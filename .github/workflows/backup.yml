@@ -2,19 +2,18 @@ name: Backup nightly
 
 on:
   schedule:
-    # ⚠️ Ejecuta cada día a las 03:00 AM hora Argentina (06:00 UTC)
-    - cron: '0 6 * * *'
-  workflow_dispatch: {} # Permite correrlo manualmente
+    - cron: '0 6 * * *'   # 03:00 AR
+  workflow_dispatch: {}
 
 jobs:
   backup:
     runs-on: ubuntu-latest
-
+    timeout-minutes: 15   # evita ejecuciones colgadas eternas
     steps:
       - name: Checkout del repositorio
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # para incluir el historial completo
+          fetch-depth: 0
 
       - name: Crear carpeta de backups
         run: mkdir -p backups
@@ -25,10 +24,11 @@ jobs:
           git bundle create "backups/sitio98plus-${TS}.bundle" --all
           echo "BUNDLE=backups/sitio98plus-${TS}.bundle" >> $GITHUB_ENV
 
-      - name: Crear ZIP del árbol de trabajo
+      # 🔁 Nuevo: snapshot rápido del árbol con git archive (no incluye .git ni node_modules no versionados)
+      - name: Crear ZIP del árbol (rápido y seguro)
         run: |
           TS=$(date -u +'%Y%m%dT%H%M%SZ')
-          zip -r "backups/sitio98plus-${TS}.zip" .
+          git archive --format=zip -o "backups/sitio98plus-${TS}.zip" HEAD
           echo "ZIP=backups/sitio98plus-${TS}.zip" >> $GITHUB_ENV
 
       - name: Subir backup (.bundle)
