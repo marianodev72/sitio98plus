@@ -1,0 +1,1 @@
+# SITIO98PLUS v3.1 (Hostinger Ready)\n\nRun local:\n```bash\ncd backend\ncp .env.example .env\n# edita MONGO_URI / JWT_SECRET\nnpm install\nnpm run seed\nnpm run dev\n```\nAbra http://localhost:3000\n

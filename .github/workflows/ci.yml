@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # Install dependencies for frontend and backend
+      - run: npm ci --workspace=frontend
+      - run: npm ci --workspace=backend
+
+      # Lint
+      - run: npm -w backend run lint --if-present
+      - run: npm -w frontend run lint --if-present
+
+      # Tests
+      - run: npm -w backend test --if-present
+      - run: npm -w frontend test --if-present
+
+      # Build
+      - run: npm -w backend run build --if-present
+      - run: npm -w frontend run build --if-present

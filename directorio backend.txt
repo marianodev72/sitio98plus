@@ -1,0 +1,665 @@
+c:\sitio98plus\backend>tree
+Listado de rutas de carpetas para el volumen Windows
+El número de serie del volumen es 625E-BBB6
+C:.
+├───config
+├───controllers
+├───data
+├───middleware
+├───models
+├───node_modules
+│   ├───.bin
+│   ├───@mapbox
+│   ├───@mongodb-js
+│   │   └───saslprep
+│   │       └───dist
+│   ├───@swc
+│   │   └───helpers
+│   │       ├───lib
+│   │       ├───scripts
+│   │       └───src
+│   ├───@types
+│   │   ├───node
+│   │   │   ├───assert
+│   │   │   ├───compatibility
+│   │   │   ├───dns
+│   │   │   ├───fs
+│   │   │   ├───readline
+│   │   │   ├───stream
+│   │   │   ├───timers
+│   │   │   ├───ts5.6
+│   │   │   │   └───compatibility
+│   │   │   ├───ts5.7
+│   │   │   │   └───compatibility
+│   │   │   └───web-globals
+│   │   ├───webidl-conversions
+│   │   └───whatwg-url
+│   │       └───dist
+│   ├───accepts
+│   ├───anymatch
+│   ├───append-field
+│   │   ├───lib
+│   │   └───test
+│   ├───array-buffer-byte-length
+│   │   ├───.github
+│   │   └───test
+│   ├───array-flatten
+│   ├───available-typed-arrays
+│   │   ├───.github
+│   │   └───test
+│   ├───balanced-match
+│   │   └───.github
+│   ├───base64-js
+│   ├───basic-auth
+│   │   └───node_modules
+│   │       └───safe-buffer
+│   ├───bcryptjs
+│   │   ├───.vscode
+│   │   ├───bin
+│   │   ├───dist
+│   │   ├───externs
+│   │   ├───scripts
+│   │   ├───src
+│   │   │   └───bcrypt
+│   │   │       ├───prng
+│   │   │       └───util
+│   │   └───tests
+│   ├───binary-extensions
+│   ├───body-parser
+│   │   └───lib
+│   │       └───types
+│   ├───brace-expansion
+│   ├───braces
+│   │   └───lib
+│   ├───brotli
+│   │   ├───build
+│   │   ├───dec
+│   │   └───enc
+│   ├───bson
+│   │   ├───etc
+│   │   ├───lib
+│   │   ├───src
+│   │   │   ├───parser
+│   │   │   └───utils
+│   │   └───vendor
+│   │       ├───base64
+│   │       └───text-encoding
+│   │           └───lib
+│   ├───buffer-equal-constant-time
+│   ├───buffer-from
+│   ├───busboy
+│   │   ├───.github
+│   │   │   └───workflows
+│   │   ├───bench
+│   │   ├───lib
+│   │   │   └───types
+│   │   └───test
+│   ├───bytes
+│   ├───call-bind
+│   │   ├───.github
+│   │   └───test
+│   ├───call-bind-apply-helpers
+│   │   ├───.github
+│   │   └───test
+│   ├───call-bound
+│   │   ├───.github
+│   │   └───test
+│   ├───chokidar
+│   │   ├───lib
+│   │   └───types
+│   ├───clone
+│   ├───compressible
+│   ├───compression
+│   │   └───node_modules
+│   │       └───negotiator
+│   │           └───lib
+│   ├───concat-map
+│   │   ├───example
+│   │   └───test
+│   ├───concat-stream
+│   ├───content-disposition
+│   ├───content-type
+│   ├───cookie
+│   ├───cookie-parser
+│   ├───cookie-signature
+│   ├───cors
+│   │   └───lib
+│   ├───crypto-js
+│   │   └───docs
+│   ├───dayjs
+│   │   ├───esm
+│   │   │   ├───locale
+│   │   │   └───plugin
+│   │   │       ├───advancedFormat
+│   │   │       ├───arraySupport
+│   │   │       ├───badMutable
+│   │   │       ├───bigIntSupport
+│   │   │       ├───buddhistEra
+│   │   │       ├───calendar
+│   │   │       ├───customParseFormat
+│   │   │       ├───dayOfYear
+│   │   │       ├───devHelper
+│   │   │       ├───duration
+│   │   │       ├───isBetween
+│   │   │       ├───isLeapYear
+│   │   │       ├───isMoment
+│   │   │       ├───isoWeek
+│   │   │       ├───isoWeeksInYear
+│   │   │       ├───isSameOrAfter
+│   │   │       ├───isSameOrBefore
+│   │   │       ├───isToday
+│   │   │       ├───isTomorrow
+│   │   │       ├───isYesterday
+│   │   │       ├───localeData
+│   │   │       ├───localizedFormat
+│   │   │       ├───minMax
+│   │   │       ├───negativeYear
+│   │   │       ├───objectSupport
+│   │   │       ├───pluralGetSet
+│   │   │       ├───preParsePostFormat
+│   │   │       ├───quarterOfYear
+│   │   │       ├───relativeTime
+│   │   │       ├───timezone
+│   │   │       ├───toArray
+│   │   │       ├───toObject
+│   │   │       ├───updateLocale
+│   │   │       ├───utc
+│   │   │       ├───weekday
+│   │   │       ├───weekOfYear
+│   │   │       └───weekYear
+│   │   ├───locale
+│   │   └───plugin
+│   ├───debug
+│   │   └───src
+│   ├───deep-equal
+│   │   ├───example
+│   │   └───test
+│   ├───define-data-property
+│   │   ├───.github
+│   │   └───test
+│   ├───define-properties
+│   │   └───.github
+│   ├───depd
+│   │   └───lib
+│   │       └───browser
+│   ├───destroy
+│   ├───dfa
+│   ├───dotenv
+│   │   └───lib
+│   ├───dunder-proto
+│   │   ├───.github
+│   │   └───test
+│   ├───ecdsa-sig-formatter
+│   │   └───src
+│   ├───ee-first
+│   ├───encodeurl
+│   ├───es-define-property
+│   │   ├───.github
+│   │   └───test
+│   ├───es-errors
+│   │   ├───.github
+│   │   └───test
+│   ├───es-get-iterator
+│   │   ├───.github
+│   │   └───test
+│   ├───es-object-atoms
+│   │   ├───.github
+│   │   └───test
+│   ├───escape-html
+│   ├───etag
+│   ├───express
+│   │   ├───lib
+│   │   │   ├───middleware
+│   │   │   └───router
+│   │   └───node_modules
+│   │       └───cookie
+│   ├───express-rate-limit
+│   │   └───dist
+│   ├───fill-range
+│   ├───finalhandler
+│   ├───fontkit
+│   │   ├───dist
+│   │   └───src
+│   │       ├───aat
+│   │       ├───cff
+│   │       ├───glyph
+│   │       ├───layout
+│   │       ├───opentype
+│   │       │   └───shapers
+│   │       ├───subset
+│   │       └───tables
+│   ├───for-each
+│   │   ├───.github
+│   │   └───test
+│   ├───forwarded
+│   ├───fresh
+│   ├───function-bind
+│   │   ├───.github
+│   │   └───test
+│   ├───functions-have-names
+│   │   ├───.github
+│   │   └───test
+│   ├───get-intrinsic
+│   │   ├───.github
+│   │   └───test
+│   ├───get-proto
+│   │   ├───.github
+│   │   └───test
+│   ├───glob-parent
+│   ├───gopd
+│   │   ├───.github
+│   │   └───test
+│   ├───has-bigints
+│   │   ├───.github
+│   │   └───test
+│   ├───has-flag
+│   ├───has-property-descriptors
+│   │   ├───.github
+│   │   └───test
+│   ├───has-symbols
+│   │   ├───.github
+│   │   └───test
+│   │       └───shams
+│   ├───has-tostringtag
+│   │   ├───.github
+│   │   └───test
+│   │       └───shams
+│   ├───hasown
+│   │   └───.github
+│   ├───helmet
+│   ├───http-errors
+│   ├───iconv-lite
+│   │   ├───encodings
+│   │   │   └───tables
+│   │   └───lib
+│   ├───ignore-by-default
+│   ├───inherits
+│   ├───internal-slot
+│   │   ├───.github
+│   │   └───test
+│   ├───ip-address
+│   │   ├───dist
+│   │   │   ├───v4
+│   │   │   └───v6
+│   │   └───src
+│   │       ├───v4
+│   │       └───v6
+│   ├───ipaddr.js
+│   │   └───lib
+│   ├───is-arguments
+│   │   ├───.github
+│   │   └───test
+│   ├───is-array-buffer
+│   │   ├───.github
+│   │   └───test
+│   ├───is-bigint
+│   │   ├───.github
+│   │   └───test
+│   ├───is-binary-path
+│   ├───is-boolean-object
+│   │   ├───.github
+│   │   └───test
+│   ├───is-callable
+│   │   ├───.github
+│   │   └───test
+│   ├───is-date-object
+│   │   ├───.github
+│   │   └───test
+│   ├───is-extglob
+│   ├───is-glob
+│   ├───is-map
+│   │   ├───.github
+│   │   └───test
+│   ├───is-number
+│   ├───is-number-object
+│   │   ├───.github
+│   │   └───test
+│   ├───is-regex
+│   │   └───test
+│   ├───is-set
+│   │   ├───.github
+│   │   └───test
+│   ├───is-shared-array-buffer
+│   │   ├───.github
+│   │   └───test
+│   ├───is-string
+│   │   ├───.github
+│   │   └───test
+│   ├───is-symbol
+│   │   ├───.github
+│   │   └───test
+│   ├───is-weakmap
+│   │   ├───.github
+│   │   └───test
+│   ├───is-weakset
+│   │   ├───.github
+│   │   └───test
+│   ├───isarray
+│   ├───jpeg-exif
+│   │   ├───lib
+│   │   ├───src
+│   │   └───test
+│   ├───jsonwebtoken
+│   │   ├───lib
+│   │   └───node_modules
+│   │       └───ms
+│   ├───jwa
+│   ├───jws
+│   │   └───lib
+│   ├───kareem
+│   ├───linebreak
+│   │   ├───dist
+│   │   └───node_modules
+│   │       └───base64-js
+│   │           ├───bench
+│   │           ├───lib
+│   │           └───test
+│   ├───lodash.includes
+│   ├───lodash.isboolean
+│   ├───lodash.isinteger
+│   ├───lodash.isnumber
+│   ├───lodash.isplainobject
+│   ├───lodash.isstring
+│   ├───lodash.once
+│   ├───math-intrinsics
+│   │   ├───.github
+│   │   ├───constants
+│   │   └───test
+│   ├───media-typer
+│   ├───memory-pager
+│   ├───merge-descriptors
+│   ├───methods
+│   ├───mime
+│   │   └───src
+│   ├───mime-db
+│   ├───mime-types
+│   ├───minimatch
+│   ├───minimist
+│   │   ├───.github
+│   │   ├───example
+│   │   └───test
+│   ├───mkdirp
+│   │   └───bin
+│   ├───mongodb
+│   │   ├───etc
+│   │   ├───lib
+│   │   │   ├───bulk
+│   │   │   ├───cmap
+│   │   │   │   ├───auth
+│   │   │   │   │   └───mongodb_oidc
+│   │   │   │   ├───handshake
+│   │   │   │   └───wire_protocol
+│   │   │   ├───cursor
+│   │   │   ├───gridfs
+│   │   │   ├───operations
+│   │   │   │   └───search_indexes
+│   │   │   └───sdam
+│   │   └───src
+│   │       ├───bulk
+│   │       ├───cmap
+│   │       │   ├───auth
+│   │       │   │   └───mongodb_oidc
+│   │       │   ├───handshake
+│   │       │   └───wire_protocol
+│   │       ├───cursor
+│   │       ├───gridfs
+│   │       ├───operations
+│   │       │   └───search_indexes
+│   │       └───sdam
+│   ├───mongodb-connection-string-url
+│   │   └───lib
+│   ├───mongoose
+│   │   ├───dist
+│   │   ├───lib
+│   │   │   ├───cast
+│   │   │   ├───cursor
+│   │   │   ├───drivers
+│   │   │   │   ├───browser
+│   │   │   │   └───node-mongodb-native
+│   │   │   ├───error
+│   │   │   ├───helpers
+│   │   │   │   ├───aggregate
+│   │   │   │   ├───cursor
+│   │   │   │   ├───discriminator
+│   │   │   │   ├───document
+│   │   │   │   ├───error
+│   │   │   │   ├───indexes
+│   │   │   │   ├───model
+│   │   │   │   ├───path
+│   │   │   │   ├───populate
+│   │   │   │   ├───projection
+│   │   │   │   ├───query
+│   │   │   │   ├───schema
+│   │   │   │   ├───schematype
+│   │   │   │   ├───timestamps
+│   │   │   │   ├───topology
+│   │   │   │   └───update
+│   │   │   ├───options
+│   │   │   ├───plugins
+│   │   │   ├───schema
+│   │   │   │   └───operators
+│   │   │   └───types
+│   │   │       ├───array
+│   │   │       │   └───methods
+│   │   │       └───DocumentArray
+│   │   │           └───methods
+│   │   ├───node_modules
+│   │   │   └───ms
+│   │   └───types
+│   ├───morgan
+│   │   └───node_modules
+│   │       └───on-finished
+│   ├───mpath
+│   │   ├───lib
+│   │   └───test
+│   ├───mquery
+│   │   ├───.github
+│   │   ├───lib
+│   │   │   └───collection
+│   │   └───node_modules
+│   │       ├───debug
+│   │       │   └───src
+│   │       └───ms
+│   ├───ms
+│   ├───multer
+│   │   ├───lib
+│   │   └───storage
+│   ├───negotiator
+│   │   └───lib
+│   ├───nodemon
+│   │   ├───bin
+│   │   ├───doc
+│   │   │   └───cli
+│   │   ├───lib
+│   │   │   ├───cli
+│   │   │   ├───config
+│   │   │   ├───help
+│   │   │   ├───monitor
+│   │   │   ├───rules
+│   │   │   └───utils
+│   │   └───node_modules
+│   │       ├───debug
+│   │       │   └───src
+│   │       └───ms
+│   ├───normalize-path
+│   ├───object-assign
+│   ├───object-inspect
+│   │   ├───.github
+│   │   ├───example
+│   │   └───test
+│   │       └───browser
+│   ├───object-is
+│   │   └───test
+│   ├───object-keys
+│   │   └───test
+│   ├───object.assign
+│   │   ├───.github
+│   │   ├───dist
+│   │   └───test
+│   ├───on-finished
+│   ├───on-headers
+│   ├───pako
+│   │   ├───dist
+│   │   └───lib
+│   │       ├───utils
+│   │       └───zlib
+│   ├───parseurl
+│   ├───path-to-regexp
+│   ├───pdfkit
+│   │   └───js
+│   │       └───data
+│   ├───picomatch
+│   │   └───lib
+│   ├───png-js
+│   │   ├───examples
+│   │   ├───images
+│   │   └───test
+│   │       ├───images
+│   │       └───__snapshots__
+│   ├───possible-typed-array-names
+│   │   ├───.github
+│   │   └───test
+│   ├───proxy-addr
+│   ├───pstree.remy
+│   │   ├───lib
+│   │   └───tests
+│   │       └───fixtures
+│   ├───punycode
+│   ├───qs
+│   │   ├───.github
+│   │   ├───dist
+│   │   ├───lib
+│   │   └───test
+│   ├───range-parser
+│   ├───raw-body
+│   │   └───node_modules
+│   ├───readable-stream
+│   │   └───lib
+│   │       └───internal
+│   │           └───streams
+│   ├───readdirp
+│   ├───regexp.prototype.flags
+│   │   └───test
+│   ├───restructure
+│   │   ├───src
+│   │   └───test
+│   ├───safe-buffer
+│   ├───safe-regex-test
+│   │   ├───.github
+│   │   └───test
+│   ├───safer-buffer
+│   ├───semver
+│   │   ├───bin
+│   │   ├───classes
+│   │   ├───functions
+│   │   ├───internal
+│   │   └───ranges
+│   ├───send
+│   │   └───node_modules
+│   │       ├───encodeurl
+│   │       └───ms
+│   ├───serve-static
+│   ├───set-function-length
+│   │   └───.github
+│   ├───set-function-name
+│   │   └───.github
+│   ├───setprototypeof
+│   │   └───test
+│   ├───side-channel
+│   │   ├───.github
+│   │   └───test
+│   ├───side-channel-list
+│   │   ├───.github
+│   │   └───test
+│   ├───side-channel-map
+│   │   ├───.github
+│   │   └───test
+│   ├───side-channel-weakmap
+│   │   ├───.github
+│   │   └───test
+│   ├───sift
+│   │   ├───es
+│   │   ├───es5m
+│   │   ├───lib
+│   │   └───src
+│   ├───simple-update-notifier
+│   │   ├───build
+│   │   └───src
+│   ├───slugify
+│   ├───smart-buffer
+│   │   ├───build
+│   │   ├───docs
+│   │   └───typings
+│   ├───socks
+│   │   ├───build
+│   │   │   ├───client
+│   │   │   └───common
+│   │   ├───docs
+│   │   │   └───examples
+│   │   │       ├───javascript
+│   │   │       └───typescript
+│   │   └───typings
+│   │       ├───client
+│   │       └───common
+│   ├───sparse-bitfield
+│   ├───statuses
+│   ├───stop-iteration-iterator
+│   │   ├───.github
+│   │   └───test
+│   ├───streamsearch
+│   │   ├───.github
+│   │   │   └───workflows
+│   │   ├───lib
+│   │   └───test
+│   ├───string_decoder
+│   │   └───lib
+│   ├───supports-color
+│   ├───tiny-inflate
+│   │   └───test
+│   ├───to-regex-range
+│   ├───toidentifier
+│   ├───touch
+│   │   └───bin
+│   ├───tr46
+│   │   └───lib
+│   ├───tslib
+│   │   └───modules
+│   ├───type-is
+│   ├───typedarray
+│   │   ├───example
+│   │   └───test
+│   │       └───server
+│   ├───undefsafe
+│   │   ├───.github
+│   │   │   └───workflows
+│   │   └───lib
+│   ├───undici-types
+│   ├───unicode-properties
+│   │   └───dist
+│   ├───unicode-trie
+│   │   └───test
+│   ├───unpipe
+│   ├───util-deprecate
+│   ├───utils-merge
+│   ├───vary
+│   ├───webidl-conversions
+│   │   └───lib
+│   ├───whatwg-url
+│   │   └───lib
+│   ├───which-boxed-primitive
+│   │   ├───.github
+│   │   └───test
+│   ├───which-collection
+│   │   ├───.github
+│   │   └───test
+│   ├───which-typed-array
+│   │   ├───.github
+│   │   └───test
+│   └───xtend
+├───routes
+├───scr
+├───scripts
+├───uploads
+│   └───postulaciones
+│       └───69189f71a5f794721e59f3f5
+└───utils

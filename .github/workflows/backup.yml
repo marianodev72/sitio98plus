@@ -1,0 +1,21 @@
+name: Backup nightly
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Crear backup .bundle
+        run: git bundle create sitio98plus-$(date +'%Y%m%dT%H%M%S').bundle --all
+      - name: Crear snapshot .zip
+        run: zip -r sitio98plus-$(date +'%Y%m%dT%H%M%S').zip . -x '*.git*'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sitio98plus-backup
+          path: |
+            *.bundle
+            *.zip
+          retention-days: 60
