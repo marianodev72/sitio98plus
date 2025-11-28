@@ -11,6 +11,7 @@ const {
   crearAnexo11,
   listarAnexos11Permisionario,
   obtenerAnexo11Detalle,
+  generarAnexo11PDF,
 } = require("../controllers/anexo11Controller");
 
 // -----------------------------------------------------------------------------
@@ -65,6 +66,17 @@ router.get(
   authMiddleware,
   ensurePermisionario,
   listarAnexos11Permisionario
+);
+
+// -----------------------------------------------------------------------------
+// GET /api/anexo11/:id/pdf
+// Descarga el PDF del Anexo 11 (permisionario sólo si es suyo).
+// -----------------------------------------------------------------------------
+router.get(
+  "/:id/pdf",
+  authMiddleware,
+  ensurePermisionario,
+  generarAnexo11PDF
 );
 
 // -----------------------------------------------------------------------------

@@ -8,6 +8,7 @@ const PermisionarioGestiones = () => {
   return (
     <div className="min-h-screen bg-[#050816] text-white">
       <div className="max-w-5xl mx-auto px-4 py-10">
+
         <button
           className="text-sm text-sky-400 hover:text-sky-300 mb-4"
           onClick={() => navigate("/permisionario")}
@@ -17,67 +18,79 @@ const PermisionarioGestiones = () => {
 
         <h1 className="text-3xl font-bold mb-2">Mis gestiones</h1>
         <p className="text-slate-300 mb-8 max-w-3xl">
-          Desde esta sección vas a poder iniciar y consultar tus gestiones
-          internas con la Alcaldía. En esta primera etapa vas a encontrar el
-          formulario de <strong>Pedido de trabajo (Anexo 11)</strong>.
+          Desde esta sección vas a poder iniciar y consultar tus gestiones internas con la Alcaldía.
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Card: Pedido de trabajo (Anexo 11) */}
+
+          {/* ANEXO 11 */}
           <div className="bg-[#0b1020] border border-slate-700/60 rounded-2xl p-6 flex flex-col justify-between">
-            <div>
-              <h2 className="text-xl font-semibold mb-2">
-                Pedido de trabajo (Anexo 11)
-              </h2>
-              <p className="text-slate-300 text-sm">
-                Formulario para solicitar reparaciones, verificaciones o
-                provisiones en tu vivienda fiscal. El trámite será intervenido
-                por el Inspector y el Administrador General.
-              </p>
-            </div>
-            <div className="mt-6">
+            <h2 className="text-xl font-semibold mb-2">Pedido de trabajo (Anexo 11)</h2>
+            <p className="text-slate-300 text-sm">
+              Formulario para solicitar reparaciones y verificaciones en la vivienda fiscal.
+            </p>
+            <div className="mt-6 flex gap-3">
               <button
                 onClick={() =>
                   navigate("/permisionario/gestiones/anexo11/nuevo")
                 }
-                className="w-full md:w-auto px-6 py-2 rounded-full bg-sky-500 hover:bg-sky-400 text-sm font-semibold transition-colors"
+                className="px-6 py-2 rounded-full bg-sky-500 hover:bg-sky-400 text-sm font-semibold transition-colors"
               >
-                Iniciar pedido de trabajo
+                Iniciar
               </button>
-            </div>
-          </div>
-
-          {/* Card: Ver mis gestiones */}
-          <div className="bg-[#0b1020] border border-slate-700/60 rounded-2xl p-6 flex flex-col justify-between">
-            <div>
-              <h2 className="text-xl font-semibold mb-2">Ver mis gestiones</h2>
-              <p className="text-slate-300 text-sm">
-                Listado de todos los pedidos iniciados, en curso y finalizados.
-                Podrás ver el detalle de cada gestión y las intervenciones del
-                Inspector y del Administrador General.
-              </p>
-            </div>
-            <div className="mt-6">
               <button
-                onClick={() => navigate("/permisionario/gestiones/mis")}
-                className="w-full md:w-auto px-6 py-2 rounded-full bg-sky-500 hover:bg-sky-400 text-sm font-semibold transition-colors"
+                onClick={() =>
+                  navigate("/permisionario/gestiones/mis")
+                }
+                className="px-6 py-2 rounded-full border border-sky-400 text-sky-400 hover:bg-sky-700/20 text-sm font-semibold"
               >
                 Ver mis gestiones
               </button>
             </div>
           </div>
 
-          {/* Espacio reservado para futuros anexos 3,4,7,8,9 */}
-          <div className="bg-[#0b1020] border border-dashed border-slate-700/60 rounded-2xl p-6 md:col-span-2">
-            <h2 className="text-lg font-semibold mb-1">
-              Próximamente: otros formularios
-            </h2>
-            <p className="text-slate-400 text-sm">
-              En esta sección se irán incorporando los formularios internos
-              restantes (Anexos 3, 4, 7, 8 y 9) para que puedas gestionarlos
-              desde el mismo panel.
+          {/* ANEXO 3 */}
+          <div className="bg-[#0b1020] border border-slate-700/60 rounded-2xl p-6 flex flex-col justify-between">
+            <h2 className="text-xl font-semibold mb-2">Acta de recepción (Anexo 3)</h2>
+            <p className="text-slate-300 text-sm">
+              Acta generada por el Inspector. Vos solo tenés que dar conformidad o pedir revisión.
             </p>
+            <div className="mt-6">
+              <button
+                onClick={() => navigate("/permisionario/gestiones/anexo3/mis")}
+                className="px-6 py-2 rounded-full bg-sky-500 hover:bg-sky-400 text-sm font-semibold transition-colors"
+              >
+                Ver mis actas
+              </button>
+            </div>
           </div>
+
+          {/* ANEXO 4 */}
+          <div className="bg-[#0b1020] border border-slate-700/60 rounded-2xl p-6 flex flex-col justify-between">
+            <h2 className="text-xl font-semibold mb-2">Formulario de novedades (Anexo 4)</h2>
+            <p className="text-slate-300 text-sm">
+              Formulario que completás vos como permisionario para informar novedades al Jefe de Barrio.
+            </p>
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={() =>
+                  navigate("/permisionario/gestiones/anexo4/nuevo")
+                }
+                className="px-6 py-2 rounded-full bg-sky-500 hover:bg-sky-400 text-sm font-semibold transition-colors"
+              >
+                Iniciar Anexo 4
+              </button>
+              <button
+                onClick={() =>
+                  navigate("/permisionario/gestiones/anexo4/mis")
+                }
+                className="px-6 py-2 rounded-full border border-sky-400 text-sky-400 hover:bg-sky-700/20 text-sm font-semibold"
+              >
+                Ver mis Anexo 4
+              </button>
+            </div>
+          </div>
+
         </div>
       </div>
     </div>
