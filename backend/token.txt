@@ -1,0 +1,19 @@
+
+
+# === Autenticación ===
+JWT_SECRET=894b443be985ef59675be6ff7965e6000342ff4dcea0fda8a099ff3fedd14f87
+
+
+cd C:\sitio98plus\backend
+
+
+despues, del informe de siguientes pasos continuamos trabajando, tambien te comparto una captura de powershell donde hicimos pruegas del modulo pre postulante. analiza todo y hazme preguntas sobre lo hecho para poder continuar
+
+token; eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5MTJiYWVmNmFjOGEzMjU4ZDk5NTY4ZiIsImVtYWlsIjoiYWRtaW5AZXhhbXBsZS5jb20iLCJyb2xlIjoiQURNSU4iLCJpYXQiOjE3NjMyNDQ0NzAsImV4cCI6MTc2Mzg0OTI3MH0.Wl7vpBF0DmwIAUNkWsNbIeFfbMZ7hF2Y24S2V_nBrpY
+
+"formularios":[{"_id":"691926ad8a9f95fbee57a583"
+
+usuario y pass admin general
+const username = process.env.ADMIN_USER || 'admin';
+  const email = process.env.ADMIN_EMAIL || 'admin@example.com';
+  const rawPass = process.env.ADMIN_PASS || '123456';
