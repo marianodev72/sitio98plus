@@ -13,11 +13,11 @@ const {
   enviarPedido,
 } = require("../controllers/pedidosTrabajoController");
 
-// Usamos el mismo middleware de autenticación estándar
-const authMiddleware = require("../middleware/authMiddleware");
+// Usamos el middleware de autenticación estándar RS256
+const auth = require("../middleware/auth");
 
 // Protege todas las rutas de este router
-router.use(authMiddleware);
+router.use(auth);
 
 // LISTAR MIS PEDIDOS
 router.get("/mios", listarMisPedidos);

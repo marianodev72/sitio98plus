@@ -4,8 +4,8 @@
 const express = require("express");
 const router = express.Router();
 
-const authMiddleware = require("../middleware/authMiddleware");
-const ROLES = require("../middleware/roles");
+// Tomamos ROLES y requireRole desde el middleware de auth central
+const { ROLES, requireRole } = require("../middleware/auth");
 
 const {
   crearAnexo3,
@@ -18,101 +18,69 @@ const {
   generarAnexo3PDF,
 } = require("../controllers/anexo3Controller");
 
-// Helper de rol
-function ensureRole(roleConst) {
-  return (req, res, next) => {
-    try {
-      if (!req.user || !req.user.role) {
-        return res.status(401).json({
-          ok: false,
-          message: "No autenticado.",
-        });
-      }
-      const role = String(req.user.role || "").toUpperCase();
-      if (role !== roleConst) {
-        return res.status(403).json({
-          ok: false,
-          message: "No tenés permisos suficientes para esta operación.",
-        });
-      }
-      next();
-    } catch (err) {
-      console.error("Error en ensureRole:", err);
-      return res.status(500).json({
-        ok: false,
-        message: "Error al validar permisos.",
-      });
-    }
-  };
-}
+// NOTA IMPORTANTE:
+// En server.js/app.js tiene que existir algo así:
+//   const auth = require("./middleware/auth");
+//   const anexo3Routes = require("./routes/anexo3");
+//   app.use("/api/anexo3", auth, anexo3Routes);
+// Es decir: auth SE APLICA antes de estas rutas.
 
-const ensureInspector = ensureRole(ROLES.INSPECTOR);
-const ensurePermisionario = ensureRole(ROLES.PERMISIONARIO);
-const ensureAdmin = ensureRole(ROLES.ADMIN);
+// Middlewares de rol usando la función centralizada
+const ensureInspector = requireRole(ROLES.INSPECTOR);
+const ensurePermisionario = requireRole(ROLES.PERMISIONARIO);
+const ensureAdmin = requireRole(ROLES.ADMIN);
 
 // -----------------------------------------------------------------------------
-// POST /api/anexo3        (Inspector crea)
+// POST /api/anexo3
+// Crea un nuevo Anexo 3 (lo inicia el INSPECTOR)
 // -----------------------------------------------------------------------------
-router.post("/", authMiddleware, ensureInspector, crearAnexo3);
+router.post("/", ensureInspector, crearAnexo3);
 
 // -----------------------------------------------------------------------------
-// GET /api/anexo3/mis     (Permisionario ve sus Anexos 3)
+// GET /api/anexo3/mis
+// Lista los Anexos 3 del permisionario logueado
 // -----------------------------------------------------------------------------
-router.get(
-  "/mis",
-  authMiddleware,
-  ensurePermisionario,
-  listarAnexos3Permisionario
-);
+router.get("/mis", ensurePermisionario, listarAnexos3Permisionario);
 
 // -----------------------------------------------------------------------------
-// GET /api/anexo3/:id/pdf (Descarga PDF – mismos permisos que el detalle)
+// GET /api/anexo3/:id/pdf
+// Genera y descarga el PDF del Anexo 3
+// (permisionario dueño / inspector asignado / admin)
 // -----------------------------------------------------------------------------
-router.get("/:id/pdf", authMiddleware, generarAnexo3PDF);
+router.get("/:id/pdf", generarAnexo3PDF);
 
 // -----------------------------------------------------------------------------
-// GET /api/anexo3/:id     (Permisionario/Inspector/Admin ven detalle)
+// GET /api/anexo3/:id
+// Detalle del Anexo 3 (permisionario dueño / inspector asignado / admin)
 // -----------------------------------------------------------------------------
-router.get("/:id", authMiddleware, obtenerAnexo3Detalle);
+router.get("/:id", obtenerAnexo3Detalle);
 
 // -----------------------------------------------------------------------------
-// PATCH /api/anexo3/:id/conforme     (Permisionario da conforme)
+// PATCH /api/anexo3/:id/conforme
+// Permisionario da CONFORME -> PENDIENTE_CIERRE_ADMIN
 // -----------------------------------------------------------------------------
-router.patch(
-  "/:id/conforme",
-  authMiddleware,
-  ensurePermisionario,
-  permisionarioDaConforme
-);
+router.patch("/:id/conforme", ensurePermisionario, permisionarioDaConforme);
 
 // -----------------------------------------------------------------------------
-// PATCH /api/anexo3/:id/revision     (Permisionario pide revisión)
+// PATCH /api/anexo3/:id/revision
+// Permisionario NO está de acuerdo -> EN_REVISION_INSPECTOR
 // -----------------------------------------------------------------------------
-router.patch(
-  "/:id/revision",
-  authMiddleware,
-  ensurePermisionario,
-  permisionarioPideRevision
-);
+router.patch("/:id/revision", ensurePermisionario, permisionarioPideRevision);
 
 // -----------------------------------------------------------------------------
-// PATCH /api/anexo3/:id/enviar-a-permisionario   (Inspector reenvía)
+// PATCH /api/anexo3/:id/enviar-a-permisionario
+// Inspector reenvía luego de revisar -> PENDIENTE_CONFORME_PERMISIONARIO
 // -----------------------------------------------------------------------------
 router.patch(
   "/:id/enviar-a-permisionario",
-  authMiddleware,
   ensureInspector,
   inspectorReenviaAPermisionario
 );
 
 // -----------------------------------------------------------------------------
-// PATCH /api/anexo3/:id/cerrar       (Admin cierra)
+// PATCH /api/anexo3/:id/cerrar
+// Admin General cierra el trámite -> CERRADO
 // -----------------------------------------------------------------------------
-router.patch(
-  "/:id/cerrar",
-  authMiddleware,
-  ensureAdmin,
-  adminCierraAnexo3
-);
+router.patch("/:id/cerrar", ensureAdmin, adminCierraAnexo3);
 
 module.exports = router;

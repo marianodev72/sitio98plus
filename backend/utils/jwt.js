@@ -1,36 +1,50 @@
 // utils/jwt.js
-// Utilidades para firmar y verificar JWT en ZN98
+// Utilidades JWT para autenticación en ZN98 (RS256)
 
-const jwt = require("jsonwebtoken");
+const jwt = require('jsonwebtoken');
 
-// Clave y expiración desde variables de entorno, con valores por defecto de desarrollo
-const JWT_SECRET = process.env.JWT_SECRET || "cambia-esta-clave-en-produccion";
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
+// Las claves deben venir de variables de entorno
+// JWT_PRIVATE_KEY y JWT_PUBLIC_KEY en formato PEM
+// (si están con \n, las normalizamos)
+function getPrivateKey() {
+  const key = process.env.JWT_PRIVATE_KEY;
+  if (!key) {
+    throw new Error('JWT_PRIVATE_KEY no está definida en el entorno');
+  }
+  return key.replace(/\\n/g, '\n');
+}
 
-/**
- * Firma un token JWT con el payload indicado.
- * @param {object} payload - Datos a guardar en el token (id, email, role, etc.)
- * @param {object} [options] - Opciones extras para jwt.sign
- * @returns {string} token JWT
- */
-function signToken(payload, options = {}) {
-  return jwt.sign(payload, JWT_SECRET, {
-    expiresIn: JWT_EXPIRES_IN,
-    ...options,
+function getPublicKey() {
+  const key = process.env.JWT_PUBLIC_KEY;
+  if (!key) {
+    throw new Error('JWT_PUBLIC_KEY no está definida en el entorno');
+  }
+  return key.replace(/\\n/g, '\n');
+}
+
+// Crea el token de autenticación para un usuario
+function signAuthToken(user) {
+  const payload = {
+    sub: user._id.toString(),
+    role: user.role,
+    matricula: user.matricula,
+    email: user.email,
+  };
+
+  return jwt.sign(payload, getPrivateKey(), {
+    algorithm: 'RS256',
+    expiresIn: '1d', // 1 día, ajustable
   });
 }
 
-/**
- * Verifica un token JWT y devuelve el payload decodificado.
- * Lanza error si el token es inválido o expiró.
- * @param {string} token
- * @returns {object} payload
- */
-function verifyToken(token) {
-  return jwt.verify(token, JWT_SECRET);
+// Verifica un token y devuelve el payload
+function verifyAuthToken(token) {
+  return jwt.verify(token, getPublicKey(), {
+    algorithms: ['RS256'],
+  });
 }
 
 module.exports = {
-  signToken,
-  verifyToken,
+  signAuthToken,
+  verifyAuthToken,
 };

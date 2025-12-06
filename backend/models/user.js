@@ -1,44 +1,109 @@
-// backend/models/user.js
+// models/user.js
+// Modelo de Usuario del sistema ZN98
+
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
-const userSchema = new mongoose.Schema(
+const { Schema } = mongoose;
+
+const ROLES_PERMITIDOS = [
+  'ADMIN_GENERAL',
+  'ADMIN',
+  'POSTULANTE',
+  'PERMISIONARIO',
+  'ALOJADO',
+  'INSPECTOR',
+  'JEFE_DE_BARRIO',
+];
+
+const ESTADOS_HABITACIONALES = [
+  'SIN_VIVIENDA',             // default
+  'POSTULANTE',
+  'PERMISIONARIO_EN_ESPERA',
+  'PERMISIONARIO_ACTIVO',
+  'ALOJADO_EN_ESPERA',
+  'ALOJADO_ACTIVO',
+];
+
+const userSchema = new Schema(
   {
-    // Usamos el email como identificador principal de login
+    // Identificación básica
+    nombre: { type: String, trim: true, required: true },
+    apellido: { type: String, trim: true, required: true },
+
     email: {
       type: String,
-      required: true,
-      unique: true,
+      trim: true,
       lowercase: true,
-      trim: true,
-    },
-
-    // username opcional (por si lo usa el panel admin)
-    username: {
-      type: String,
-      trim: true,
-    },
-
-    nombre: { type: String, trim: true },
-    apellido: { type: String, trim: true },
-
-    // IMPORTANTE: usamos "password" para ser compatibles
-    // con los datos que ya tenés en la colección.
-    password: {
-      type: String,
+      unique: true,
       required: true,
-      select: false, // no se devuelve por defecto
+      index: true,
     },
 
+    dni: { type: String, trim: true },
+    matricula: { type: String, trim: true },
+
+    telefono: { type: String, trim: true },
+
+    // Autenticación
+    passwordHash: { type: String, required: true },
+
+    // Rol y estado habitacional
     role: {
       type: String,
-      enum: ['ADMIN', 'POSTULANTE', 'ADMINISTRACION', 'INSPECTOR', 'JEFE_BARRIO', 'PERMISIONARIO', 'INVITADO'],
+      enum: ROLES_PERMITIDOS,
       default: 'POSTULANTE',
+      index: true,
     },
 
+    estadoHabitacional: {
+      type: String,
+      enum: ESTADOS_HABITACIONALES,
+      default: 'SIN_VIVIENDA',
+      index: true,
+    },
+
+    // Barrio asignado (para INSPECTOR / JEFE_DE_BARRIO / algunos ADMIN)
+    barrioAsignado: {
+      type: String,
+      trim: true,
+      index: true,
+    },
+
+    // Relaciones con vivienda y alojamiento
+    viviendaAsignada: {
+      type: Schema.Types.ObjectId,
+      ref: 'Vivienda',
+    },
+
+    alojamientoAsignado: {
+      type: Schema.Types.ObjectId,
+      ref: 'Alojamiento',
+    },
+
+    // Tipo de alojamiento (C01, C02, C03, C04, CUSO, etc.)
+    tipoAlojamientoCodigo: {
+      type: String,
+      trim: true,
+    },
+
+    // Flags de control
     activo: {
       type: Boolean,
       default: true,
+      index: true,
+    },
+
+    bloqueado: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+
+    // Meta / datos adicionales flexibles
+    meta: {
+      type: Schema.Types.Mixed,
+      default: {},
     },
   },
   {
@@ -46,35 +111,53 @@ const userSchema = new mongoose.Schema(
   }
 );
 
-// ----- Métodos de seguridad -----
+// Índices útiles
+userSchema.index({ apellido: 1, nombre: 1 });
+userSchema.index({ email: 1 });
+userSchema.index({ role: 1 });
+userSchema.index({ estadoHabitacional: 1 });
 
-// Setear/actualizar contraseña (en altas, cambios, script de admin, etc.)
-userSchema.methods.setPassword = async function setPassword(plainPassword) {
-  const salt = await bcrypt.genSalt(10);
-  this.password = await bcrypt.hash(plainPassword, salt);
+// ────────────────────────────────
+// Métodos de instancia
+// ────────────────────────────────
+
+/**
+ * setPassword(passwordPlano)
+ * Guarda un hash bcrypt en passwordHash.
+ */
+userSchema.methods.setPassword = async function setPassword(passwordPlano) {
+  const saltRounds = 10;
+  const hash = await bcrypt.hash(passwordPlano, saltRounds);
+  this.passwordHash = hash;
 };
 
-// Verificar contraseña en el login
-userSchema.methods.checkPassword = async function checkPassword(plainPassword) {
-  if (!this.password) return false;
-  return bcrypt.compare(plainPassword, this.password);
+/**
+ * validarPassword(passwordPlano)
+ * Compara el password recibido con el hash guardado.
+ */
+userSchema.methods.validarPassword = async function validarPassword(
+  passwordPlano
+) {
+  if (!this.passwordHash) return false;
+  return bcrypt.compare(passwordPlano, this.passwordHash);
 };
 
-// Usuario “seguro” para enviar al frontend
-userSchema.methods.toSafeObject = function toSafeObject() {
-  return {
-    id: this._id,
-    email: this.email,
-    username: this.username,
-    nombre: this.nombre,
-    apellido: this.apellido,
-    role: this.role,
-    activo: this.activo,
-    createdAt: this.createdAt,
-    updatedAt: this.updatedAt,
-  };
+// Evitar devolver passwordHash en las respuestas JSON
+userSchema.methods.toJSON = function toJSON() {
+  const obj = this.toObject({ virtuals: true });
+  delete obj.passwordHash;
+  return obj;
 };
 
-const User = mongoose.models.User || mongoose.model('User', userSchema);
+// ────────────────────────────────
+// Export del modelo evitando OverwriteModelError
+// ────────────────────────────────
 
-module.exports = User;
+const User =
+  mongoose.models.User || mongoose.model('User', userSchema);
+
+module.exports = {
+  User,
+  ROLES_PERMITIDOS,
+  ESTADOS_HABITACIONALES,
+};

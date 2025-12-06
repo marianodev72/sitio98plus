@@ -1,12 +1,12 @@
 // backend/middleware/roles.js
-// Constantes de roles usadas en todo el sistema
+// Definición centralizada de roles. Siempre MAYÚSCULAS.
 
 const ROLES = {
   ADMIN: "ADMIN",
   ADMINISTRACION: "ADMINISTRACION",
   ENCARGADO_GENERAL: "ENCARGADO_GENERAL",
-  JEFE_BARRIO: "JEFE_BARRIO",
   INSPECTOR: "INSPECTOR",
+  JEFE_BARRIO: "JEFE_BARRIO",
   PERMISIONARIO: "PERMISIONARIO",
   POSTULANTE: "POSTULANTE",
 };

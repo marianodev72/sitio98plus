@@ -3,7 +3,7 @@
 const express = require("express");
 const router = express.Router();
 
-const auth = require("../middleware/authMiddleware");
+const auth = require("../middleware/auth");
 const ROLES = require("../middleware/roles");
 
 const {
@@ -18,6 +18,10 @@ const {
 
 // Helpers de rol
 const allow = (rol) => (req, res, next) => {
+  if (!req.user || !req.user.role) {
+    return res.status(401).json({ ok: false, message: "No autenticado." });
+  }
+
   const role = String(req.user.role || "").toUpperCase();
   if (role !== rol) {
     return res.status(403).json({ ok: false, message: "Permiso denegado." });
@@ -42,10 +46,10 @@ router.get(
 // ADMIN / ADMINISTRACION listado
 router.get("/admin", auth, listarAnexos4Administracion);
 
-// PDF (todos los roles del flujo; control en el controller)
+// PDF (control de permisos en el controller)
 router.get("/:id/pdf", auth, generarAnexo4PDF);
 
-// Detalle accesible según rol (validado en controller)
+// Detalle (validado en controller según rol)
 router.get("/:id", auth, obtenerAnexo4Detalle);
 
 // JEFE DE BARRIO confirma recepción

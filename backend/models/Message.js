@@ -1,87 +1,90 @@
-// models/Message.js
-// Mensajería interna ZN98
+// models/Mensaje.js
 
-const mongoose = require("mongoose");
+const mongoose = require('mongoose');
+const { Schema } = mongoose;
 
-const ROLES = [
-  "POSTULANTE",
-  "PERMISIONARIO",
-  "ALOJADO",
-  "INSPECTOR",
-  "JEFE_BARRIO",
-  "ADMINISTRACION",
-  "ENCARGADO_GENERAL",
-  "ADMIN",
-];
-
-const MessageSchema = new mongoose.Schema(
+/**
+ * Subdocumento para adjuntos de los mensajes
+ * (por si después conectamos con uploadAdjuntos)
+ */
+const MensajeAdjuntoSchema = new Schema(
   {
-    // emisor
-    fromUser: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+    fileId: {
+      type: Schema.Types.ObjectId,
       required: true,
     },
-    fromRole: {
+    nombre: {
       type: String,
-      required: true,
-      enum: ROLES,
+      default: '',
     },
-    fromBarrio: {
+    mimetype: {
       type: String,
-      default: null, // barrio del emisor (si aplica)
+      default: '',
     },
-
-    // destino (directo o por rol/barrio)
-    toUser: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      default: null,
-    },
-    toRole: {
-      type: String,
-      enum: ROLES,
-      default: null,
-    },
-    toBarrio: {
-      type: String,
-      default: null, // para broadcasts por barrio
-    },
-
-    // contenido
-    subject: {
-      type: String,
-      required: true,
-      trim: true,
-      maxlength: 200,
-    },
-    body: {
-      type: String,
-      required: true,
-      trim: true,
-      maxlength: 10000,
-    },
-
-    // tipo de envío: directo o broadcast (por rol/barrio)
-    kind: {
-      type: String,
-      required: true,
-      enum: ["DIRECT", "BROADCAST"],
-    },
-
-    // estado de lectura
-    readAt: {
-      type: Date,
-      default: null,
-    },
-
-    // auditoría mínima
-    meta: {
-      ip: String,
-      userAgent: String,
+    size: {
+      type: Number,
+      default: 0,
     },
   },
-  { timestamps: true }
+  { _id: false }
 );
 
-module.exports = mongoose.model("Message", MessageSchema);
+/**
+ * Esquema principal de Mensaje
+ */
+const MensajeSchema = new Schema({
+  remitente: {
+    type: Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+  },
+
+  destinatarios: [
+    {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
+  ],
+
+  asunto: {
+    type: String,
+    default: '',
+    trim: true,
+  },
+
+  cuerpo: {
+    type: String,
+    default: '',
+    trim: true,
+  },
+
+  adjuntos: {
+    type: [MensajeAdjuntoSchema],
+    default: [],
+  },
+
+  // Usuarios que ya marcaron como leído este mensaje
+  leidoPor: [
+    {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+    },
+  ],
+
+  // Para futuras funciones de “eliminado para X usuario”
+  eliminadoPara: [
+    {
+      usuario: { type: Schema.Types.ObjectId, ref: 'User' },
+      fecha: { type: Date, default: Date.now },
+    },
+  ],
+
+  // Fecha de creación del mensaje (usada en los .sort({ creadoEn: -1 }))
+  creadoEn: {
+    type: Date,
+    default: Date.now,
+  },
+});
+
+module.exports = mongoose.model('Mensaje', MensajeSchema);

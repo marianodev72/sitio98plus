@@ -7,6 +7,14 @@ const PDFDocument = require("pdfkit");
 const esRole = (usuario, roleConst) =>
   String(usuario?.role || "").toUpperCase() === roleConst;
 
+// Normaliza el ID del usuario (acepta req.user.id o req.user._id)
+const getUserId = (usuario) => {
+  if (!usuario) return null;
+  if (usuario._id) return usuario._id.toString();
+  if (usuario.id) return usuario.id.toString();
+  return null;
+};
+
 // -----------------------------------------------------------------------------
 // POST /api/anexo3
 // Crea un nuevo Anexo 3 (lo inicia el INSPECTOR)
@@ -14,8 +22,9 @@ const esRole = (usuario, roleConst) =>
 const crearAnexo3 = async (req, res) => {
   try {
     const usuario = req.user;
+    const userId = getUserId(usuario);
 
-    if (!usuario || !usuario._id) {
+    if (!usuario || !userId) {
       return res.status(401).json({ ok: false, message: "No autenticado." });
     }
 
@@ -56,7 +65,7 @@ const crearAnexo3 = async (req, res) => {
         nombreCompleto: body.permisionarioNombre || "",
       },
       inspector: {
-        usuario: usuario._id,
+        usuario: userId,
         grado: body.inspectorGrado || "",
         nombreCompleto: body.inspectorNombre || usuario.nombre || "",
       },
@@ -74,7 +83,7 @@ const crearAnexo3 = async (req, res) => {
       estado: "PENDIENTE_CONFORME_PERMISIONARIO",
       historial: [
         {
-          actor: usuario._id,
+          actor: userId,
           actorRole: ROLES.INSPECTOR,
           accion: "CREADO_INSPECTOR",
           observaciones: "Acta de recepción creada por inspector.",
@@ -112,8 +121,9 @@ const crearAnexo3 = async (req, res) => {
 const listarAnexos3Permisionario = async (req, res) => {
   try {
     const usuario = req.user;
+    const userId = getUserId(usuario);
 
-    if (!usuario || !usuario._id) {
+    if (!usuario || !userId) {
       return res.status(401).json({ ok: false, message: "No autenticado." });
     }
 
@@ -125,7 +135,7 @@ const listarAnexos3Permisionario = async (req, res) => {
     }
 
     const anexos = await Anexo3.find({
-      "permisionario.usuario": usuario._id,
+      "permisionario.usuario": userId,
     })
       .sort({ createdAt: -1 })
       .lean();
@@ -159,8 +169,9 @@ const listarAnexos3Permisionario = async (req, res) => {
 const obtenerAnexo3Detalle = async (req, res) => {
   try {
     const usuario = req.user;
+    const userId = getUserId(usuario);
 
-    if (!usuario || !usuario._id) {
+    if (!usuario || !userId) {
       return res.status(401).json({ ok: false, message: "No autenticado." });
     }
 
@@ -177,11 +188,11 @@ const obtenerAnexo3Detalle = async (req, res) => {
 
     const esPermisionario =
       role === ROLES.PERMISIONARIO &&
-      String(doc.permisionario.usuario) === String(usuario._id);
+      String(doc.permisionario.usuario) === String(userId);
 
     const esInspector =
       role === ROLES.INSPECTOR &&
-      String(doc.inspector.usuario) === String(usuario._id);
+      String(doc.inspector.usuario) === String(userId);
 
     const esAdmin = role === ROLES.ADMIN;
 
@@ -209,8 +220,9 @@ const obtenerAnexo3Detalle = async (req, res) => {
 const permisionarioDaConforme = async (req, res) => {
   try {
     const usuario = req.user;
+    const userId = getUserId(usuario);
 
-    if (!usuario || !usuario._id) {
+    if (!usuario || !userId) {
       return res.status(401).json({ ok: false, message: "No autenticado." });
     }
 
@@ -230,7 +242,7 @@ const permisionarioDaConforme = async (req, res) => {
         .json({ ok: false, message: "Anexo 3 no encontrado." });
     }
 
-    if (String(doc.permisionario.usuario) !== String(usuario._id)) {
+    if (String(doc.permisionario.usuario) !== String(userId)) {
       return res.status(403).json({
         ok: false,
         message: "No podés dar conforme a un Anexo 3 que no es tuyo.",
@@ -247,7 +259,7 @@ const permisionarioDaConforme = async (req, res) => {
 
     doc.estado = "PENDIENTE_CIERRE_ADMIN";
     doc.historial.push({
-      actor: usuario._id,
+      actor: userId,
       actorRole: ROLES.PERMISIONARIO,
       accion: "CONFORME_PERMISIONARIO",
       observaciones: req.body?.observaciones || "",
@@ -276,8 +288,9 @@ const permisionarioDaConforme = async (req, res) => {
 const permisionarioPideRevision = async (req, res) => {
   try {
     const usuario = req.user;
+    const userId = getUserId(usuario);
 
-    if (!usuario || !usuario._id) {
+    if (!usuario || !userId) {
       return res.status(401).json({ ok: false, message: "No autenticado." });
     }
 
@@ -297,7 +310,7 @@ const permisionarioPideRevision = async (req, res) => {
         .json({ ok: false, message: "Anexo 3 no encontrado." });
     }
 
-    if (String(doc.permisionario.usuario) !== String(usuario._id)) {
+    if (String(doc.permisionario.usuario) !== String(userId)) {
       return res.status(403).json({
         ok: false,
         message: "No podés solicitar revisión de un Anexo 3 que no es tuyo.",
@@ -314,7 +327,7 @@ const permisionarioPideRevision = async (req, res) => {
 
     doc.estado = "EN_REVISION_INSPECTOR";
     doc.historial.push({
-      actor: usuario._id,
+      actor: userId,
       actorRole: ROLES.PERMISIONARIO,
       accion: "REVISION_SOLICITADA_PERMISIONARIO",
       observaciones: req.body?.observaciones || "",
@@ -344,8 +357,9 @@ const permisionarioPideRevision = async (req, res) => {
 const inspectorReenviaAPermisionario = async (req, res) => {
   try {
     const usuario = req.user;
+    const userId = getUserId(usuario);
 
-    if (!usuario || !usuario._id) {
+    if (!usuario || !userId) {
       return res.status(401).json({ ok: false, message: "No autenticado." });
     }
 
@@ -365,7 +379,7 @@ const inspectorReenviaAPermisionario = async (req, res) => {
         .json({ ok: false, message: "Anexo 3 no encontrado." });
     }
 
-    if (String(doc.inspector.usuario) !== String(usuario._id)) {
+    if (String(doc.inspector.usuario) !== String(userId)) {
       return res.status(403).json({
         ok: false,
         message:
@@ -383,7 +397,7 @@ const inspectorReenviaAPermisionario = async (req, res) => {
 
     doc.estado = "PENDIENTE_CONFORME_PERMISIONARIO";
     doc.historial.push({
-      actor: usuario._id,
+      actor: userId,
       actorRole: ROLES.INSPECTOR,
       accion: "REENVIADO_A_PERMISIONARIO",
       observaciones: req.body?.observaciones || "",
@@ -413,8 +427,9 @@ const inspectorReenviaAPermisionario = async (req, res) => {
 const adminCierraAnexo3 = async (req, res) => {
   try {
     const usuario = req.user;
+    const userId = getUserId(usuario);
 
-    if (!usuario || !usuario._id) {
+    if (!usuario || !userId) {
       return res.status(401).json({ ok: false, message: "No autenticado." });
     }
 
@@ -444,14 +459,14 @@ const adminCierraAnexo3 = async (req, res) => {
 
     doc.estado = "CERRADO";
     doc.administradorCierre = {
-      usuario: usuario._id,
+      usuario: userId,
       grado: req.body?.adminGrado || "",
       nombreCompleto: req.body?.adminNombre || usuario.nombre || "",
       fechaCierre: new Date(),
     };
 
     doc.historial.push({
-      actor: usuario._id,
+      actor: userId,
       actorRole: ROLES.ADMIN,
       accion: "CERRADO_ADMIN",
       observaciones: req.body?.observaciones || "",
@@ -481,8 +496,9 @@ const adminCierraAnexo3 = async (req, res) => {
 const generarAnexo3PDF = async (req, res) => {
   try {
     const usuario = req.user;
+    const userId = getUserId(usuario);
 
-    if (!usuario || !usuario._id) {
+    if (!usuario || !userId) {
       return res.status(401).json({ ok: false, message: "No autenticado." });
     }
 
@@ -499,11 +515,11 @@ const generarAnexo3PDF = async (req, res) => {
 
     const esPermisionario =
       role === ROLES.PERMISIONARIO &&
-      String(doc.permisionario.usuario) === String(usuario._id);
+      String(doc.permisionario.usuario) === String(userId);
 
     const esInspector =
       role === ROLES.INSPECTOR &&
-      String(doc.inspector.usuario) === String(usuario._id);
+      String(doc.inspector.usuario) === String(userId);
 
     const esAdmin = role === ROLES.ADMIN;
 
@@ -637,11 +653,9 @@ const generarAnexo3PDF = async (req, res) => {
     // Novedades
     pdf.fontSize(12).text("Novedades / Observaciones", { underline: true });
     pdf.moveDown(0.5);
-    pdf
-      .fontSize(10)
-      .text(doc.novedades || "—", {
-        width: 500,
-      });
+    pdf.fontSize(10).text(doc.novedades || "—", {
+      width: 500,
+    });
     pdf.moveDown();
 
     pdf.fontSize(9).text(`Estado actual: ${doc.estado || ""}`, {

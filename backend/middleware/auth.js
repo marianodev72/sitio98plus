@@ -1,107 +1,124 @@
-// backend/middleware/auth.js
-// Punto único de autenticación y compatibilidad hacia atrás
+// middleware/auth.js
+// Autenticación y autorización centralizada — Sistema ZN98
 
-const jwt = require("jsonwebtoken");
-const ROLES = require("./roles");
-const requireRole = require("./requireRole"); // para compatibilidad
+const jwt = require('jsonwebtoken');
+const { User } = require('../models/User');
 
-const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
+const TOKEN_COOKIE_NAME = 'zn98_token';
 
-/**
- * Genera un JWT con los datos mínimos necesarios.
- */
+// Claves RSA (RS256)
+// En producción deben venir de variables de entorno y estar FUERA del repo.
+const JWT_PRIVATE_KEY = process.env.JWT_PRIVATE_KEY;
+const JWT_PUBLIC_KEY = process.env.JWT_PUBLIC_KEY;
+
+if (!JWT_PRIVATE_KEY || !JWT_PUBLIC_KEY) {
+  console.warn(
+    '[auth] JWT_PRIVATE_KEY o JWT_PUBLIC_KEY no están definidas en variables de entorno.'
+  );
+}
+
+// Opciones de cookie — en producción ajustamos Secure y SameSite.
+function getCookieOptions() {
+  const isProduction = process.env.NODE_ENV === 'production';
+  return {
+    httpOnly: true,
+    secure: isProduction, // true en producción (HTTPS)
+    sameSite: isProduction ? 'strict' : 'lax',
+    path: '/', // cookie válida para toda la app
+  };
+}
+
+// Firma un token JWT para un usuario
 function signToken(user) {
   const payload = {
-    id: user._id,
+    sub: user._id.toString(),
+    email: user.email,
     role: user.role,
+    activo: user.activo,
   };
 
-  return jwt.sign(payload, JWT_SECRET, {
-    expiresIn: JWT_EXPIRES_IN,
+  return jwt.sign(payload, JWT_PRIVATE_KEY, {
+    algorithm: 'RS256',
+    expiresIn: '1h',
   });
 }
 
-/**
- * Middleware principal de autenticación.
- * - Lee el token desde Authorization: Bearer <token> o cookie "token".
- * - Verifica el JWT y carga req.user = { id, role }.
- */
-function authRequired(req, res, next) {
+// Setea cookie de autenticación
+function setAuthCookie(res, token) {
+  res.cookie(TOKEN_COOKIE_NAME, token, getCookieOptions());
+}
+
+// Limpia cookie de autenticación
+function clearAuthCookie(res) {
+  res.clearCookie(TOKEN_COOKIE_NAME, getCookieOptions());
+}
+
+// Middleware: requiere usuario autenticado
+async function authRequired(req, res, next) {
   try {
-    let token = null;
+    const tokenFromCookie = req.cookies?.[TOKEN_COOKIE_NAME];
+    const authHeader = req.headers.authorization;
+    let token = tokenFromCookie;
 
-    const authHeader = req.headers["authorization"] || "";
-    if (authHeader.startsWith("Bearer ")) {
-      token = authHeader.substring(7);
-    }
-
-    // Compatibilidad: también permite token en cookie "token"
-    if (!token && req.cookies && req.cookies.token) {
-      token = req.cookies.token;
+    // Permite opcionalmente "Bearer <token>" por header
+    if (!token && authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1];
     }
 
     if (!token) {
-      return res.status(401).json({ message: "No autenticado" });
+      return res.status(401).json({ message: 'No autenticado.' });
     }
 
-    const decoded = jwt.verify(token, JWT_SECRET);
+    let payload;
+    try {
+      payload = jwt.verify(token, JWT_PUBLIC_KEY, { algorithms: ['RS256'] });
+    } catch (err) {
+      return res.status(401).json({ message: 'Token inválido o expirado.' });
+    }
 
-    req.user = {
-      id: decoded.id,
-      role: decoded.role,
-    };
+    const user = await User.findById(payload.sub);
+    if (!user) {
+      return res.status(401).json({ message: 'Usuario no encontrado.' });
+    }
 
+    if (!user.activo || user.bloqueado) {
+      return res
+        .status(403)
+        .json({ message: 'Usuario inactivo o bloqueado.' });
+    }
+
+    req.user = user;
     next();
   } catch (err) {
-    console.error("Error en authRequired:", err);
-    return res.status(401).json({ message: "Token inválido o expirado" });
+    console.error('[authRequired] Error:', err);
+    res.status(500).json({ message: 'Error en autenticación.' });
   }
 }
 
-/**
- * Helpers para setear / limpiar la cookie de auth (si se usan cookies).
- */
-function setAuthCookie(res, token) {
-  res.cookie("token", token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
-  });
+// Middleware: requiere uno de los roles indicados
+function requireRole(...rolesPermitidos) {
+  const rolesNormalizados = rolesPermitidos.map((r) => r.toUpperCase());
+
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ message: 'No autenticado.' });
+    }
+
+    const roleUsuario = (req.user.role || '').toUpperCase();
+
+    if (!rolesNormalizados.includes(roleUsuario)) {
+      return res.status(403).json({ message: 'Acceso denegado.' });
+    }
+
+    next();
+  };
 }
 
-function clearAuthCookie(res) {
-  res.clearCookie("token");
-}
-
-/**
- * Función principal que exportamos por default.
- * Esto permite:
- *   const authMiddleware = require("../middleware/auth");
- * y usarlo directamente como middleware.
- */
-function authMiddleware(req, res, next) {
-  return authRequired(req, res, next);
-}
-
-// =============================
-// EXPORTS (compatibilidad total)
-// =============================
-
-// default: middleware de auth
-module.exports = authMiddleware;
-
-// named exports para destructuring:
-//   const { requireAuth, requireRole } = require("../middleware/auth");
-module.exports.authRequired = authRequired;
-module.exports.requireAuth = authRequired;
-
-// helpers de JWT
-module.exports.signToken = signToken;
-module.exports.setAuthCookie = setAuthCookie;
-module.exports.clearAuthCookie = clearAuthCookie;
-
-// reexport de requireRole y ROLES para código legacy
-module.exports.requireRole = requireRole;
-module.exports.ROLES = ROLES;
+module.exports = {
+  signToken,
+  setAuthCookie,
+  clearAuthCookie,
+  authRequired,
+  requireRole,
+  TOKEN_COOKIE_NAME,
+};

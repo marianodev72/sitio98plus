@@ -1,140 +1,82 @@
 // backend/routes/permisionario.js
-
 const express = require("express");
-const path = require("path");
-const fs = require("fs");
-const multer = require("multer");
-
 const router = express.Router();
 
-// Controlador de permisionario (mis datos, documentos, etc.)
-const controller = require("../controllers/permisionarioController");
+const permController = require("../controllers/permisionarioController");
+let comController;
+try {
+  comController = require("../controllers/permisionarioComunicacionesController");
+} catch (err) {
+  console.warn(
+    "[permisionario] No se pudo cargar permisionarioComunicacionesController:",
+    err.message
+  );
+}
+const anexo7 = require("../controllers/anexo7Controller");
 
-// Controlador específico de comunicaciones del permisionario
-const comunicacionesController = require("../controllers/permisionarioComunicacionesController");
-
-// -----------------------------------------------------------------------------
-// Middleware local: asegura que el usuario logueado sea PERMISIONARIO
-// (1ª llave: authMiddleware se aplica en server.js para /api/permisionario)
-// -----------------------------------------------------------------------------
+// Middleware: valida que req.user exista y sea permisionario
 function ensurePermisionario(req, res, next) {
   try {
-    if (!req.user || !req.user.role) {
-      return res
-        .status(401)
-        .json({ ok: false, msg: "No autenticado o usuario inválido" });
+    if (!req.user) {
+      return res.status(401).json({ ok: false, msg: "Token inválido" });
     }
 
-    const role = String(req.user.role).toUpperCase();
-
+    const role = (req.user.role || "").toUpperCase();
     if (role !== "PERMISIONARIO") {
-      return res.status(403).json({
-        ok: false,
-        msg: "Acceso permitido solo para permisionarios",
-      });
+      return res.status(403).json({ ok: false, msg: "Acceso denegado" });
     }
 
     next();
   } catch (err) {
-    console.error("Error en ensurePermisionario:", err);
-    return res.status(500).json({
-      ok: false,
-      msg: "Error al validar permisos de permisionario",
-    });
+    console.error(err);
+    return res.status(500).json({ ok: false, msg: "Error validando rol" });
   }
 }
 
+// --- Mis Datos
+router.get("/mis-datos", ensurePermisionario, permController.getMisDatos);
+
 // -----------------------------------------------------------------------------
-// Configuración de subida de archivos para COMUNICACIONES
-// Carpeta: backend/uploads/comunicaciones
-// Sólo permite PDF / JPG / PNG – máx. 5 archivos de 5 MB
+// Comunicaciones (solo se crean si las funciones existen)
 // -----------------------------------------------------------------------------
-const comunicacionesUploadDir = path.join(
-  __dirname,
-  "..",
-  "uploads",
-  "comunicaciones"
-);
-
-fs.mkdirSync(comunicacionesUploadDir, { recursive: true });
-
-const storageComunicaciones = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, comunicacionesUploadDir);
-  },
-  filename: (req, file, cb) => {
-    const timestamp = Date.now();
-    const sanitized = file.originalname.replace(/[^a-zA-Z0-9.\-_.]/g, "_");
-    cb(null, `${timestamp}-${sanitized}`);
-  },
-});
-
-function fileFilterComunicaciones(req, file, cb) {
-  const allowed = [
-    "application/pdf",
-    "image/jpeg",
-    "image/png",
-  ];
-
-  if (allowed.includes(file.mimetype)) {
-    cb(null, true);
-  } else {
-    cb(new Error("Tipo de archivo no permitido (solo PDF/JPG/PNG)."), false);
-  }
+if (
+  comController &&
+  typeof comController.getMisComunicaciones === "function"
+) {
+  router.get(
+    "/comunicaciones",
+    ensurePermisionario,
+    comController.getMisComunicaciones
+  );
+} else {
+  console.warn(
+    "[permisionario] Ruta GET /comunicaciones deshabilitada: getMisComunicaciones no definida."
+  );
 }
 
-const uploadComunicaciones = multer({
-  storage: storageComunicaciones,
-  fileFilter: fileFilterComunicaciones,
-  limits: {
-    fileSize: 5 * 1024 * 1024, // 5 MB
-    files: 5, // máximo 5 adjuntos
-  },
-}).array("adjuntos", 5);
-
-// Wrapper para manejar errores de multer y devolver JSON limpio
-function manejarUploadComunicaciones(req, res, next) {
-  uploadComunicaciones(req, res, (err) => {
-    if (err) {
-      console.error("Error al subir adjuntos de comunicación:", err);
-      return res.status(400).json({
-        ok: false,
-        msg: err.message || "Error al subir archivos adjuntos.",
-      });
-    }
-    next();
-  });
+if (comController && typeof comController.crearComunicacion === "function") {
+  router.post(
+    "/comunicaciones",
+    ensurePermisionario,
+    comController.crearComunicacion
+  );
+} else {
+  console.warn(
+    "[permisionario] Ruta POST /comunicaciones deshabilitada: crearComunicacion no definida."
+  );
 }
 
 // -----------------------------------------------------------------------------
-// RUTAS EXISTENTES (no tocamos la lógica que ya funcionaba)
+// Anexo 7
 // -----------------------------------------------------------------------------
-
-// GET – Obtener mis datos
-router.get("/mis-datos", ensurePermisionario, controller.getMisDatos);
-
-// PUT – Actualizar mis datos
-router.put("/mis-datos", ensurePermisionario, controller.actualizarMisDatos);
-
-// POST – Subir documentos
-router.post("/documentos", ensurePermisionario, controller.subirDocumento);
-
-// -----------------------------------------------------------------------------
-// RUTAS DE COMUNICACIONES DEL PERMISIONARIO
-// -----------------------------------------------------------------------------
-// GET /api/permisionario/comunicaciones
-router.get(
-  "/comunicaciones",
-  ensurePermisionario,
-  comunicacionesController.listarMisComunicaciones
-);
-
-// POST /api/permisionario/comunicaciones
+router.get("/anexos7/mios", ensurePermisionario, anexo7.getMisAnexos7);
+router.get("/anexos7/:id", ensurePermisionario, anexo7.getAnexo7ById);
+router.post("/anexos7", ensurePermisionario, anexo7.crearAnexo7);
+router.put("/anexos7/:id", ensurePermisionario, anexo7.editarAnexo7);
 router.post(
-  "/comunicaciones",
+  "/anexos7/:id/enviar-a-inspector",
   ensurePermisionario,
-  manejarUploadComunicaciones,
-  comunicacionesController.crearComunicacion
+  anexo7.enviarAInspector
 );
 
 module.exports = router;

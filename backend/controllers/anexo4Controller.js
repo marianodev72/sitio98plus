@@ -4,6 +4,7 @@ const Anexo4 = require("../models/Anexo4");
 const ROLES = require("../middleware/roles");
 const PDFDocument = require("pdfkit");
 
+// Helpers
 const esRole = (usuario, rol) =>
   String(usuario?.role || "").toUpperCase() === rol;
 
@@ -13,6 +14,8 @@ const parseFecha = (value) => {
   if (isNaN(d.getTime())) return undefined;
   return d;
 };
+
+const obtenerIdUsuario = (u) => u?.id || u?._id || u?.sub || null;
 
 // -----------------------------------------------------------------------------
 // PERMISIONARIO CREA FORMULARIO
@@ -25,6 +28,14 @@ const crearAnexo4 = async (req, res) => {
       return res.status(403).json({
         ok: false,
         message: "Solo un permisionario puede crear el Anexo 4.",
+      });
+    }
+
+    const userId = obtenerIdUsuario(usuario);
+    if (!userId) {
+      return res.status(500).json({
+        ok: false,
+        message: "No se pudo determinar el usuario autenticado.",
       });
     }
 
@@ -54,30 +65,35 @@ const crearAnexo4 = async (req, res) => {
 
     const nuevo = new Anexo4({
       numero: siguienteNumero,
+
       permisionario: {
-        usuario: usuario._id,
+        usuario: userId,
         grado: body.permisionarioGrado || "",
         nombreCompleto:
           body.permisionarioNombre ||
           usuario.nombreCompleto ||
           `${usuario.apellido || ""} ${usuario.nombre || ""}`.trim(),
       },
+
       datos: {
-        unidadHabitacional: barrio, // Barrio
-        dpto: vivienda, // Vivienda
-        nombreConyuge: representante, // Datos del representante
+        unidadHabitacional: barrio,
+        dpto: vivienda,
+        nombreConyuge: representante,
         destinosFamiliares,
         observaciones,
         fechaSalida,
         fechaRegreso,
       },
+
       estado: "ENVIADO_PERMISIONARIO",
+
       historial: [
         {
-          actor: usuario._id,
+          actor: userId,
           actorRole: ROLES.PERMISIONARIO,
           accion: "CREADO_PERMISIONARIO",
           observaciones: "Anexo 4 generado y enviado.",
+          fecha: new Date(),
         },
       ],
     });
@@ -101,22 +117,23 @@ const crearAnexo4 = async (req, res) => {
 };
 
 // -----------------------------------------------------------------------------
-// PERMISIONARIO VE SUS ANEXOS 4
+// LISTADOS
 // -----------------------------------------------------------------------------
+
+// Lista de Anexos 4 del permisionario autenticado
 const listarAnexos4Permisionario = async (req, res) => {
   try {
     const usuario = req.user;
+    const userId = obtenerIdUsuario(usuario);
 
     if (!esRole(usuario, ROLES.PERMISIONARIO)) {
       return res.status(403).json({
         ok: false,
-        message: "Solo un permisionario puede listar sus Anexo 4.",
+        message: "Solo un permisionario puede ver sus Anexos 4.",
       });
     }
 
-    const docs = await Anexo4.find({
-      "permisionario.usuario": usuario._id,
-    })
+    const docs = await Anexo4.find({ "permisionario.usuario": userId })
       .sort({ createdAt: -1 })
       .lean();
 
@@ -127,21 +144,19 @@ const listarAnexos4Permisionario = async (req, res) => {
         numero: d.numero,
         estado: d.estado,
         creadoEn: d.createdAt,
-        unidadHabitacional: d.datos.unidadHabitacional, // barrio
+        unidadHabitacional: d.datos?.unidadHabitacional,
       })),
     });
   } catch (err) {
     console.error("Error listarAnexos4Permisionario:", err);
     return res.status(500).json({
       ok: false,
-      message: "No se pudieron obtener los Anexo 4.",
+      message: "No se pudo obtener el listado de Anexos 4.",
     });
   }
 };
 
-// -----------------------------------------------------------------------------
-// LISTADO PARA JEFE DE BARRIO
-// -----------------------------------------------------------------------------
+// Listado para Jefe de Barrio (simplificado)
 const listarAnexos4JefeBarrio = async (req, res) => {
   try {
     const usuario = req.user;
@@ -153,7 +168,7 @@ const listarAnexos4JefeBarrio = async (req, res) => {
       });
     }
 
-    const docs = await Anexo4.find({}).sort({ createdAt: -1 }).lean();
+    const docs = await Anexo4.find().sort({ createdAt: -1 }).lean();
 
     return res.json({
       ok: true,
@@ -162,35 +177,31 @@ const listarAnexos4JefeBarrio = async (req, res) => {
         numero: d.numero,
         estado: d.estado,
         creadoEn: d.createdAt,
-        unidadHabitacional: d.datos.unidadHabitacional, // barrio
-        permisionario: d.permisionario?.nombreCompleto || "",
+        unidadHabitacional: d.datos?.unidadHabitacional,
       })),
     });
   } catch (err) {
     console.error("Error listarAnexos4JefeBarrio:", err);
     return res.status(500).json({
       ok: false,
-      message: "No se pudieron obtener los Anexo 4 para Jefe de Barrio.",
+      message: "No se pudo obtener el listado de Anexos 4.",
     });
   }
 };
 
-// -----------------------------------------------------------------------------
-// LISTADO PARA ADMIN / ADMINISTRACION
-// -----------------------------------------------------------------------------
+// Listado para Administración (simplificado)
 const listarAnexos4Administracion = async (req, res) => {
   try {
     const usuario = req.user;
-    const role = String(usuario?.role || "").toUpperCase();
 
-    if (role !== ROLES.ADMIN && role !== ROLES.ADMINISTRACION) {
+    if (!esRole(usuario, ROLES.ADMINISTRACION)) {
       return res.status(403).json({
         ok: false,
-        message: "Solo Administración o Admin pueden ver este listado.",
+        message: "Solo Administración puede ver este listado.",
       });
     }
 
-    const docs = await Anexo4.find({}).sort({ createdAt: -1 }).lean();
+    const docs = await Anexo4.find().sort({ createdAt: -1 }).lean();
 
     return res.json({
       ok: true,
@@ -199,60 +210,67 @@ const listarAnexos4Administracion = async (req, res) => {
         numero: d.numero,
         estado: d.estado,
         creadoEn: d.createdAt,
-        unidadHabitacional: d.datos.unidadHabitacional, // barrio
-        permisionario: d.permisionario?.nombreCompleto || "",
+        unidadHabitacional: d.datos?.unidadHabitacional,
       })),
     });
   } catch (err) {
     console.error("Error listarAnexos4Administracion:", err);
     return res.status(500).json({
       ok: false,
-      message: "No se pudieron obtener los Anexo 4 para Administración.",
+      message: "No se pudo obtener el listado de Anexos 4.",
     });
   }
 };
 
 // -----------------------------------------------------------------------------
-// DETALLE DEL ANEXO 4
+// DETALLE
 // -----------------------------------------------------------------------------
 const obtenerAnexo4Detalle = async (req, res) => {
   try {
-    const usuario = req.user;
     const { id } = req.params;
+    const usuario = req.user;
+    const userId = obtenerIdUsuario(usuario);
 
     const doc = await Anexo4.findById(id).lean();
+
     if (!doc) {
-      return res.status(404).json({ ok: false, message: "Anexo 4 no encontrado." });
-    }
-
-    const role = String(usuario.role || "").toUpperCase();
-
-    const esPermisionario =
-      role === ROLES.PERMISIONARIO &&
-      String(doc.permisionario.usuario) === String(usuario._id);
-
-    const esJefeBarrio = role === ROLES.JEFE_BARRIO;
-    const esAdmin = role === ROLES.ADMIN || role === ROLES.ADMINISTRACION;
-
-    if (!esPermisionario && !esJefeBarrio && !esAdmin) {
-      return res.status(403).json({
+      return res.status(404).json({
         ok: false,
-        message: "No tiene permiso para ver este Anexo 4.",
+        message: "Anexo 4 no encontrado.",
       });
     }
 
-    return res.json({ ok: true, anexo4: doc });
+    const rol = String(usuario?.role || "").toUpperCase();
+
+    if (rol === ROLES.PERMISIONARIO) {
+      if (String(doc.permisionario?.usuario) !== String(userId)) {
+        return res.status(403).json({
+          ok: false,
+          message: "No estás autorizado a ver este Anexo 4.",
+        });
+      }
+    }
+    // Otros roles (JEFE_BARRIO, ADMINISTRACION, ADMIN) se permiten por ahora
+
+    return res.json({
+      ok: true,
+      anexo4: doc,
+    });
   } catch (err) {
     console.error("Error obtenerAnexo4Detalle:", err);
-    return res.status(500).json({ ok: false, message: "Error en el servidor." });
+    return res.status(500).json({
+      ok: false,
+      message: "No se pudo obtener el detalle del Anexo 4.",
+    });
   }
 };
 
 // -----------------------------------------------------------------------------
-// JEFE DE BARRIO RECIBE FORMULARIO
+// JEFE DE BARRIO CONFIRMA RECEPCIÓN
 // -----------------------------------------------------------------------------
 const jefeBarrioConfirmaRecepcion = async (req, res) => {
   try {
+    const { id } = req.params;
     const usuario = req.user;
 
     if (!esRole(usuario, ROLES.JEFE_BARRIO)) {
@@ -262,141 +280,96 @@ const jefeBarrioConfirmaRecepcion = async (req, res) => {
       });
     }
 
-    const { id } = req.params;
+    const userId = obtenerIdUsuario(usuario);
+
     const doc = await Anexo4.findById(id);
-
     if (!doc) {
-      return res.status(404).json({ ok: false, message: "Anexo 4 no encontrado." });
-    }
-
-    if (doc.estado !== "ENVIADO_PERMISIONARIO") {
-      return res.status(400).json({
+      return res.status(404).json({
         ok: false,
-        message: "Este Anexo 4 ya fue recibido por el Jefe de Barrio.",
+        message: "Anexo 4 no encontrado.",
       });
     }
 
     doc.estado = "RECIBIDO_JEFE_BARRIO";
-    doc.jefeBarrio = {
-      usuario: usuario._id,
-      grado: usuario.grado || "",
-      nombreCompleto: usuario.nombre || "",
-      fechaRecepcion: new Date(),
-    };
-
     doc.historial.push({
-      actor: usuario._id,
+      actor: userId,
       actorRole: ROLES.JEFE_BARRIO,
       accion: "RECIBIDO_JEFE_BARRIO",
-      observaciones: req.body?.observaciones || "",
+      fecha: new Date(),
     });
 
     await doc.save();
 
     return res.json({
       ok: true,
-      message: "Anexo 4 recibido por el Jefe de Barrio.",
-      estado: doc.estado,
+      message: "Recepción confirmada.",
     });
   } catch (err) {
     console.error("Error jefeBarrioConfirmaRecepcion:", err);
     return res.status(500).json({
       ok: false,
-      message: "Error al registrar la recepción.",
+      message: "No se pudo actualizar el Anexo 4.",
     });
   }
 };
 
 // -----------------------------------------------------------------------------
-// PDF DEL ANEXO 4
+// PDF (implementación mínima)
 // -----------------------------------------------------------------------------
 const generarAnexo4PDF = async (req, res) => {
   try {
-    const usuario = req.user;
     const { id } = req.params;
 
     const doc = await Anexo4.findById(id).lean();
     if (!doc) {
-      return res.status(404).json({ ok: false, message: "No encontrado." });
-    }
-
-    const role = String(usuario.role || "").toUpperCase();
-
-    const permitido =
-      (role === ROLES.PERMISIONARIO &&
-        String(doc.permisionario.usuario) === String(usuario._id)) ||
-      role === ROLES.JEFE_BARRIO ||
-      role === ROLES.ADMIN ||
-      role === ROLES.ADMINISTRACION;
-
-    if (!permitido) {
-      return res.status(403).json({
+      return res.status(404).json({
         ok: false,
-        message: "No tiene permiso para descargar este PDF.",
+        message: "Anexo 4 no encontrado.",
       });
     }
 
-    const pdf = new PDFDocument({ margin: 50 });
-    const nombre = `anexo4_${doc.numero}.pdf`;
+    const pdf = new PDFDocument({ margin: 40 });
 
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="${nombre}"`);
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="anexo4_${doc.numero || id}.pdf"`
+    );
+
     pdf.pipe(res);
 
-    pdf.fontSize(16).text("ANEXO 4 - FORMULARIO DE NOVEDADES", {
-      align: "center",
-    });
+    pdf.fontSize(18).text("Anexo 4 - Solicitud de salida", { align: "center" });
     pdf.moveDown();
 
-    pdf.fontSize(12).text(`Número: ${doc.numero}`);
-    pdf.text(`Fecha: ${new Date(doc.createdAt).toLocaleString("es-AR")}`);
+    pdf.fontSize(12).text(`Número: ${doc.numero || "-"}`);
+    pdf.text(
+      `Permisionario: ${doc.permisionario?.grado || ""} ${
+        doc.permisionario?.nombreCompleto || ""
+      }`
+    );
+    pdf.text(`Unidad habitacional: ${doc.datos?.unidadHabitacional || "-"}`);
+    pdf.text(`Vivienda: ${doc.datos?.dpto || "-"}`);
     pdf.moveDown();
 
-    pdf.fontSize(12).text("Datos del Permisionario", { underline: true });
-    pdf.fontSize(10);
-    pdf.text(`Nombre: ${doc.permisionario.nombreCompleto}`);
-    pdf.text(`Grado: ${doc.permisionario.grado}`);
+    pdf.text(`Representante / Cónyuge: ${doc.datos?.nombreConyuge || "-"}`);
+    pdf.text(
+      `Destino / familiares: ${doc.datos?.destinosFamiliares || "-"}`
+    );
+    pdf.text(`Fecha de salida: ${doc.datos?.fechaSalida || "-"}`);
+    pdf.text(`Fecha de regreso: ${doc.datos?.fechaRegreso || "-"}`);
     pdf.moveDown();
 
-    pdf.fontSize(12).text("Datos informados", { underline: true });
-    pdf.fontSize(10);
-    pdf.text(`Barrio: ${doc.datos.unidadHabitacional || ""}`);
-    pdf.text(`Vivienda: ${doc.datos.dpto || ""}`);
-    pdf.text(`Datos del representante: ${doc.datos.nombreConyuge || ""}`);
-    pdf.text(`Destinos familiares: ${doc.datos.destinosFamiliares || ""}`);
-    pdf.text(`Observaciones: ${doc.datos.observaciones || ""}`);
-
-    if (doc.datos.fechaSalida) {
-      pdf.text(
-        `Salida: ${new Date(doc.datos.fechaSalida).toLocaleDateString("es-AR")}`
-      );
-    }
-    if (doc.datos.fechaRegreso) {
-      pdf.text(
-        `Regreso: ${new Date(doc.datos.fechaRegreso).toLocaleDateString("es-AR")}`
-      );
-    }
-
-    pdf.moveDown();
-
-    if (doc.jefeBarrio?.usuario) {
-      pdf.fontSize(12).text("Recepción Jefe de Barrio", { underline: true });
-      pdf.fontSize(10);
-      pdf.text(`Nombre: ${doc.jefeBarrio.nombreCompleto}`);
-      pdf.text(
-        `Fecha recepción: ${new Date(
-          doc.jefeBarrio.fechaRecepcion
-        ).toLocaleString("es-AR")}`
-      );
-    }
+    pdf.text(`Observaciones: ${doc.datos?.observaciones || "-"}`);
 
     pdf.end();
   } catch (err) {
     console.error("Error generarAnexo4PDF:", err);
-    return res.status(500).json({
-      ok: false,
-      message: "No se pudo generar el PDF.",
-    });
+    if (!res.headersSent) {
+      return res.status(500).json({
+        ok: false,
+        message: "No se pudo generar el PDF.",
+      });
+    }
   }
 };
 

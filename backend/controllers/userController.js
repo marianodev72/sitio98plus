@@ -1,27 +1,40 @@
 // backend/controllers/userController.js
-const { validationResult } = require('express-validator');
-const User = require('../models/user');
-const { signToken, setAuthCookie, clearAuthCookie } = require('../utils/auth');
 
-const INVALID_MSG = 'Credenciales inválidas';
+const { validationResult } = require("express-validator");
+const User = require("../models/user");
+const {
+  signToken,
+  setAuthCookie,
+  clearAuthCookie,
+} = require("../middleware/auth");
 
-// POST /api/users/login
-exports.login = async (req, res, next) => {
+const INVALID_MSG = "Credenciales inválidas";
+
+// -----------------------------------------------------------------------------
+// LOGIN
+// -----------------------------------------------------------------------------
+exports.login = async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res
-        .status(400)
-        .json({ ok: false, message: 'Datos inválidos', errors: errors.array() });
+      return res.status(400).json({
+        ok: false,
+        message: "Datos inválidos",
+        errors: errors.array(),
+      });
     }
 
-    const { email, password } = req.body;
+    const { email, password: bodyPassword, clave: bodyClave } = req.body || {};
+    const password = bodyPassword || bodyClave;
 
-    // Buscamos por email (el frontend manda "email")
-    const user = await User.findOne({ email }).select('+password');
+    if (!email || !password) {
+      return res
+        .status(400)
+        .json({ ok: false, message: "Debe indicar email y contraseña." });
+    }
 
+    const user = await User.findOne({ email }).select("+password");
     if (!user) {
-      // No revelamos si el email existe o no
       return res.status(400).json({ ok: false, message: INVALID_MSG });
     }
 
@@ -30,100 +43,139 @@ exports.login = async (req, res, next) => {
       return res.status(400).json({ ok: false, message: INVALID_MSG });
     }
 
-    const safeUser = user.toSafeObject();
-    const token = signToken(safeUser);
+    if (user.activo === false) {
+      return res.status(403).json({
+        ok: false,
+        message: "Usuario inactivo. Contacte al administrador.",
+      });
+    }
 
-    // Cookie HTTP-only (por seguridad) + token en el body
+    const safeUser = {
+      id: user._id.toString(),
+      email: user.email,
+      role: user.role,
+      activo: user.activo,
+    };
+
+    const token = signToken(user);
     setAuthCookie(res, token);
 
     return res.json({
       ok: true,
-      token,
       user: safeUser,
+      token,
     });
   } catch (err) {
-    console.error('Error en login:', err);
-    next(err);
+    console.error("❌ Error en login:", err);
+    return res
+      .status(500)
+      .json({ ok: false, message: "Error interno del servidor." });
   }
 };
 
-// POST /api/users/register  (registro de postulante)
-exports.register = async (req, res, next) => {
+// -----------------------------------------------------------------------------
+// REGISTER
+// -----------------------------------------------------------------------------
+exports.register = async (req, res) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
+    const { email, password, role, nombre, apellido } = req.body || {};
+
+    if (!email || !password) {
       return res
         .status(400)
-        .json({ ok: false, message: 'Datos inválidos', errors: errors.array() });
+        .json({ ok: false, message: "Email y contraseña son obligatorios." });
     }
 
-    const { email, password, nombre, apellido } = req.body;
-
-    const existing = await User.findOne({ email });
-    if (existing) {
+    const exists = await User.findOne({ email });
+    if (exists) {
       return res
         .status(400)
-        .json({ ok: false, message: 'Ya existe un usuario con ese correo' });
+        .json({ ok: false, message: "Ya existe un usuario con ese email." });
     }
 
     const user = new User({
       email,
-      username: email, // opcional: dejamos el email como username
-      nombre,
-      apellido,
-      role: 'POSTULANTE',
+      password,
+      role: role || "POSTULANTE",
+      nombre: nombre || "",
+      apellido: apellido || "",
       activo: true,
     });
 
-    await user.setPassword(password);
     await user.save();
 
-    const safeUser = user.toSafeObject();
-    const token = signToken(safeUser);
-    setAuthCookie(res, token);
+    const safeUser = {
+      id: user._id.toString(),
+      email: user.email,
+      role: user.role,
+      activo: user.activo,
+    };
 
-    return res.status(201).json({
-      ok: true,
-      token,
-      user: safeUser,
-    });
+    return res.status(201).json({ ok: true, user: safeUser });
   } catch (err) {
-    console.error('Error en register:', err);
-    next(err);
+    console.error("❌ Error en register:", err);
+    return res
+      .status(500)
+      .json({ ok: false, message: "Error al registrar usuario." });
   }
 };
 
+// -----------------------------------------------------------------------------
 // GET /api/users/me
-exports.getMe = async (req, res, next) => {
+// -----------------------------------------------------------------------------
+exports.getMe = async (req, res) => {
   try {
-    // authMiddleware ya puso req.user
     if (!req.user) {
-      return res.status(401).json({ ok: false, message: 'No autenticado' });
+      return res.status(401).json({ ok: false, message: "No autenticado." });
     }
 
-    return res.json({ ok: true, user: req.user });
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res
+        .status(404)
+        .json({ ok: false, message: "Usuario no encontrado." });
+    }
+
+    const safeUser = {
+      id: user._id.toString(),
+      email: user.email,
+      role: user.role,
+      activo: user.activo,
+    };
+
+    return res.json({ ok: true, user: safeUser });
   } catch (err) {
-    next(err);
+    console.error("❌ Error en getMe:", err);
+    return res
+      .status(500)
+      .json({ ok: false, message: "Error al obtener el usuario." });
   }
 };
 
-// GET /api/users  (solo ADMIN)
-exports.getUsers = async (req, res, next) => {
-  try {
-    const users = await User.find().sort({ createdAt: -1 });
-    const safe = users.map((u) => u.toSafeObject());
-    res.json({ ok: true, users: safe });
-  } catch (err) {
-    next(err);
-  }
+// -----------------------------------------------------------------------------
+// GET USERS RAW
+// -----------------------------------------------------------------------------
+exports.getUsersRaw = async () => {
+  const users = await User.find().sort({ createdAt: -1 });
+  return users.map((u) => ({
+    id: u._id.toString(),
+    email: u.email,
+    nombre: u.nombre,
+    apellido: u.apellido,
+    role: u.role,
+    activo: u.activo,
+  }));
 };
 
-// POST /api/users/logout
-exports.logout = async (req, res, next) => {
+// -----------------------------------------------------------------------------
+// LOGOUT
+// -----------------------------------------------------------------------------
+exports.logout = async (req, res) => {
   try {
     clearAuthCookie(res);
     res.json({ ok: true });
   } catch (err) {
-    next(err);
+    console.error("❌ Error en logout:", err);
+    res.status(500).json({ ok: false, message: "Error al cerrar sesión" });
   }
 };

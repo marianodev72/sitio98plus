@@ -4,7 +4,7 @@
 const express = require("express");
 const router = express.Router();
 
-const authMiddleware = require("../middleware/authMiddleware");
+const auth = require("../middleware/auth");
 const ROLES = require("../middleware/roles");
 
 const {
@@ -15,28 +15,64 @@ const {
 } = require("../controllers/anexo11Controller");
 
 // -----------------------------------------------------------------------------
-// Middleware local: asegura que el usuario logueado sea PERMISIONARIO
-// (segunda llave de seguridad, además del uso del token)
+// Helper para obtener el rol del usuario
+// -----------------------------------------------------------------------------
+function getRole(user) {
+  if (!user) return null;
+
+  if (user.role) {
+    return String(user.role).trim().toUpperCase();
+  }
+
+  if (Array.isArray(user.roles) && user.roles.length > 0) {
+    return String(user.roles[0]).trim().toUpperCase();
+  }
+
+  return null;
+}
+
+// -----------------------------------------------------------------------------
+// Middleware: asegura que el usuario sea PERMISIONARIO
 // -----------------------------------------------------------------------------
 function ensurePermisionario(req, res, next) {
   try {
-    if (!req.user || !req.user.role) {
+    console.log("[ANEXO11] ensurePermisionario → req.user =", req.user);
+
+    // 1) Si por alguna razón no hay req.user, 401.
+    if (!req.user) {
       return res.status(401).json({
         ok: false,
-        message: "No autenticado.",
+        message: "No autenticado (req.user vacío en Anexo11).",
       });
     }
 
-    const role = String(req.user.role || "").toUpperCase();
+    const role = getRole(req.user);
+    console.log(
+      "[ANEXO11] ensurePermisionario → role resuelto =",
+      role,
+      " / esperado =",
+      ROLES.PERMISIONARIO
+    );
 
+    // 2) Si no hay rol, también 401 (usuario mal configurado).
+    if (!role) {
+      return res.status(401).json({
+        ok: false,
+        message:
+          "Usuario autenticado pero sin rol asignado. Contacte al administrador.",
+      });
+    }
+
+    // 3) Rol incorrecto → 403 (no 401).
     if (role !== ROLES.PERMISIONARIO) {
       return res.status(403).json({
         ok: false,
-        message: "Acceso permitido solo para permisionarios.",
+        message: `Acceso permitido solo para permisionarios. Rol actual: ${role}`,
       });
     }
 
-    next();
+    // 4) Todo OK → dejamos pasar.
+    return next();
   } catch (err) {
     console.error("Error en ensurePermisionario (Anexo11):", err);
     return res.status(500).json({
@@ -47,47 +83,19 @@ function ensurePermisionario(req, res, next) {
 }
 
 // -----------------------------------------------------------------------------
-// POST /api/anexo11
-// Crea un nuevo Anexo 11
+// Rutas (auth RS256 + permisos de permisionario)
 // -----------------------------------------------------------------------------
-router.post(
-  "/",
-  authMiddleware,
-  ensurePermisionario,
-  crearAnexo11
-);
 
-// -----------------------------------------------------------------------------
-// GET /api/anexo11/mis
-// Lista los Anexo 11 del permisionario logueado
-// -----------------------------------------------------------------------------
-router.get(
-  "/mis",
-  authMiddleware,
-  ensurePermisionario,
-  listarAnexos11Permisionario
-);
+// Crear Anexo 11
+router.post("/", auth, ensurePermisionario, crearAnexo11);
 
-// -----------------------------------------------------------------------------
-// GET /api/anexo11/:id/pdf
-// Descarga el PDF del Anexo 11 (permisionario sólo si es suyo).
-// -----------------------------------------------------------------------------
-router.get(
-  "/:id/pdf",
-  authMiddleware,
-  ensurePermisionario,
-  generarAnexo11PDF
-);
+// Listar Anexos 11 del permisionario logueado
+router.get("/mis", auth, ensurePermisionario, listarAnexos11Permisionario);
 
-// -----------------------------------------------------------------------------
-// GET /api/anexo11/:id
-// Detalle de un Anexo 11 (permisionario lo ve sólo si es suyo).
-// -----------------------------------------------------------------------------
-router.get(
-  "/:id",
-  authMiddleware,
-  ensurePermisionario,
-  obtenerAnexo11Detalle
-);
+// Generar/obtener PDF de un Anexo 11
+router.get("/:id/pdf", auth, ensurePermisionario, generarAnexo11PDF);
+
+// Detalle de un Anexo 11
+router.get("/:id", auth, ensurePermisionario, obtenerAnexo11Detalle);
 
 module.exports = router;

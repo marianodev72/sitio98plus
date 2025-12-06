@@ -1,53 +1,150 @@
-// backend/models/FormTemplate.js
-// Definición de tipos de formulario (ANEXO 02, 08, 11, etc.)
+// models/FormTemplate.js
+// Plantilla de formularios y ANEXOS — Sistema ZN98
 
-const mongoose = require("mongoose");
+const mongoose = require('mongoose');
+const { Schema } = mongoose;
 
-const formTemplateSchema = new mongoose.Schema(
+// Códigos de anexos/formularios conocidos.
+// Se pueden agregar más sin tocar el modelo.
+const FORM_CODES = [
+  'ANEXO_1',
+  'ANEXO_3',
+  'ANEXO_4',
+  'ANEXO_7',
+  'ANEXO_11',
+  'ANEXO_13',
+  'FORM_REGISTRO_VISITA',
+  'FORM_INSPECCION',
+  'FORM_INTERNO',
+];
+
+const fieldSchema = new Schema(
   {
-    // Código único: ANEXO_11_PERMISIONARIO, ANEXO_02_PERMISIONARIO, etc.
-    codigo: {
+    nombre: {
+      // nombre interno del campo (ej: "domicilio_actual")
       type: String,
       required: true,
-      unique: true,
+      trim: true,
+    },
+    etiqueta: {
+      // etiqueta visible (ej: "Domicilio actual")
+      type: String,
+      required: true,
+      trim: true,
+    },
+    tipo: {
+      // text, number, date, select, checkbox, textarea, etc.
+      type: String,
+      required: true,
+      trim: true,
+    },
+    requerido: {
+      type: Boolean,
+      default: false,
+    },
+    opciones: [
+      {
+        // para selects / radios
+        valor: { type: String, trim: true },
+        etiqueta: { type: String, trim: true },
+      },
+    ],
+    ayuda: {
+      // texto de ayuda, opcional
+      type: String,
+      trim: true,
+    },
+  },
+  { _id: false }
+);
+
+const formTemplateSchema = new Schema(
+  {
+    // Código interno del formulario / anexo
+    code: {
+      type: String,
+      required: true,
+      trim: true,
+      uppercase: true,
       index: true,
     },
 
-    nombre: { type: String, required: true },
-    descripcion: { type: String },
-
-    // Número de anexo (2, 8, 11, etc.)
-    numero: { type: Number },
-
-    // Roles que pueden iniciar este formulario
-    rolesQuePuedenIniciar: {
-      type: [String],
-      default: [],
+    // Nombre legible (ej: "ANEXO 4 - AUSENCIA PROLONGADA")
+    nombre: {
+      type: String,
+      required: true,
+      trim: true,
     },
 
-    // Roles que pueden intervenir / cambiar estado
-    rolesQuePuedenIntervenir: {
-      type: [String],
-      default: [],
+    descripcion: {
+      type: String,
+      trim: true,
     },
 
-    // Si este formulario está activo en el sistema
+    // Versión del formulario (por si en el futuro cambia estructura)
+    version: {
+      type: Number,
+      default: 1,
+    },
+
+    // Campos que debe mostrar el frontend
+    campos: [fieldSchema],
+
+    // ¿Está activo para ser usado?
     activo: {
       type: Boolean,
       default: true,
+      index: true,
     },
 
-    // Flags de relación
-    requiereVivienda: { type: Boolean, default: false },
-    requiereAlojamiento: { type: Boolean, default: false },
+    // Roles que PUEDEN crear/envíar este formulario
+    rolesQuePuedenCrear: [
+      {
+        type: String,
+        trim: true,
+        uppercase: true,
+      },
+    ],
+
+    // Roles que pueden VER/REVISAR envíos
+    rolesQuePuedenVer: [
+      {
+        type: String,
+        trim: true,
+        uppercase: true,
+      },
+    ],
+
+    // ¿Requiere vincular a Vivienda / Alojamiento?
+    requiereVivienda: {
+      type: Boolean,
+      default: false,
+    },
+    requiereAlojamiento: {
+      type: Boolean,
+      default: false,
+    },
+
+    // Metadatos administrativos
+    creadoPor: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+    },
+    ultimaEdicionPor: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+    },
   },
   {
     timestamps: true,
   }
 );
 
-const FormTemplate =
-  mongoose.models.FormTemplate ||
-  mongoose.model("FormTemplate", formTemplateSchema);
+formTemplateSchema.index({ code: 1, version: 1 }, { unique: true });
 
-module.exports = FormTemplate;
+const FormTemplate = mongoose.model('FormTemplate', formTemplateSchema);
+
+module.exports = {
+  FormTemplate,
+  FORM_CODES,
+};

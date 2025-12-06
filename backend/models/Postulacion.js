@@ -1,122 +1,142 @@
-// backend/models/Postulacion.js
-// Modelo de Postulación ZN98 (viviendas / alojamientos)
+// models/Postulacion.js
+// Modelo oficial de Postulación — Sistema ZN98
+// Versión unificada, segura y lista para backend institucional.
 
-const mongoose = require("mongoose");
+const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
-// -----------------------------------------------------------------------------
-// Subdocumento: archivos adjuntos de la postulación
-// -----------------------------------------------------------------------------
-const archivoSchema = new Schema(
-  {
-    nombreSistema: { type: String, required: true }, // nombre renombrado en el servidor
-    nombreOriginal: { type: String, required: true }, // nombre original subido por el usuario
-    tipo: { type: String }, // mimetype (image/jpeg, application/pdf, etc.)
-    size: { type: Number }, // tamaño en bytes
-    rutaRelativa: { type: String }, // ruta relativa desde backend/, ej: /uploads/postulaciones/123.pdf
-  },
-  { _id: false }
-);
+// Estados permitidos según reglamento administrativo
+const POSTULACION_ESTADOS = [
+  'EN_ANALISIS',
+  'PENDIENTE_DOCUMENTACION',
+  'ACEPTADA',
+  'RECHAZADA',
+  'ASIGNADA',
+];
 
-// -----------------------------------------------------------------------------
-// Subdocumento: entrada de historial (cambios de estado, etc.)
-// -----------------------------------------------------------------------------
+// Tipos de postulación
+const POSTULACION_TIPOS = ['VIVIENDA', 'ALOJAMIENTO'];
+
 const historialSchema = new Schema(
   {
     fecha: { type: Date, default: Date.now },
-    accion: { type: String, required: true }, // "CREADA", "ESTADO_CAMBIADO", etc.
-    usuario: {
-      type: Schema.Types.ObjectId,
-      ref: "User",
+    estadoAnterior: { type: String },
+    estadoNuevo: {
+      type: String,
+      enum: POSTULACION_ESTADOS,
     },
-    detalle: { type: String },
+    observacion: {
+      type: String,
+      trim: true,
+    },
+    realizadoPor: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+    },
   },
   { _id: false }
 );
 
-// -----------------------------------------------------------------------------
-// Esquema principal de Postulación
-// -----------------------------------------------------------------------------
+const adjuntoSchema = new Schema(
+  {
+    nombre: String,
+    ruta: String,
+    tipo: String, // pdf, jpg, png
+    size: Number, // en bytes
+    fechaSubida: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
+
 const postulacionSchema = new Schema(
   {
-    // Usuario titular de la postulación (POSTULANTE autenticado)
-    user: {
+    // Usuario que realiza la postulación
+    usuario: {
       type: Schema.Types.ObjectId,
-      ref: "User",
+      ref: 'User',
       required: true,
-    },
-
-    // Tipo de postulación: vivienda fiscal o alojamiento
-    tipo: {
-      type: String,
-      enum: ["VIVIENDA", "ALOJAMIENTO"],
-      required: true,
-    },
-
-    // Estado actual de la postulación
-    estado: {
-      type: String,
-      enum: ["EN_ANALISIS", "APROBADA", "RECHAZADA"],
-      default: "EN_ANALISIS",
-    },
-
-    // Datos del ANEXO 1 (estructura flexible, tal como la envía el frontend)
-    datosPersonales: {
-      type: Schema.Types.Mixed,
-      default: {},
-    },
-
-    convivientes: {
-      type: [Schema.Types.Mixed], // { apellidoNombres, relacion, aCargo, edad, dni, diba }
-      default: [],
-    },
-
-    animales: {
-      type: [Schema.Types.Mixed], // { especie, raza, edad, sexo, peso }
-      default: [],
-    },
-
-    preferencias: {
-      type: Schema.Types.Mixed, // { barrioPreferido, tipoVivienda, ... }
-      default: {},
-    },
-
-    declaraciones: {
-      type: Schema.Types.Mixed, // { socioeconomico, propietarioZona, etc. }
-      default: {},
-    },
-
-    // Capacidad familiar total (titular + convivientes a cargo)
-    capacidadTotal: {
-      type: Number,
-      default: 1,
-    },
-
-    // Barrio preferido "canonizado" para filtros rápidos
-    barrioPreferidoCanonico: {
-      type: String,
-      default: "",
       index: true,
     },
 
-    // Archivos adjuntos (PDF / imágenes)
-    archivos: {
-      type: [archivoSchema],
-      default: [],
+    // Tipo de postulación
+    tipo: {
+      type: String,
+      enum: POSTULACION_TIPOS,
+      required: true,
+      index: true,
     },
 
-    // Historial de acciones
-    historial: {
-      type: [historialSchema],
-      default: [],
+    // Estado administrativo
+    estado: {
+      type: String,
+      enum: POSTULACION_ESTADOS,
+      default: 'EN_ANALISIS',
+      index: true,
     },
+
+    // Fecha y certificación de envío
+    fechaEnvio: {
+      type: Date,
+      default: Date.now,
+      index: true,
+    },
+
+    // Datos recogidos del FORMULARIO (dinámico)
+    datosFormulario: {
+      type: Object,
+      default: {},
+    },
+
+    // Adjuntos (PDF/JPG)
+    adjuntos: [adjuntoSchema],
+
+    // Historial de estados (auditoría completa)
+    historial: [historialSchema],
+
+    // Observaciones de administración o administrador general
+    observacionesInternas: [
+      {
+        fecha: { type: Date, default: Date.now },
+        texto: { type: String, trim: true },
+        realizadoPor: { type: Schema.Types.ObjectId, ref: 'User' },
+      },
+    ],
+
+    // Para asignación futura
+    viviendaAsignada: { type: Schema.Types.ObjectId, ref: 'Vivienda' },
+    alojamientoAsignado: { type: Schema.Types.ObjectId, ref: 'Alojamiento' },
   },
   {
-    timestamps: true, // createdAt, updatedAt
+    timestamps: true,
   }
 );
 
-// Evitamos OverwriteModelError en desarrollo
-module.exports =
-  mongoose.models.Postulacion ||
-  mongoose.model("Postulacion", postulacionSchema);
+// Indices recomendados
+postulacionSchema.index({ usuario: 1, tipo: 1 });
+postulacionSchema.index({ estado: 1, tipo: 1 });
+postulacionSchema.index({ fechaEnvio: 1 });
+
+// Método para registrar cambios de estado
+postulacionSchema.methods.cambiarEstado = function (
+  nuevoEstado,
+  usuarioResponsable,
+  observacion = ''
+) {
+  const estadoAnterior = this.estado;
+  this.estado = nuevoEstado;
+
+  this.historial.push({
+    estadoAnterior,
+    estadoNuevo: nuevoEstado,
+    observacion,
+    realizadoPor: usuarioResponsable,
+  });
+};
+
+const Postulacion = mongoose.model('Postulacion', postulacionSchema);
+
+module.exports = {
+  Postulacion,
+  POSTULACION_ESTADOS,
+  POSTULACION_TIPOS,
+};

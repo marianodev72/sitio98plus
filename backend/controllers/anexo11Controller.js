@@ -5,8 +5,16 @@ const ROLES = require("../middleware/roles");
 const PDFDocument = require("pdfkit");
 
 // -----------------------------------------------------------------------------
-// Helper: obtiene datos de vivienda desde el body admitiendo distintos formatos
+// Helpers
 // -----------------------------------------------------------------------------
+
+// Obtiene el ID de usuario desde req.user (soporta id o _id por compatibilidad)
+function getUsuarioId(usuario) {
+  if (!usuario) return null;
+  return usuario.id || usuario._id || null;
+}
+
+// Helper: obtiene datos de vivienda desde el body admitiendo distintos formatos
 function extraerViviendaDelBody(body = {}) {
   if (body.vivienda && typeof body.vivienda === "object") {
     return {
@@ -27,6 +35,12 @@ function extraerViviendaDelBody(body = {}) {
   };
 }
 
+// Normaliza el rol a MAYÚSCULAS (string)
+function getRole(usuario) {
+  if (!usuario) return null;
+  return String(usuario.role || "").toUpperCase().trim();
+}
+
 // -----------------------------------------------------------------------------
 // POST /api/anexo11
 // Crear un nuevo Anexo 11 (pedido de trabajo) - lo inicia el PERMISIONARIO
@@ -34,23 +48,26 @@ function extraerViviendaDelBody(body = {}) {
 const crearAnexo11 = async (req, res) => {
   try {
     const usuario = req.user;
+    const usuarioId = getUsuarioId(usuario);
 
-    if (!usuario || !usuario._id) {
+    if (!usuario || !usuarioId) {
       return res.status(401).json({
         ok: false,
         message: "No autenticado.",
       });
     }
 
-    if (String(usuario.role || "").toUpperCase() !== ROLES.PERMISIONARIO) {
+    if (getRole(usuario) !== ROLES.PERMISIONARIO) {
       return res.status(403).json({
         ok: false,
         message: "Acceso permitido solo para permisionarios.",
       });
     }
 
+    // Clonamos el body para no mutar directamente req.body
     const body = { ...(req.body || {}) };
 
+    // Permite formatos anteriores donde venía un objeto "permisionario" con los datos
     if (body.permisionario && typeof body.permisionario === "object") {
       const p = body.permisionario;
 
@@ -78,6 +95,7 @@ const crearAnexo11 = async (req, res) => {
       body.grado = p.grado || body.grado || "";
     }
 
+    // ------------------ Validaciones ------------------
     const errores = [];
 
     if (!body.unidad) {
@@ -113,21 +131,24 @@ const crearAnexo11 = async (req, res) => {
       });
     }
 
+    // ------------------ Construcción del documento ------------------
     const vivienda = extraerViviendaDelBody(body);
 
     const permisionarioNombre =
       body.permisionarioNombre ||
       (body.permisionario && body.permisionario.apellidoNombre) ||
       "";
-    const grado = body.grado || (body.permisionario && body.permisionario.grado) || "";
+    const grado =
+      body.grado || (body.permisionario && body.permisionario.grado) || "";
 
+    // Número correlativo
     const last = await Anexo11.findOne().sort({ numero: -1 }).lean();
     const siguienteNumero = last && last.numero ? last.numero + 1 : 1;
 
     const nuevoAnexo = new Anexo11({
       numero: siguienteNumero,
       permisionario: {
-        usuario: usuario._id,
+        usuario: usuarioId,
         grado: grado,
         nombreCompleto: permisionarioNombre,
       },
@@ -138,7 +159,7 @@ const crearAnexo11 = async (req, res) => {
       historial: [
         {
           fecha: new Date(),
-          actor: usuario._id,
+          actor: usuarioId,
           actorRole: ROLES.PERMISIONARIO,
           accion: "CREADO",
           observaciones: "Gestión iniciada por el permisionario.",
@@ -176,15 +197,16 @@ const crearAnexo11 = async (req, res) => {
 const listarAnexos11Permisionario = async (req, res) => {
   try {
     const usuario = req.user;
+    const usuarioId = getUsuarioId(usuario);
 
-    if (!usuario || !usuario._id) {
+    if (!usuario || !usuarioId) {
       return res.status(401).json({
         ok: false,
         message: "No autenticado.",
       });
     }
 
-    if (String(usuario.role || "").toUpperCase() !== ROLES.PERMISIONARIO) {
+    if (getRole(usuario) !== ROLES.PERMISIONARIO) {
       return res.status(403).json({
         ok: false,
         message: "Acceso permitido solo para permisionarios.",
@@ -192,7 +214,7 @@ const listarAnexos11Permisionario = async (req, res) => {
     }
 
     const anexos = await Anexo11.find({
-      "permisionario.usuario": usuario._id,
+      "permisionario.usuario": usuarioId,
     })
       .sort({ createdAt: -1 })
       .lean();
@@ -227,8 +249,9 @@ const listarAnexos11Permisionario = async (req, res) => {
 const obtenerAnexo11Detalle = async (req, res) => {
   try {
     const usuario = req.user;
+    const usuarioId = getUsuarioId(usuario);
 
-    if (!usuario || !usuario._id) {
+    if (!usuario || !usuarioId) {
       return res.status(401).json({
         ok: false,
         message: "No autenticado.",
@@ -246,11 +269,11 @@ const obtenerAnexo11Detalle = async (req, res) => {
       });
     }
 
-    const role = String(usuario.role || "").toUpperCase();
+    const role = getRole(usuario);
 
     if (
       role === ROLES.PERMISIONARIO &&
-      String(doc.permisionario.usuario) !== String(usuario._id)
+      String(doc.permisionario.usuario) !== String(usuarioId)
     ) {
       return res.status(403).json({
         ok: false,
@@ -278,8 +301,9 @@ const obtenerAnexo11Detalle = async (req, res) => {
 const generarAnexo11PDF = async (req, res) => {
   try {
     const usuario = req.user;
+    const usuarioId = getUsuarioId(usuario);
 
-    if (!usuario || !usuario._id) {
+    if (!usuario || !usuarioId) {
       return res.status(401).json({
         ok: false,
         message: "No autenticado.",
@@ -297,11 +321,11 @@ const generarAnexo11PDF = async (req, res) => {
       });
     }
 
-    const role = String(usuario.role || "").toUpperCase();
+    const role = getRole(usuario);
 
     if (
       role === ROLES.PERMISIONARIO &&
-      String(doc.permisionario.usuario) !== String(usuario._id)
+      String(doc.permisionario.usuario) !== String(usuarioId)
     ) {
       return res.status(403).json({
         ok: false,

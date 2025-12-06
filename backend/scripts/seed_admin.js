@@ -1,42 +1,63 @@
 // backend/scripts/seed_admin.js
-require('dotenv').config();
-const mongoose = require('mongoose');
-const bcrypt = require('bcrypt');
 
-async function run() {
-  const uri = process.env.MONGO_URI;
-  if (!uri) {
-    console.error('❌ Falta MONGO_URI');
+require("dotenv").config();
+const mongoose = require("mongoose");
+const bcrypt = require("bcryptjs");
+const User = require("../models/user");
+
+async function main() {
+  const { MONGO_URI, ADMIN_EMAIL, ADMIN_PASSWORD, NODE_ENV } = process.env;
+
+  if (!MONGO_URI) {
+    console.error("❌ MONGO_URI no está definido en .env");
     process.exit(1);
   }
-  await mongoose.connect(uri);
 
-  const col = mongoose.connection.collection('users');
-
-  const username = process.env.ADMIN_USER || 'admin';
-  const email = process.env.ADMIN_EMAIL || 'admin@example.com';
-  const rawPass = process.env.ADMIN_PASS || '123456';
-
-  const password = await bcrypt.hash(rawPass, 10);
-
-  const existing = await col.findOne({ $or: [{ email }, { username }] });
-  if (existing) {
-    console.log('ℹ️  Admin ya existe. Actualizando contraseña/role...');
-    await col.updateOne(
-      { _id: existing._id },
-      { $set: { password, role: 'ADMIN', email, username } }
-    );
-    console.log('✅ Admin actualizado:', existing._id);
-  } else {
-    const r = await col.insertOne({ username, email, password, role: 'ADMIN', createdAt: new Date() });
-    console.log('✅ Admin creado:', r.insertedId);
+  if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {
+    console.error("❌ ADMIN_EMAIL o ADMIN_PASSWORD no definidos en .env");
+    process.exit(1);
   }
 
-  await mongoose.connection.close();
-  process.exit(0);
+  // Por seguridad, no lo ejecutamos en producción
+  if (NODE_ENV === "production") {
+    console.error("⚠️ seed_admin NO debe ejecutarse en producción.");
+    process.exit(1);
+  }
+
+  try {
+    await mongoose.connect(MONGO_URI);
+    console.log("✅ Conectado a MongoDB para seeding");
+
+    // ¿Ya existe?
+    const existing = await User.findOne({ email: ADMIN_EMAIL });
+
+    if (existing) {
+      console.log(`ℹ️ Ya existe un usuario admin con el email ${ADMIN_EMAIL}`);
+      process.exit(0);
+    }
+
+    // Hasheamos contraseña
+    const hash = await bcrypt.hash(ADMIN_PASSWORD, 10);
+
+    const admin = await User.create({
+      email: ADMIN_EMAIL,
+      password: hash,
+      role: "ADMIN",
+      activo: true,
+    });
+
+    console.log("✅ Usuario ADMIN creado:");
+    console.log({
+      id: admin._id.toString(),
+      email: admin.email,
+      role: admin.role,
+    });
+
+    process.exit(0);
+  } catch (err) {
+    console.error("❌ Error creando usuario admin:", err);
+    process.exit(1);
+  }
 }
 
-run().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+main();

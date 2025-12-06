@@ -1,121 +1,167 @@
 // models/FormSubmission.js
-// Instancia concreta de un formulario (ANEXO) completado por algún usuario
+// Envíos de formularios y ANEXOS — Sistema ZN98
 
-const mongoose = require("mongoose");
+const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
-const historialSchema = new Schema(
+const ESTADOS_FORM = [
+  'BORRADOR',
+  'ENVIADO',
+  'EN_REVISION',
+  'APROBADO',
+  'RECHAZADO',
+  'CERRADO',
+  'ASIGNADO', // NUEVO ESTADO PARA ANEXO_22 (asignación de tipo de alojamiento)
+];
+
+const historialEstadoSchema = new Schema(
   {
-    usuario: { type: Schema.Types.ObjectId, ref: "User" },
-    accion: { type: String, trim: true },
-    comentario: { type: String, trim: true },
-    fecha: { type: Date, default: Date.now },
+    fecha: {
+      type: Date,
+      default: Date.now,
+    },
+    estadoAnterior: {
+      type: String,
+    },
+    estadoNuevo: {
+      type: String,
+      enum: ESTADOS_FORM,
+    },
+    observacion: {
+      type: String,
+      trim: true,
+    },
+    realizadoPor: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+    },
   },
   { _id: false }
 );
 
-const archivoAdjuntoSchema = new Schema(
+const adjuntoSchema = new Schema(
   {
-    nombreOriginal: { type: String, trim: true },
-    nombreAlmacenado: { type: String, trim: true },
-    ruta: { type: String, trim: true },
-    size: { type: Number },
-    mimeType: { type: String, trim: true },
-    uploadedAt: { type: Date, default: Date.now },
+    nombre: String,
+    ruta: String,
+    tipo: String, // pdf, jpg, png
+    size: Number,
+    fechaSubida: {
+      type: Date,
+      default: Date.now,
+    },
   },
   { _id: false }
 );
 
 const formSubmissionSchema = new Schema(
   {
-    // Plantilla a la que pertenece (ANEXO_02_PERMISIONARIO, etc.)
+    // Referencia a la plantilla (ANEXO / Formulario)
     template: {
       type: Schema.Types.ObjectId,
-      ref: "FormTemplate",
-      required: true,
-    },
-
-    // Código de plantilla (ej: ANEXO_08_PERMISIONARIO)
-    tipoFormulario: {
-      type: String,
+      ref: 'FormTemplate',
       required: true,
       index: true,
+    },
+
+    // Código del anexo / formulario (ej: ANEXO_01, ANEXO_04, ANEXO_21...)
+    codigo: {
+      type: String,
+      required: true,
       trim: true,
       uppercase: true,
-    },
-
-    // 🔹 Código legible de la instancia:
-    // Ej: ANEXO_08_K01_16_11_25
-    codigoInstancia: {
-      type: String,
-      trim: true,
       index: true,
     },
 
-    // Quién creó el formulario (permisionario, inspector, admin, etc.)
-    userCreador: {
+    // Usuario que crea/envía el formulario
+    usuario: {
       type: Schema.Types.ObjectId,
-      ref: "User",
+      ref: 'User',
       required: true,
+      index: true,
     },
 
-    // A quién se refiere (titular de la vivienda / trámite)
-    userTitular: {
-      type: Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
-
-    // Vivienda asociada (si corresponde)
-    vivienda: {
-      type: Schema.Types.ObjectId,
-      ref: "Vivienda",
-      default: null,
-    },
-
-    // Postulación asociada (si corresponde)
-    postulacion: {
-      type: Schema.Types.ObjectId,
-      ref: "Postulacion",
-      default: null,
-    },
-
-    // Alojamiento asociado (para anexos de alojados, en el futuro)
-    alojamiento: {
-      type: Schema.Types.ObjectId,
-      ref: "Alojamiento",
-      default: null,
-    },
-
-    // Datos propios del formulario (campos del anexo)
+    // Datos dinámicos del formulario (según campos del template)
+    // Acá podemos guardar, por ej., "estadoAnexo" = EN_ANALISIS / ADJUDICADA / etc
     datos: {
-      type: Schema.Types.Mixed,
+      type: Object,
       default: {},
     },
 
-    // Estado del trámite del formulario
+    // Estado general de workflow del formulario
     estado: {
       type: String,
-      enum: ["BORRADOR", "ENVIADO", "APROBADO", "RECHAZADO", "CERRADO"],
-      default: "ENVIADO",
+      enum: ESTADOS_FORM,
+      default: 'ENVIADO',
       index: true,
     },
 
-    // Historial de intervenciones (quién hizo qué, cuándo)
-    historial: {
-      type: [historialSchema],
-      default: [],
+    // Adjuntos (si el formulario lo permite)
+    adjuntos: [adjuntoSchema],
+
+    // Historial de cambios de estado
+    historialEstados: [historialEstadoSchema],
+
+    // Relación con vivienda o alojamiento si aplica
+    vivienda: {
+      type: Schema.Types.ObjectId,
+      ref: 'Vivienda',
+    },
+    alojamiento: {
+      type: Schema.Types.ObjectId,
+      ref: 'Alojamiento',
     },
 
-    // Archivos adjuntos vinculados a este formulario (si en el futuro se asocian)
-    archivosAdjuntos: {
-      type: [archivoAdjuntoSchema],
-      default: [],
+    // Barrio vinculado (para Jefe de Barrio, inspector, etc.)
+    barrio: {
+      type: String,
+      trim: true,
+      index: true,
     },
+
+    // Para uso administrativo (ej: número de expediente)
+    numeroExpediente: {
+      type: String,
+      trim: true,
+      index: true,
+    },
+
+    // Observaciones internas (no visibles para el usuario común)
+    observacionesInternas: [
+      {
+        fecha: { type: Date, default: Date.now },
+        texto: { type: String, trim: true },
+        realizadoPor: { type: Schema.Types.ObjectId, ref: 'User' },
+      },
+    ],
   },
   {
-    timestamps: true, // createdAt, updatedAt
+    timestamps: true,
   }
 );
 
-module.exports = mongoose.model("FormSubmission", formSubmissionSchema);
+formSubmissionSchema.index({ usuario: 1, codigo: 1, estado: 1 });
+formSubmissionSchema.index({ createdAt: 1 });
+
+// Método para cambiar estado con auditoría
+formSubmissionSchema.methods.cambiarEstado = function (
+  nuevoEstado,
+  usuarioResponsable,
+  observacion = ''
+) {
+  const estadoAnterior = this.estado;
+  this.estado = nuevoEstado;
+
+  this.historialEstados.push({
+    estadoAnterior,
+    estadoNuevo: nuevoEstado,
+    observacion,
+    realizadoPor: usuarioResponsable,
+  });
+};
+
+const FormSubmission = mongoose.model('FormSubmission', formSubmissionSchema);
+
+module.exports = {
+  FormSubmission,
+  ESTADOS_FORM,
+};

@@ -1,26 +1,22 @@
 // backend/config/db.js
+
 const mongoose = require("mongoose");
 
 const connectDB = async () => {
   try {
-    const uri =
-      process.env.MONGO_URI ||
-      process.env.MONGODB_URI ||
-      process.env.DATABASE_URL;
+    const uri = process.env.MONGO_URI;
 
     if (!uri) {
-      throw new Error(
-        "No se encontró la URI de MongoDB. Define MONGO_URI (o MONGODB_URI) en el archivo .env"
-      );
+      throw new Error("MONGO_URI no está definida en el archivo .env");
     }
 
     await mongoose.connect(uri);
 
-    console.log("✅ MongoDB conectado correctamente");
+    console.log("✅ Conectado a MongoDB Atlas");
   } catch (err) {
-    console.error("❌ Error al conectar a MongoDB:", err.message);
-    // Tiramos el error para que nodemon lo muestre y no quede en un estado raro
-    throw err;
+    console.error("❌ Error al conectar a MongoDB:", err);
+    // Para entornos de desarrollo está bien cortar el proceso
+    process.exit(1);
   }
 };
 
