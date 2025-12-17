@@ -1,70 +1,70 @@
-// backend/scripts/resetAdminPassword.js
-// Uso:
-//    node scripts/resetAdminPassword.js
+// scripts/resetAdminPassword.js
+// Reinicia la contraseña del usuario admin.general@example.com
+// SOLO PARA DESARROLLO
 
 require("dotenv").config();
 const mongoose = require("mongoose");
-const path = require("path");
+const { User } = require("../models/User");
 
-// Importa modelo User
-const User = require(path.join(__dirname, "..", "models", "user"));
+// OJO: esta URI debe apuntar a la base zn98 que ves en Compass
+const MONGODB_URI =
+  process.env.MONGODB_URI ||
+  "mongodb://127.0.0.1:27017/zn98";
 
-// CONFIGURAR ESTOS VALORES
-const ADMIN_EMAIL = "admin@example.com";   // el email del admin existente
-const NEW_PASSWORD = "123456";          // Nueva contraseña deseada
-
-(async () => {
+async function main() {
   try {
-    console.log("Conectando a MongoDB...");
-    await mongoose.connect(process.env.MONGO_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
-    console.log("✅ Conectado.\n");
+    console.log("[resetAdminPassword] Conectando a:", MONGODB_URI);
+    await mongoose.connect(MONGODB_URI);
 
-    const email = ADMIN_EMAIL.toLowerCase();
-    let user = await User.findOne({ email }).select("+password");
+    const email = "admin.general@example.com";
+    const nuevaPassword = "AdminGeneral!2025";
+
+    const user = await User.findOne({ email }).select("+passwordHash");
 
     if (!user) {
-      console.log("❌ No se encontró un usuario ADMIN con ese email:", email);
-      return;
+      console.error(
+        "[resetAdminPassword] No se encontró usuario con email:",
+        email
+      );
+      process.exit(1);
     }
 
-    console.log("🔎 Usuario encontrado:");
-    console.log({
-      id: user._id.toString(),
+    console.log("[resetAdminPassword] Usuario encontrado:", {
       email: user.email,
       role: user.role,
+      activo: user.activo,
+      bloqueado: user.bloqueado,
     });
 
-    console.log("\n🔐 Reseteando contraseña usando setPassword()...");
+    // Aseguramos que sea ADMIN_GENERAL, activo y no bloqueado
+    user.role = "ADMIN_GENERAL";
+    user.activo = true;
+    user.bloqueado = false;
 
-    // 👉 ESTA es la forma correcta según tu modelo
-    await user.setPassword(NEW_PASSWORD);
+    if (typeof user.setPassword !== "function") {
+      throw new Error(
+        "El modelo User NO tiene setPassword(). Revisar models/User.js"
+      );
+    }
 
+    await user.setPassword(nuevaPassword);
     await user.save();
 
-    console.log("✅ Contraseña guardada. Verificando con checkPassword...");
+    console.log("──────────────────────────────────────────────");
+    console.log(" Contraseña ACTUALIZADA para el usuario:");
+    console.log("  Email:      ", email);
+    console.log("  Nuevo pass: ", nuevaPassword);
+    console.log("  Rol:        ", user.role);
+    console.log("  Activo:     ", user.activo);
+    console.log("  Bloqueado:  ", user.bloqueado);
+    console.log("──────────────────────────────────────────────");
 
-    // Volvemos a cargar para asegurarnos de que quedó bien
-    user = await User.findOne({ email }).select("+password");
-    const ok = await user.checkPassword(NEW_PASSWORD);
-
-    console.log("Resultado de checkPassword(NEW_PASSWORD):", ok);
-
-    if (!ok) {
-      console.log(
-        "⚠️ Atención: checkPassword devolvió false, algo sigue mal con el hash."
-      );
-    } else {
-      console.log("\n👌 Todo bien. Podés loguearte con:");
-      console.log("   Email:", ADMIN_EMAIL);
-      console.log("   Clave:", NEW_PASSWORD);
-    }
-  } catch (err) {
-    console.error("❌ Error reseteando la contraseña del admin:", err);
-  } finally {
     await mongoose.disconnect();
     process.exit(0);
+  } catch (err) {
+    console.error("[resetAdminPassword] Error:", err);
+    process.exit(1);
   }
-})();
+}
+
+main();

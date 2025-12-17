@@ -1,186 +1,161 @@
-// server.js
-// Servidor principal del Sistema ZN98 (Backend)
-// Versión reestructurada con auth + liquidaciones + servicios + formularios (ANEXOS) + tareas.
+// backend/server.js
+require("dotenv").config();
 
-require('dotenv').config();
-
-const express = require('express');
-const mongoose = require('mongoose');
-const helmet = require('helmet');
-const cors = require('cors');
-const morgan = require('morgan');
-const cookieParser = require('cookie-parser');
-const compression = require('compression');
-const rateLimit = require('express-rate-limit');
-const path = require('path');
-const fs = require('fs');
+const express = require("express");
+const mongoose = require("mongoose");
+const helmet = require("helmet");
+const cors = require("cors");
+const morgan = require("morgan");
+const cookieParser = require("cookie-parser");
+const compression = require("compression");
+const rateLimit = require("express-rate-limit");
+const path = require("path");
+const fs = require("fs");
 
 const app = express();
 
-// ───────────────────────────────────────────────
-// CONFIGURACIÓN BÁSICA
-// ───────────────────────────────────────────────
+// ✅ FIX DEFINITIVO: evita 304 sin body en endpoints /api (rompe axios/fetch.json())
+app.set("etag", false);
 
 const PORT = process.env.PORT || 3000;
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/zn98';
-const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
+const MONGO_URI = process.env.MONGO_URI;
 
-// ───────────────────────────────────────────────
-// PREPARAR CARPETAS DE UPLOADS
-// ───────────────────────────────────────────────
+// ✅ allowlist ORIGINS (separados por coma en .env si querés)
+const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || "http://localhost:5173";
+const ORIGINS = String(CLIENT_ORIGIN)
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
 
-const UPLOADS_DIR = path.join(__dirname, 'uploads');
-const UPLOADS_CSV_DIR = path.join(UPLOADS_DIR, 'csv');
-const UPLOADS_MENSAJES_DIR = path.join(UPLOADS_DIR, 'mensajes');
+const UPLOADS_DIR = path.join(__dirname, "uploads");
+const UPLOADS_CSV_DIR = path.join(UPLOADS_DIR, "csv");
+const UPLOADS_MENSAJES_DIR = path.join(UPLOADS_DIR, "mensajes");
+[UPLOADS_DIR, UPLOADS_CSV_DIR, UPLOADS_MENSAJES_DIR].forEach((dir) => {
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+});
 
-if (!fs.existsSync(UPLOADS_DIR)) {
-  fs.mkdirSync(UPLOADS_DIR);
-}
-if (!fs.existsSync(UPLOADS_CSV_DIR)) {
-  fs.mkdirSync(UPLOADS_CSV_DIR);
-}
-if (!fs.existsSync(UPLOADS_MENSAJES_DIR)) {
-  fs.mkdirSync(UPLOADS_MENSAJES_DIR);
-}
+// Rutas
+const authRoutes = require("./routes/authRoutes");
+const liquidacionRoutes = require("./routes/liquidacionRoutes");
+const serviciosRoutes = require("./routes/serviciosRoutes");
+const formularioRoutes = require("./routes/formularioRoutes");
+const tareasRoutes = require("./routes/tareasRoutes");
+const mensajeRoutes = require("./routes/mensajeRoutes");
+const adminRoutes = require("./routes/adminRoutes");
+const templateRoutes = require("./routes/templateRoutes");
+const viviendaRoutes = require("./routes/viviendaRoutes");
 
-// ───────────────────────────────────────────────
-// RUTAS PRINCIPALES
-// ───────────────────────────────────────────────
+const anexo01Routes = require("./routes/anexo01Routes");
+const anexo02Routes = require("./routes/anexo02Routes");
+const anexo03Routes = require("./routes/anexo03Routes");
+const anexo04Routes = require("./routes/anexo04Routes");
+const anexo07Routes = require("./routes/anexo07Routes");
+const anexo08Routes = require("./routes/anexo08Routes");
+const anexo09Routes = require("./routes/anexo09Routes");
+const anexo11Routes = require("./routes/anexo11Routes");
 
-const authRoutes = require('./routes/authRoutes');
-const liquidacionRoutes = require('./routes/liquidacionRoutes');
-const serviciosRoutes = require('./routes/serviciosRoutes');
-const formularioRoutes = require('./routes/formularioRoutes');
-const tareasRoutes = require('./routes/tareasRoutes');
+const anexo21Routes = require("./routes/anexo21Routes");
+const anexo22Routes = require("./routes/anexo22Routes");
+const anexo23Routes = require("./routes/anexo23Routes");
+const anexo24Routes = require("./routes/anexo24Routes");
+const anexo25Routes = require("./routes/anexo25Routes");
+const anexo26Routes = require("./routes/anexo26Routes");
+const anexo28Routes = require("./routes/anexo28Routes");
 
-// Rutas adicionales que fuimos construyendo
-const mensajeRoutes = require('./routes/mensajeRoutes');      // mensajería interna + adjuntos
-const adminRoutes = require('./routes/adminRoutes');          // panel ADMIN_GENERAL
-const anexo01Routes = require('./routes/anexo01Routes');      // ANEXO 01 - Formulario inscripción vivienda
-const anexo02Routes = require('./routes/anexo02Routes');      // ANEXO 02 - Acta de asignación vivienda
-const anexo03Routes = require('./routes/anexo03Routes');      // ANEXO 03 - Acta de recepción vivienda
-// Futuras rutas:
-// const viviendaRoutes = require('./routes/viviendaRoutes');
-// const alojamientoRoutes = require('./routes/alojamientoRoutes');
+const statsRoutes = require("./routes/statsRoutes");
 
-// ───────────────────────────────────────────────
-// MIDDLEWARES DE SEGURIDAD Y UTILIDAD
-// ───────────────────────────────────────────────
-
+// Middlewares
 app.use(helmet());
 app.use(compression());
-app.use(morgan('dev'));
+app.use(morgan("dev"));
+app.use(cookieParser());
 
 app.use(
   cors({
-    origin: CLIENT_ORIGIN,
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true);
+      if (ORIGINS.includes(origin)) return cb(null, true);
+      return cb(new Error(`CORS blocked origin: ${origin}`), false);
+    },
     credentials: true,
   })
 );
 
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser());
 
-// Rate limiting básico para /api
-const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  standardHeaders: true,
-  legacyHeaders: false,
+const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 120 });
+app.use("/api/", apiLimiter);
+
+// ✅ FIX: headers anti-cache para TODA la API (evita 304 sin body)
+app.use("/api", (req, res, next) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  res.setHeader("Surrogate-Control", "no-store");
+  next();
 });
 
-app.use('/api/', apiLimiter);
-
-// ───────────────────────────────────────────────
-// RUTA DE SALUD / TEST
-// ───────────────────────────────────────────────
-
-app.get('/api/health', (req, res) => {
-  res.json({
-    status: 'ok',
-    message: 'Backend ZN98 operativo',
-    timestamp: new Date().toISOString(),
-  });
+// Health
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok", message: "Servidor ZN98 operativo", timestamp: new Date().toISOString() });
 });
 
-// ───────────────────────────────────────────────
-// RUTAS API
-// ───────────────────────────────────────────────
+// Rutas
+app.use("/api/auth", authRoutes);
+app.use("/api/liquidaciones", liquidacionRoutes);
+app.use("/api/servicios", serviciosRoutes);
+app.use("/api/formularios", formularioRoutes);
+app.use("/api/tareas", tareasRoutes);
+app.use("/api/templates", templateRoutes);
+app.use("/api/mensajes", mensajeRoutes);
+app.use("/api/admin", adminRoutes);
 
-// Autenticación (login, logout, me, etc.)
-app.use('/api/auth', authRoutes);
+app.use("/api/viviendas", viviendaRoutes);
 
-// Liquidaciones (import CSV + consulta)
-app.use('/api/liquidaciones', liquidacionRoutes);
+app.use("/api/anexos/01", anexo01Routes);
+app.use("/api/anexos/02", anexo02Routes);
+app.use("/api/anexos/03", anexo03Routes);
+app.use("/api/anexos/04", anexo04Routes);
+app.use("/api/anexos/07", anexo07Routes);
+app.use("/api/anexos/08", anexo08Routes);
+app.use("/api/anexos/09", anexo09Routes);
+app.use("/api/anexos/11", anexo11Routes);
 
-// Servicios (import CSV + consulta)
-app.use('/api/servicios', serviciosRoutes);
+app.use("/api/anexos/21", anexo21Routes);
+app.use("/api/anexos/22", anexo22Routes);
+app.use("/api/anexos/23", anexo23Routes);
+app.use("/api/anexos/24", anexo24Routes);
+app.use("/api/anexos/25", anexo25Routes);
+app.use("/api/anexos/26", anexo26Routes);
+app.use("/api/anexos/28", anexo28Routes);
 
-// Formularios / ANEXOS genéricos (motor de FormSubmission)
-app.use('/api/formularios', formularioRoutes);
+app.use("/api/stats", statsRoutes);
 
-// Tareas programadas (recordatorios, procesos)
-app.use('/api/tareas', tareasRoutes);
+// Static
+app.use("/uploads", express.static(UPLOADS_DIR));
 
-// Mensajería interna (bandejas, envío, adjuntos seguros)
-app.use('/api/mensajes', mensajeRoutes);
-
-// Panel de Administración (solo ADMIN_GENERAL)
-app.use('/api/admin', adminRoutes);
-
-// ANEXOS específicos de Vivienda Fiscal
-app.use('/api/anexos/01', anexo01Routes); // Formulario de inscripción
-app.use('/api/anexos/02', anexo02Routes); // Acta de asignación
-app.use('/api/anexos/03', anexo03Routes); // Acta de recepción
-
-// Futuro:
-// app.use('/api/viviendas', viviendaRoutes);
-// app.use('/api/alojamientos', alojamientoRoutes);
-
-// ───────────────────────────────────────────────
-// ARCHIVOS ESTÁTICOS (adjuntos, CSV, etc.)
-// ───────────────────────────────────────────────
-
-app.use('/uploads', express.static(UPLOADS_DIR));
-
-// ───────────────────────────────────────────────
-// MANEJO DE 404
-// ───────────────────────────────────────────────
-
-app.use((req, res, next) => {
-  res.status(404).json({
-    message: 'Recurso no encontrado.',
-    path: req.originalUrl,
-  });
+// 404
+app.use((req, res) => {
+  res.status(404).json({ message: "Recurso no encontrado", path: req.originalUrl });
 });
 
-// ───────────────────────────────────────────────
-// MANEJO CENTRALIZADO DE ERRORES
-// ───────────────────────────────────────────────
-
+// Error global
 app.use((err, req, res, next) => {
-  console.error('[ERROR GLOBAL]', err);
-  res.status(500).json({
-    message: 'Error interno del servidor.',
-  });
+  console.error("[ERROR GLOBAL]", err);
+  res.status(500).json({ message: "Error interno del servidor" });
 });
 
-// ───────────────────────────────────────────────
-// CONEXIÓN A MONGODB Y ARRANQUE DEL SERVER
-// ───────────────────────────────────────────────
-
+// Mongo + start
 mongoose
   .connect(MONGO_URI)
   .then(() => {
-    console.log('[MongoDB] Conexión exitosa.');
-    app.listen(PORT, () => {
-      console.log(`Servidor ZN98 escuchando en puerto ${PORT}`);
-      console.log(`CORS permitido desde: ${CLIENT_ORIGIN}`);
-    });
+    console.log("[MongoDB] Conectado");
+    console.log(`Servidor escuchando en puerto ${PORT}`);
+    app.listen(PORT);
   })
   .catch((err) => {
-    console.error('[MongoDB] Error de conexión:', err);
+    console.error("[MongoDB] Error de conexión:", err);
     process.exit(1);
   });
 

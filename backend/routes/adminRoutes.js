@@ -1,69 +1,27 @@
-// routes/adminRoutes.js
-
-const express = require('express');
+// backend/routes/adminRoutes.js
+const express = require("express");
 const router = express.Router();
 
-const { authRequired } = require('../middleware/auth');
-const adminController = require('../controllers/adminController');
+const auth = require("../middleware/auth");
 
-/**
- * OJO:
- * De momento SOLO usamos authRequired.
- * Más adelante podemos volver a sumar requireRole('ADMIN_GENERAL')
- * cuando ya tengamos todo estable.
- */
+// 🔒 sanity check inmediato (evita server caído por undefined)
+if (typeof auth.authRequired !== "function") {
+  throw new Error("[adminRoutes] authRequired no es función. Revisa ../middleware/auth exports.");
+}
+if (typeof auth.requireRole !== "function") {
+  throw new Error("[adminRoutes] requireRole no es función. Revisa ../middleware/auth exports.");
+}
 
-// Todas las rutas de este router requieren estar logueado
-router.use(authRequired);
+const { authRequired, requireRole } = auth;
 
-// Listar usuarios con filtros
-router.get('/usuarios', adminController.listarUsuarios);
-
-// Crear usuario manualmente
-router.post('/usuarios', adminController.crearUsuario);
-
-// Editar usuario (datos administrativos)
-router.put('/usuarios/:id', adminController.actualizarUsuario);
-
-// Cambiar rol de usuario
-router.patch('/usuarios/:id/rol', adminController.cambiarRol);
-
-// Cambiar estado habitacional
-router.patch(
-  '/usuarios/:id/estado-habitacional',
-  adminController.cambiarEstadoHabitacional
-);
-
-// Bloquear / desbloquear usuario
-router.patch('/usuarios/:id/bloqueo', adminController.cambiarBloqueo);
-
-// Resetear contraseña
-router.post(
-  '/usuarios/:id/reset-password',
-  adminController.resetearPassword
-);
-
-// Ver historial de cambios
-router.get('/usuarios/:id/historial', adminController.verHistorial);
-
-// Asignar / desasignar vivienda POR ORDEN SUPERIOR
-router.post(
-  '/usuarios/:id/asignar-vivienda',
-  adminController.asignarViviendaPorOrdenSuperior
-);
-router.post(
-  '/usuarios/:id/desasignar-vivienda',
-  adminController.desasignarViviendaPorOrdenSuperior
-);
-
-// Asignar / desasignar alojamiento POR ORDEN SUPERIOR
-router.post(
-  '/usuarios/:id/asignar-alojamiento',
-  adminController.asignarAlojamientoPorOrdenSuperior
-);
-router.post(
-  '/usuarios/:id/desasignar-alojamiento',
-  adminController.desasignarAlojamientoPorOrdenSuperior
+// ✅ endpoint admin/admin_general
+router.get(
+  "/ping",
+  authRequired,
+  requireRole("ADMIN", "ADMIN_GENERAL"),
+  (req, res) => {
+    res.json({ ok: true, role: req.user?.role, userId: req.user?._id });
+  }
 );
 
 module.exports = router;

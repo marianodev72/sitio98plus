@@ -1,28 +1,21 @@
-// routes/formularioRoutes.js
-// Rutas de formularios / ANEXOS — Sistema ZN98
-
-const express = require('express');
+const express = require("express");
 const router = express.Router();
+const multer = require("multer");
+const path = require("path");
+const fs = require("fs");
 
-const {
-  crearAnexo,
-  getMisAnexos,
-  listarAnexosPorCodigo,
-  actualizarEstadoAnexo,
-} = require('../controllers/formularioController');
+const { authRequired, requireRole } = require("../middleware/auth");
+const c = require("../controllers/formularioController");
 
-const { authRequired } = require('../middleware/auth');
+const UPLOADS = path.join(process.cwd(), "uploads", "formularios");
+fs.mkdirSync(UPLOADS, { recursive: true });
 
-// Crear un anexo (según código) — ej: POST /api/formularios/ANEXO_04
-router.post('/:codigo', authRequired, crearAnexo);
+const upload = multer({ dest: UPLOADS });
 
-// Obtener MIS anexos (usuario logueado), opcional ?codigo=ANEXO_04
-router.get('/mios', authRequired, getMisAnexos);
-
-// Listar anexos por código (según permisos / barrio, etc.)
-router.get('/anexo/:codigo', authRequired, listarAnexosPorCodigo);
-
-// Cambiar estado de un anexo (ADMIN / ADMIN_GENERAL / INSPECTOR / JEFE_DE_BARRIO)
-router.patch('/:id/estado', authRequired, actualizarEstadoAnexo);
+router.post("/:codigo", authRequired, upload.any(), c.crearAnexo);
+router.get("/mios", authRequired, c.getMisAnexos);
+router.get("/anexo/:codigo", authRequired, requireRole("ADMIN", "ADMIN_GENERAL"), c.listarPorCodigo);
+router.post("/:id/conformidad", authRequired, requireRole("POSTULANTE"), c.darConformidad);
+router.post("/:id/conformidad-admin", authRequired, requireRole("ADMIN", "ADMIN_GENERAL"), c.darConformidadAdmin);
 
 module.exports = router;

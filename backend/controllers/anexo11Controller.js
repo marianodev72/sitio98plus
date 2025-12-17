@@ -1,420 +1,131 @@
-// backend/controllers/anexo11Controller.js
+// controllers/anexo11Controller.js
 
-const Anexo11 = require("../models/Anexo11");
-const ROLES = require("../middleware/roles");
-const PDFDocument = require("pdfkit");
+const mongoose = require('mongoose');
+const FormSubmission = require('../models/FormSubmission');
+const { User } = require('../models/user');
+const Vivienda = require('../models/vivienda');
 
-// -----------------------------------------------------------------------------
-// Helpers
-// -----------------------------------------------------------------------------
-
-// Obtiene el ID de usuario desde req.user (soporta id o _id por compatibilidad)
-function getUsuarioId(usuario) {
-  if (!usuario) return null;
-  return usuario.id || usuario._id || null;
-}
-
-// Helper: obtiene datos de vivienda desde el body admitiendo distintos formatos
-function extraerViviendaDelBody(body = {}) {
-  if (body.vivienda && typeof body.vivienda === "object") {
-    return {
-      unidad: body.vivienda.unidad || "",
-      dpto: body.vivienda.dpto || "",
-      mb: body.vivienda.mb || "",
-      mz: body.vivienda.mz || "",
-      casa: body.vivienda.casa || "",
-    };
-  }
-
-  return {
-    unidad: body.unidad || body.unidadVivienda || "",
-    dpto: body.dpto || body.departamento || "",
-    mb: body.mb || "",
-    mz: body.mz || "",
-    casa: body.casa || "",
-  };
-}
-
-// Normaliza el rol a MAYÚSCULAS (string)
-function getRole(usuario) {
-  if (!usuario) return null;
-  return String(usuario.role || "").toUpperCase().trim();
-}
-
-// -----------------------------------------------------------------------------
-// POST /api/anexo11
-// Crear un nuevo Anexo 11 (pedido de trabajo) - lo inicia el PERMISIONARIO
-// -----------------------------------------------------------------------------
-const crearAnexo11 = async (req, res) => {
+/**
+ * Crear ANEXO 11 – Pedido de Trabajo
+ */
+async function crearAnexo11(req, res) {
   try {
-    const usuario = req.user;
-    const usuarioId = getUsuarioId(usuario);
+    const { permisionarioId, viviendaId, metadata } = req.validatedBody;
 
-    if (!usuario || !usuarioId) {
-      return res.status(401).json({
-        ok: false,
-        message: "No autenticado.",
-      });
-    }
+    if (!mongoose.Types.ObjectId.isValid(permisionarioId))
+      return res.status(400).json({ error: 'permisionarioId inválido' });
 
-    if (getRole(usuario) !== ROLES.PERMISIONARIO) {
-      return res.status(403).json({
-        ok: false,
-        message: "Acceso permitido solo para permisionarios.",
-      });
-    }
+    if (!mongoose.Types.ObjectId.isValid(viviendaId))
+      return res.status(400).json({ error: 'viviendaId inválido' });
 
-    // Clonamos el body para no mutar directamente req.body
-    const body = { ...(req.body || {}) };
+    const usuario = await User.findById(permisionarioId);
+    if (!usuario)
+      return res.status(404).json({ error: 'Permisionario no encontrado' });
 
-    // Permite formatos anteriores donde venía un objeto "permisionario" con los datos
-    if (body.permisionario && typeof body.permisionario === "object") {
-      const p = body.permisionario;
+    const vivienda = await Vivienda.findById(viviendaId);
+    if (!vivienda)
+      return res.status(404).json({ error: 'Vivienda no encontrada' });
 
-      body.unidad = p.unidad || body.unidad;
-      body.dpto = p.dpto || body.dpto;
-      body.mb = p.mb || body.mb;
-      body.mz = p.mz || body.mz;
-      body.casa = p.casa || body.casa;
-
-      body.solicito =
-        p.solicita ||
-        p.solicito ||
-        body.solicito ||
-        body.tipoSolicitud ||
-        body.tipo;
-
-      body.detalle = p.detalle || body.detalle || body.detallePedido;
-
-      body.permisionarioNombre =
-        p.apellidoNombre ||
-        p.nombreCompleto ||
-        body.permisionarioNombre ||
-        "";
-
-      body.grado = p.grado || body.grado || "";
-    }
-
-    // ------------------ Validaciones ------------------
-    const errores = [];
-
-    if (!body.unidad) {
-      errores.push("La unidad de vivienda es obligatoria.");
-    }
-
-    if (!body.dpto) {
-      errores.push("El departamento es obligatorio.");
-    }
-
-    const tipoSolicitudRaw =
-      body.tipoSolicitud || body.solicito || body.tipo || "";
-    const tipoSolicitud = String(tipoSolicitudRaw).toUpperCase().trim();
-
-    const tiposValidos = ["CAMBIO", "REPARACION", "VERIFICACION", "PROVISION"];
-    if (!tiposValidos.includes(tipoSolicitud)) {
-      errores.push(
-        "Tipo de solicitud inválido. Debe ser CAMBIO, REPARACION, VERIFICACION o PROVISION."
-      );
-    }
-
-    const detallePedido =
-      body.detallePedido || body.detalle || body.descripcion || "";
-    if (!detallePedido || !String(detallePedido).trim()) {
-      errores.push("El detalle del pedido no puede estar vacío.");
-    }
-
-    if (errores.length > 0) {
-      return res.status(400).json({
-        ok: false,
-        message: "Error en los datos enviados.",
-        errores,
-      });
-    }
-
-    // ------------------ Construcción del documento ------------------
-    const vivienda = extraerViviendaDelBody(body);
-
-    const permisionarioNombre =
-      body.permisionarioNombre ||
-      (body.permisionario && body.permisionario.apellidoNombre) ||
-      "";
-    const grado =
-      body.grado || (body.permisionario && body.permisionario.grado) || "";
-
-    // Número correlativo
-    const last = await Anexo11.findOne().sort({ numero: -1 }).lean();
-    const siguienteNumero = last && last.numero ? last.numero + 1 : 1;
-
-    const nuevoAnexo = new Anexo11({
-      numero: siguienteNumero,
-      permisionario: {
-        usuario: usuarioId,
-        grado: grado,
-        nombreCompleto: permisionarioNombre,
-      },
-      vivienda,
-      tipoSolicitud,
-      detallePedido: detallePedido.trim(),
-      estado: "ENVIADO",
-      historial: [
-        {
-          fecha: new Date(),
-          actor: usuarioId,
-          actorRole: ROLES.PERMISIONARIO,
-          accion: "CREADO",
-          observaciones: "Gestión iniciada por el permisionario.",
-        },
-      ],
+    const nuevoA11 = new FormSubmission({
+      tipo: 'ANEXO_11',
+      creadoPor: req.user._id,
+      postulanteId: permisionarioId,
+      viviendaId,
+      estadoTramite: 'EN_ANALISIS',
+      metadata,
     });
 
-    await nuevoAnexo.save();
+    await nuevoA11.save();
 
     return res.status(201).json({
-      ok: true,
-      message: "Anexo 11 creado correctamente.",
-      anexo11: {
-        id: nuevoAnexo._id,
-        numero: nuevoAnexo.numero,
-        estado: nuevoAnexo.estado,
-        tipoSolicitud: nuevoAnexo.tipoSolicitud,
-        detallePedido: nuevoAnexo.detallePedido,
-        creadoEn: nuevoAnexo.createdAt,
-      },
+      message: 'ANEXO 11 creado correctamente',
+      anexo11Id: nuevoA11._id,
     });
   } catch (err) {
-    console.error("Error en crearAnexo11:", err);
-    return res.status(500).json({
-      ok: false,
-      message: "No se pudo crear el Anexo 11.",
-    });
+    console.error('Error al crear ANEXO 11:', err);
+    return res.status(500).json({ error: 'Error interno al crear ANEXO 11' });
   }
-};
+}
 
-// -----------------------------------------------------------------------------
-// GET /api/anexo11/mis
-// Lista los Anexo 11 del permisionario logueado
-// -----------------------------------------------------------------------------
-const listarAnexos11Permisionario = async (req, res) => {
+/**
+ * Obtener por ID
+ */
+async function obtenerPorId(req, res) {
   try {
-    const usuario = req.user;
-    const usuarioId = getUsuarioId(usuario);
-
-    if (!usuario || !usuarioId) {
-      return res.status(401).json({
-        ok: false,
-        message: "No autenticado.",
-      });
-    }
-
-    if (getRole(usuario) !== ROLES.PERMISIONARIO) {
-      return res.status(403).json({
-        ok: false,
-        message: "Acceso permitido solo para permisionarios.",
-      });
-    }
-
-    const anexos = await Anexo11.find({
-      "permisionario.usuario": usuarioId,
-    })
-      .sort({ createdAt: -1 })
-      .lean();
-
-    const gestiones = anexos.map((a) => ({
-      id: a._id,
-      numero: a.numero,
-      estado: a.estado,
-      tipoSolicitud: a.tipoSolicitud,
-      detallePedido: a.detallePedido,
-      creadoEn: a.createdAt,
-    }));
-
-    return res.json({
-      ok: true,
-      anexo11: gestiones,
-      gestiones,
-    });
-  } catch (err) {
-    console.error("Error en listarAnexos11Permisionario:", err);
-    return res.status(500).json({
-      ok: false,
-      message: "No se pudo obtener el listado de Anexo 11.",
-    });
-  }
-};
-
-// -----------------------------------------------------------------------------
-// GET /api/anexo11/:id
-// Detalle de un Anexo 11 (permisionario lo ve solo si es suyo)
-// -----------------------------------------------------------------------------
-const obtenerAnexo11Detalle = async (req, res) => {
-  try {
-    const usuario = req.user;
-    const usuarioId = getUsuarioId(usuario);
-
-    if (!usuario || !usuarioId) {
-      return res.status(401).json({
-        ok: false,
-        message: "No autenticado.",
-      });
-    }
-
     const { id } = req.params;
 
-    const doc = await Anexo11.findById(id).lean();
+    if (!mongoose.Types.ObjectId.isValid(id))
+      return res.status(400).json({ error: 'ID inválido' });
 
-    if (!doc) {
-      return res.status(404).json({
-        ok: false,
-        message: "Anexo 11 no encontrado.",
-      });
-    }
+    const anexo = await FormSubmission.findById(id).lean();
+    if (!anexo || anexo.tipo !== 'ANEXO_11')
+      return res.status(404).json({ error: 'ANEXO 11 no encontrado' });
 
-    const role = getRole(usuario);
+    return res.json(anexo);
+  } catch (err) {
+    console.error('Error obtener ANEXO 11:', err);
+    return res.status(500).json({ error: 'Error interno' });
+  }
+}
 
-    if (
-      role === ROLES.PERMISIONARIO &&
-      String(doc.permisionario.usuario) !== String(usuarioId)
-    ) {
-      return res.status(403).json({
-        ok: false,
-        message: "No tenés permiso para ver este Anexo 11.",
-      });
-    }
+/**
+ * Listar
+ */
+async function listar(req, res) {
+  try {
+    const { estado, apellido, mr, viviendaId } = req.query;
+
+    const filtro = { tipo: 'ANEXO_11' };
+
+    if (estado) filtro.estadoTramite = estado;
+    if (apellido)
+      filtro['metadata.permisionario.apellido'] = new RegExp(apellido, 'i');
+    if (mr) filtro['metadata.permisionario.mr'] = mr;
+    if (viviendaId && mongoose.Types.ObjectId.isValid(viviendaId))
+      filtro.viviendaId = viviendaId;
+
+    const lista = await FormSubmission.find(filtro).lean();
+
+    return res.json(lista);
+  } catch (err) {
+    console.error('Error al listar ANEXO 11:', err);
+    return res.status(500).json({ error: 'Error interno' });
+  }
+}
+
+/**
+ * Cambiar estado (solo Admin General)
+ */
+async function cambiarEstado(req, res) {
+  try {
+    const { id } = req.params;
+    const { nuevoEstado } = req.body;
+
+    const permitidos = ['EN_ANALISIS', 'APROBADO', 'RECHAZADO', 'CERRADO'];
+
+    if (!permitidos.includes(nuevoEstado))
+      return res.status(400).json({ error: 'Estado inválido' });
+
+    const anexo = await FormSubmission.findById(id);
+    if (!anexo || anexo.tipo !== 'ANEXO_11')
+      return res.status(404).json({ error: 'ANEXO 11 no encontrado' });
+
+    anexo.estadoTramite = nuevoEstado;
+    await anexo.save();
 
     return res.json({
-      ok: true,
-      anexo11: doc,
+      message: 'Estado actualizado correctamente',
+      estado: nuevoEstado,
     });
   } catch (err) {
-    console.error("Error en obtenerAnexo11Detalle:", err);
-    return res.status(500).json({
-      ok: false,
-      message: "No se pudo obtener el detalle del Anexo 11.",
-    });
+    console.error('Error cambiar estado ANEXO 11:', err);
+    return res.status(500).json({ error: 'Error interno' });
   }
-};
-
-// -----------------------------------------------------------------------------
-// GET /api/anexo11/:id/pdf
-// Genera y descarga el PDF del Anexo 11 (permisionario sólo si es suyo)
-// -----------------------------------------------------------------------------
-const generarAnexo11PDF = async (req, res) => {
-  try {
-    const usuario = req.user;
-    const usuarioId = getUsuarioId(usuario);
-
-    if (!usuario || !usuarioId) {
-      return res.status(401).json({
-        ok: false,
-        message: "No autenticado.",
-      });
-    }
-
-    const { id } = req.params;
-
-    const doc = await Anexo11.findById(id).lean();
-
-    if (!doc) {
-      return res.status(404).json({
-        ok: false,
-        message: "Anexo 11 no encontrado.",
-      });
-    }
-
-    const role = getRole(usuario);
-
-    if (
-      role === ROLES.PERMISIONARIO &&
-      String(doc.permisionario.usuario) !== String(usuarioId)
-    ) {
-      return res.status(403).json({
-        ok: false,
-        message: "No tenés permiso para descargar este Anexo 11.",
-      });
-    }
-
-    const nombreArchivo = `anexo11_${doc.numero || doc._id}.pdf`;
-
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="${nombreArchivo}"`
-    );
-
-    const pdf = new PDFDocument({
-      size: "A4",
-      margin: 50,
-    });
-
-    pdf.pipe(res);
-
-    pdf.fontSize(16).text("ANEXO 11 - Pedido de trabajo", {
-      align: "center",
-    });
-    pdf.moveDown();
-
-    pdf.fontSize(10).text(`Número de gestión: ${doc.numero || doc._id}`);
-    if (doc.createdAt) {
-      pdf.text(
-        `Fecha de creación: ${new Date(doc.createdAt).toLocaleString("es-AR")}`
-      );
-    }
-    pdf.moveDown();
-
-    pdf.fontSize(12).text("Datos del permisionario", { underline: true });
-    pdf.moveDown(0.5);
-    pdf.fontSize(10).text(
-      `Permisionario: ${(doc.permisionario?.grado || "")} ${
-        doc.permisionario?.nombreCompleto || ""
-      }`
-    );
-    pdf.moveDown();
-
-    pdf.fontSize(12).text("Datos de la vivienda", { underline: true });
-    pdf.moveDown(0.5);
-    if (doc.vivienda) {
-      pdf
-        .fontSize(10)
-        .text(`Unidad: ${doc.vivienda.unidad || ""}`)
-        .text(`Departamento: ${doc.vivienda.dpto || ""}`)
-        .text(`MB: ${doc.vivienda.mb || ""}`)
-        .text(`MZ: ${doc.vivienda.mz || ""}`)
-        .text(`Casa: ${doc.vivienda.casa || ""}`);
-    } else {
-      pdf.fontSize(10).text("Vivienda: (sin datos)");
-    }
-    pdf.moveDown();
-
-    pdf.fontSize(12).text("Solicitud", { underline: true });
-    pdf.moveDown(0.5);
-    pdf.fontSize(10).text(`Tipo de solicitud: ${doc.tipoSolicitud || "—"}`);
-    pdf.moveDown(0.5);
-    pdf.fontSize(10).text("Detalle del pedido:");
-    pdf.moveDown(0.5);
-    pdf.fontSize(10).text(doc.detallePedido || "—", {
-      width: 500,
-    });
-    pdf.moveDown();
-
-    pdf.fontSize(9).text(`Estado actual: ${doc.estado || "ENVIADO"}`, {
-      align: "right",
-    });
-
-    pdf.end();
-  } catch (err) {
-    console.error("Error en generarAnexo11PDF:", err);
-    if (!res.headersSent) {
-      return res.status(500).json({
-        ok: false,
-        message: "No se pudo generar el PDF del Anexo 11.",
-      });
-    }
-  }
-};
+}
 
 module.exports = {
   crearAnexo11,
-  listarAnexos11Permisionario,
-  obtenerAnexo11Detalle,
-  generarAnexo11PDF,
+  obtenerPorId,
+  listar,
+  cambiarEstado,
 };

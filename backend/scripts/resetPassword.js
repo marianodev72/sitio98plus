@@ -1,39 +1,36 @@
-// backend/scripts/resetPassword.js
-const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+const mongoose = require("mongoose");
+const bcrypt = require("bcryptjs");
+const { User } = require("../models/user");
 
-const connectDB = require('../config/db');
-const User = require('../models/user');
+const uri = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/zn98";
 
-async function main() {
-  try {
-    console.log('Conectando a MongoDB Atlas...');
-    await connectDB(process.env.MONGO_URI);
+async function resetPassword(email, newPass) {
+  await mongoose.connect(uri);
+  console.log("✔ Conectado a DB:", uri);
 
-    const email = 'postulante@example.com';
-
-    const user = await User.findOne({ email }).select('+password');
-
-    if (!user) {
-      console.log('❌ No existe un usuario con ese email.');
-      process.exit(0);
-    }
-
-    // Nueva contraseña
-    const newPassword = '123456';
-    await user.setPassword(newPassword);
-
-    await user.save();
-
-    console.log('✅ Contraseña reseteada correctamente:');
-    console.log(`Usuario: ${email}`);
-    console.log(`Nueva contraseña: ${newPassword}`);
-
-    process.exit(0);
-  } catch (err) {
-    console.error('❌ Error:', err);
-    process.exit(1);
+  const user = await User.findOne({ email });
+  if (!user) {
+    console.log("❌ Usuario no encontrado:", email);
+    return process.exit(1);
   }
+
+  const hashed = await bcrypt.hash(newPass, 10);
+
+  // 👇 ESTE es el campo correcto según tus documentos:
+  user.passwordHash = hashed;
+
+  await user.save();
+
+  console.log(`✔ Contraseña actualizada para ${email}`);
+  console.log(`   Nueva clave: ${newPass}`);
+  process.exit(0);
 }
 
-main();
+const [,, email, pass] = process.argv;
+
+if (!email || !pass) {
+  console.log("Uso: node scripts/resetPassword.js email nuevaClave");
+  process.exit(1);
+}
+
+resetPassword(email, pass);

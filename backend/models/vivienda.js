@@ -1,20 +1,11 @@
 // models/vivienda.js
-// Modelo de Vivienda Fiscal para el sistema ZN98
+// Modelo Vivienda ZN98 – versión con dormitorios + barrioCodigo
 
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
-const ESTADOS_VIVIENDA = [
-  'DISPONIBLE',
-  'OCUPADA',
-  'RESERVADA',
-  'ASIGNADA_FUTURA',
-  'MANTENIMIENTO',
-  'BAJA',
-];
-
-// Ocupación actual (permisionario en este momento)
-const OcupacionActualSchema = new Schema(
+// Subdocumento para ocupación actual e historial
+const ocupacionSchema = new Schema(
   {
     permisionario: {
       type: Schema.Types.ObjectId,
@@ -30,86 +21,63 @@ const OcupacionActualSchema = new Schema(
       type: Boolean,
       default: false,
     },
-    motivo: {
-      type: String,
-      trim: true,
-    },
   },
   { _id: false }
 );
 
-// Historial de ocupaciones
-const HistorialOcupacionSchema = new Schema(
+const viviendaSchema = new Schema(
   {
-    permisionario: {
-      type: Schema.Types.ObjectId,
-      ref: 'User',
-    },
-    fechaIngreso: {
-      type: Date,
-    },
-    fechaEgreso: {
-      type: Date,
-    },
-    motivo: {
-      type: String,
-      trim: true,
-    },
-  },
-  { _id: false }
-);
-
-const ViviendaSchema = new Schema(
-  {
-    // Código interno: K01, M12, etc.
+    // Código único de vivienda (ej: AS-501, PB-501, LM-23, IN-D-01)
     codigo: {
       type: String,
-      trim: true,
       required: true,
       unique: true,
       index: true,
     },
 
-    // Dirección textual completa
-    direccion: {
-      type: String,
-      trim: true,
-    },
-
-    // Barrio / complejo / conjunto
+    // Nombre del barrio en texto completo (ej: "ALTE STORNI", "CTE. PIEDRABUENA")
     barrio: {
       type: String,
-      trim: true,
+      required: true,
+    },
+
+    // Código corto de barrio (AS, AB, PB, LM, IN, OT)
+    barrioCodigo: {
+      type: String,
       index: true,
     },
 
-    // Alguna descripción libre (piso, torre, etc.)
-    descripcion: {
+    // Número de vivienda / departamento (ej: "501", "D-01")
+    numero: {
       type: String,
-      trim: true,
     },
 
-    // Estado operativo de la vivienda
+    // Cantidad de dormitorios de la unidad
+    dormitorios: {
+      type: Number,
+      default: 0,
+    },
+
+    // Estado de la vivienda
     estado: {
       type: String,
-      enum: ESTADOS_VIVIENDA,
+      enum: ['DISPONIBLE', 'OCUPADA', 'RESERVADA', 'REPARACION'],
       default: 'DISPONIBLE',
-      index: true,
     },
 
-    // Ocupación actual (permisionario y fechas)
+    // Ocupación actual (permisionario vigente)
     ocupacionActual: {
-      type: OcupacionActualSchema,
+      type: ocupacionSchema,
       default: null,
     },
 
     // Historial de ocupaciones
     historialOcupacion: {
-      type: [HistorialOcupacionSchema],
+      type: [ocupacionSchema],
       default: [],
     },
 
-    // Meta / datos adicionales flexibles
+    // Campo libre para metadatos
     meta: {
       type: Schema.Types.Mixed,
       default: {},
@@ -120,12 +88,6 @@ const ViviendaSchema = new Schema(
   }
 );
 
-// Índices útiles
-ViviendaSchema.index({ barrio: 1, codigo: 1 });
-ViviendaSchema.index({ estado: 1 });
-
-// Export del modelo evitando OverwriteModelError
-const Vivienda =
-  mongoose.models.Vivienda || mongoose.model('Vivienda', ViviendaSchema);
-
-module.exports = Vivienda;
+// Evita OverwriteModelError si se requiere el modelo más de una vez
+module.exports =
+  mongoose.models.Vivienda || mongoose.model('Vivienda', viviendaSchema);

@@ -1,7 +1,7 @@
 // controllers/adminController.js
 
 const mongoose = require('mongoose');
-const User = require('../models/user');
+const { User } = require('../models/user'); // <- IMPORT CORRECTO DEL MODELO
 const Vivienda = require('../models/vivienda');
 const Alojamiento = require('../models/Alojamiento');
 const AuditLog = require('../models/AuditLog');
@@ -25,36 +25,75 @@ async function registrarAuditoria({ actorId, targetUserId, tipo, detalle }) {
 }
 
 /**
- * Listar usuarios con filtros (rol, estado, barrio, matricula, grado, etc).
+ * Listar usuarios con filtros (rol, estado, barrio, búsqueda de texto).
+ *
+ * Frontend envía:
+ *  - role
+ *  - estadoHabitacional
+ *  - barrio
+ *  - buscar
+ *
+ * También aceptamos los nombres viejos por compatibilidad:
+ *  - rol
+ *  - barrioAsignado
+ *  - texto
  */
 async function listarUsuarios(req, res) {
   try {
     const {
       rol,
+      role,
       estadoHabitacional,
+      barrio,
       barrioAsignado,
       matricula,
       grado,
       texto,
+      buscar,
     } = req.query;
 
     const filtro = {};
 
-    if (rol) filtro.role = rol;
-    if (estadoHabitacional) filtro.estadoHabitacional = estadoHabitacional;
-    if (barrioAsignado) filtro.barrioAsignado = barrioAsignado;
-    if (matricula) filtro.mr = matricula;
-    if (grado) filtro.grado = grado;
+    // Rol (aceptamos role o rol)
+    if (rol || role) {
+      filtro.role = rol || role;
+    }
 
-    if (texto) {
+    // Estado habitacional
+    if (estadoHabitacional) {
+      filtro.estadoHabitacional = estadoHabitacional;
+    }
+
+    // Barrio asignado (nuevo: barrio, viejo: barrioAsignado)
+    if (barrio || barrioAsignado) {
+      filtro.barrioAsignado = barrio || barrioAsignado;
+    }
+
+    // Matricula (en el modelo nuevo es "matricula")
+    if (matricula) {
+      filtro.matricula = matricula;
+    }
+
+    // Por ahora ignoramos "grado" porque el modelo actual no lo define
+
+    const textoLibre = buscar || texto;
+    if (textoLibre) {
+      const regex = new RegExp(textoLibre, 'i');
       filtro.$or = [
-        { apellido: new RegExp(texto, 'i') },
-        { nombres: new RegExp(texto, 'i') },
-        { mr: new RegExp(texto, 'i') },
+        { apellido: regex },
+        { nombre: regex },
+        { email: regex },
+        { dni: regex },
+        { matricula: regex },
       ];
     }
 
-    const usuarios = await User.find(filtro).lean();
+    // Solo devolvemos campos útiles para el panel
+    const usuarios = await User.find(filtro)
+      .select(
+        'nombre apellido email role estadoHabitacional barrioAsignado viviendaAsignada alojamientoAsignado activo bloqueado'
+      )
+      .lean();
 
     return res.json(usuarios);
   } catch (err) {
@@ -348,9 +387,13 @@ async function asignarViviendaPorOrdenSuperior(req, res) {
     const { id } = req.params;
     const { viviendaId, motivo } = req.body;
 
-    if (!mongoose.Types.ObjectId.isValid(id) ||
-        !mongoose.Types.ObjectId.isValid(viviendaId)) {
-      return res.status(400).json({ error: 'ID de usuario o vivienda inválidos' });
+    if (
+      !mongoose.Types.ObjectId.isValid(id) ||
+      !mongoose.Types.ObjectId.isValid(viviendaId)
+    ) {
+      return res
+        .status(400)
+        .json({ error: 'ID de usuario o vivienda inválidos' });
     }
 
     const usuario = await User.findById(id);
@@ -404,7 +447,9 @@ async function desasignarViviendaPorOrdenSuperior(req, res) {
 
     const viviendaId = usuario.viviendaAsignada;
     if (!viviendaId) {
-      return res.status(400).json({ error: 'El usuario no tiene vivienda asignada' });
+      return res
+        .status(400)
+        .json({ error: 'El usuario no tiene vivienda asignada' });
     }
 
     const vivienda = await Vivienda.findById(viviendaId);
@@ -442,9 +487,13 @@ async function asignarAlojamientoPorOrdenSuperior(req, res) {
     const { id } = req.params;
     const { alojamientoId, motivo } = req.body;
 
-    if (!mongoose.Types.ObjectId.isValid(id) ||
-        !mongoose.Types.ObjectId.isValid(alojamientoId)) {
-      return res.status(400).json({ error: 'ID de usuario o alojamiento inválidos' });
+    if (
+      !mongoose.Types.ObjectId.isValid(id) ||
+      !mongoose.Types.ObjectId.isValid(alojamientoId)
+    ) {
+      return res
+        .status(400)
+        .json({ error: 'ID de usuario o alojamiento inválidos' });
     }
 
     const usuario = await User.findById(id);
@@ -499,7 +548,9 @@ async function desasignarAlojamientoPorOrdenSuperior(req, res) {
 
     const alojamientoId = usuario.alojamientoAsignado;
     if (!alojamientoId) {
-      return res.status(400).json({ error: 'El usuario no tiene alojamiento asignado' });
+      return res
+        .status(400)
+        .json({ error: 'El usuario no tiene alojamiento asignado' });
     }
 
     const alojamiento = await Alojamiento.findById(alojamientoId);

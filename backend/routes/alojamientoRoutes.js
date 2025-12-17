@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 
-const { authRequired, requireRole } = require('../middlewares/auth');
+const { authRequired, requireRole } = require('../middleware/auth');
 const {
   validateAlojamientoCreate,
   validateAlojamientoUpdate

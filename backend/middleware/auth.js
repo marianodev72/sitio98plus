@@ -1,124 +1,149 @@
-// middleware/auth.js
-// Autenticación y autorización centralizada — Sistema ZN98
+// backend/middleware/auth.js
+// Auth ZN98 (RSA) — estable y retrocompatible
+// - JWT RS256 con private.pem/public.pem
+// - Token por cookie (default: "token") o Authorization: Bearer <token>
+// - Retrocompat: soporta payload {user:{...}} y payload directo {...}
 
-const jwt = require('jsonwebtoken');
-const { User } = require('../models/User');
+const fs = require("fs");
+const path = require("path");
+const jwt = require("jsonwebtoken");
 
-const TOKEN_COOKIE_NAME = 'zn98_token';
-
-// Claves RSA (RS256)
-// En producción deben venir de variables de entorno y estar FUERA del repo.
-const JWT_PRIVATE_KEY = process.env.JWT_PRIVATE_KEY;
-const JWT_PUBLIC_KEY = process.env.JWT_PUBLIC_KEY;
-
-if (!JWT_PRIVATE_KEY || !JWT_PUBLIC_KEY) {
-  console.warn(
-    '[auth] JWT_PRIVATE_KEY o JWT_PUBLIC_KEY no están definidas en variables de entorno.'
-  );
+function readKeySafe(p) {
+  try {
+    if (p && fs.existsSync(p)) return fs.readFileSync(p, "utf8");
+  } catch (_) {}
+  return null;
 }
 
-// Opciones de cookie — en producción ajustamos Secure y SameSite.
-function getCookieOptions() {
-  const isProduction = process.env.NODE_ENV === 'production';
-  return {
-    httpOnly: true,
-    secure: isProduction, // true en producción (HTTPS)
-    sameSite: isProduction ? 'strict' : 'lax',
-    path: '/', // cookie válida para toda la app
-  };
-}
+const ROOT = path.join(__dirname, ".."); // backend/
 
-// Firma un token JWT para un usuario
+const PRIVATE_CANDIDATES = [
+  process.env.JWT_PRIVATE_KEY_PATH,
+  path.join(ROOT, "private.pem"),
+  path.join(ROOT, "keys", "private.pem"),
+  path.join(ROOT, "config", "private.pem"),
+].filter(Boolean);
+
+const PUBLIC_CANDIDATES = [
+  process.env.JWT_PUBLIC_KEY_PATH,
+  path.join(ROOT, "public.pem"),
+  path.join(ROOT, "keys", "public.pem"),
+  path.join(ROOT, "config", "public.pem"),
+].filter(Boolean);
+
+const PRIVATE_KEY = PRIVATE_CANDIDATES.map(readKeySafe).find(Boolean);
+const PUBLIC_KEY = PUBLIC_CANDIDATES.map(readKeySafe).find(Boolean);
+
+if (PRIVATE_KEY && PUBLIC_KEY) console.log("[auth] Claves JWT cargadas");
+else console.warn("[auth] ⚠️ No se pudieron cargar private.pem/public.pem");
+
 function signToken(user) {
+  if (!PRIVATE_KEY) throw new Error("JWT private key no cargada (private.pem).");
+
+  // ✅ CONTRATO ÚNICO: guardamos SIEMPRE dentro de "user"
   const payload = {
-    sub: user._id.toString(),
-    email: user.email,
-    role: user.role,
-    activo: user.activo,
+    user: {
+      _id: String(user._id),
+      nombre: user.nombre,
+      apellido: user.apellido,
+      email: user.email,
+      dni: user.dni,
+      matricula: user.matricula,
+      role: user.role,
+      activo: user.activo,
+      barrioAsignado: user.barrioAsignado ?? null,
+      viviendaAsignada: user.viviendaAsignada ?? null,
+      alojamientoAsignado: user.alojamientoAsignado ?? null,
+    },
   };
 
-  return jwt.sign(payload, JWT_PRIVATE_KEY, {
-    algorithm: 'RS256',
-    expiresIn: '1h',
+  const expiresIn = process.env.JWT_EXPIRES_IN || "7d";
+  return jwt.sign(payload, PRIVATE_KEY, { algorithm: "RS256", expiresIn });
+}
+
+function verifyToken(token) {
+  if (!PUBLIC_KEY) throw new Error("JWT public key no cargada (public.pem).");
+  return jwt.verify(token, PUBLIC_KEY, { algorithms: ["RS256"] });
+}
+
+function setAuthCookie(res, token) {
+  const cookieName = process.env.AUTH_COOKIE_NAME || "token";
+  const isProd = String(process.env.NODE_ENV || "").toLowerCase() === "production";
+
+  res.cookie(cookieName, token, {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: isProd ? "none" : "lax",
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+    path: "/",
   });
 }
 
-// Setea cookie de autenticación
-function setAuthCookie(res, token) {
-  res.cookie(TOKEN_COOKIE_NAME, token, getCookieOptions());
-}
-
-// Limpia cookie de autenticación
 function clearAuthCookie(res) {
-  res.clearCookie(TOKEN_COOKIE_NAME, getCookieOptions());
+  const cookieName = process.env.AUTH_COOKIE_NAME || "token";
+  const isProd = String(process.env.NODE_ENV || "").toLowerCase() === "production";
+
+  res.clearCookie(cookieName, {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: isProd ? "none" : "lax",
+    path: "/",
+  });
 }
 
-// Middleware: requiere usuario autenticado
-async function authRequired(req, res, next) {
+function extractToken(req) {
+  const header = req.headers.authorization || "";
+  if (header.startsWith("Bearer ")) return header.slice(7);
+
+  const cookieName = process.env.AUTH_COOKIE_NAME || "token";
+  if (req.cookies && req.cookies[cookieName]) return req.cookies[cookieName];
+
+  return null;
+}
+
+// ✅ NORMALIZADOR: garantiza req.user con el objeto usuario (no el payload crudo)
+function normalizeUserFromPayload(payload) {
+  // caso actual
+  if (payload && payload.user && payload.user._id) return payload.user;
+  // caso viejo (si alguna vez firmaste directo con campos)
+  if (payload && payload._id && payload.role) return payload;
+  // caso rarísimo (payload.user.user)
+  if (payload && payload.user && payload.user.user && payload.user.user._id) return payload.user.user;
+  return null;
+}
+
+function authRequired(req, res, next) {
   try {
-    const tokenFromCookie = req.cookies?.[TOKEN_COOKIE_NAME];
-    const authHeader = req.headers.authorization;
-    let token = tokenFromCookie;
+    const token = extractToken(req);
+    if (!token) return res.status(401).json({ message: "No autenticado" });
 
-    // Permite opcionalmente "Bearer <token>" por header
-    if (!token && authHeader && authHeader.startsWith('Bearer ')) {
-      token = authHeader.split(' ')[1];
-    }
+    const payload = verifyToken(token);
+    const u = normalizeUserFromPayload(payload);
 
-    if (!token) {
-      return res.status(401).json({ message: 'No autenticado.' });
-    }
+    if (!u) return res.status(401).json({ message: "No autenticado" });
 
-    let payload;
-    try {
-      payload = jwt.verify(token, JWT_PUBLIC_KEY, { algorithms: ['RS256'] });
-    } catch (err) {
-      return res.status(401).json({ message: 'Token inválido o expirado.' });
-    }
-
-    const user = await User.findById(payload.sub);
-    if (!user) {
-      return res.status(401).json({ message: 'Usuario no encontrado.' });
-    }
-
-    if (!user.activo || user.bloqueado) {
-      return res
-        .status(403)
-        .json({ message: 'Usuario inactivo o bloqueado.' });
-    }
-
-    req.user = user;
-    next();
+    req.user = u;
+    return next();
   } catch (err) {
-    console.error('[authRequired] Error:', err);
-    res.status(500).json({ message: 'Error en autenticación.' });
+    return res.status(401).json({ message: "No autenticado" });
   }
 }
 
-// Middleware: requiere uno de los roles indicados
-function requireRole(...rolesPermitidos) {
-  const rolesNormalizados = rolesPermitidos.map((r) => r.toUpperCase());
-
+function requireRole(...roles) {
+  const allowed = roles.map((r) => String(r).toUpperCase());
   return (req, res, next) => {
-    if (!req.user) {
-      return res.status(401).json({ message: 'No autenticado.' });
-    }
-
-    const roleUsuario = (req.user.role || '').toUpperCase();
-
-    if (!rolesNormalizados.includes(roleUsuario)) {
-      return res.status(403).json({ message: 'Acceso denegado.' });
-    }
-
-    next();
+    const role = String(req.user?.role || "").toUpperCase();
+    if (!role) return res.status(403).json({ message: "No autorizado" });
+    if (!allowed.includes(role)) return res.status(403).json({ message: "No autorizado" });
+    return next();
   };
 }
 
 module.exports = {
   signToken,
+  verifyToken,
   setAuthCookie,
   clearAuthCookie,
   authRequired,
   requireRole,
-  TOKEN_COOKIE_NAME,
 };

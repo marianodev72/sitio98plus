@@ -1,213 +1,156 @@
-// scripts/seedFormTemplates.js
-// Crea / actualiza plantillas de formularios (ANEXO 2 y ANEXO 22) en la BD
+// backend/scripts/seedFormTemplates.js
+require("dotenv").config();
+const mongoose = require("mongoose");
+const { FormTemplate } = require("../models/FormTemplate");
 
-require('dotenv').config();
-const mongoose = require('mongoose');
-const path = require('path');
-
-const connectDB = require('../config/db');
-const { FormTemplate } = require('../models/FormTemplate');
-
-async function upsertTemplate(data) {
-  const { codigo } = data;
-
-  let template = await FormTemplate.findOne({ codigo });
-
-  if (!template) {
-    console.log(`🆕 Creando plantilla nueva: ${codigo}`);
-    template = new FormTemplate(data);
-  } else {
-    console.log(`♻️ Actualizando plantilla existente: ${codigo}`);
-    template.nombre = data.nombre;
-    template.descripcion = data.descripcion;
-    template.version = data.version;
-    template.activo = data.activo;
-    template.rolesQuePuedenRellenar = data.rolesQuePuedenRellenar;
-    template.campos = data.campos;
-  }
-
-  await template.save();
-  console.log(`✅ Plantilla ${codigo} guardada con _id=${template._id}`);
+function getMongoUri() {
+  return (
+    process.env.MONGO_URI ||
+    process.env.MONGO_URL ||
+    process.env.MONGODB_URI ||
+    null
+  );
 }
 
-async function run() {
-  try {
-    await connectDB();
-    console.log('🔌 Conectado a MongoDB para seed de FormTemplates');
+async function upsertTemplate(payload) {
+  const { code, version = 1 } = payload;
 
-    const templatesData = [
-      // ================== ANEXO 2 — ASIGNACIÓN DE VIVIENDA ==================
-      {
-        codigo: 'ANEXO_2',
-        nombre: 'Acta de Asignación de Vivienda Fiscal (ANEXO 2)',
-        descripcion:
-          'Acta de asignación de vivienda fiscal de la Armada. Generada por ADMIN, validada por ADMIN GENERAL.',
-        version: 1,
-        activo: true,
-        // Por ahora solo ADMIN y ADMIN_GENERAL pueden completar/enviar esta acta
-        rolesQuePuedenRellenar: ['ADMIN', 'ADMIN_GENERAL'],
-        campos: [
-          {
-            nombre: 'grado',
-            etiqueta: 'Grado del permisionario',
-            tipo: 'texto',
-            requerido: true,
-          },
-          {
-            nombre: 'apellido_nombres',
-            etiqueta: 'Apellido y Nombres del permisionario',
-            tipo: 'texto',
-            requerido: true,
-          },
-          {
-            nombre: 'matricula',
-            etiqueta: 'Matrícula (M.R.)',
-            tipo: 'texto',
-            requerido: true,
-          },
-          {
-            nombre: 'destino',
-            etiqueta: 'Destino',
-            tipo: 'texto',
-            requerido: true,
-          },
-          {
-            nombre: 'barrio',
-            etiqueta: 'Barrio de la vivienda asignada',
-            tipo: 'texto', // más adelante podemos convertirlo en select si queremos lista oficial
-            requerido: true,
-          },
-          {
-            nombre: 'numero_casa',
-            etiqueta: 'Número de casa / nomenclatura',
-            tipo: 'texto',
-            requerido: true,
-          },
-          {
-            nombre: 'cantidad_habitaciones',
-            etiqueta: 'Cantidad de habitaciones',
-            tipo: 'numero',
-            requerido: true,
-          },
-          {
-            nombre: 'fecha_asignacion',
-            etiqueta: 'Fecha de asignación',
-            tipo: 'fecha',
-            requerido: true,
-          },
-          {
-            nombre: 'fecha_entrega',
-            etiqueta: 'Fecha de entrega',
-            tipo: 'fecha',
-            requerido: false,
-          },
-          {
-            nombre: 'lugar',
-            etiqueta: 'Lugar',
-            tipo: 'texto',
-            requerido: false,
-          },
-          {
-            nombre: 'observaciones',
-            etiqueta: 'Observaciones',
-            tipo: 'textarea',
-            requerido: false,
-          },
-        ],
-      },
+  const updated = await FormTemplate.findOneAndUpdate(
+    { code, version },
+    { $set: payload },
+    { upsert: true, new: true }
+  );
 
-      // ================== ANEXO 22 — ASIGNACIÓN DE ALOJAMIENTO ==================
-      {
-        codigo: 'ANEXO_22',
-        nombre: 'Acta de Asignación de Alojamiento Naval (ANEXO 22)',
-        descripcion:
-          'Acta de asignación de alojamiento naval. Generada por ADMIN, validada por ADMIN GENERAL.',
-        version: 1,
-        activo: true,
-        // Por ahora solo ADMIN y ADMIN_GENERAL pueden completar/enviar esta acta
-        rolesQuePuedenRellenar: ['ADMIN', 'ADMIN_GENERAL'],
-        campos: [
-          {
-            nombre: 'grado',
-            etiqueta: 'Grado del titular',
-            tipo: 'texto',
-            requerido: true,
-          },
-          {
-            nombre: 'apellido_nombres',
-            etiqueta: 'Apellido y Nombres del titular',
-            tipo: 'texto',
-            requerido: true,
-          },
-          {
-            nombre: 'matricula',
-            etiqueta: 'Matrícula (M.R.)',
-            tipo: 'texto',
-            requerido: true,
-          },
-          {
-            nombre: 'destino',
-            etiqueta: 'Destino',
-            tipo: 'texto',
-            requerido: true,
-          },
-          {
-            nombre: 'predio',
-            etiqueta: 'Predio',
-            tipo: 'texto',
-            requerido: false,
-          },
-          {
-            nombre: 'edificio',
-            etiqueta: 'Edificio',
-            tipo: 'texto',
-            requerido: false,
-          },
-          {
-            nombre: 'codigo_alojamiento',
-            etiqueta: 'Código / tipo de alojamiento (ej. C01, C02)',
-            tipo: 'texto', // más adelante se puede vincular directo a la tabla Alojamiento
-            requerido: true,
-          },
-          {
-            nombre: 'lugar',
-            etiqueta: 'Lugar / Localidad',
-            tipo: 'texto',
-            requerido: true,
-          },
-          {
-            nombre: 'fecha_asignacion',
-            etiqueta: 'Fecha de asignación',
-            tipo: 'fecha',
-            requerido: true,
-          },
-          {
-            nombre: 'fecha_entrega',
-            etiqueta: 'Fecha de entrega',
-            tipo: 'fecha',
-            requerido: false,
-          },
-          {
-            nombre: 'observaciones',
-            etiqueta: 'Observaciones',
-            tipo: 'textarea',
-            requerido: false,
-          },
-        ],
-      },
-    ];
-
-    for (const tmpl of templatesData) {
-      await upsertTemplate(tmpl);
-    }
-
-    console.log('🎉 Seed de FormTemplates completado.');
-  } catch (err) {
-    console.error('❌ Error en seedFormTemplates:', err);
-  } finally {
-    await mongoose.connection.close();
-    process.exit(0);
-  }
+  return updated;
 }
 
-run();
+async function main() {
+  const uri = getMongoUri();
+  if (!uri) {
+    console.error("Falta MONGO_URI (o MONGO_URL / MONGODB_URI) en .env");
+    process.exit(1);
+  }
+
+  console.log("Conectando a MongoDB...");
+  await mongoose.connect(uri);
+
+  const templates = [
+    {
+      code: "ANEXO_01",
+      nombre: "ANEXO 01 - Postulación a vivienda fiscal",
+      descripcion: "Inicia una postulación (panel limitado del postulante).",
+      version: 1,
+      activo: true,
+      requiereVivienda: false,
+      requiereAlojamiento: false,
+      rolesQuePuedenCrear: ["POSTULANTE"],
+      rolesQuePuedenVer: ["POSTULANTE", "ADMIN", "ADMIN_GENERAL"],
+      campos: [
+        {
+          nombre: "motivo",
+          etiqueta: "Motivo / observación inicial",
+          tipo: "textarea",
+          requerido: false,
+          ayuda: "Campo opcional para dejar un texto inicial.",
+        },
+      ],
+    },
+
+    {
+      code: "ANEXO_02",
+      nombre: "ANEXO 02 - Asignación de vivienda fiscal",
+      descripcion:
+        "ADMIN_GENERAL crea, POSTULANTE da conformidad, ADMIN_GENERAL cierra (reserva sin ocupación).",
+      version: 1,
+      activo: true,
+      requiereVivienda: false, // vivienda va en datos.viviendaId
+      requiereAlojamiento: false,
+      rolesQuePuedenCrear: ["ADMIN_GENERAL"],
+      rolesQuePuedenVer: ["ADMIN_GENERAL", "ADMIN", "POSTULANTE", "PERMISIONARIO"],
+      campos: [
+        {
+          nombre: "viviendaId",
+          etiqueta: "Vivienda (ID)",
+          tipo: "text",
+          requerido: true,
+          ayuda: "ObjectId de la vivienda a asignar.",
+        },
+        {
+          nombre: "fechaAsignacion",
+          etiqueta: "Fecha de asignación",
+          tipo: "date",
+          requerido: false,
+        },
+        {
+          nombre: "observaciones",
+          etiqueta: "Observaciones internas",
+          tipo: "textarea",
+          requerido: false,
+        },
+      ],
+    },
+
+    {
+      code: "ANEXO_03",
+      nombre: "ANEXO 03 - Recepción de vivienda fiscal",
+      descripcion:
+        "ADMIN_GENERAL crea, INSPECTOR conforma, PERMISIONARIO conforma, ADMIN_GENERAL cierra (ocupa vivienda).",
+      version: 1,
+      activo: true,
+      requiereVivienda: true, // usa viviendaAsignada del titular
+      requiereAlojamiento: false,
+      rolesQuePuedenCrear: ["ADMIN_GENERAL"],
+      rolesQuePuedenVer: ["ADMIN_GENERAL", "ADMIN", "INSPECTOR", "PERMISIONARIO"],
+      campos: [
+        {
+          nombre: "fechaOcupacion",
+          etiqueta: "Fecha de ocupación",
+          tipo: "date",
+          requerido: false,
+        },
+        {
+          nombre: "observaciones",
+          etiqueta: "Observaciones internas",
+          tipo: "textarea",
+          requerido: false,
+        },
+      ],
+    },
+
+    {
+      code: "ANEXO_07",
+      nombre: "ANEXO 07 - Observaciones / novedades del permisionario",
+      descripcion:
+        "El permisionario deja observaciones. NO se registran observaciones en conformidades de ANEXO_02/03.",
+      version: 1,
+      activo: true,
+      requiereVivienda: true,
+      requiereAlojamiento: false,
+      rolesQuePuedenCrear: ["PERMISIONARIO"],
+      rolesQuePuedenVer: ["PERMISIONARIO", "INSPECTOR", "ADMIN", "ADMIN_GENERAL"],
+      campos: [
+        {
+          nombre: "novedades",
+          etiqueta: "Novedades / Observaciones",
+          tipo: "textarea",
+          requerido: true,
+        },
+      ],
+    },
+  ];
+
+  console.log("Upsert de plantillas...");
+  for (const t of templates) {
+    const saved = await upsertTemplate(t);
+    console.log("OK:", saved.code, "v", saved.version, "activo:", saved.activo);
+  }
+
+  await mongoose.disconnect();
+  console.log("Listo. Plantillas creadas/actualizadas.");
+  process.exit(0);
+}
+
+main().catch((err) => {
+  console.error("Error:", err);
+  process.exit(1);
+});
