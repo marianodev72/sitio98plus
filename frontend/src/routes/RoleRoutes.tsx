@@ -15,15 +15,9 @@ import Mensajeria from "../pages/admin_general/Mensajeria";
 import Gestiones from "../pages/admin_general/Gestiones";
 import GestionarAnexo from "../pages/admin_general/GestionarAnexo";
 
-// ✅ Placeholder (hasta que armemos el panel real)
-function PostulanteEnConstruccion() {
-  return (
-    <div style={{ padding: 24 }}>
-      <h2>Panel POSTULANTE (en construcción)</h2>
-      <p>Este panel se completa en la siguiente fase.</p>
-    </div>
-  );
-}
+// Postulante pages
+import PanelPostulante from "../pages/postulante/PanelPostulante";
+import Anexo01Institucional from "../pages/postulante/Anexo01Institucional";
 
 export default function RoleRoutes() {
   return (
@@ -48,7 +42,11 @@ export default function RoleRoutes() {
         </Route>
 
         {/* POSTULANTE */}
-        <Route path="postulante" element={<PostulanteEnConstruccion />} />
+        <Route path="postulante">
+          <Route index element={<PanelPostulante />} />
+          {/* ✅ NUEVO: ANEXO_01 institucional fijo */}
+          <Route path="nueva" element={<Anexo01Institucional />} />
+        </Route>
 
         {/* Otros roles (los armamos después) */}
         <Route

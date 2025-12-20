@@ -21,3 +21,15 @@ yarn-error.log*
 # Sistema
 .DS_Store
 Thumbs.db
+
+# Secrets
+backend/keys/
+backend/.env
+frontend/.env
+
+# Uploads
+backend/uploads/
+
+# Node
+node_modules/
+

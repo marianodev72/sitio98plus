@@ -91,10 +91,7 @@ async function autocompleteDatosAnexo02(datos) {
   // Solo completamos si faltan:
   if (!datos.apellidoNombres && apellidoNombresAuto) datos.apellidoNombres = apellidoNombresAuto;
 
-  // “grado” no existe en schema base: se toma de meta si viene cargado
   if (!datos.grado) datos.grado = String(meta.grado || meta.rango || "").trim();
-
-  // “mrDestino” se toma de meta si viene cargado
   if (!datos.mrDestino) datos.mrDestino = String(meta.mrDestino || meta.destino || "").trim();
 
   return datos;
@@ -112,6 +109,56 @@ async function getById(req, res) {
     if (!canSeeSubmission(req.user, anexo)) return genericDenied(res);
 
     return res.json({ anexo });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ message: "Error" });
+  }
+}
+
+// ─────────────────────────────
+// ✅ NUEVO: Estado institucional (gestión ADMIN_GENERAL)
+// Guarda:
+// - anexo.estadoInstitucional
+// - anexo.datos._historialInstitucional[] (para que el front lo muestre)
+async function setEstadoInstitucional(req, res) {
+  try {
+    const { id } = req.params;
+    if (!isObjectId(id)) return genericDenied(res);
+
+    const user = req.user;
+    const role = up(user?.role);
+    if (role !== "ADMIN_GENERAL") return genericDenied(res);
+
+    const estadoInstitucional = up(req.body?.estadoInstitucional || "");
+    const motivo = String(req.body?.motivo || "").trim();
+
+    // lista permitida (ajustable)
+    const allowed = new Set(["EN_REVISION", "APROBADA", "NO_APROBADA"]);
+    if (!allowed.has(estadoInstitucional)) return badRequest(res);
+
+    const anexo = await FormSubmission.findById(id);
+    if (!anexo) return genericDenied(res);
+    if (!canSeeSubmission(user, anexo)) return genericDenied(res);
+
+    // Sólo por ahora: habilitamos gestión institucional base para ANEXO_01
+    if (up(anexo.codigo) !== "ANEXO_01") return genericDenied(res);
+
+    anexo.estadoInstitucional = estadoInstitucional;
+
+    anexo.datos = anexo.datos && typeof anexo.datos === "object" ? anexo.datos : {};
+    const hist = Array.isArray(anexo.datos._historialInstitucional) ? anexo.datos._historialInstitucional : [];
+
+    hist.push({
+      fecha: new Date().toISOString(),
+      estadoInstitucional,
+      motivo: motivo || undefined,
+      realizadoPor: String(user?._id || ""),
+    });
+
+    anexo.datos._historialInstitucional = hist;
+    await anexo.save();
+
+    return res.json({ anexo: anexo.toObject() });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ message: "Error" });
@@ -158,7 +205,7 @@ function writeBoxRow(doc, label, value, xLabel, xValue, y) {
 }
 
 // ─────────────────────────────
-// PDF ANEXO_03 (acta relevamiento físico)
+// PDF ANEXO_03
 function renderAnexo03Pdf(doc, anexo, vivienda) {
   const d = anexo.datos || {};
 
@@ -302,7 +349,7 @@ function renderAnexo03Pdf(doc, anexo, vivienda) {
 }
 
 // ─────────────────────────────
-// PDF ANEXO_02 (acta administrativa) — texto literal
+// PDF ANEXO_02
 function renderAnexo02Pdf(doc, anexo, vivienda) {
   const d = anexo.datos || {};
 
@@ -430,7 +477,7 @@ function renderAnexo02Pdf(doc, anexo, vivienda) {
 }
 
 // ─────────────────────────────
-// GET PDF (intervinientes + admin)
+// GET PDF
 async function descargarPdf(req, res) {
   try {
     const { id } = req.params;
@@ -486,11 +533,10 @@ async function crearAnexo(req, res) {
       if (!isObjectId(datos.postulanteId)) return badRequest(res);
       if (!isObjectId(datos.viviendaId)) return badRequest(res);
 
-      // ✅ Autocomplete institucional desde el User (si faltan campos)
       datos = await autocompleteDatosAnexo02(datos);
     }
 
-    // ✅ ANEXO_03: solo INSPECTOR puede iniciarlo y requiere ANEXO_02 CERRADO
+    // ANEXO_03
     if (codigo === "ANEXO_03") {
       if (userRole !== "INSPECTOR") return genericDenied(res);
       if (!isObjectId(datos.viviendaId)) return badRequest(res);
@@ -511,11 +557,9 @@ async function crearAnexo(req, res) {
       const barrioInspector = String(user.barrioAsignado || "").trim();
       if (!barrioInspector || barrioInspector !== String(v.barrio).trim()) return genericDenied(res);
 
-      // Encadenado + referencia al permisionario (ex postulante)
       datos.derivadoDe = anexo02._id;
       if (anexo02?.datos?.postulanteId) datos.postulanteId = anexo02.datos.postulanteId;
 
-      // Para PDF: inspectorNombre si no viene
       if (!datos.inspectorNombre) datos.inspectorNombre = `${user.apellido || ""} ${user.nombre || ""}`.trim();
     }
 
@@ -530,7 +574,7 @@ async function crearAnexo(req, res) {
       })
     );
 
-    // Intervinientes mínimos por tipo
+    // Intervinientes mínimos
     const intervinientes = [];
 
     if (codigo === "ANEXO_02" && isObjectId(datos.postulanteId)) {
@@ -639,7 +683,6 @@ async function darConformidadAdmin(req, res) {
     if (!anexo.conformidadPostulante?.ok) return badRequest(res);
     if (anexo.estado !== "EN_REVISION") return badRequest(res);
 
-    // ✅ FECHAS (las carga Admin General con menú de fecha) — copiar literal
     let datosIn = req.body?.datos ?? {};
     if (typeof datosIn === "string") {
       try {
@@ -655,7 +698,6 @@ async function darConformidadAdmin(req, res) {
     anexo.cambiarEstado("CERRADO", user._id, "Cierre ADMIN_GENERAL");
     anexo.datos.conformidadAdminGeneral = { ok: true, fecha: new Date(), usuario: user._id };
 
-    // Vivienda: DISPONIBLE -> RESERVADA
     let barrioVivienda = null;
     if (Vivienda && isObjectId(anexo.datos.viviendaId)) {
       const v = await Vivienda.findById(anexo.datos.viviendaId);
@@ -668,7 +710,6 @@ async function darConformidadAdmin(req, res) {
       }
     }
 
-    // Usuario: POSTULANTE -> PERMISIONARIO
     if (User && isObjectId(anexo.datos.postulanteId)) {
       await User.updateOne(
         { _id: anexo.datos.postulanteId },
@@ -676,7 +717,6 @@ async function darConformidadAdmin(req, res) {
       );
     }
 
-    // Intervinientes + INSPECTOR/JB por barrio
     const iv = Array.isArray(anexo.intervinientes) ? anexo.intervinientes : [];
     addIntervinienteUnique(iv, anexo.datos.postulanteId, "POSTULANTE");
 
@@ -708,7 +748,6 @@ function sanitizeDatosAnexo03(prevDatos, nextDatos) {
   const prev = prevDatos && typeof prevDatos === "object" ? prevDatos : {};
   const next = nextDatos && typeof nextDatos === "object" ? nextDatos : {};
 
-  // Campos bloqueados (estabilidad / no romper enlaces)
   const locked = {
     viviendaId: prev.viviendaId,
     alojamientoId: prev.alojamientoId,
@@ -717,7 +756,6 @@ function sanitizeDatosAnexo03(prevDatos, nextDatos) {
     inspectorNombre: prev.inspectorNombre,
   };
 
-  // Evitar que intenten colar "conformidad*" dentro de datos
   const cleaned = { ...next };
   Object.keys(cleaned).forEach((k) => {
     const kk = up(k);
@@ -748,13 +786,8 @@ async function updateDatosAnexo03(req, res) {
 
     const anexo = await FormSubmission.findById(id);
     if (!anexo) return genericDenied(res);
-
     if (up(anexo.codigo) !== "ANEXO_03") return genericDenied(res);
-
-    // Solo editable mientras está ENVIADO (antes de conformidades)
     if (up(anexo.estado) !== "ENVIADO") return genericDenied(res);
-
-    // Debe ser interviniente INSPECTOR del trámite
     if (!isInspectorInterviniente(anexo, user._id)) return genericDenied(res);
 
     anexo.datos = sanitizeDatosAnexo03(anexo.datos || {}, datos);
@@ -778,7 +811,6 @@ async function darConformidadPermisionario03(req, res) {
     if (up(anexo.codigo) !== "ANEXO_03") return genericDenied(res);
 
     if (String(anexo.datos?.postulanteId || "") !== String(user._id)) return genericDenied(res);
-
     if (["EN_REVISION", "CERRADO"].includes(anexo.estado)) return res.json({ anexo });
 
     anexo.datos = anexo.datos || {};
@@ -810,7 +842,6 @@ async function cerrarAnexo03AdminGeneral(req, res) {
     anexo.datos = anexo.datos || {};
     anexo.datos.conformidadAdminGeneral = { ok: true, fecha: new Date(), usuario: user._id };
 
-    // Vivienda: RESERVADA -> OCUPADA y ocupacionActual
     if (Vivienda && isObjectId(anexo.datos.viviendaId)) {
       const v = await Vivienda.findById(anexo.datos.viviendaId);
       if (v) {
@@ -844,6 +875,9 @@ module.exports = {
   getMisAnexos,
   getById,
   descargarPdf,
+
+  // ✅ gestión institucional
+  setEstadoInstitucional,
 
   // ANEXO_02
   darConformidad,

@@ -1,315 +1,232 @@
-// controllers/viviendaController.js
-const mongoose = require('mongoose');
-const Vivienda = require('../models/Vivienda');
-const { ESTADOS_VIVIENDA } = require('../validators/viviendaValidator');
+// backend/controllers/viviendaController.js
+// Controller PURO (sin Express Router)
 
-/**
- * Helper: determina si un rol tiene acceso GLOBAL a viviendas.
- */
-function tieneAccesoGlobal(role) {
-  return role === 'ADMIN' || role === 'ADMIN_GENERAL';
+const Vivienda = require("../models/Vivienda");
+const { generateViviendasListadoPDF } = require("../utils/pdf");
+
+function escapeRegex(str) {
+  return String(str).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/**
- * Helper: roles que pueden ver viviendas por barrio.
- */
-function tieneAccesoPorBarrio(role) {
-  return role === 'INSPECTOR' || role === 'JEFE_DE_BARRIO';
+function buildViviendasPipeline(query = {}) {
+  const {
+    codigo,
+    barrio,
+    estado,
+    dormitorios,
+    permisionario,
+    personasMin,
+    personasMax,
+    sortBy,
+    sortDir,
+  } = query;
+
+  const dir = String(sortDir || "asc").toLowerCase() === "desc" ? -1 : 1;
+  const sortKey = String(sortBy || "barrio").toLowerCase();
+
+  const pipeline = [];
+  const match = { estado: { $ne: "BAJA" } };
+
+  if (estado) match.estado = estado;
+  if (codigo) match.codigo = { $regex: escapeRegex(codigo), $options: "i" };
+  if (barrio) match.barrio = { $regex: escapeRegex(barrio), $options: "i" };
+
+  if (dormitorios !== undefined && dormitorios !== "") {
+    const d = Number(dormitorios);
+    if (!Number.isNaN(d)) match.dormitorios = d;
+  }
+
+  if (personasMin !== undefined && personasMin !== "") {
+    const n = Number(personasMin);
+    if (!Number.isNaN(n)) {
+      match.cantidadHabitantes = { ...(match.cantidadHabitantes || {}), $gte: n };
+    }
+  }
+
+  if (personasMax !== undefined && personasMax !== "") {
+    const n = Number(personasMax);
+    if (!Number.isNaN(n)) {
+      match.cantidadHabitantes = { ...(match.cantidadHabitantes || {}), $lte: n };
+    }
+  }
+
+  pipeline.push({ $match: match });
+
+  pipeline.push({
+    $lookup: {
+      from: "users",
+      localField: "ocupacionActual.permisionario",
+      foreignField: "_id",
+      as: "permisionarioDoc",
+    },
+  });
+
+  pipeline.push({
+    $addFields: {
+      permisionarioDoc: { $arrayElemAt: ["$permisionarioDoc", 0] },
+      hacinamientoRatio: {
+        $cond: [
+          { $gt: ["$dormitorios", 0] },
+          { $divide: ["$cantidadHabitantes", "$dormitorios"] },
+          0,
+        ],
+      },
+    },
+  });
+
+  if (permisionario) {
+    const rx = new RegExp(escapeRegex(permisionario), "i");
+    pipeline.push({
+      $match: {
+        $or: [
+          { "permisionarioDoc.nombre": rx },
+          { "permisionarioDoc.apellido": rx },
+          { "permisionarioDoc.matricula": rx },
+        ],
+      },
+    });
+  }
+
+  pipeline.push({
+    $project: {
+      codigo: 1,
+      barrio: 1,
+      dormitorios: 1,
+      estado: 1,
+      cantidadHabitantes: 1,
+      hacinamientoRatio: 1,
+      permisionario: {
+        nombre: "$permisionarioDoc.nombre",
+        apellido: "$permisionarioDoc.apellido",
+        matricula: "$permisionarioDoc.matricula",
+      },
+    },
+  });
+
+  const sort = {};
+  if (sortKey === "hacinamiento") sort.hacinamientoRatio = dir;
+  else if (sortKey === "personas") sort.cantidadHabitantes = dir;
+  else sort[sortKey] = dir;
+
+  pipeline.push({ $sort: sort });
+
+  return {
+    pipeline,
+    meta: {
+      sortBy: sortKey,
+      sortDir: dir === -1 ? "desc" : "asc",
+    },
+  };
 }
 
-/**
- * GET /api/viviendas
- * Listado de viviendas.
- * - ADMIN/ADMIN_GENERAL: acceso global, con filtros opcionales.
- * - INSPECTOR/JEFE_DE_BARRIO: solo viviendas de su barrioAsignado.
- * - PERMISIONARIO: solo su viviendaAsignada.
- */
+function buildFiltrosResumen(query = {}) {
+  const clean = (v) => (v === undefined || v === null ? "" : String(v).trim());
+  const out = {};
+
+  const codigo = clean(query.codigo);
+  const barrio = clean(query.barrio);
+  const estado = clean(query.estado);
+  const dormitorios = clean(query.dormitorios);
+  const permisionario = clean(query.permisionario);
+  const personasMin = clean(query.personasMin);
+  const personasMax = clean(query.personasMax);
+
+  if (codigo) out["Código"] = codigo;
+  if (barrio) out["Barrio"] = barrio;
+  if (estado) out["Estado"] = estado;
+  if (dormitorios) out["Dormitorios"] = dormitorios;
+  if (permisionario) out["Permisionario"] = permisionario;
+  if (personasMin) out["Personas mín."] = personasMin;
+  if (personasMax) out["Personas máx."] = personasMax;
+
+  return out;
+}
+
 async function listar(req, res) {
   try {
     const user = req.user;
-    const role = user.role;
 
-    let filtro = {};
-    const { barrio, estado, codigo } = req.query;
-
-    // Filtros comunes permitidos para roles globales
-    if (barrio) filtro.barrio = barrio;
-    if (estado && ESTADOS_VIVIENDA.includes(estado)) filtro.estado = estado;
-    if (codigo) filtro.codigo = codigo;
-
-    if (tieneAccesoGlobal(role)) {
-      // ADMIN / ADMIN_GENERAL → visión global
-      const viviendas = await Vivienda.find(filtro).lean();
-      return res.json(viviendas);
+    // Seguridad: genérico y sin revelar rol
+    if (!user || !["ADMIN", "ADMIN_GENERAL"].includes(user.role)) {
+      return res.status(404).json({ message: "Recurso no disponible" });
     }
 
-    if (tieneAccesoPorBarrio(role)) {
-      // INSPECTOR / JEFE_DE_BARRIO → solo su barrio
-      if (!user.barrioAsignado) {
-        return res.status(400).json({
-          error: 'El usuario no tiene un barrioAsignado configurado'
-        });
-      }
+    const { pipeline } = buildViviendasPipeline(req.query);
 
-      filtro.barrio = user.barrioAsignado;
-      const viviendas = await Vivienda.find(filtro).lean();
-      return res.json(viviendas);
-    }
-
-    if (role === 'PERMISIONARIO') {
-      // Permisionario → solo su viviendaAsignada
-      if (!user.viviendaAsignada) {
-        return res.json([]); // no tiene vivienda asignada
-      }
-
-      if (!mongoose.Types.ObjectId.isValid(user.viviendaAsignada)) {
-        return res.status(400).json({
-          error: 'viviendaAsignada del usuario es inválida'
-        });
-      }
-
-      const vivienda = await Vivienda.findById(user.viviendaAsignada).lean();
-      if (!vivienda) {
-        return res.json([]);
-      }
-      return res.json([vivienda]);
-    }
-
-    // Otros roles (POSTULANTE, ALOJADO, etc.) no deben listar viviendas
-    return res.status(403).json({
-      error: `El rol ${role} no está autorizado para listar viviendas`
-    });
+    const viviendas = await Vivienda.aggregate(pipeline);
+    return res.json({ viviendas });
   } catch (err) {
-    console.error('Error en listar viviendas:', err);
-    return res.status(500).json({ error: 'Error interno al listar viviendas' });
+    console.error("[VIVIENDAS] Error listando:", err);
+    return res.status(500).json({ message: "Error interno" });
   }
 }
 
-/**
- * GET /api/viviendas/:id
- * Obtiene una vivienda por ID respetando las reglas de visibilidad por rol.
- */
-async function obtenerPorId(req, res) {
+async function cambiarEstado(req, res) {
   try {
-    const user = req.user;
-    const role = user.role;
+    // Seguridad: genérico y sin revelar rol
+    if (!req.user || req.user.role !== "ADMIN_GENERAL") {
+      return res.status(404).json({ message: "Recurso no disponible" });
+    }
+
     const { id } = req.params;
-
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: 'ID de vivienda inválido' });
-    }
-
-    const vivienda = await Vivienda.findById(id).lean();
-    if (!vivienda) {
-      return res.status(404).json({ error: 'Vivienda no encontrada' });
-    }
-
-    if (tieneAccesoGlobal(role)) {
-      return res.json(vivienda);
-    }
-
-    if (tieneAccesoPorBarrio(role)) {
-      if (!user.barrioAsignado) {
-        return res.status(400).json({
-          error: 'El usuario no tiene un barrioAsignado configurado'
-        });
-      }
-      if (vivienda.barrio !== user.barrioAsignado) {
-        return res.status(403).json({
-          error: 'No tiene permiso para ver viviendas de otro barrio'
-        });
-      }
-      return res.json(vivienda);
-    }
-
-    if (role === 'PERMISIONARIO') {
-      if (!user.viviendaAsignada) {
-        return res.status(403).json({
-          error: 'No tiene vivienda asignada'
-        });
-      }
-      if (String(user.viviendaAsignada) !== String(vivienda._id)) {
-        return res.status(403).json({
-          error: 'No tiene permiso para ver esta vivienda'
-        });
-      }
-      return res.json(vivienda);
-    }
-
-    return res.status(403).json({
-      error: `El rol ${role} no está autorizado para ver viviendas`
-    });
-  } catch (err) {
-    console.error('Error en obtener vivienda por ID:', err);
-    return res.status(500).json({ error: 'Error interno al obtener vivienda' });
-  }
-}
-
-/**
- * POST /api/viviendas
- * Crea una nueva vivienda.
- * SOLO ADMIN y ADMIN_GENERAL.
- * No se toca ocupacionActual ni historialOcupacion desde acá.
- */
-async function crear(req, res) {
-  try {
-    const user = req.user;
-    const role = user.role;
-
-    if (!tieneAccesoGlobal(role)) {
-      return res.status(403).json({
-        error: 'Solo ADMIN o ADMIN_GENERAL pueden crear viviendas'
-      });
-    }
-
-    const data = req.validatedBody;
-
-    // Validar unicidad de codigo
-    const existente = await Vivienda.findOne({ codigo: data.codigo }).lean();
-    if (existente) {
-      return res.status(409).json({
-        error: 'Ya existe una vivienda con ese código'
-      });
-    }
-
-    const vivienda = new Vivienda({
-      codigo: data.codigo,
-      direccion: data.direccion,
-      barrio: data.barrio,
-      descripcion: data.descripcion || '',
-      estado: data.estado || 'DISPONIBLE'
-      // NO seteamos ocupacionActual ni historialOcupacion aquí
-    });
-
-    const guardada = await vivienda.save();
-    return res.status(201).json(guardada);
-  } catch (err) {
-    console.error('Error al crear vivienda:', err);
-    return res.status(500).json({ error: 'Error interno al crear vivienda' });
-  }
-}
-
-/**
- * PATCH /api/viviendas/:id
- * Actualiza campos permitidos de una vivienda.
- * SOLO ADMIN y ADMIN_GENERAL.
- * NO permite modificar ocupación directamente.
- */
-async function actualizar(req, res) {
-  try {
-    const user = req.user;
-    const role = user.role;
-    const { id } = req.params;
-
-    if (!tieneAccesoGlobal(role)) {
-      return res.status(403).json({
-        error: 'Solo ADMIN o ADMIN_GENERAL pueden actualizar viviendas'
-      });
-    }
-
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: 'ID de vivienda inválido' });
-    }
+    const { estado } = req.body;
 
     const vivienda = await Vivienda.findById(id);
     if (!vivienda) {
-      return res.status(404).json({ error: 'Vivienda no encontrada' });
+      return res.status(404).json({ message: "Recurso no disponible" });
     }
 
-    const data = req.validatedBody;
+    vivienda.estado = estado;
+    await vivienda.save();
 
-    // Reglas institucionales: no romper ocupación
-    if (data.estado) {
-      const tieneOcupante =
-        vivienda.ocupacionActual && vivienda.ocupacionActual.permisionario;
-
-      // No permitir marcar DISPONIBLE si tiene ocupante
-      if (tieneOcupante && data.estado !== 'OCUPADA') {
-        return res.status(400).json({
-          error:
-            'No se puede cambiar el estado de una vivienda con ocupación activa desde este endpoint. Use el flujo institucional (ANEXO_09 / baja).'
-        });
-      }
-
-      // No permitir setear OCUPADA manualmente si no hay ocupante
-      if (!tieneOcupante && data.estado === 'OCUPADA') {
-        return res.status(400).json({
-          error:
-            'No se puede marcar una vivienda como OCUPADA sin asignación institucional (ANEXO_02).'
-        });
-      }
-    }
-
-    // Aplicar cambios permitidos
-    if (data.direccion !== undefined) vivienda.direccion = data.direccion;
-    if (data.barrio !== undefined) vivienda.barrio = data.barrio;
-    if (data.descripcion !== undefined) vivienda.descripcion = data.descripcion;
-    if (data.estado !== undefined) vivienda.estado = data.estado;
-
-    const guardada = await vivienda.save();
-    return res.json(guardada);
+    return res.json({ message: "Estado actualizado" });
   } catch (err) {
-    console.error('Error al actualizar vivienda:', err);
-    return res.status(500).json({ error: 'Error interno al actualizar vivienda' });
+    console.error("[VIVIENDAS] Error cambiando estado:", err);
+    return res.status(500).json({ message: "Error interno" });
   }
 }
 
-/**
- * DELETE /api/viviendas/:id
- * "Baja lógica" de una vivienda.
- * Recomendado SOLO para ADMIN_GENERAL.
- * 
- * En lugar de borrar, marcamos estado=BAJA,
- * siempre que no tenga ocupación activa.
- */
-async function bajaLogica(req, res) {
+async function generarPdf(req, res) {
   try {
     const user = req.user;
-    const role = user.role;
-    const { id } = req.params;
 
-    if (role !== 'ADMIN_GENERAL') {
-      return res.status(403).json({
-        error: 'Solo ADMIN_GENERAL puede dar de baja viviendas'
-      });
+    // Seguridad: genérico y sin revelar rol
+    if (!user || !["ADMIN", "ADMIN_GENERAL"].includes(user.role)) {
+      return res.status(404).json({ message: "Recurso no disponible" });
     }
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: 'ID de vivienda inválido' });
-    }
+    const { pipeline, meta } = buildViviendasPipeline(req.query);
+    const viviendas = await Vivienda.aggregate(pipeline);
 
-    const vivienda = await Vivienda.findById(id);
-    if (!vivienda) {
-      return res.status(404).json({ error: 'Vivienda no encontrada' });
-    }
+    const filtros = buildFiltrosResumen(req.query);
 
-    const tieneOcupante =
-      vivienda.ocupacionActual && vivienda.ocupacionActual.permisionario;
+    // Headers de descarga
+    const now = new Date();
+    const safe = now.toISOString().slice(0, 16).replace(/[:T]/g, "-"); // YYYY-MM-DD-HH-MM
+    const filename = `Sitio98_Viviendas_${safe}.pdf`;
 
-    if (tieneOcupante) {
-      return res.status(400).json({
-        error:
-          'No se puede dar de baja una vivienda con ocupación activa. Debe gestionarse la desocupación por los anexos correspondientes.'
-      });
-    }
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
 
-    vivienda.estado = 'BAJA';
-    const guardada = await vivienda.save();
-
-    return res.json({
-      message: 'Vivienda dada de baja correctamente (baja lógica)',
-      vivienda: guardada
+    // PDF stream directo a la respuesta
+    generateViviendasListadoPDF(res, {
+      titulo: "Listado de Viviendas",
+      fecha: now,
+      filtros,
+      orden: {
+        sortBy: meta.sortBy,
+        sortDir: meta.sortDir,
+      },
+      viviendas,
     });
   } catch (err) {
-    console.error('Error en baja lógica de vivienda:', err);
-    return res.status(500).json({ error: 'Error interno al dar de baja vivienda' });
+    console.error("[VIVIENDAS] Error generando PDF:", err);
+    return res.status(500).json({ message: "Error interno" });
   }
 }
 
 module.exports = {
   listar,
-  obtenerPorId,
-  crear,
-  actualizar,
-  bajaLogica
+  cambiarEstado,
+  generarPdf,
 };

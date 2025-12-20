@@ -1,8 +1,8 @@
-// controllers/mensajeController.js
+// backend/controllers/mensajeController.js
 
-const mongoose = require('mongoose');
-// IMPORT CORREGIDO: el archivo se llama Message.js
-const Message = require('../models/Message');
+const mongoose = require("mongoose");
+// ✅ VOLVEMOS AL IMPORT QUE EXISTE EN TU PROYECTO
+const Message = require("../models/Message");
 
 /**
  * Obtener el ID del usuario autenticado de forma segura
@@ -18,41 +18,62 @@ function getUserId(req) {
  * - to: array de destinatarios (ids de usuario)
  * - asunto
  * - cuerpo
- * - adjuntos: opcional (por ahora viene desde el body)
+ * - adjuntos:
+ *    - si viene upload (multer): req.files
+ *    - si viene por body (retrocompat): req.body.adjuntos
  */
 async function enviarMensaje(req, res) {
   try {
     const usuarioId = getUserId(req);
     if (!usuarioId) {
-      return res.status(401).json({ error: 'Usuario no autenticado' });
+      return res.status(401).json({ error: "Usuario no autenticado" });
     }
 
-    const { para, asunto, cuerpo, adjuntos } = req.body;
+    // ⚠️ puede venir como para (array) o como para[] (formdata)
+    const rawPara = req.body?.para ?? req.body?.["para[]"];
+    const para = Array.isArray(rawPara) ? rawPara : rawPara ? [rawPara] : [];
+
+    const asunto = req.body?.asunto || "";
+    const cuerpo = req.body?.cuerpo || "";
 
     if (!Array.isArray(para) || para.length === 0) {
-      return res
-        .status(400)
-        .json({ error: 'Debe indicar al menos un destinatario' });
+      return res.status(400).json({ error: "Debe indicar al menos un destinatario" });
     }
+
+    // ✅ adjuntos por upload (si existen)
+    const adjuntosUpload = Array.isArray(req.files)
+      ? req.files.map((f) => ({
+          // mantenemos estructura base; si tu schema tiene fileId obligatorio lo generamos
+          fileId: new mongoose.Types.ObjectId(),
+          nombre: f.originalname,
+          mimetype: f.mimetype,
+          size: f.size,
+          // guardamos path público (server expone /uploads)
+          path: `/uploads/mensajes/${f.filename}`,
+        }))
+      : [];
+
+    // ✅ retrocompat: adjuntos desde body (si tu implementación previa lo usaba)
+    const adjuntosBody = Array.isArray(req.body?.adjuntos) ? req.body.adjuntos : [];
 
     const nuevoMensaje = new Message({
       remitente: new mongoose.Types.ObjectId(usuarioId),
       destinatarios: para.map((id) => new mongoose.Types.ObjectId(id)),
-      asunto: asunto || '',
-      cuerpo: cuerpo || '',
-      adjuntos: Array.isArray(adjuntos) ? adjuntos : [],
+      asunto,
+      cuerpo,
+      adjuntos: [...adjuntosBody, ...adjuntosUpload],
       leidoPor: [],
     });
 
     await nuevoMensaje.save();
 
     return res.status(201).json({
-      message: 'Mensaje enviado correctamente',
+      message: "Mensaje enviado correctamente",
       mensajeId: nuevoMensaje._id,
     });
   } catch (err) {
-    console.error('Error al enviar mensaje:', err);
-    return res.status(500).json({ error: 'Error interno al enviar mensaje' });
+    console.error("Error al enviar mensaje:", err);
+    return res.status(500).json({ error: "Error interno al enviar mensaje" });
   }
 }
 
@@ -63,7 +84,7 @@ async function listarEntrada(req, res) {
   try {
     const usuarioId = getUserId(req);
     if (!usuarioId) {
-      return res.status(401).json({ error: 'Usuario no autenticado' });
+      return res.status(401).json({ error: "Usuario no autenticado" });
     }
 
     const mensajes = await Message.find({
@@ -74,8 +95,8 @@ async function listarEntrada(req, res) {
 
     return res.json(mensajes);
   } catch (err) {
-    console.error('Error al listar bandeja de entrada:', err);
-    return res.status(500).json({ error: 'Error interno' });
+    console.error("Error al listar bandeja de entrada:", err);
+    return res.status(500).json({ error: "Error interno" });
   }
 }
 
@@ -86,7 +107,7 @@ async function listarEnviados(req, res) {
   try {
     const usuarioId = getUserId(req);
     if (!usuarioId) {
-      return res.status(401).json({ error: 'Usuario no autenticado' });
+      return res.status(401).json({ error: "Usuario no autenticado" });
     }
 
     const mensajes = await Message.find({
@@ -97,79 +118,70 @@ async function listarEnviados(req, res) {
 
     return res.json(mensajes);
   } catch (err) {
-    console.error('Error al listar enviados:', err);
-    return res.status(500).json({ error: 'Error interno' });
+    console.error("Error al listar enviados:", err);
+    return res.status(500).json({ error: "Error interno" });
   }
 }
 
 /**
- * Obtener un mensaje por ID, verificando que el usuario tenga acceso
+ * Obtener un mensaje por ID, verificando acceso
  */
 async function obtenerMensaje(req, res) {
   try {
     const usuarioId = getUserId(req);
     if (!usuarioId) {
-      return res.status(401).json({ error: 'Usuario no autenticado' });
+      return res.status(401).json({ error: "Usuario no autenticado" });
     }
 
     const { id } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: 'ID de mensaje inválido' });
+      return res.status(400).json({ error: "ID de mensaje inválido" });
     }
 
     const mensaje = await Message.findById(id).lean();
     if (!mensaje) {
-      return res.status(404).json({ error: 'Mensaje no encontrado' });
+      return res.status(404).json({ error: "Mensaje no encontrado" });
     }
 
-    const esRemitente =
-      String(mensaje.remitente) === String(usuarioId);
-    const esDestinatario = mensaje.destinatarios.some(
-      (d) => String(d) === String(usuarioId),
-    );
+    const esRemitente = String(mensaje.remitente) === String(usuarioId);
+    const esDestinatario = Array.isArray(mensaje.destinatarios) && mensaje.destinatarios.some((d) => String(d) === String(usuarioId));
 
     if (!esRemitente && !esDestinatario) {
-      return res
-        .status(403)
-        .json({ error: 'No tiene acceso a este mensaje' });
+      return res.status(403).json({ error: "No tiene acceso a este mensaje" });
     }
 
     return res.json(mensaje);
   } catch (err) {
-    console.error('Error al obtener mensaje:', err);
-    return res.status(500).json({ error: 'Error interno' });
+    console.error("Error al obtener mensaje:", err);
+    return res.status(500).json({ error: "Error interno" });
   }
 }
 
 /**
- * Marcar mensaje como leído por el usuario autenticado
+ * Marcar mensaje como leído
  */
 async function marcarComoLeido(req, res) {
   try {
     const usuarioId = getUserId(req);
     if (!usuarioId) {
-      return res.status(401).json({ error: 'Usuario no autenticado' });
+      return res.status(401).json({ error: "Usuario no autenticado" });
     }
 
     const { id } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: 'ID de mensaje inválido' });
+      return res.status(400).json({ error: "ID de mensaje inválido" });
     }
 
     const mensaje = await Message.findById(id);
     if (!mensaje) {
-      return res.status(404).json({ error: 'Mensaje no encontrado' });
+      return res.status(404).json({ error: "Mensaje no encontrado" });
     }
 
-    const esDestinatario = mensaje.destinatarios.some(
-      (d) => String(d) === String(usuarioId),
-    );
+    const esDestinatario = Array.isArray(mensaje.destinatarios) && mensaje.destinatarios.some((d) => String(d) === String(usuarioId));
     if (!esDestinatario) {
-      return res
-        .status(403)
-        .json({ error: 'Solo los destinatarios pueden marcar como leído' });
+      return res.status(403).json({ error: "Solo los destinatarios pueden marcar como leído" });
     }
 
     if (!mensaje.leidoPor) mensaje.leidoPor = [];
@@ -178,26 +190,23 @@ async function marcarComoLeido(req, res) {
       await mensaje.save();
     }
 
-    return res.json({ message: 'Mensaje marcado como leído' });
+    return res.json({ message: "Mensaje marcado como leído" });
   } catch (err) {
-    console.error('Error al marcar mensaje como leído:', err);
-    return res.status(500).json({ error: 'Error interno' });
+    console.error("Error al marcar mensaje como leído:", err);
+    return res.status(500).json({ error: "Error interno" });
   }
 }
 
 /**
- * Listar todos los mensajes (auditoría; control de rol se hace en la ruta)
+ * Auditoría (lista todos)
  */
 async function listarTodos(req, res) {
   try {
-    const mensajes = await Message.find({})
-      .sort({ creadoEn: -1 })
-      .lean();
-
+    const mensajes = await Message.find({}).sort({ creadoEn: -1 }).lean();
     return res.json(mensajes);
   } catch (err) {
-    console.error('Error al listar todos los mensajes:', err);
-    return res.status(500).json({ error: 'Error interno' });
+    console.error("Error al listar todos los mensajes:", err);
+    return res.status(500).json({ error: "Error interno" });
   }
 }
 

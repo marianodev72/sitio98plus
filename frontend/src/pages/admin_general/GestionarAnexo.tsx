@@ -1,8 +1,9 @@
-// frontend/src/pages/admin_general/GestionarAnexo.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { http } from "../../api/http";
 import { useAuth } from "../../auth/useAuth";
+import AnexoViewer from "../../components/anexos/AnexoViewer";
+import AdjuntosList from "../../components/AdjuntosList";
 
 type Anexo = {
   _id: string;
@@ -11,39 +12,31 @@ type Anexo = {
   estadoInstitucional?: string | null;
   createdAt?: string;
   updatedAt?: string;
-  usuario?: any;
   datos?: any;
+  adjuntos?: Array<{
+    nombre?: string;
+    ruta?: string;
+    tipo?: string;
+    size?: number;
+  }>;
+  historialEstados?: Array<{
+    fecha?: string;
+    estadoAnterior?: string;
+    estadoNuevo?: string;
+    observacion?: string;
+    realizadoPor?: string;
+  }>;
 };
-
-function safe(v: unknown) {
-  return v === null || v === undefined || v === "" ? "-" : String(v);
-}
 
 function up(v: unknown) {
   return String(v || "").toUpperCase().trim();
 }
 
 function fmtDate(v?: string) {
-  if (!v) return "-";
+  if (!v) return "—";
   const d = new Date(v);
-  if (Number.isNaN(d.getTime())) return "-";
+  if (Number.isNaN(d.getTime())) return "—";
   return d.toLocaleString();
-}
-
-function safeFileNameDate() {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(
-    d.getMinutes()
-  )}`;
-}
-
-// yyyy-mm-dd (para input type="date")
-function toDateInputValue(v: string) {
-  const d = new Date(v);
-  if (Number.isNaN(d.getTime())) return "";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 export default function GestionarAnexo() {
@@ -52,41 +45,31 @@ export default function GestionarAnexo() {
   const { user } = useAuth();
 
   const [anexo, setAnexo] = useState<Anexo | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [motivo, setMotivo] = useState("");
 
-  const myRole = up(user?.role);
-  const cod = up(anexo?.codigo);
-  const est = up(anexo?.estado);
+  const role = up(user?.role);
+  const esAdmin = role === "ADMIN_GENERAL" || role === "ADMIN";
 
-  // ✅ Campos editables para cierre ADMIN_GENERAL de ANEXO_02
-  const [fechaAsignacion, setFechaAsignacion] = useState<string>("");
-  const [fechaEntrega, setFechaEntrega] = useState<string>("");
+  const historialInstitucional = useMemo(() => {
+    const h = (anexo?.datos && anexo.datos._historialInstitucional) || [];
+    return Array.isArray(h) ? h : [];
+  }, [anexo]);
 
-  // ─────────────────────────────
   async function cargar() {
     if (!id) return;
-
     setLoading(true);
-    setErrorMsg("");
+    setError(null);
 
     try {
       const res = await http.get(`/formularios/${id}`);
-      const a = res.data?.anexo || null;
-      setAnexo(a);
-
-      // si ya existieran guardados, precargamos
-      const fa = String(a?.datos?.fechaAsignacion || "").trim();
-      const fe = String(a?.datos?.fechaEntrega || "").trim();
-
-      // si vienen como ISO u otro, tratamos de normalizarlos
-      setFechaAsignacion(fa && fa.includes("-") ? fa.slice(0, 10) : fa);
-      setFechaEntrega(fe && fe.includes("-") ? fe.slice(0, 10) : fe);
-    } catch (err) {
-      console.error("[GESTIONAR] Error cargando", err);
-      setAnexo(null);
-      setErrorMsg("La página solicitada no está disponible. Por favor, contacte al administrador.");
+      setAnexo(res.data?.anexo || null);
+    } catch {
+      setError(
+        "La página solicitada no está disponible. Por favor, contacte al administrador."
+      );
     } finally {
       setLoading(false);
     }
@@ -97,236 +80,217 @@ export default function GestionarAnexo() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  async function descargarPdf() {
-    if (!anexo) return;
-
+  async function setEstadoInstitucional(estadoInstitucional: string) {
+    if (!id) return;
     setBusy(true);
-    setErrorMsg("");
+    setError(null);
 
     try {
-      const res = await http.get(`/formularios/${anexo._id}/pdf`, { responseType: "blob" });
-      const blob = new Blob([res.data], { type: "application/pdf" });
-      const url = window.URL.createObjectURL(blob);
-
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `Sitio98_${up(anexo.codigo)}_${safeFileNameDate()}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-
-      window.URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error("[GESTIONAR] Error PDF", err);
-      setErrorMsg("La operación solicitada no está disponible. Por favor, contacte al administrador.");
+      const res = await http.patch(
+        `/formularios/${id}/estado-institucional`,
+        {
+          estadoInstitucional,
+          motivo,
+        }
+      );
+      setAnexo(res.data?.anexo || null);
+      setMotivo("");
+    } catch {
+      setError(
+        "No se ha podido procesar su solicitud, contacte al administrador."
+      );
     } finally {
       setBusy(false);
     }
   }
 
-  // ─────────────────────────────
-  // Acciones institucionales por rol/estado/código
-  const accion = useMemo(() => {
-    // ANEXO_02: POSTULANTE conformidad cuando está ENVIADO
-    if (cod === "ANEXO_02" && myRole === "POSTULANTE" && est === "ENVIADO") return "CONFORMIDAD_POSTULANTE_02";
-
-    // ANEXO_02: ADMIN_GENERAL cierre cuando está EN_REVISION
-    if (cod === "ANEXO_02" && myRole === "ADMIN_GENERAL" && est === "EN_REVISION") return "CIERRE_ADMIN_02";
-
-    // ANEXO_03: PERMISIONARIO conformidad cuando está ENVIADO
-    if (cod === "ANEXO_03" && myRole === "PERMISIONARIO" && est === "ENVIADO") return "CONFORMIDAD_PERM_03";
-
-    // ANEXO_03: ADMIN_GENERAL cierre cuando está EN_REVISION
-    if (cod === "ANEXO_03" && myRole === "ADMIN_GENERAL" && est === "EN_REVISION") return "CIERRE_ADMIN_03";
-
-    return null;
-  }, [cod, est, myRole]);
-
-  function labelAccion(kind: string) {
-    switch (kind) {
-      case "CONFORMIDAD_POSTULANTE_02":
-        return "Dar conformidad (Postulante)";
-      case "CIERRE_ADMIN_02":
-        return "Cerrar trámite (Admin. Gral.)";
-      case "CONFORMIDAD_PERM_03":
-        return "Dar conformidad (Permisionario)";
-      case "CIERRE_ADMIN_03":
-        return "Cerrar trámite (Admin. Gral.)";
-      default:
-        return "Acción";
-    }
-  }
-
-  async function ejecutarAccion() {
-    if (!anexo || !accion) return;
-
-    setBusy(true);
-    setErrorMsg("");
-
-    try {
-      if (accion === "CONFORMIDAD_POSTULANTE_02") {
-        await http.post(`/formularios/${anexo._id}/conformidad`);
-      } else if (accion === "CIERRE_ADMIN_02") {
-        // ✅ Enviamos fechas (backend puede persistirlas en anexo.datos)
-        await http.post(`/formularios/${anexo._id}/conformidad-admin`, {
-          datos: {
-            fechaAsignacion: fechaAsignacion || null,
-            fechaEntrega: fechaEntrega || null,
-          },
-        });
-      } else if (accion === "CONFORMIDAD_PERM_03") {
-        await http.post(`/formularios/${anexo._id}/conformidad-permisionario`);
-      } else if (accion === "CIERRE_ADMIN_03") {
-        await http.post(`/formularios/${anexo._id}/cierre-admin-general`);
-      }
-
-      await cargar();
-    } catch (err) {
-      console.error("[GESTIONAR] Error acción", err);
-      setErrorMsg("La operación solicitada no está disponible. Por favor, contacte al administrador.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  // ─────────────────────────────
-  // INSPECTOR: iniciar ANEXO_03 desde ANEXO_02 cerrado
-  const canIniciarAnexo03 =
-    myRole === "INSPECTOR" &&
-    cod === "ANEXO_02" &&
-    est === "CERRADO" &&
-    !!String(anexo?.datos?.viviendaId || "").trim();
-
-  async function iniciarAnexo03() {
-    if (!anexo) return;
-
-    const viviendaId = String(anexo.datos?.viviendaId || "").trim();
-    if (!viviendaId) {
-      setErrorMsg("La operación solicitada no está disponible. Por favor, contacte al administrador.");
-      return;
-    }
-
-    const ok = window.confirm("Confirmar inicio de Toma de Vivienda (ANEXO_03). ¿Continuar?");
-    if (!ok) return;
-
-    setBusy(true);
-    setErrorMsg("");
-
-    try {
-      const payload = { datos: { viviendaId } };
-      const res = await http.post(`/formularios/ANEXO_03`, payload);
-      const nuevo = res.data?.anexo;
-
-      if (nuevo?._id) {
-        navigate(`/app/admin-general/gestiones/${nuevo._id}`);
-      } else {
-        await cargar();
-      }
-    } catch (err) {
-      console.error("[GESTIONAR] Error iniciando ANEXO_03", err);
-      setErrorMsg("La operación solicitada no está disponible. Por favor, contacte al administrador.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  // ─────────────────────────────
-
-  if (loading) return <p>Cargando…</p>;
-
-  if (!anexo) {
+  if (loading) return <div style={{ padding: 24 }}>Cargando…</div>;
+  if (error)
     return (
-      <div>
-        <h1>Gestionar Anexo</h1>
-        <p>Detalle no disponible.</p>
-        <button onClick={() => navigate("/app/admin-general/gestiones")}>Volver</button>
-      </div>
+      <div style={{ padding: 24, color: "crimson" }}>{error}</div>
     );
-  }
+  if (!anexo) return <div style={{ padding: 24 }}>Sin datos.</div>;
 
   return (
-    <>
-      <h1>Gestionar Anexo</h1>
+    <div style={{ padding: 24 }}>
+      <h2>Gestionar</h2>
 
       <div style={{ marginBottom: 12 }}>
-        <button onClick={() => navigate("/app/admin-general/gestiones")}>← Volver a Gestiones</button>
+        <div>
+          <b>ID:</b> {anexo._id}
+        </div>
+        <div>
+          <b>Código:</b> {anexo.codigo || "—"}
+        </div>
+        <div>
+          <b>Estado:</b> {anexo.estado || "—"}
+        </div>
+        <div>
+          <b>Institucional:</b> {anexo.estadoInstitucional || "—"}
+        </div>
+        <div>
+          <b>Creado:</b> {fmtDate(anexo.createdAt)}
+        </div>
+        <div>
+          <b>Actualizado:</b> {fmtDate(anexo.updatedAt)}
+        </div>
       </div>
 
-      {errorMsg ? (
-        <div style={{ marginBottom: 12, padding: 10, border: "1px solid #ccc", background: "#f7f7f7" }}>
-          {errorMsg}
+      <div
+        style={{
+          display: "flex",
+          gap: 12,
+          alignItems: "center",
+          marginBottom: 16,
+        }}
+      >
+        <button onClick={() => navigate(-1)}>Volver</button>
+
+        <a
+          href={`http://localhost:3000/api/formularios/${anexo._id}/pdf`}
+          target="_blank"
+          rel="noreferrer"
+        >
+          PDF
+        </a>
+
+        <button onClick={cargar}>Recargar</button>
+      </div>
+
+      {esAdmin && (
+        <div
+          style={{
+            border: "1px solid #ddd",
+            padding: 12,
+            borderRadius: 8,
+            marginBottom: 18,
+          }}
+        >
+          <h3 style={{ marginTop: 0 }}>
+            Acciones (ADMIN_GENERAL)
+          </h3>
+
+          {up(anexo.codigo) === "ANEXO_01" ? (
+            <>
+              <div style={{ marginBottom: 8 }}>
+                <label>
+                  Motivo / Observación (opcional)
+                  <input
+                    value={motivo}
+                    onChange={(e) => setMotivo(e.target.value)}
+                    placeholder="Ej: Documentación incompleta, pasa a revisión…"
+                    style={{ width: "100%", marginTop: 4 }}
+                  />
+                </label>
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  flexWrap: "wrap",
+                }}
+              >
+                <button
+                  disabled={busy}
+                  onClick={() =>
+                    setEstadoInstitucional("EN_REVISION")
+                  }
+                >
+                  Tomar en revisión
+                </button>
+                <button
+                  disabled={busy}
+                  onClick={() =>
+                    setEstadoInstitucional("APROBADA")
+                  }
+                >
+                  Aprobar
+                </button>
+                <button
+                  disabled={busy}
+                  onClick={() =>
+                    setEstadoInstitucional("NO_APROBADA")
+                  }
+                >
+                  No aprobar
+                </button>
+              </div>
+            </>
+          ) : (
+            <p>
+              Este anexo aún no tiene flujo de gestión
+              configurado.
+            </p>
+          )}
         </div>
-      ) : null}
+      )}
 
-      <section style={{ border: "1px solid #ddd", padding: 12, marginBottom: 12 }}>
-        <div>
-          <strong>{safe(anexo.codigo)}</strong> — Estado: <strong>{safe(anexo.estado)}</strong>
-          {anexo.estadoInstitucional ? <> — Inst.: <strong>{safe(anexo.estadoInstitucional)}</strong></> : null}
-        </div>
-        <div style={{ marginTop: 6, fontSize: 13 }}>
-          <div>Creado: {fmtDate(anexo.createdAt)}</div>
-          <div>Actualizado: {fmtDate(anexo.updatedAt)}</div>
-        </div>
+      {/* VISUALIZACIÓN */}
+      <h3>Visualización del anexo</h3>
+      <div
+        style={{
+          border: "1px solid #eee",
+          borderRadius: 10,
+          padding: 12,
+          marginBottom: 18,
+        }}
+      >
+        <AnexoViewer
+          codigo={anexo.codigo}
+          datos={anexo.datos}
+        />
+      </div>
 
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
-          <button disabled={busy} onClick={descargarPdf}>
-            Descargar PDF
-          </button>
+      {/* ADJUNTOS */}
+      <h3>Adjuntos</h3>
+      <AdjuntosList adjuntos={anexo.adjuntos || []} />
 
-          {accion ? (
-            <button disabled={busy} onClick={ejecutarAccion}>
-              {labelAccion(accion)}
-            </button>
-          ) : null}
+      {/* HISTORIAL INSTITUCIONAL */}
+      <h3>Historial institucional</h3>
+      {historialInstitucional.length > 0 ? (
+        <ul>
+          {historialInstitucional.map((h: any, idx: number) => (
+            <li key={`${h.fecha || "h"}-${idx}`}>
+              {fmtDate(h.fecha)} —{" "}
+              <b>{h.estadoInstitucional}</b>
+              {h.motivo ? ` — ${h.motivo}` : ""}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p>Sin historial.</p>
+      )}
 
-          {canIniciarAnexo03 ? (
-            <button disabled={busy} onClick={iniciarAnexo03}>
-              Iniciar Toma (ANEXO_03)
-            </button>
-          ) : null}
-        </div>
-      </section>
+      {/* HISTORIAL DE ESTADOS */}
+      <h3>Historial de estados</h3>
+      {Array.isArray(anexo.historialEstados) &&
+      anexo.historialEstados.length > 0 ? (
+        <ul>
+          {anexo.historialEstados.map((h, idx) => (
+            <li key={`${h.fecha || "e"}-${idx}`}>
+              {fmtDate(h.fecha)} —{" "}
+              {h.estadoAnterior || "?"} →{" "}
+              <b>{h.estadoNuevo || "?"}</b>
+              {h.observacion
+                ? ` — ${h.observacion}`
+                : ""}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p>Sin historial.</p>
+      )}
 
-      {/* ✅ ANEXO_02: fechas solo para ADMIN_GENERAL cuando está EN_REVISION */}
-      {cod === "ANEXO_02" && myRole === "ADMIN_GENERAL" && est === "EN_REVISION" ? (
-        <section style={{ border: "1px solid #ddd", padding: 12, marginBottom: 12 }}>
-          <h3 style={{ marginTop: 0 }}>Datos administrativos (Admin. Gral.)</h3>
-
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
-            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <span>Fecha de Asignación</span>
-              <input
-                type="date"
-                value={fechaAsignacion}
-                onChange={(e) => setFechaAsignacion(e.target.value)}
-                disabled={busy}
-              />
-            </label>
-
-            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <span>Fecha de Entrega</span>
-              <input
-                type="date"
-                value={fechaEntrega}
-                onChange={(e) => setFechaEntrega(e.target.value)}
-                disabled={busy}
-              />
-            </label>
-          </div>
-
-          <p style={{ marginTop: 10, marginBottom: 0, fontSize: 13 }}>
-            Estas fechas se envían al cierre del trámite.
-          </p>
-        </section>
-      ) : null}
-
-      {/* JSON institucional */}
-      <section style={{ border: "1px solid #ddd", padding: 12 }}>
-        <h3 style={{ marginTop: 0 }}>Datos</h3>
-        <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", marginBottom: 0 }}>
-          {JSON.stringify(anexo.datos || {}, null, 2)}
-        </pre>
-      </section>
-    </>
+      <div style={{ marginTop: 16 }}>
+        <button
+          onClick={() =>
+            navigate("/app/admin-general/gestiones")
+          }
+        >
+          Volver a: Gestiones
+        </button>
+      </div>
+    </div>
   );
 }

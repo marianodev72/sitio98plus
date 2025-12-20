@@ -1,53 +1,20 @@
-// routes/viviendaRoutes.js
-const express = require('express');
+// backend/routes/viviendaRoutes.js
+const express = require("express");
 const router = express.Router();
 
-const { authRequired, requireRole } = require('../middleware/auth');
-const {
-  validateViviendaCreate,
-  validateViviendaUpdate
-} = require('../validators/viviendaValidator');
+const viviendaController = require("../controllers/viviendaController");
+const { authRequired } = require("../middleware/auth");
 
-const viviendaController = require('../controllers/viviendaController');
+// IMPORTANTE: este es el middleware correcto que:
+// - extrae token de cookie o Authorization Bearer
+// - verifica JWT RS256
+// - setea req.user normalizado
+router.use(authRequired);
 
-// Listar viviendas
-router.get(
-  '/',
-  authRequired,
-  viviendaController.listar
-);
+// PDF antes de rutas parametrizadas (buena práctica)
+router.get("/pdf", viviendaController.generarPdf);
 
-// Obtener vivienda por ID
-router.get(
-  '/:id',
-  authRequired,
-  viviendaController.obtenerPorId
-);
-
-// Crear vivienda (solo ADMIN / ADMIN_GENERAL)
-router.post(
-  '/',
-  authRequired,
-  requireRole('ADMIN', 'ADMIN_GENERAL'),
-  validateViviendaCreate,
-  viviendaController.crear
-);
-
-// Actualizar vivienda (solo ADMIN / ADMIN_GENERAL)
-router.patch(
-  '/:id',
-  authRequired,
-  requireRole('ADMIN', 'ADMIN_GENERAL'),
-  validateViviendaUpdate,
-  viviendaController.actualizar
-);
-
-// Baja lógica de vivienda (solo ADMIN_GENERAL)
-router.delete(
-  '/:id',
-  authRequired,
-  requireRole('ADMIN_GENERAL'),
-  viviendaController.bajaLogica
-);
+router.get("/", viviendaController.listar);
+router.patch("/:id/estado", viviendaController.cambiarEstado);
 
 module.exports = router;

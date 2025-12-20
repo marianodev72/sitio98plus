@@ -76,6 +76,12 @@ const userSchema = new Schema(
     activo: { type: Boolean, default: true, index: true },
     bloqueado: { type: Boolean, default: false, index: true },
 
+    // ✅ Histórico institucional (no aparece en listados normales)
+    archivado: { type: Boolean, default: false, index: true },
+    archivadoAt: { type: Date, default: null },
+    archivadoPor: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    archivadoMotivo: { type: String, default: "" },
+
     meta: { type: Schema.Types.Mixed, default: {} },
   },
   { timestamps: true }

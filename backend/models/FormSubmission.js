@@ -1,5 +1,5 @@
-// models/FormSubmission.js
-// Envíos de formularios y ANEXOS — Sistema ZN98
+// backend/models/FormSubmission.js
+// Envíos de formularios y ANEXOS — Sistema ZN98 / Sitio 98
 
 const mongoose = require("mongoose");
 const { Schema } = mongoose;
@@ -11,7 +11,7 @@ const ESTADOS_FORM = [
   "APROBADO",
   "RECHAZADO",
   "CERRADO",
-  "ASIGNADO", // para ANEXO_02
+  "ASIGNADO", // para ANEXO_02 si se usa
 ];
 
 const historialEstadoSchema = new Schema(
@@ -29,7 +29,7 @@ const adjuntoSchema = new Schema(
   {
     nombre: String,
     ruta: String,
-    tipo: String, // pdf, jpg, png
+    tipo: String, // mimetype (pdf, jpg, png)
     size: Number,
     fechaSubida: { type: Date, default: Date.now },
   },
@@ -46,9 +46,16 @@ const conformidadSchema = new Schema(
   { _id: false }
 );
 
+const intervinienteSchema = new Schema(
+  {
+    userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    rol: { type: String, trim: true, uppercase: true }, // POSTULANTE | PERMISIONARIO | INSPECTOR | JEFE_DE_BARRIO | ALOJADO
+  },
+  { _id: false }
+);
+
 const formSubmissionSchema = new Schema(
   {
-    // Referencia a la plantilla (ANEXO / Formulario)
     template: {
       type: Schema.Types.ObjectId,
       ref: "FormTemplate",
@@ -56,7 +63,6 @@ const formSubmissionSchema = new Schema(
       index: true,
     },
 
-    // Código del anexo / formulario
     codigo: {
       type: String,
       required: true,
@@ -65,8 +71,6 @@ const formSubmissionSchema = new Schema(
       index: true,
     },
 
-    // Usuario que crea/envía el formulario
-    // (en ANEXO_02 normalmente será ADMIN_GENERAL)
     usuario: {
       type: Schema.Types.ObjectId,
       ref: "User",
@@ -74,10 +78,8 @@ const formSubmissionSchema = new Schema(
       index: true,
     },
 
-    // Datos dinámicos del formulario
     datos: { type: Object, default: {} },
 
-    // Estado general de workflow del formulario
     estado: {
       type: String,
       enum: ESTADOS_FORM,
@@ -85,23 +87,18 @@ const formSubmissionSchema = new Schema(
       index: true,
     },
 
-    // Adjuntos
-    adjuntos: [adjuntoSchema],
+    // ✅ Estado institucional (solo cuando aplica: 01/21, cierres con novedades, etc.)
+    estadoInstitucional: { type: String, trim: true, uppercase: true, default: null, index: true },
 
-    // Historial de cambios de estado
+    adjuntos: [adjuntoSchema],
     historialEstados: [historialEstadoSchema],
 
-    // Relación con vivienda o alojamiento si aplica
     vivienda: { type: Schema.Types.ObjectId, ref: "Vivienda" },
     alojamiento: { type: Schema.Types.ObjectId, ref: "Alojamiento" },
 
-    // Barrio vinculado
     barrio: { type: String, trim: true, index: true },
-
-    // Para uso administrativo
     numeroExpediente: { type: String, trim: true, index: true },
 
-    // Observaciones internas
     observacionesInternas: [
       {
         fecha: { type: Date, default: Date.now },
@@ -110,11 +107,14 @@ const formSubmissionSchema = new Schema(
       },
     ],
 
-    // ✅ NUEVO: conformidad institucional del postulante para ANEXO_02
-    conformidadPostulante: {
-      type: conformidadSchema,
-      default: null,
-    },
+    // ✅ Conformidad postulante (ANEXO_02 / ANEXO_22)
+    conformidadPostulante: { type: conformidadSchema, default: null },
+
+    // ✅ Intervinientes del trámite (visibilidad)
+    intervinientes: { type: [intervinienteSchema], default: [] },
+
+    // ✅ Encadenado simple para anexos derivados (02→03, 03→07)
+    derivadoDe: { type: Schema.Types.ObjectId, ref: "FormSubmission", default: null, index: true },
   },
   { timestamps: true }
 );
@@ -122,14 +122,9 @@ const formSubmissionSchema = new Schema(
 formSubmissionSchema.index({ usuario: 1, codigo: 1, estado: 1 });
 formSubmissionSchema.index({ createdAt: 1 });
 
-formSubmissionSchema.methods.cambiarEstado = function (
-  nuevoEstado,
-  usuarioResponsable,
-  observacion = ""
-) {
+formSubmissionSchema.methods.cambiarEstado = function (nuevoEstado, usuarioResponsable, observacion = "") {
   const estadoAnterior = this.estado;
   this.estado = nuevoEstado;
-
   this.historialEstados.push({
     estadoAnterior,
     estadoNuevo: nuevoEstado,
