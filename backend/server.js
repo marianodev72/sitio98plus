@@ -38,7 +38,7 @@ const UPLOADS_MENSAJES_DIR = path.join(UPLOADS_DIR, "mensajes");
 const authRoutes = require("./routes/authRoutes");
 const liquidacionRoutes = require("./routes/liquidacionRoutes");
 const serviciosRoutes = require("./routes/serviciosRoutes");
-const formularioRoutes = require("./routes/formularioRoutes");
+const formularioRoutes = require("./routes/formularios");
 const tareasRoutes = require("./routes/tareasRoutes");
 const mensajeRoutes = require("./routes/mensajeRoutes");
 const adminRoutes = require("./routes/adminRoutes");
@@ -105,7 +105,23 @@ app.use("/api/users", userRoutes);
 app.use("/api/stats", statsRoutes);
 
 // Static
-app.use("/uploads", express.static(UPLOADS_DIR));
+app.use(
+  "/uploads",
+  express.static(UPLOADS_DIR, {
+    setHeaders: (res) => {
+      // Permitir embebido controlado (img / iframe)
+      res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+
+      // Evitar cache 304 (rompe previews)
+      res.setHeader("Cache-Control", "no-store");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
+
+      // Intentar abrir inline (PDF / imágenes)
+      res.setHeader("Content-Disposition", "inline");
+    },
+  })
+);
 
 // 404
 app.use((req, res) => {
