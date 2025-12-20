@@ -1,123 +1,156 @@
 // backend/controllers/registerPostulanteController.js
-
+const bcrypt = require("bcryptjs");
 const fs = require("fs");
 const path = require("path");
-const bcrypt = require("bcryptjs");
-const { body, validationResult } = require("express-validator");
-const User = require("../models/user");
-const ROLES = require("../middleware/roles");
+const axios = require("axios");
 
-const MATRICULAS_CSV_PATH = path.join(
-  __dirname,
-  "../data/matriculas.csv"
-);
+// ✅ IMPORT CORRECTO (tu modelo exporta { User: ... })
+const { User } = require("../models/User");
 
-// Carga matriculas autorizadas en un Set (en memoria)
-function cargarMatriculasAutorizadas() {
-  if (!fs.existsSync(MATRICULAS_CSV_PATH)) {
-    console.error(
-      "[REGISTER] No se encontró el archivo matriculas.csv en backend/data."
-    );
+// 📁 CSV real
+const CSV_MATRICULAS_PATH = path.join(__dirname, "..", "data", "matriculas.csv");
+
+function cargarMatriculasHabilitadas() {
+  try {
+    if (!fs.existsSync(CSV_MATRICULAS_PATH)) {
+      console.error("[REGISTRO] No se encontró el CSV de matrículas:", CSV_MATRICULAS_PATH);
+      return new Set();
+    }
+
+    const contenido = fs.readFileSync(CSV_MATRICULAS_PATH, "utf8");
+    const lineas = contenido.split(/\r?\n/);
+
+    const set = new Set();
+    for (const linea of lineas) {
+      const m = String(linea || "").trim();
+      if (!m) continue;
+
+      const lower = m.toLowerCase();
+      if (lower === "matricula" || lower === "matrícula") continue;
+
+      const firstCol = m.split(/[;,]/)[0].trim();
+      if (firstCol) set.add(firstCol);
+    }
+    return set;
+  } catch (err) {
+    console.error("[REGISTRO] Error leyendo CSV matrículas:", err);
     return new Set();
   }
-
-  const contenido = fs.readFileSync(MATRICULAS_CSV_PATH, "utf8");
-  const lineas = contenido.split(/\r?\n/);
-
-  const set = new Set();
-  for (const linea of lineas) {
-    const limpia = linea.trim();
-    if (!limpia) continue;
-
-    // Soporta CSV tipo "MATRICULA;APELLIDO;NOMBRE;..."
-    const [mat] = limpia.split(";");
-    if (mat) {
-      set.add(mat.trim().toUpperCase());
-    }
-  }
-
-  return set;
 }
 
-// Validación de campos con express-validator
-const validarRegistro = [
-  body("email").isEmail().withMessage("Email inválido."),
-  body("matricula")
-    .trim()
-    .notEmpty()
-    .withMessage("La matrícula es obligatoria."),
-  body("clave")
-    .isLength({ min: 8 })
-    .withMessage("La clave debe tener al menos 8 caracteres."),
-  body("confirmarClave")
-    .custom((value, { req }) => value === req.body.clave)
-    .withMessage("Las claves no coinciden."),
-];
+async function verificarTurnstile(captchaToken) {
+  const secret = process.env.TURNSTILE_SECRET_KEY;
 
-// Handler principal
-async function registerPostulante(req, res) {
+  if (!secret) {
+    console.error("[REGISTRO] Falta TURNSTILE_SECRET_KEY en backend/.env");
+    return false;
+  }
+
   try {
-    const errores = validationResult(req);
-    if (!errores.isEmpty()) {
-      return res.status(400).json({
-        ok: false,
-        msg: "Datos inválidos.",
-        errors: errores.array(),
-      });
-    }
+    const body = new URLSearchParams({
+      secret,
+      response: captchaToken,
+    }).toString();
 
-    const email = String(req.body.email || "").trim().toLowerCase();
-    const matricula = String(req.body.matricula || "").trim().toUpperCase();
-    const clave = String(req.body.clave || "");
+    const resp = await axios.post(
+      "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+      body,
+      { headers: { "Content-Type": "application/x-www-form-urlencoded" }, timeout: 7000 }
+    );
 
-    // 1) Validar matrícula contra CSV
-    const matriculasAutorizadas = cargarMatriculasAutorizadas();
+    return !!resp.data?.success;
+  } catch (err) {
+    console.error("[REGISTRO] Error verificando Turnstile:", err?.message || err);
+    return false;
+  }
+}
 
-    if (!matriculasAutorizadas.has(matricula)) {
-      // Mensaje genérico, no filtramos más detalles
-      return res.status(403).json({
-        ok: false,
-        msg: "NO AUTORIZADO EL REGISTRO",
-      });
-    }
-
-    // 2) Verificar que el email no exista
-    const existente = await User.findOne({ email });
-    if (existente) {
-      return res.status(400).json({
-        ok: false,
-        msg: "Ya existe un usuario registrado con ese correo.",
-      });
-    }
-
-    // 3) Hashear la clave
-    const salt = await bcrypt.genSalt(10);
-    const passwordHash = await bcrypt.hash(clave, salt);
-
-    // 4) Crear usuario con rol POSTULANTE
-    const nuevoUsuario = new User({
+exports.registrarPostulante = async (req, res) => {
+  try {
+    const {
       email,
-      password: passwordHash,
-      role: ROLES.POSTULANTE || "POSTULANTE",
-      activo: true,
+      password,
+      confirmarPassword,
+      matricula,
+      nombre,
+      apellido,
+      grado,
+      captchaToken,
+    } = req.body;
+
+    // Mensaje genérico para TODO
+    const deny = (status = 400) =>
+      res.status(status).json({ message: "No es posible procesar el registro en este momento." });
+
+    // 1) Validaciones mínimas
+    if (
+      !email ||
+      !password ||
+      !confirmarPassword ||
+      !matricula ||
+      !nombre ||
+      !apellido ||
+      !grado
+    ) {
+      return deny(400);
+    }
+
+    if (password !== confirmarPassword) {
+      return deny(400);
+    }
+
+    // 2) Turnstile obligatorio
+    if (!captchaToken) {
+      return deny(400);
+    }
+
+    const okCaptcha = await verificarTurnstile(String(captchaToken));
+    if (!okCaptcha) {
+      return deny(403);
+    }
+
+    // 3) Matrícula contra CSV
+    const matriculasValidas = cargarMatriculasHabilitadas();
+    const matriculaTrim = String(matricula).trim();
+
+    if (!matriculasValidas.has(matriculaTrim)) {
+      return deny(403);
+    }
+
+    // 4) Email único (genérico)
+    const emailNorm = String(email).trim().toLowerCase();
+    const existente = await User.findOne({ email: emailNorm });
+    if (existente) {
+      return deny(400);
+    }
+
+    // 5) Hash password
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    // 6) Crear usuario POSTULANTE inactivo
+    const nuevoUsuario = new User({
+      email: emailNorm,
+      passwordHash,
+      role: "POSTULANTE",
+      activo: false,
+      matricula: matriculaTrim,
+      nombre: String(nombre).trim(),
+      apellido: String(apellido).trim(),
+      meta: {
+        grado: String(grado).trim(),
+        origenRegistro: "REGISTRO_PUBLICO",
+      },
     });
 
     await nuevoUsuario.save();
 
     return res.status(201).json({
-      ok: true,
-      msg: "Registro exitoso. Ya puede iniciar sesión como POSTULANTE.",
+      message: "Registro recibido. Su solicitud será evaluada por el administrador.",
     });
-  } catch (err) {
-    console.error("[REGISTER POSTULANTE] Error:", err);
+  } catch (error) {
+    console.error("[REGISTRO POSTULANTE] Error:", error);
     return res.status(500).json({
-      ok: false,
-      msg: "Error interno al registrar el usuario.",
+      message: "No es posible procesar el registro en este momento.",
     });
   }
-}
-
-module.exports = {
-  validarRegistro,
-  registerPostulante,
 };

@@ -34,7 +34,7 @@ const UPLOADS_MENSAJES_DIR = path.join(UPLOADS_DIR, "mensajes");
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 });
 
-// Rutas
+// Rutas (core)
 const authRoutes = require("./routes/authRoutes");
 const liquidacionRoutes = require("./routes/liquidacionRoutes");
 const serviciosRoutes = require("./routes/serviciosRoutes");
@@ -44,24 +44,7 @@ const mensajeRoutes = require("./routes/mensajeRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const templateRoutes = require("./routes/templateRoutes");
 const viviendaRoutes = require("./routes/viviendaRoutes");
-
-const anexo01Routes = require("./routes/anexo01Routes");
-const anexo02Routes = require("./routes/anexo02Routes");
-const anexo03Routes = require("./routes/anexo03Routes");
-const anexo04Routes = require("./routes/anexo04Routes");
-const anexo07Routes = require("./routes/anexo07Routes");
-const anexo08Routes = require("./routes/anexo08Routes");
-const anexo09Routes = require("./routes/anexo09Routes");
-const anexo11Routes = require("./routes/anexo11Routes");
-
-const anexo21Routes = require("./routes/anexo21Routes");
-const anexo22Routes = require("./routes/anexo22Routes");
-const anexo23Routes = require("./routes/anexo23Routes");
-const anexo24Routes = require("./routes/anexo24Routes");
-const anexo25Routes = require("./routes/anexo25Routes");
-const anexo26Routes = require("./routes/anexo26Routes");
-const anexo28Routes = require("./routes/anexo28Routes");
-
+const userRoutes = require("./routes/userRoutes");
 const statsRoutes = require("./routes/statsRoutes");
 
 // Middlewares
@@ -89,7 +72,10 @@ app.use("/api/", apiLimiter);
 
 // ✅ FIX: headers anti-cache para TODA la API (evita 304 sin body)
 app.use("/api", (req, res, next) => {
-  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.setHeader(
+    "Cache-Control",
+    "no-store, no-cache, must-revalidate, proxy-revalidate"
+  );
   res.setHeader("Pragma", "no-cache");
   res.setHeader("Expires", "0");
   res.setHeader("Surrogate-Control", "no-store");
@@ -98,10 +84,14 @@ app.use("/api", (req, res, next) => {
 
 // Health
 app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", message: "Servidor ZN98 operativo", timestamp: new Date().toISOString() });
+  res.json({
+    status: "ok",
+    message: "Servidor ZN98 operativo",
+    timestamp: new Date().toISOString(),
+  });
 });
 
-// Rutas
+// Rutas API (único backend institucional para anexos: /api/formularios)
 app.use("/api/auth", authRoutes);
 app.use("/api/liquidaciones", liquidacionRoutes);
 app.use("/api/servicios", serviciosRoutes);
@@ -110,26 +100,8 @@ app.use("/api/tareas", tareasRoutes);
 app.use("/api/templates", templateRoutes);
 app.use("/api/mensajes", mensajeRoutes);
 app.use("/api/admin", adminRoutes);
-
 app.use("/api/viviendas", viviendaRoutes);
-
-app.use("/api/anexos/01", anexo01Routes);
-app.use("/api/anexos/02", anexo02Routes);
-app.use("/api/anexos/03", anexo03Routes);
-app.use("/api/anexos/04", anexo04Routes);
-app.use("/api/anexos/07", anexo07Routes);
-app.use("/api/anexos/08", anexo08Routes);
-app.use("/api/anexos/09", anexo09Routes);
-app.use("/api/anexos/11", anexo11Routes);
-
-app.use("/api/anexos/21", anexo21Routes);
-app.use("/api/anexos/22", anexo22Routes);
-app.use("/api/anexos/23", anexo23Routes);
-app.use("/api/anexos/24", anexo24Routes);
-app.use("/api/anexos/25", anexo25Routes);
-app.use("/api/anexos/26", anexo26Routes);
-app.use("/api/anexos/28", anexo28Routes);
-
+app.use("/api/users", userRoutes);
 app.use("/api/stats", statsRoutes);
 
 // Static
