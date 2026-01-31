@@ -1,21 +1,113 @@
 name: Backup nightly
+
 on:
   schedule:
     - cron: '0 6 * * *'
   workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
 jobs:
   backup:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Crear backup .bundle
-        run: git bundle create sitio98plus-$(date +'%Y%m%dT%H%M%S').bundle --all
-      - name: Crear snapshot .zip
-        run: zip -r sitio98plus-$(date +'%Y%m%dT%H%M%S').zip . -x '*.git*'
-      - uses: actions/upload-artifact@v4
+      - name: Checkout repo (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Crear backup (bundle + zip), cifrar y generar evidencia
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          umask 077
+
+          TS="$(date -u +'%Y%m%dT%H%M%SZ')"
+          PREFIX="sitio98plus-${TS}"
+
+          BUNDLE="${PREFIX}.bundle"
+          ZIP="${PREFIX}.zip"
+          TAR="${PREFIX}.tar.gz"
+          ENC="${TAR}.gpg"
+
+          MANIFEST="${PREFIX}.manifest.txt"
+          SHA_ENC="${ENC}.sha256"
+
+          WORKDIR="$(mktemp -d)"
+          echo "==> Workdir: ${WORKDIR}"
+
+          echo "==> Creando bundle: ${BUNDLE}"
+          git bundle create "${WORKDIR}/${BUNDLE}" --all
+
+          echo "==> Verificando bundle (pre-cifrado)"
+          git bundle verify "${WORKDIR}/${BUNDLE}"
+
+          echo "==> Creando snapshot zip: ${ZIP}"
+          (cd . && zip -r "${WORKDIR}/${ZIP}" . -x '*.git*' >/dev/null)
+
+          echo "==> Verificando zip (pre-cifrado)"
+          unzip -t "${WORKDIR}/${ZIP}" >/dev/null
+
+          echo "==> Empaquetando tar: ${TAR}"
+          tar czf "${WORKDIR}/${TAR}" -C "${WORKDIR}" "${BUNDLE}" "${ZIP}"
+
+          echo "==> Cifrando (AES256) => ${ENC}"
+          echo "$BACKUP_PASSPHRASE" | gpg --batch --yes --passphrase-fd 0 \
+            --pinentry-mode loopback \
+            --symmetric --cipher-algo AES256 \
+            -o "${WORKDIR}/${ENC}" "${WORKDIR}/${TAR}"
+
+          echo "==> Generando SHA256 del cifrado"
+          sha256sum "${WORKDIR}/${ENC}" | tee "${WORKDIR}/${SHA_ENC}"
+
+          echo "==> Manifest (evidencia)"
+          {
+            echo "timestamp_utc=${TS}"
+            echo "repo=${GITHUB_REPOSITORY}"
+            echo "commit=${GITHUB_SHA}"
+            echo "runner_os=${RUNNER_OS}"
+            echo "encrypted=${ENC}"
+            echo "sha256_file=${SHA_ENC}"
+            echo "contains=${BUNDLE},${ZIP}"
+          } | tee "${WORKDIR}/${MANIFEST}"
+
+          echo "==> Evidencia de restore (post-cifrado): descifrar + extraer + verificar"
+          RESTDIR="$(mktemp -d)"
+          echo "$BACKUP_PASSPHRASE" | gpg --batch --yes --passphrase-fd 0 \
+            --pinentry-mode loopback \
+            --decrypt "${WORKDIR}/${ENC}" > "${RESTDIR}/restored.tar.gz"
+
+          tar xzf "${RESTDIR}/restored.tar.gz" -C "${RESTDIR}"
+
+          RBUNDLE="${RESTDIR}/${PREFIX}.bundle"
+          RZIP="${RESTDIR}/${PREFIX}.zip"
+
+          test -f "${RBUNDLE}"
+          test -f "${RZIP}"
+
+          git bundle verify "${RBUNDLE}"
+          unzip -t "${RZIP}" >/dev/null
+
+          echo "==> OK: restore test pasó (descifrado + extracción + verificación)"
+
+          echo "==> Publicando artefactos (solo cifrado + evidencia)"
+          mv "${WORKDIR}/${ENC}" .
+          mv "${WORKDIR}/${SHA_ENC}" .
+          mv "${WORKDIR}/${MANIFEST}" .
+
+          echo "==> Limpieza"
+          rm -rf "${WORKDIR}" "${RESTDIR}"
+
+      - name: Subir backup cifrado + evidencia
+        uses: actions/upload-artifact@v4
         with:
           name: sitio98plus-backup
           path: |
-            *.bundle
-            *.zip
+            *.tar.gz.gpg
+            *.tar.gz.gpg.sha256
+            *.manifest.txt
           retention-days: 60
+          if-no-files-found: error
