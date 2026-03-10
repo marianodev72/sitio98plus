@@ -1,199 +1,305 @@
 // backend/controllers/authController.js
-const jwt = require("jsonwebtoken");
-const bcrypt = require("bcryptjs");
 const fs = require("fs");
 const path = require("path");
-const axios = require("axios");
+const jwt = require("jsonwebtoken");
+const bcrypt = require("bcryptjs");
 
-// ✅ IMPORT CORRECTO (tu modelo exporta { User: ... })
-const { User } = require("../models/User");
+// ✅ path correcto (controllers -> ./models)
+let User = null;
+try {
+  ({ User } = require("../models/user"));
+} catch {
+  ({ User } = require("../models/user"));
+}
 
-// ====== Config ======
-const GENERIC_ERROR = "No se ha podido procesar su solicitud, contacte al administrador";
-const MAX_FAILS = 3;
-const WINDOW_MS = 15 * 60 * 1000; // 15 minutos
+// ─────────────────────────────
+// Helpers
+// ─────────────────────────────
+const isProd = process.env.NODE_ENV === "production";
 
-// ====== RSA Key ======
-const PRIVATE_KEY = fs.readFileSync(
-  path.join(__dirname, "..", "keys", "private.pem"),
-  "utf8"
-);
+function requireEnv(name) {
+  const v = process.env[name];
+  if (!v) throw new Error(`Missing required env: ${name}`);
+  return v;
+}
 
-// ====== Cookie helpers ======
-function setAuthCookie(res, token) {
-  res.cookie("token", token, {
+function safeEmail(v) {
+  return String(v || "").trim().toLowerCase();
+}
+
+function parseBool(v, fallback = false) {
+  if (v === undefined || v === null || v === "") return fallback;
+  const s = String(v).trim().toLowerCase();
+  return s === "1" || s === "true" || s === "yes" || s === "on";
+}
+
+function normalizeSameSite(v, fallback = "lax") {
+  const s = String(v || fallback).trim().toLowerCase();
+  if (s === "lax") return "lax";
+  if (s === "strict") return "strict";
+  if (s === "none") return "none";
+  return fallback;
+}
+
+// ─────────────────────────────
+// JWT KEYS (RS256)
+// ─────────────────────────────
+let PUBLIC_KEY = null;
+let PRIVATE_KEY = null;
+
+const ACTIVE_KID = process.env.JWT_ACTIVE_KID || "key-actual";
+
+function readKeySafe(p) {
+  try {
+    if (p && fs.existsSync(p)) return fs.readFileSync(p, "utf8");
+  } catch (_) {}
+  return null;
+}
+
+// Permite inyectar PEM por env (por ejemplo desde Secret Manager)
+function readPemFromEnv(varName) {
+  const raw = process.env[varName];
+  if (!raw) return null;
+  // Soporta PEM con \\n escapados
+  if (raw.includes("\\n")) return raw.replace(/\\n/g, "\n");
+  return raw;
+}
+
+const ROOT = path.join(__dirname, "..");
+
+const PRIVATE_CANDIDATES = [
+  process.env.JWT_PRIVATE_KEY_PATH,
+  path.join(ROOT, "private.pem"),
+  path.join(ROOT, "keys", "private.pem"),
+  path.join(ROOT, "config", "private.pem"),
+  path.join(ROOT, "security", "jwtRS256.key"),
+].filter(Boolean);
+
+const PUBLIC_CANDIDATES = [
+  process.env.JWT_PUBLIC_KEY_PATH,
+  path.join(ROOT, "public.pem"),
+  path.join(ROOT, "keys", "public.pem"),
+  path.join(ROOT, "config", "public.pem"),
+  path.join(ROOT, "security", "jwtRS256.key.pub"),
+].filter(Boolean);
+
+PRIVATE_KEY =
+  readPemFromEnv("JWT_PRIVATE_KEY") || PRIVATE_CANDIDATES.map(readKeySafe).find(Boolean);
+PUBLIC_KEY =
+  readPemFromEnv("JWT_PUBLIC_KEY") || PUBLIC_CANDIDATES.map(readKeySafe).find(Boolean);
+
+const KEYRING_PUBLIC = {
+  [ACTIVE_KID]: PUBLIC_KEY,
+};
+
+if (PRIVATE_KEY && PUBLIC_KEY) console.log("[auth] Claves JWT cargadas");
+else console.warn("[auth] ⚠️ No se pudieron cargar las claves JWT (private/public).");
+
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "30m";
+
+function getCookieConfig() {
+  const nodeEnv = String(process.env.NODE_ENV || "").toLowerCase();
+  const prod = nodeEnv === "production";
+
+  const sameSiteEnv = normalizeSameSite(process.env.AUTH_COOKIE_SAMESITE || (prod ? "strict" : "lax"));
+  const secureEnvRaw = process.env.AUTH_COOKIE_SECURE;
+  const secureEnv =
+    secureEnvRaw === undefined || secureEnvRaw === null || secureEnvRaw === ""
+      ? prod
+      : String(secureEnvRaw).toLowerCase() === "true";
+
+  let sameSite = sameSiteEnv;
+  let secure = secureEnv;
+
+  if (sameSite === "none" && !secure) {
+    console.warn("[auth] ⚠️ SameSite=None sin Secure: forzando Secure=true.");
+    secure = true;
+  }
+
+  return { secure, sameSite };
+}
+
+function getSessionMaxMinutes() {
+  const raw = process.env.SESSION_MAX_MINUTES;
+  const parsed = Number(raw);
+  if (!raw || !Number.isFinite(parsed) || parsed <= 0) return 30;
+  return parsed;
+}
+
+function sendAuthCookie(res, token) {
+  const cookieName = process.env.AUTH_COOKIE_NAME || "token";
+  const { secure, sameSite } = getCookieConfig();
+  const sessionMinutes = getSessionMaxMinutes();
+
+  res.cookie(cookieName, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    secure,
+    sameSite,
+    maxAge: sessionMinutes * 60 * 1000,
+    path: "/",
   });
 }
 
 function clearAuthCookie(res) {
-  res.clearCookie("token", {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+  const cookieName = process.env.AUTH_COOKIE_NAME || "token";
+  const { secure, sameSite } = getCookieConfig();
+  res.clearCookie(cookieName, { httpOnly: true, secure, sameSite, path: "/" });
+}
+
+function signToken(payload) {
+  if (!PRIVATE_KEY) throw new Error("JWT private key no cargada.");
+  return jwt.sign({ user: payload }, PRIVATE_KEY, {
+    algorithm: "RS256",
+    expiresIn: JWT_EXPIRES_IN,
+    header: { kid: ACTIVE_KID },
   });
 }
 
-// ====== Intentos fallidos (memoria) ======
-// Nota: en producción lo ideal es Redis, pero esto sirve perfecto para ahora.
-const failStore = new Map();
-// key -> { count, firstAt }
-function keyFor(ip, email) {
-  return `${ip || "unknown"}::${String(email || "").toLowerCase()}`;
-}
-function getFailState(key) {
-  const now = Date.now();
-  const s = failStore.get(key);
-  if (!s) return { count: 0, firstAt: now };
+function verifyToken(token) {
+  if (!PUBLIC_KEY) throw new Error("JWT public key no cargada.");
 
-  if (now - s.firstAt > WINDOW_MS) {
-    // expiró ventana
-    failStore.delete(key);
-    return { count: 0, firstAt: now };
-  }
-  return s;
-}
-function incFail(key) {
-  const now = Date.now();
-  const s = getFailState(key);
-  const next = { count: (s.count || 0) + 1, firstAt: s.firstAt || now };
-  failStore.set(key, next);
-  return next;
-}
-function resetFail(key) {
-  failStore.delete(key);
-}
-
-// ====== Turnstile verify ======
-async function verifyTurnstile(captchaToken) {
-  const secret = process.env.TURNSTILE_SECRET_KEY;
-  if (!secret) {
-    console.error("[AUTH] Falta TURNSTILE_SECRET_KEY en backend/.env");
-    return false;
-  }
+  let selectedPublicKey = PUBLIC_KEY;
   try {
-    const body = new URLSearchParams({
-      secret,
-      response: captchaToken,
-    }).toString();
-
-    const resp = await axios.post(
-      "https://challenges.cloudflare.com/turnstile/v0/siteverify",
-      body,
-      { headers: { "Content-Type": "application/x-www-form-urlencoded" }, timeout: 7000 }
-    );
-
-    return !!resp.data?.success;
-  } catch (err) {
-    console.error("[AUTH] Error verificando Turnstile:", err?.message || err);
-    return false;
+    const decoded = jwt.decode(token, { complete: true });
+    const kid = decoded?.header?.kid;
+    if (kid) {
+      const key = KEYRING_PUBLIC[kid];
+      if (!key) throw new Error("kid desconocido");
+      selectedPublicKey = key;
+    }
+  } catch (_) {
+    throw new Error("JWT inválido");
   }
+
+  return jwt.verify(token, selectedPublicKey, { algorithms: ["RS256"] });
 }
 
-// ====== Controllers ======
+function buildUserPayload(user) {
+  const permisos = Array.isArray(user?.permisos) ? user.permisos : [];
 
-// POST /api/auth/login
-exports.login = async (req, res) => {
+  return {
+    _id: String(user._id),
+    role: user.role,
+    permisos,
+    activo: user.activo !== false,
+    barrioAsignado: user.barrioAsignado || "",
+    viviendaAsignada: user.viviendaAsignada ?? null,
+    alojamientoAsignado: user.alojamientoAsignado ?? null,
+
+    // ✅ CRÍTICO: NO usar fallback tipo "|| 0"
+    tokenVersion: (typeof user.tokenVersion === "number" ? user.tokenVersion : 0),
+  };
+}
+
+// ─────────────────────────────
+// Controllers
+// ─────────────────────────────
+async function login(req, res) {
   try {
-    const email = String(req.body?.email || "").trim().toLowerCase();
+    if (!User) return res.status(500).json({ message: "Error interno" });
+
+    const email = safeEmail(req.body?.email);
     const password = String(req.body?.password || "");
-    const captchaToken = String(req.body?.captchaToken || "").trim();
 
-    const ip =
-      req.headers["x-forwarded-for"]?.toString().split(",")[0]?.trim() ||
-      req.socket?.remoteAddress ||
-      req.ip;
+    if (!email || !password) return res.status(401).json({ message: "No autorizado" });
 
-    const k = keyFor(ip, email);
-    const state = getFailState(k);
-    const requireCaptcha = state.count >= MAX_FAILS;
+    // ✅ Importante: tokenVersion puede estar select:false => traer explícitamente
+    const user = await User.findOne({ email }).select("+passwordHash +tokenVersion").lean();
+    if (!user) return res.status(401).json({ message: "No autorizado" });
 
-    // Mensaje genérico SIEMPRE
-    const deny = (captchaRequiredFlag) =>
-      res.status(401).json({
-        message: GENERIC_ERROR,
-        requireCaptcha: !!captchaRequiredFlag,
-      });
-
-    // Si ya requiere captcha, validarlo SIEMPRE
-    if (requireCaptcha) {
-      if (!captchaToken) return deny(true);
-      const ok = await verifyTurnstile(captchaToken);
-      if (!ok) return deny(true);
+    if (user.activo === false || user.bloqueado === true || user.archivado === true) {
+      return res.status(401).json({ message: "No autorizado" });
     }
 
-    if (!email || !password) {
-      incFail(k);
-      return deny(getFailState(k).count >= MAX_FAILS);
-    }
+    const ok = await bcrypt.compare(password, user.passwordHash || "");
+    if (!ok) return res.status(401).json({ message: "No autorizado" });
 
-    const user = await User.findOne({ email });
-    if (!user) {
-      incFail(k);
-      return deny(getFailState(k).count >= MAX_FAILS);
-    }
+    const payload = buildUserPayload(user);
+    const token = signToken(payload);
 
-    // Bloqueo institucional (genérico)
-    if (user.activo === false) {
-      incFail(k);
-      return deny(getFailState(k).count >= MAX_FAILS);
-    }
+    sendAuthCookie(res, token);
 
-    if (!user.passwordHash) {
-      incFail(k);
-      return deny(getFailState(k).count >= MAX_FAILS);
-    }
-
-    const okPass = await bcrypt.compare(password, user.passwordHash);
-    if (!okPass) {
-      incFail(k);
-      return deny(getFailState(k).count >= MAX_FAILS);
-    }
-
-    // ✅ Éxito: resetear contador
-    resetFail(k);
-
-    const payload = {
-      user: {
-        _id: user._id,
-        email: user.email,
-        role: user.role,
-      },
-    };
-
-    const token = jwt.sign(payload, PRIVATE_KEY, {
-      algorithm: "RS256",
-      expiresIn: "8h",
-    });
-
-    setAuthCookie(res, token);
-    return res.json({ message: "Login correcto" });
+    return res.json({ user: payload });
   } catch (err) {
-    console.error("[AUTH LOGIN]", err);
-    return res.status(500).json({ message: GENERIC_ERROR });
+    console.error("[auth.login] Error:", err);
+    return res.status(500).json({ message: "No se ha podido procesar su solicitud." });
   }
-};
+}
 
-// POST /api/auth/logout
-exports.logout = async (req, res) => {
+async function logout(req, res) {
   try {
     clearAuthCookie(res);
-    return res.json({ message: "Logout correcto" });
+    return res.json({ ok: true });
   } catch (err) {
-    console.error("[AUTH LOGOUT]", err);
-    return res.status(500).json({ message: GENERIC_ERROR });
+    console.error("[auth.logout] Error:", err);
+    return res.status(500).json({ message: "No se ha podido procesar su solicitud." });
   }
-};
+}
 
-// GET /api/auth/me
-exports.me = async (req, res) => {
+async function me(req, res) {
   try {
-    if (!req.user) return res.status(401).json({ message: "No autenticado" });
-    return res.json({ user: req.user });
+    if (!User) return res.status(500).json({ message: "Error interno" });
+
+    // ✅ Validación uniforme: este endpoint debe estar montado bajo authRequired.
+    // Si llegamos acá, la sesión ya fue validada (firma + estado + tokenVersion).
+    const uid = String(req.user?._id || "");
+    if (!uid) return res.status(401).json({ message: "No autorizado" });
+
+    // Cargamos desde DB para devolver el payload completo requerido por el frontend.
+    // Importante: tokenVersion puede estar select:false en el schema.
+    const dbUser = await User.findById(uid).select("+tokenVersion").lean();
+    if (!dbUser || dbUser.activo === false) return res.status(401).json({ message: "No autorizado" });
+
+    return res.json({ user: buildUserPayload(dbUser) });
   } catch (err) {
-    console.error("[AUTH ME]", err);
-    return res.status(500).json({ message: GENERIC_ERROR });
+    console.error("[auth.me] Error:", err);
+    return res.status(500).json({ message: "No se ha podido procesar su solicitud." });
   }
-};
+}
+
+async function refresh(req, res) {
+  try {
+    if (!User) return res.status(500).json({ message: "Error interno" });
+
+    const cookieName = process.env.AUTH_COOKIE_NAME || "token";
+    const token = req.cookies?.[cookieName] || "";
+    if (!token) return res.status(401).json({ message: "No autorizado" });
+
+    let decoded;
+    try {
+      decoded = verifyToken(token);
+    } catch {
+      return res.status(401).json({ message: "No autorizado" });
+    }
+
+    const u = decoded?.user;
+    if (!u?._id) return res.status(401).json({ message: "No autorizado" });
+
+    // ✅ tokenVersion puede estar select:false => traer explícitamente
+    const dbUser = await User.findById(u._id).select("+tokenVersion").lean();
+    if (!dbUser || dbUser.activo === false) return res.status(401).json({ message: "No autorizado" });
+
+    // ✅ Fail-closed: revocación por tokenVersion (mismo criterio que authRequired)
+    const tokenVFromToken = typeof u.tokenVersion === "number" ? u.tokenVersion : 0;
+    const tokenVFromDb = typeof dbUser.tokenVersion === "number" ? dbUser.tokenVersion : 0;
+    if (tokenVFromToken !== tokenVFromDb) return res.status(401).json({ message: "No autorizado" });
+
+    const payload = buildUserPayload(dbUser);
+    const newToken = signToken(payload);
+
+    // ✅ renueva cookie
+    sendAuthCookie(res, newToken);
+
+    return res.json({ user: payload });
+  } catch (err) {
+    console.error("[auth.refresh] Error:", err);
+    return res.status(500).json({ message: "No se ha podido procesar su solicitud." });
+  }
+}
+
+// Si ya lo tenías, dejalo (lo llamás desde authRoutes.js)
+async function registerPostulante(req, res) {
+  return res.status(404).json({ message: "Recurso no disponible" });
+}
+
+module.exports = { login, logout, me, refresh, registerPostulante };

@@ -1,68 +1,52 @@
-// models/AuditLog.js
-// Registro de auditoría — Sistema ZN98
-// Guarda quién hizo qué, cuándo y sobre qué recurso.
-
-const mongoose = require('mongoose');
+// backend/models/AuditLog.js
+const mongoose = require("mongoose");
 const { Schema } = mongoose;
 
-const auditLogSchema = new Schema(
+/**
+ * AuditLog (A6)
+ * Registro forense institucional:
+ * - quién: actorId + actorRole
+ * - qué: action + targetType/targetId + method/path
+ * - cuándo: timestamps/createdAt
+ * - contexto: ip + userAgent + statusCode + durationMs
+ * - metadata: SOLO allowlist (sin sensibles)
+ *
+ * Campos canónicos para Módulo Auditoría Institucional:
+ * actorId, actorRole, action, targetType, targetId, createdAt, requestId
+ */
+const AuditLogSchema = new Schema(
   {
-    usuario: {
-      type: Schema.Types.ObjectId,
-      ref: 'User',
-    },
+    actorId: { type: Schema.Types.ObjectId, ref: "User", default: null, index: true },
+    actorRole: { type: String, default: "", index: true },
 
-    // Guardamos el rol del usuario al momento de la acción (por trazabilidad)
-    rolEnMomento: {
-      type: String,
-      trim: true,
-    },
+    action: { type: String, required: true, index: true },
 
-    // Tipo de acción: VIEW, DOWNLOAD, CREATE, UPDATE, DELETE, LOGIN, LOGOUT, ASSIGN, etc.
-    accion: {
-      type: String,
-      required: true,
-      trim: true,
-      index: true,
-    },
+    targetType: { type: String, default: "", index: true },
+    targetId: { type: String, default: "", index: true },
 
-    // Tipo de recurso afectado: POSTULACION, VIVIENDA, ALOJAMIENTO, FORMULARIO, MENSAJE, etc.
-    recursoTipo: {
-      type: String,
-      required: true,
-      trim: true,
-      index: true,
-    },
+    // ✅ CANÓNICO (sin índice nuevo acá)
+    requestId: { type: String, default: "" },
 
-    // ID del recurso afectado (por ejemplo, ID de Postulacion, Vivienda, etc.)
-    recursoId: {
-      type: String,
-      required: true,
-      trim: true,
-      index: true,
-    },
+    method: { type: String, default: "" },
+    path: { type: String, default: "" },
 
-    // Información adicional opcional (ej: IP, descripción, observaciones)
-    detalle: {
-      type: String,
-      trim: true,
-    },
+    statusCode: { type: Number, default: 0 },
+    durationMs: { type: Number, default: 0 },
 
-    // IP aproximada (si decidimos registrarla)
-    ip: {
-      type: String,
-      trim: true,
-    },
+    ip: { type: String, default: "" },
+    userAgent: { type: String, default: "" },
+
+    // ⚠️ NO guardar body/query completo: solo allowlist
+    metadata: { type: Schema.Types.Mixed, default: {} },
   },
-  {
-    timestamps: true, // createdAt = momento de la acción
-  }
+  { timestamps: true, versionKey: false }
 );
 
-auditLogSchema.index({ accion: 1, recursoTipo: 1, createdAt: -1 });
+// Índices útiles para auditoría por rango y por actor/acción (existentes)
+AuditLogSchema.index({ action: 1, createdAt: -1 });
+AuditLogSchema.index({ actorId: 1, createdAt: -1 });
+AuditLogSchema.index({ targetType: 1, targetId: 1, createdAt: -1 });
 
-const AuditLog = mongoose.model('AuditLog', auditLogSchema);
+const AuditLog = mongoose.models.AuditLog || mongoose.model("AuditLog", AuditLogSchema);
 
-module.exports = {
-  AuditLog,
-};
+module.exports = { AuditLog };

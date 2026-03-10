@@ -14,6 +14,14 @@ const User = require("../models/User");
  */
 async function asignarViviendaAPostulante(req, res, next) {
   try {
+    const actor = req.user;
+    if (!actor || !actor.role) {
+      return res.status(404).json({ error: "Recurso no disponible" });
+    }
+    if (actor.role !== "ADMIN_GENERAL") {
+      return res.status(404).json({ error: "Recurso no disponible" });
+    }
+
     const { viviendaId } = req.params;
     const { postulanteId, origen, fechaAsignacion, observaciones } = req.body || {};
 
@@ -34,33 +42,26 @@ async function asignarViviendaAPostulante(req, res, next) {
     if (vivienda.estado === "OCUPADA") {
       return res.status(409).json({
         message:
-          "La vivienda ya figura como OCUPADA. No se puede registrar una nueva asignación proyectada.",
+          "La vivienda ya figura como OCUPADA. No se puede asignar a un nuevo postulante.",
       });
     }
 
     // 2) Buscar postulante
-    const postulante = await User.findById(postulanteId).select(
-      "_id nombre apellido email role estadoHabitacional"
-    );
-
+    const postulante = await User.findById(postulanteId);
     if (!postulante) {
-      return res
-        .status(404)
-        .json({ message: "Postulante no encontrado en el sistema." });
+      return res.status(404).json({ message: "Postulante no encontrado." });
     }
 
-    // Validación suave de rol: no rompemos si el backend cambia algo,
-    // pero ayudamos a no asignar cualquier usuario.
-    if (postulante.role !== "POSTULANTE") {
-      return res.status(400).json({
+    // Regla ANEXO 02: debe estar ACEPTADO
+    if (postulante.estadoHabitacional !== "ACEPTADO") {
+      return res.status(409).json({
         message:
-          "El usuario seleccionado no tiene rol POSTULANTE. Revise el flujo de aceptación antes de asignar.",
+          "El postulante no está en estado ACEPTADO. No corresponde asignar vivienda (ANEXO 02).",
       });
     }
 
-    // 3) Armar asignación proyectada (ANEXO 02)
-    const now = new Date();
-    const fecha = fechaAsignacion ? new Date(fechaAsignacion) : now;
+    // 3) Construir asignación proyectada
+    const fecha = fechaAsignacion ? new Date(fechaAsignacion) : new Date();
 
     const asignacionProyectada = {
       postulante: postulante._id,

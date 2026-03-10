@@ -1,156 +1,176 @@
 // backend/controllers/registerPostulanteController.js
+// Registro público de POSTULANTE (pendiente aprobación institucional)
+
 const bcrypt = require("bcryptjs");
-const fs = require("fs");
-const path = require("path");
-const axios = require("axios");
 
-// ✅ IMPORT CORRECTO (tu modelo exporta { User: ... })
-const { User } = require("../models/User");
-
-// 📁 CSV real
-const CSV_MATRICULAS_PATH = path.join(__dirname, "..", "data", "matriculas.csv");
-
-function cargarMatriculasHabilitadas() {
+let User = null;
+try {
+  ({ User } = require("../models/User"));
+} catch {
   try {
-    if (!fs.existsSync(CSV_MATRICULAS_PATH)) {
-      console.error("[REGISTRO] No se encontró el CSV de matrículas:", CSV_MATRICULAS_PATH);
-      return new Set();
-    }
-
-    const contenido = fs.readFileSync(CSV_MATRICULAS_PATH, "utf8");
-    const lineas = contenido.split(/\r?\n/);
-
-    const set = new Set();
-    for (const linea of lineas) {
-      const m = String(linea || "").trim();
-      if (!m) continue;
-
-      const lower = m.toLowerCase();
-      if (lower === "matricula" || lower === "matrícula") continue;
-
-      const firstCol = m.split(/[;,]/)[0].trim();
-      if (firstCol) set.add(firstCol);
-    }
-    return set;
-  } catch (err) {
-    console.error("[REGISTRO] Error leyendo CSV matrículas:", err);
-    return new Set();
+    ({ User } = require("../models/user"));
+  } catch {
+    User = null;
   }
 }
 
-async function verificarTurnstile(captchaToken) {
-  const secret = process.env.TURNSTILE_SECRET_KEY;
+const { findMatriculaRecord } = require("../utils/matriculas");
 
-  if (!secret) {
-    console.error("[REGISTRO] Falta TURNSTILE_SECRET_KEY en backend/.env");
-    return false;
-  }
-
-  try {
-    const body = new URLSearchParams({
-      secret,
-      response: captchaToken,
-    }).toString();
-
-    const resp = await axios.post(
-      "https://challenges.cloudflare.com/turnstile/v0/siteverify",
-      body,
-      { headers: { "Content-Type": "application/x-www-form-urlencoded" }, timeout: 7000 }
-    );
-
-    return !!resp.data?.success;
-  } catch (err) {
-    console.error("[REGISTRO] Error verificando Turnstile:", err?.message || err);
-    return false;
-  }
+function up(v) {
+  return String(v || "").toUpperCase().trim();
+}
+function norm(v) {
+  return String(v || "").trim();
 }
 
-exports.registrarPostulante = async (req, res) => {
+// Mensajes institucionales (opacos, sin develar motivo)
+const MSG_PENDIENTE =
+  "Su solicitud ha sido recibida y se encuentra en etapa de evaluación. Será notificado una vez aprobada.";
+
+const MSG_NO_PROCESABLE =
+  "No es posible procesar su solicitud en este momento, intente mas tarde o comuníquese con el Administrador";
+
+// ✅ Respuesta NO PROCESABLE (única)
+function noProcesable(res) {
+  return res.status(200).json({
+    status: "NO_PROCESABLE",
+    message: MSG_NO_PROCESABLE,
+  });
+}
+
+// ✅ Respuesta PENDIENTE (creado correctamente)
+function pendiente(res) {
+  return res.status(200).json({
+    status: "PENDIENTE",
+    message: MSG_PENDIENTE,
+  });
+}
+
+// Normalización simple para DNI (solo dígitos)
+function normDni(v) {
+  return String(v || "")
+    .replace(/[^\d]/g, "")
+    .trim();
+}
+
+// Permite controlar validación de nombre por env (por defecto OFF)
+function boolEnv(name, fallback = false) {
+  const raw = process.env[name];
+  if (raw === undefined || raw === null || raw === "") return fallback;
+  const s = String(raw).trim().toLowerCase();
+  return s === "1" || s === "true" || s === "yes" || s === "on";
+}
+
+function normName(s) {
+  return up(s)
+    .replace(/[.,]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+async function registerPostulante(req, res) {
   try {
-    const {
-      email,
-      password,
-      confirmarPassword,
-      matricula,
-      nombre,
-      apellido,
-      grado,
-      captchaToken,
-    } = req.body;
+    if (!User) {
+      console.error("[registerPostulante] Modelo User no disponible");
+      return noProcesable(res);
+    }
 
-    // Mensaje genérico para TODO
-    const deny = (status = 400) =>
-      res.status(status).json({ message: "No es posible procesar el registro en este momento." });
+    const body = req.body || {};
+    const email = norm(body.email).toLowerCase();
+    const matricula = norm(body.matricula);
+    const nombre = norm(body.nombre);
+    const apellido = norm(body.apellido);
+    const password = String(body.password || "");
+    const confirmarPassword = String(body.confirmarPassword || "");
 
-    // 1) Validaciones mínimas
-    if (
-      !email ||
-      !password ||
-      !confirmarPassword ||
-      !matricula ||
-      !nombre ||
-      !apellido ||
-      !grado
-    ) {
-      return deny(400);
+    // ✅ DNI obligatorio (segundo factor)
+    const dni = normDni(body.dni);
+
+    // Opcional
+    const grado = norm(body.grado);
+
+    // Mínimos
+    if (!email || !matricula || !nombre || !apellido || !dni || !password || !confirmarPassword) {
+      return noProcesable(res);
     }
 
     if (password !== confirmarPassword) {
-      return deny(400);
+      return noProcesable(res);
     }
 
-    // 2) Turnstile obligatorio
-    if (!captchaToken) {
-      return deny(400);
+    // 1) Validación institucional contra CSV (obligatoria)
+    const record = findMatriculaRecord(matricula);
+    if (!record) {
+      return noProcesable(res);
     }
 
-    const okCaptcha = await verificarTurnstile(String(captchaToken));
-    if (!okCaptcha) {
-      return deny(403);
+    // 2) Validación DNI estricta (obligatoria)
+    // Si el CSV no trae DNI para la matrícula, fallamos cerrado.
+    const csvDni = normDni(record.dni);
+    if (!csvDni) {
+      return noProcesable(res);
+    }
+    if (csvDni !== dni) {
+      return noProcesable(res);
     }
 
-    // 3) Matrícula contra CSV
-    const matriculasValidas = cargarMatriculasHabilitadas();
-    const matriculaTrim = String(matricula).trim();
-
-    if (!matriculasValidas.has(matriculaTrim)) {
-      return deny(403);
+    // 3) Validación extra opcional: grado (solo si viene y CSV lo trae)
+    if (grado && record.grado && up(record.grado) !== up(grado)) {
+      return noProcesable(res);
     }
 
-    // 4) Email único (genérico)
-    const emailNorm = String(email).trim().toLowerCase();
-    const existente = await User.findOne({ email: emailNorm });
+    // 4) Validación nombre/apellido (opcional, tolera orden)
+    const validateFullName = boolEnv("REG_VALIDATE_FULLNAME", false); // default OFF
+    if (validateFullName && record.nombreApellido) {
+      const csvFull = normName(record.nombreApellido);
+
+      const fullNombreApellido = normName(`${nombre} ${apellido}`);
+      const fullApellidoNombre = normName(`${apellido} ${nombre}`);
+
+      const ok = csvFull === fullNombreApellido || csvFull === fullApellidoNombre;
+
+      if (!ok) {
+        return noProcesable(res);
+      }
+    }
+
+    // 5) No disclosure por existencia de email/matrícula
+    const existente = await User.findOne({
+      $or: [{ email }, { matricula }],
+    }).lean();
+
     if (existente) {
-      return deny(400);
+      return noProcesable(res);
     }
 
-    // 5) Hash password
-    const passwordHash = await bcrypt.hash(password, 12);
+    const hash = await bcrypt.hash(String(password), 10);
 
-    // 6) Crear usuario POSTULANTE inactivo
-    const nuevoUsuario = new User({
-      email: emailNorm,
-      passwordHash,
+    // ✅ Usuario creado como POSTULANTE pero INACTIVO (pendiente aprobación ADMIN_GENERAL)
+    await User.create({
+      email,
+      passwordHash: hash,
       role: "POSTULANTE",
+      permisos: [],
+      nombre,
+      apellido,
+      matricula,
+      dni,
       activo: false,
-      matricula: matriculaTrim,
-      nombre: String(nombre).trim(),
-      apellido: String(apellido).trim(),
+      bloqueado: false,
+      archivado: false,
       meta: {
-        grado: String(grado).trim(),
-        origenRegistro: "REGISTRO_PUBLICO",
+        grado: grado || record.grado || "",
+        origenRegistro: "FORM_PUBLICO",
       },
     });
 
-    await nuevoUsuario.save();
-
-    return res.status(201).json({
-      message: "Registro recibido. Su solicitud será evaluada por el administrador.",
-    });
-  } catch (error) {
-    console.error("[REGISTRO POSTULANTE] Error:", error);
-    return res.status(500).json({
-      message: "No es posible procesar el registro en este momento.",
-    });
+    return pendiente(res);
+  } catch (err) {
+    console.error("[registerPostulante] Error:", err);
+    return noProcesable(res);
   }
+}
+
+module.exports = {
+  registerPostulante,
 };

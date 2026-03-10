@@ -1,16 +1,21 @@
-// backend/routes/statsRoutes.js
-// Rutas de estadísticas institucionales
-
-const express = require('express');
+const express = require("express");
 const router = express.Router();
 
-// Middleware de autenticación
-const { authRequired } = require('../middleware/auth');
+const { authRequired } = require("../middleware/auth");
+const {
+  getResumenStats,
+  getStatsBarrios,
+  getStatsPorBarrio,
+} = require("../controllers/statsController");
 
-// Controlador de estadísticas
-const { getResumenStats } = require('../controllers/statsController');
+router.get("/resumen", authRequired, getResumenStats);
+router.get("/barrios", authRequired, getStatsBarrios);
+router.get("/barrio/:barrio", authRequired, getStatsPorBarrio);
 
-// GET /api/stats/resumen
-router.get('/resumen', authRequired, getResumenStats);
+router.use((req, res) => {
+  return res.status(404).json({
+    message: "No es posible procesar su solicitud, contacte al Administrador",
+  });
+});
 
 module.exports = router;

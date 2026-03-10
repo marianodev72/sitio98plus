@@ -7,6 +7,33 @@ const { Vivienda } = require('../models/Vivienda');
 const { Alojamiento } = require('../models/Alojamiento');
 const { User } = require('../models/User');
 
+function denyOpaque(res) {
+  return res.status(404).json({ message: 'Recurso no disponible.' });
+}
+
+function up(v) {
+  return String(v || '').toUpperCase().trim();
+}
+
+function isObjectIdLike(v) {
+  return /^[a-f\d]{24}$/i.test(String(v || ''));
+}
+
+function isTerritorialUser(user) {
+  const permisos = Array.isArray(user?.permisos) ? user.permisos.map(up) : [];
+  return permisos.includes('INSPECTOR') || permisos.includes('JEFE_DE_BARRIO');
+}
+
+function getPostulacionBarrio(postulacion) {
+  if (!postulacion || typeof postulacion !== 'object') return undefined;
+  return (
+    postulacion.barrioAsignado ??
+    postulacion.barrio ??
+    postulacion?.datosFormulario?.barrioAsignado ??
+    postulacion?.datosFormulario?.barrio
+  );
+}
+
 async function registrarAccion({ usuario, accion, recursoTipo, recursoId, detalle, ip }) {
   try {
     await AuditLog.create({
@@ -28,11 +55,10 @@ async function registrarAccion({ usuario, accion, recursoTipo, recursoId, detall
 async function crearPostulacion(req, res) {
   try {
     const user = req.user;
+    if (!user || !user.role) return denyOpaque(res);
 
     if (!['POSTULANTE', 'PERMISIONARIO', 'ALOJADO'].includes(user.role)) {
-      return res
-        .status(403)
-        .json({ message: 'No tiene permiso para crear postulaciones.' });
+      return denyOpaque(res);
     }
 
     const { tipo, datosFormulario } = req.body;
@@ -76,6 +102,7 @@ async function crearPostulacion(req, res) {
 async function listarMisPostulaciones(req, res) {
   try {
     const user = req.user;
+    if (!user || !user.role) return denyOpaque(res);
 
     const postulaciones = await Postulacion.find({
       usuario: user._id,
@@ -106,11 +133,10 @@ async function listarMisPostulaciones(req, res) {
 async function listarPostulacionesAdmin(req, res) {
   try {
     const user = req.user;
+    if (!user || !user.role) return denyOpaque(res);
 
     if (!['ADMIN', 'ADMIN_GENERAL'].includes(user.role)) {
-      return res
-        .status(403)
-        .json({ message: 'No tiene permiso para ver todas las postulaciones.' });
+      return denyOpaque(res);
     }
 
     const { tipo, estado } = req.query;
@@ -157,6 +183,9 @@ async function obtenerPostulacion(req, res) {
     const user = req.user;
     const { id } = req.params;
 
+    if (!user || !user.role) return denyOpaque(res);
+    if (!isObjectIdLike(id)) return denyOpaque(res);
+
     const postulacion = await Postulacion.findById(id)
       .populate('usuario', 'nombre apellido matricula dni role')
       .populate('viviendaAsignada')
@@ -164,7 +193,7 @@ async function obtenerPostulacion(req, res) {
       .lean();
 
     if (!postulacion) {
-      return res.status(404).json({ message: 'Postulación no encontrada.' });
+      return denyOpaque(res);
     }
 
     const esDuenio =
@@ -172,9 +201,17 @@ async function obtenerPostulacion(req, res) {
     const esAdmin = ['ADMIN', 'ADMIN_GENERAL'].includes(user.role);
 
     if (!esDuenio && !esAdmin) {
-      return res
-        .status(403)
-        .json({ message: 'No tiene permiso para ver esta postulación.' });
+      if (isTerritorialUser(user)) {
+        if (!user.barrioAsignado) return denyOpaque(res);
+
+        const barrioPostulacion = getPostulacionBarrio(postulacion);
+        if (!barrioPostulacion) return denyOpaque(res);
+        if (String(barrioPostulacion) !== String(user.barrioAsignado)) {
+          return denyOpaque(res);
+        }
+      } else {
+        return denyOpaque(res);
+      }
     }
 
     await registrarAccion({
@@ -205,15 +242,14 @@ async function asignarVivienda(req, res) {
     const { id } = req.params;
     const { viviendaId, observacion, cantidadHabitantes } = req.body;
 
-    if (admin.role !== 'ADMIN_GENERAL') {
-      return res
-        .status(403)
-        .json({ message: 'Solo ADMIN_GENERAL puede asignar viviendas.' });
-    }
+    if (!admin || !admin.role) return denyOpaque(res);
+    if (admin.role !== 'ADMIN_GENERAL') return denyOpaque(res);
+    if (!isObjectIdLike(id)) return denyOpaque(res);
+    if (!isObjectIdLike(viviendaId)) return denyOpaque(res);
 
     const postulacion = await Postulacion.findById(id).populate('usuario');
     if (!postulacion) {
-      return res.status(404).json({ message: 'Postulación no encontrada.' });
+      return denyOpaque(res);
     }
 
     if (postulacion.tipo !== 'VIVIENDA') {
@@ -231,7 +267,7 @@ async function asignarVivienda(req, res) {
 
     const vivienda = await Vivienda.findById(viviendaId);
     if (!vivienda) {
-      return res.status(404).json({ message: 'Vivienda no encontrada.' });
+      return denyOpaque(res);
     }
 
     if (vivienda.estado !== 'DISPONIBLE') {
@@ -242,9 +278,7 @@ async function asignarVivienda(req, res) {
 
     const user = await User.findById(postulacion.usuario._id);
     if (!user) {
-      return res
-        .status(404)
-        .json({ message: 'Usuario de la postulación no encontrado.' });
+      return denyOpaque(res);
     }
 
     // Asignar ocupante a la vivienda
@@ -307,15 +341,14 @@ async function asignarAlojamiento(req, res) {
     const { id } = req.params;
     const { alojamientoId, observacion } = req.body;
 
-    if (admin.role !== 'ADMIN_GENERAL') {
-      return res
-        .status(403)
-        .json({ message: 'Solo ADMIN_GENERAL puede asignar alojamientos.' });
-    }
+    if (!admin || !admin.role) return denyOpaque(res);
+    if (admin.role !== 'ADMIN_GENERAL') return denyOpaque(res);
+    if (!isObjectIdLike(id)) return denyOpaque(res);
+    if (!isObjectIdLike(alojamientoId)) return denyOpaque(res);
 
     const postulacion = await Postulacion.findById(id).populate('usuario');
     if (!postulacion) {
-      return res.status(404).json({ message: 'Postulación no encontrada.' });
+      return denyOpaque(res);
     }
 
     if (postulacion.tipo !== 'ALOJAMIENTO') {
@@ -333,14 +366,12 @@ async function asignarAlojamiento(req, res) {
 
     const alojamiento = await Alojamiento.findById(alojamientoId);
     if (!alojamiento) {
-      return res.status(404).json({ message: 'Tipo de alojamiento no encontrado.' });
+      return denyOpaque(res);
     }
 
     const user = await User.findById(postulacion.usuario._id);
     if (!user) {
-      return res
-        .status(404)
-        .json({ message: 'Usuario de la postulación no encontrado.' });
+      return denyOpaque(res);
     }
 
     // No hay concepto de "ocupado" a nivel tipo de alojamiento (es reutilizable)

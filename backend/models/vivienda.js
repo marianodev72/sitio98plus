@@ -1,6 +1,8 @@
 // backend/models/Vivienda.js
 const mongoose = require("mongoose");
 
+// ─────────────────────────────
+// Subdocumento: ocupación actual
 const ocupacionSchema = new mongoose.Schema(
   {
     permisionario: {
@@ -13,6 +15,31 @@ const ocupacionSchema = new mongoose.Schema(
   { _id: false }
 );
 
+// ─────────────────────────────
+// 🔹 Historial de cambios de estado institucional
+const historialEstadoSchema = new mongoose.Schema(
+  {
+    fecha: { type: Date, default: Date.now },
+    actor: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+
+    estadoAnterior: String,
+    estadoNuevo: String,
+
+    observacion: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 500,
+    },
+
+    // Acciones conflictivas permitidas bajo responsabilidad institucional
+    forzado: { type: Boolean, default: false },
+  },
+  { _id: false }
+);
+
+// ─────────────────────────────
+// Modelo Vivienda
 const viviendaSchema = new mongoose.Schema(
   {
     codigo: { type: String, required: true, unique: true },
@@ -21,17 +48,29 @@ const viviendaSchema = new mongoose.Schema(
 
     estado: {
       type: String,
-      enum: ["DISPONIBLE", "OCUPADA", "RESERVADA", "REPARACION", "BAJA"],
+      enum: [
+        "DISPONIBLE",
+        "A_DESOCUPARSE",
+        "OCUPADA",
+        "RESERVADA",
+        "REPARACION",
+        "BAJA",
+      ],
       default: "DISPONIBLE",
     },
 
     cantidadHabitantes: { type: Number, default: 0 },
 
     ocupacionActual: ocupacionSchema,
+
+    // 🧾 Historial institucional de estados
+    historialEstados: {
+      type: [historialEstadoSchema],
+      default: [],
+    },
   },
   { timestamps: true }
 );
 
 module.exports =
-  mongoose.models.Vivienda ||
-  mongoose.model("Vivienda", viviendaSchema);
+  mongoose.models.Vivienda || mongoose.model("Vivienda", viviendaSchema);

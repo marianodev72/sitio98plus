@@ -45,6 +45,51 @@ function isEmptyValue(v: any) {
   return false;
 }
 
+// ---- NUEVO: valor "amigable" para ciertos campos técnicos ----
+function getDisplayValue(campo: Campo, datos: any) {
+  const raw = datos?.[campo.nombre];
+
+  // Vivienda: priorizamos código/casa/dirección en lugar del ObjectId
+  if (campo.nombre === "viviendaId") {
+    const unidad =
+      (typeof datos?.unidadHabitacional === "string" &&
+        datos.unidadHabitacional.trim()) ||
+      (typeof datos?.casa === "string" && datos.casa.trim()) ||
+      "";
+
+    const direccion =
+      typeof datos?.direccion === "string" ? datos.direccion.trim() : "";
+    const localidad =
+      typeof datos?.localidad === "string" ? datos.localidad.trim() : "";
+
+    if (unidad) return unidad; // ej: AB-414
+    if (direccion || localidad) {
+      const txt = `${direccion} ${localidad}`.trim();
+      if (txt) return txt;
+    }
+    return raw;
+  }
+
+  // Postulante / Permisionario: apellido y nombres
+  if (campo.nombre === "postulanteId" || campo.nombre === "permisionarioId") {
+    const nombre1 =
+      typeof datos?.apellidoNombres === "string"
+        ? datos.apellidoNombres.trim()
+        : "";
+    const nombre2 =
+      typeof datos?.permisionarioNombre === "string"
+        ? datos.permisionarioNombre.trim()
+        : "";
+
+    if (nombre1) return nombre1;
+    if (nombre2) return nombre2;
+    return raw;
+  }
+
+  // Por defecto devolvemos el valor original
+  return raw;
+}
+
 function renderValue(v: any) {
   if (v === null || v === undefined) return "—";
   if (typeof v === "boolean") return yn(v);
@@ -195,7 +240,7 @@ export default function TemplateViewer({
       <div style={{ border: "1px solid #eee", borderRadius: 10 }}>
         <div style={{ padding: 12 }}>
           {template.campos.map((c) => {
-            const v = datos?.[c.nombre];
+            const v = getDisplayValue(c, datos);
 
             return (
               <div

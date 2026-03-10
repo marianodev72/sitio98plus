@@ -1,25 +1,40 @@
-import { useEffect, useState } from "react";
+// frontend/src/pages/admin_general/Viviendas.tsx
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { http } from "../../api/http";
+import { useAuth } from "../../auth/useAuth";
 
 type Vivienda = {
   _id: string;
   codigo: string;
   barrio: string;
   dormitorios: number;
-  estado: string;
-  cantidadHabitantes?: number;
+  estado: EstadoVivienda;
+
+  // 🔢 Backend (pipeline) — valores ya calculados
+  cantidadHabitantes?: number; // EFECTIVA (adultos + hijos)
+  dormitoriosMinimos?: number; // ANEXO 17
+  hacinamientoRatio?: number; // personas / dormitorios (legacy)
+  hacinamientoColor?: "VERDE" | "AMARILLO" | "ROJO";
+  hacinamientoPct?: number; // % dormitorios / mínimos
+
   permisionario?: {
     _id?: string;
     nombre?: string;
     apellido?: string;
     matricula?: string;
   };
-  hacinamientoRatio?: number;
 };
 
 type Semaforo = "verde" | "amarillo" | "rojo";
 
-type EstadoVivienda = "DISPONIBLE" | "OCUPADA" | "RESERVADA" | "REPARACION" | "BAJA";
+type EstadoVivienda =
+  | "DISPONIBLE"
+  | "A_DESOCUPARSE"
+  | "OCUPADA"
+  | "RESERVADA"
+  | "REPARACION"
+  | "BAJA";
+
 type SortBy =
   | "codigo"
   | "barrio"
@@ -28,22 +43,30 @@ type SortBy =
   | "permisionario"
   | "personas"
   | "hacinamiento";
+
 type SortDir = "asc" | "desc";
 
 const ESTADOS: { value: EstadoVivienda; label: string }[] = [
   { value: "DISPONIBLE", label: "Disponible" },
+  { value: "A_DESOCUPARSE", label: "A desocuparse" },
   { value: "OCUPADA", label: "Ocupada" },
   { value: "RESERVADA", label: "Reservada" },
   { value: "REPARACION", label: "Reparación" },
   { value: "BAJA", label: "Baja" },
 ];
 
+function up(v: unknown) {
+  return String(v || "").toUpperCase().trim();
+}
+
+function hasPerm(user: any, perm: string) {
+  const list = Array.isArray(user?.permisos) ? user.permisos : [];
+  const p = up(perm);
+  return list.map((x: any) => up(x)).includes(p);
+}
+
+// (No se usan actualmente, pero los dejo por si los usan en otra iteración)
 function getSemaforoPorDormitorios(dormitorios: number, personas: number): Semaforo {
-  // Regla institucional:
-  // 1 dormitorio: 2 verde, 3 a 4 amarillo, >4 rojo
-  // 2 dormitorios: 4 verde, 5 amarillo, >5 rojo
-  // 3 dormitorios: 6 verde, 7 amarillo, >7 rojo
-  // 4+ dormitorios: >10 rojo (si no, verde)
   if (dormitorios <= 1) {
     if (personas <= 2) return "verde";
     if (personas <= 4) return "amarillo";
@@ -62,7 +85,6 @@ function getSemaforoPorDormitorios(dormitorios: number, personas: number): Semaf
     return "rojo";
   }
 
-  // 4 o más dormitorios
   return personas > 10 ? "rojo" : "verde";
 }
 
@@ -81,6 +103,7 @@ function getSemaforoLabel(semaforo: Semaforo): string {
 function isEstadoVivienda(value: string): value is EstadoVivienda {
   return (
     value === "DISPONIBLE" ||
+    value === "A_DESOCUPARSE" ||
     value === "OCUPADA" ||
     value === "RESERVADA" ||
     value === "REPARACION" ||
@@ -91,7 +114,6 @@ function isEstadoVivienda(value: string): value is EstadoVivienda {
 function safeFileNameDate() {
   const d = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
-  // YYYY-MM-DD_HH-mm
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(
     d.getMinutes()
   )}`;
@@ -118,21 +140,33 @@ function sortLabel(sortBy: SortBy): string {
   }
 }
 
-export default function Viviendas() {
+type Props = {
+  readOnly?: boolean;
+};
+
+export default function Viviendas({ readOnly = false }: Props) {
+  const { user } = useAuth();
+
+  const role = up(user?.role);
+  const canEdit = !readOnly && role === "ADMIN_GENERAL";
+  const inspectorLike = role === "INSPECTOR" || hasPerm(user, "INSPECTOR");
+
   const [viviendas, setViviendas] = useState<Vivienda[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // UI estado/errores (genéricos)
   const [errorMsg, setErrorMsg] = useState<string>("");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
-  // PDF
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+
+  // ✅ Barrios dropdown (ADMIN_GENERAL)
+  const [barrios, setBarrios] = useState<string[]>([]);
+  const barriosDisponibles = useMemo(() => ["", ...barrios], [barrios]); // "" => Todos
 
   // filtros
   const [codigo, setCodigo] = useState("");
   const [barrio, setBarrio] = useState("");
-  const [estado, setEstado] = useState(""); // "" === Todos
+  const [estado, setEstado] = useState("");
   const [dormitorios, setDormitorios] = useState("");
   const [permisionario, setPermisionario] = useState("");
   const [personasMin, setPersonasMin] = useState("");
@@ -147,7 +181,7 @@ export default function Viviendas() {
 
     if (codigo.trim()) params.codigo = codigo.trim();
     if (barrio.trim()) params.barrio = barrio.trim();
-    if (estado) params.estado = estado; // si es "" => no se envía, queda "Todos"
+    if (estado) params.estado = estado;
     if (dormitorios) params.dormitorios = dormitorios;
     if (permisionario.trim()) params.permisionario = permisionario.trim();
     if (personasMin) params.personasMin = personasMin;
@@ -159,12 +193,26 @@ export default function Viviendas() {
     return params;
   }
 
+  async function cargarBarrios() {
+    // Solo ADMIN_GENERAL muestra dropdown
+    if (role !== "ADMIN_GENERAL") return;
+
+    try {
+      const res = await http.get("/viviendas/barrios");
+      const lista = Array.isArray(res.data?.barrios) ? res.data.barrios : [];
+      setBarrios(lista.map((x: any) => String(x || "").trim()).filter(Boolean));
+    } catch (err) {
+      console.error("[VIVIENDAS] Error cargando barrios", err);
+      setBarrios([]);
+      // accesorio => no mostramos error institucional
+    }
+  }
+
   async function cargarViviendas() {
     setLoading(true);
     setErrorMsg("");
     try {
       const params = buildParams();
-
       const res = await http.get("/viviendas", { params });
 
       const data = res.data;
@@ -181,17 +229,16 @@ export default function Viviendas() {
   }
 
   async function actualizarEstado(viviendaId: string, nuevoEstado: EstadoVivienda) {
+    if (!canEdit) return;
+
     setErrorMsg("");
     setUpdatingId(viviendaId);
 
-    // Optimista (para que se vea inmediato)
     const prev = viviendas;
     setViviendas((curr) => curr.map((v) => (v._id === viviendaId ? { ...v, estado: nuevoEstado } : v)));
 
     try {
       await http.patch(`/viviendas/${viviendaId}/estado`, { estado: nuevoEstado });
-
-      // Refresco para asegurar consistencia
       await cargarViviendas();
     } catch (err) {
       console.error("Error actualizando estado de vivienda", err);
@@ -208,11 +255,7 @@ export default function Viviendas() {
 
     try {
       const params = buildParams();
-
-      const res = await http.get("/viviendas/pdf", {
-        params,
-        responseType: "blob",
-      });
+      const res = await http.get("/viviendas/pdf", { params, responseType: "blob" });
 
       const blob = new Blob([res.data], { type: "application/pdf" });
       const url = window.URL.createObjectURL(blob);
@@ -234,28 +277,23 @@ export default function Viviendas() {
   }
 
   function limpiarFiltros() {
-    // Limpiar filtros
     setCodigo("");
-    setBarrio("");
+    setBarrio(inspectorLike && user?.barrioAsignado ? String(user.barrioAsignado) : "");
     setEstado("");
     setDormitorios("");
     setPermisionario("");
     setPersonasMin("");
     setPersonasMax("");
 
-    // Reset orden
     setSortBy("barrio");
     setSortDir("asc");
 
-    // Recargar con valores limpios en el próximo tick
     setTimeout(() => {
       cargarViviendas();
     }, 0);
   }
 
   function applySort(nextSortBy: SortBy) {
-    // Si clickean la misma columna, alterna asc/desc.
-    // Si clickean otra columna, empieza en asc.
     setSortBy((currentBy) => {
       if (currentBy === nextSortBy) {
         setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -265,7 +303,6 @@ export default function Viviendas() {
       return nextSortBy;
     });
 
-    // Aplicar automáticamente
     setTimeout(() => {
       cargarViviendas();
     }, 0);
@@ -277,13 +314,17 @@ export default function Viviendas() {
   }
 
   useEffect(() => {
+    if (inspectorLike && user?.barrioAsignado) {
+      setBarrio(String(user.barrioAsignado));
+    }
+    cargarBarrios();
     cargarViviendas();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const total = viviendas.length;
 
-  const thStyle: React.CSSProperties = {
+  const thStyle: CSSProperties = {
     cursor: "pointer",
     userSelect: "none",
     whiteSpace: "nowrap",
@@ -293,15 +334,14 @@ export default function Viviendas() {
     <>
       <h1>Viviendas</h1>
 
+      {readOnly ? (
+        <div style={{ marginBottom: 10, padding: 10, border: "1px solid #ddd", background: "#fafafa" }}>
+          Modo inspector: solo visualización.
+        </div>
+      ) : null}
+
       {errorMsg ? (
-        <div
-          style={{
-            marginBottom: "1rem",
-            padding: "0.75rem",
-            border: "1px solid #ccc",
-            background: "#f7f7f7",
-          }}
-        >
+        <div style={{ marginBottom: "1rem", padding: "0.75rem", border: "1px solid #ccc", background: "#f7f7f7" }}>
           {errorMsg}
         </div>
       ) : null}
@@ -309,12 +349,37 @@ export default function Viviendas() {
       <section style={{ marginBottom: "1rem" }}>
         <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
           <input placeholder="Código" value={codigo} onChange={(e) => setCodigo(e.target.value)} />
-          <input placeholder="Barrio" value={barrio} onChange={(e) => setBarrio(e.target.value)} />
 
-          {/* 🔧 Cambio solicitado: "Todos" */}
+          {role === "ADMIN_GENERAL" && !inspectorLike ? (
+            <select
+              value={barrio}
+              onChange={(e) => setBarrio(e.target.value)}
+              title="Filtrar por barrio"
+              style={{ minWidth: 220 }}
+            >
+              <option value="">Todos los barrios</option>
+              {barriosDisponibles
+                .filter((b) => b !== "")
+                .map((b) => (
+                  <option key={b} value={b}>
+                    {b}
+                  </option>
+                ))}
+            </select>
+          ) : (
+            <input
+              placeholder="Barrio"
+              value={barrio}
+              onChange={(e) => setBarrio(e.target.value)}
+              disabled={inspectorLike}
+              title={inspectorLike ? "Barrio fijado por su asignación" : ""}
+            />
+          )}
+
           <select value={estado} onChange={(e) => setEstado(e.target.value)}>
             <option value="">Todos</option>
             <option value="DISPONIBLE">Disponible</option>
+            <option value="A_DESOCUPARSE">A desocuparse</option>
             <option value="OCUPADA">Ocupada</option>
             <option value="RESERVADA">Reservada</option>
             <option value="REPARACION">Reparación</option>
@@ -374,7 +439,7 @@ export default function Viviendas() {
           </button>
 
           <button onClick={descargarPdf} disabled={loading || downloadingPdf}>
-            {downloadingPdf ? "Generando PDF…" : "Descargar PDF"}
+            {downloadingPdf ? "Generando PDF…" : "Descargar PDF (con filtros)"}
           </button>
         </div>
 
@@ -386,51 +451,63 @@ export default function Viviendas() {
       {loading ? (
         <p>Cargando viviendas…</p>
       ) : (
-        <table border={1} cellPadding={6} cellSpacing={0}>
+        <table border={1} cellPadding={6} cellSpacing={0} style={{ width: "100%" }}>
           <thead>
             <tr>
-              <th style={thStyle} onClick={() => applySort("codigo")} title="Ordenar por Código">
+              <th style={thStyle} onClick={() => applySort("codigo")}>
                 Código{sortIndicator("codigo")}
               </th>
-              <th style={thStyle} onClick={() => applySort("barrio")} title="Ordenar por Barrio">
+              <th style={thStyle} onClick={() => applySort("barrio")}>
                 Barrio{sortIndicator("barrio")}
               </th>
-              <th style={thStyle} onClick={() => applySort("dormitorios")} title="Ordenar por Dormitorios">
+              <th style={thStyle} onClick={() => applySort("dormitorios")}>
                 Dormitorios{sortIndicator("dormitorios")}
               </th>
-              <th style={thStyle} onClick={() => applySort("estado")} title="Ordenar por Estado">
+              <th style={thStyle} onClick={() => applySort("estado")}>
                 Estado{sortIndicator("estado")}
               </th>
-              <th style={thStyle} onClick={() => applySort("permisionario")} title="Ordenar por Permisionario">
+              <th style={thStyle} onClick={() => applySort("permisionario")}>
                 Permisionario{sortIndicator("permisionario")}
               </th>
-              <th style={thStyle} onClick={() => applySort("personas")} title="Ordenar por Personas">
+              <th style={thStyle} onClick={() => applySort("personas")}>
                 Personas{sortIndicator("personas")}
               </th>
-              <th style={thStyle} onClick={() => applySort("hacinamiento")} title="Ordenar por Hacinamiento">
+              <th style={thStyle} onClick={() => applySort("hacinamiento")}>
                 Hacinamiento{sortIndicator("hacinamiento")}
               </th>
             </tr>
           </thead>
+
           <tbody>
             {viviendas.map((v) => {
-              const perm = v.permisionario?.apellido
-                ? `${v.permisionario.apellido} ${v.permisionario.nombre || ""}`.trim()
-                : v.permisionario?.nombre || "-";
+              const perm = v.permisionario
+                ? (
+                    `${v.permisionario.apellido || ""} ${v.permisionario.nombre || ""}`.trim() ||
+                    v.permisionario.matricula ||
+                    "-"
+                  )
+                : "-";
 
-              const personasNum = typeof v.cantidadHabitantes === "number" ? v.cantidadHabitantes : null;
+              const estadoActual: EstadoVivienda = isEstadoVivienda(v.estado)
+  ? v.estado
+  : "DISPONIBLE";
 
-              // Regla institucional: personas/hacinamiento/semaforo SOLO si OCUPADA (Anexo 03 cerrado)
-              const personas = v.estado === "OCUPADA" ? (personasNum ?? "-") : "-";
+const personasNum =
+  typeof v.cantidadHabitantes === "number"
+    ? v.cantidadHabitantes
+    : null;
 
-              const ratioText = typeof v.hacinamientoRatio === "number" ? v.hacinamientoRatio.toFixed(2) : "-";
+const personas =
+  v.estado === "OCUPADA" && personasNum !== null
+    ? personasNum
+    : "-";
 
-              const semaforo =
-                v.estado === "OCUPADA" && personasNum !== null
-                  ? getSemaforoPorDormitorios(v.dormitorios, personasNum)
-                  : null;
+const color = v.hacinamientoColor ?? null;
 
-              const estadoActual: EstadoVivienda = isEstadoVivienda(v.estado) ? v.estado : "DISPONIBLE";
+const pct =
+  typeof v.hacinamientoPct === "number"
+    ? v.hacinamientoPct
+    : null;
 
               return (
                 <tr key={v._id}>
@@ -439,47 +516,71 @@ export default function Viviendas() {
                   <td>{v.dormitorios}</td>
 
                   <td>
-                    <select
-                      value={estadoActual}
-                      disabled={updatingId === v._id || downloadingPdf}
-                      onChange={(e) => {
-                        const next = e.target.value;
-                        if (!isEstadoVivienda(next)) return;
-                        if (next === estadoActual) return;
-                        actualizarEstado(v._id, next);
-                      }}
-                      style={{ minWidth: 150 }}
-                    >
-                      {ESTADOS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
-                    {updatingId === v._id ? <span style={{ marginLeft: 8, fontSize: 12 }}>Guardando…</span> : null}
+                    {canEdit ? (
+                      <>
+                        <select
+                          value={estadoActual}
+                          disabled={updatingId === v._id || downloadingPdf}
+                          onChange={(e) => {
+                            const next = e.target.value;
+                            if (!isEstadoVivienda(next)) return;
+                            if (next === estadoActual) return;
+                            actualizarEstado(v._id, next);
+                          }}
+                          style={{ minWidth: 160 }}
+                        >
+                          {ESTADOS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+
+                        {updatingId === v._id ? (
+                          <span style={{ marginLeft: 8, fontSize: 12 }}>Guardando…</span>
+                        ) : null}
+                      </>
+                    ) : (
+                      <span>{estadoActual}</span>
+                    )}
                   </td>
 
                   <td>{perm}</td>
-                  <td>{personas}</td>
-                  <td>
-                    {v.estado !== "OCUPADA" || !semaforo ? (
-                      "-"
-                    ) : (
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                        <span
-                          title={`Semáforo: ${getSemaforoLabel(semaforo)} (Personas: ${personasNum}, Dormitorios: ${v.dormitorios})`}
-                          style={{
-                            width: 10,
-                            height: 10,
-                            borderRadius: "50%",
-                            background: getSemaforoColor(semaforo),
-                            display: "inline-block",
-                          }}
-                        />
-                        <span>{ratioText}</span>
-                      </span>
-                    )}
-                  </td>
+                  {/* PERSONAS */}
+<td>
+  {v.estado === "OCUPADA" && typeof v.cantidadHabitantes === "number"
+    ? v.cantidadHabitantes
+    : "-"}
+</td>
+
+{/* HACINAMIENTO */}
+<td>
+  {v.estado !== "OCUPADA" || !v.hacinamientoColor ? (
+    "-"
+  ) : (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+      <span
+        style={{
+          width: 10,
+          height: 10,
+          borderRadius: "50%",
+          background:
+            v.hacinamientoColor === "VERDE"
+              ? "green"
+              : v.hacinamientoColor === "AMARILLO"
+              ? "orange"
+              : "red",
+          display: "inline-block",
+        }}
+      />
+      <span>
+        {typeof v.hacinamientoRatio === "number"
+          ? v.hacinamientoRatio.toFixed(2)
+          : "-"}
+      </span>
+    </span>
+  )}
+</td>
                 </tr>
               );
             })}

@@ -1,7 +1,12 @@
 // backend/scripts/seedFormTemplates.js
+// Seed de plantillas de formularios / ANEXOS – Sistema ZN98 / SITIO98+
+
 require("dotenv").config();
 const mongoose = require("mongoose");
 const { FormTemplate } = require("../models/FormTemplate");
+
+// 🔗 Plantilla institucional específica del ANEXO 07
+const { anexo07Template } = require("../templates/anexo07Template");
 
 function getMongoUri() {
   return (
@@ -117,26 +122,9 @@ async function main() {
       ],
     },
 
-    {
-      code: "ANEXO_07",
-      nombre: "ANEXO 07 - Observaciones / novedades del permisionario",
-      descripcion:
-        "El permisionario deja observaciones. NO se registran observaciones en conformidades de ANEXO_02/03.",
-      version: 1,
-      activo: true,
-      requiereVivienda: true,
-      requiereAlojamiento: false,
-      rolesQuePuedenCrear: ["PERMISIONARIO"],
-      rolesQuePuedenVer: ["PERMISIONARIO", "INSPECTOR", "ADMIN", "ADMIN_GENERAL"],
-      campos: [
-        {
-          nombre: "novedades",
-          etiqueta: "Novedades / Observaciones",
-          tipo: "textarea",
-          requerido: true,
-        },
-      ],
-    },
+    // 🟦 ANEXO 07 – usamos la plantilla institucional centralizada
+    //    definida en backend/templates/anexo07Template.js
+    anexo07Template,
   ];
 
   console.log("Upsert de plantillas...");

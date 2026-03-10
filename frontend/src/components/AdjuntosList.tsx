@@ -15,26 +15,6 @@ function bytes(n?: number) {
   return `${mb.toFixed(2)} MB`;
 }
 
-function toPublicUrl(ruta?: string) {
-  if (!ruta) return null;
-
-  const p = String(ruta).replace(/\\/g, "/");
-
-  // Caso ideal: contiene /uploads/
-  const idx = p.toLowerCase().indexOf("/uploads/");
-  if (idx >= 0) return p.slice(idx);
-
-  // Caso: empieza con uploads/
-  if (p.toLowerCase().startsWith("uploads/")) return "/" + p;
-
-  // Caso: solo filename en UPLOADS (poco común)
-  // Si tus adjuntos quedan en /uploads/formularios/<file>
-  const file = p.split("/").pop();
-  if (file) return `/uploads/formularios/${file}`;
-
-  return null;
-}
-
 function isImage(mime?: string) {
   return !!mime && mime.startsWith("image/");
 }
@@ -42,15 +22,29 @@ function isPdf(mime?: string) {
   return mime === "application/pdf";
 }
 
-export default function AdjuntosList({ adjuntos }: { adjuntos: Adjunto[] }) {
+/**
+ * BLOQUE 5.1 (migración): NO usar uploads static
+ * Descarga segura via endpoint:
+ *   GET /api/formularios/:id/adjuntos/:fileId
+ *
+ * Nota: el endpoint devuelve Content-Disposition: attachment,
+ * por lo que NO se hace preview inline (iframe/img) para evitar bypass.
+ */
+export default function AdjuntosList({
+  adjuntos,
+  formularioId,
+}: {
+  adjuntos: Adjunto[];
+  formularioId: string;
+}) {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
   const items = useMemo(() => {
-    return (Array.isArray(adjuntos) ? adjuntos : []).map((a) => {
-      const url = toPublicUrl(a.ruta);
+    return (Array.isArray(adjuntos) ? adjuntos : []).map((a, idx) => {
+      const url = `/api/formularios/${formularioId}/adjuntos/${idx}`;
       return { ...a, url };
     });
-  }, [adjuntos]);
+  }, [adjuntos, formularioId]);
 
   if (!items.length) return <p>Sin adjuntos.</p>;
 
@@ -58,13 +52,14 @@ export default function AdjuntosList({ adjuntos }: { adjuntos: Adjunto[] }) {
     <div style={{ display: "grid", gap: 12 }}>
       {items.map((a, idx) => {
         const nombre = a.nombre || `Adjunto ${idx + 1}`;
-        const url = a.url ? `http://localhost:3000${a.url}` : null;
+        const url = a.url;
 
-        const canPreview = !!url && (isPdf(a.tipo) || isImage(a.tipo));
+        // Por seguridad: endpoint sirve attachment => no preview inline
+        const canPreview = false;
 
         return (
           <div
-            key={`${a.ruta || nombre}-${idx}`}
+            key={`${nombre}-${idx}`}
             style={{
               border: "1px solid #eee",
               borderRadius: 10,
@@ -88,7 +83,7 @@ export default function AdjuntosList({ adjuntos }: { adjuntos: Adjunto[] }) {
                     <a href={url} target="_blank" rel="noreferrer">
                       Ver
                     </a>
-                    <a href={url} download>
+                    <a href={url}>
                       Descargar
                     </a>
 
@@ -103,43 +98,21 @@ export default function AdjuntosList({ adjuntos }: { adjuntos: Adjunto[] }) {
                   </>
                 ) : (
                   <span style={{ color: "crimson" }}>
-                    No se pudo generar URL pública
+                    No se pudo generar URL segura
                   </span>
                 )}
               </div>
             </div>
 
-            {/* PREVIEW */}
-            {openIndex === idx && url && isImage(a.tipo) ? (
-              <div style={{ marginTop: 10 }}>
-                <img
-                  src={url}
-                  alt={nombre}
-                  style={{
-                    maxWidth: "100%",
-                    borderRadius: 8,
-                    border: "1px solid #ddd",
-                  }}
-                />
+            {/* PREVIEW (deshabilitado por seguridad) */}
+            {openIndex === idx && url ? (
+              <div style={{ marginTop: 10, fontSize: 13, color: "#444" }}>
+                Por seguridad institucional, los adjuntos se descargan como <b>attachment</b> y no se
+                previsualizan inline. Usá “Ver” o “Descargar”.
               </div>
             ) : null}
 
-            {openIndex === idx && url && isPdf(a.tipo) ? (
-              <div style={{ marginTop: 10 }}>
-                <iframe
-                  title={nombre}
-                  src={url}
-                  style={{
-                    width: "100%",
-                    height: 520,
-                    border: "1px solid #ddd",
-                    borderRadius: 8,
-                  }}
-                />
-              </div>
-            ) : null}
-
-            {/* Para DOCX/XLSX: explicamos por qué no hay preview */}
+            {/* Mensaje adicional para tipos no previsualizables (mantiene UX existente) */}
             {openIndex === idx && url && !canPreview ? (
               <div style={{ marginTop: 10, fontSize: 13, color: "#444" }}>
                 Este tipo de archivo normalmente no se previsualiza en el navegador.

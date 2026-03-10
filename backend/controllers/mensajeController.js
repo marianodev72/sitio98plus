@@ -1,220 +1,303 @@
 // backend/controllers/mensajeController.js
-
+const Mensaje = require("../models/mensaje");
+const { User } = require("../models/user");
 const mongoose = require("mongoose");
-// ✅ VOLVEMOS AL IMPORT QUE EXISTE EN TU PROYECTO
-const Message = require("../models/Message");
 
-/**
- * Obtener el ID del usuario autenticado de forma segura
- */
-function getUserId(req) {
-  if (!req.user) return null;
-  return req.user._id || req.user.id || null;
+function up(v) {
+  return String(v || "").toUpperCase().trim();
 }
 
-/**
- * Enviar mensaje
- * - from: usuario autenticado
- * - to: array de destinatarios (ids de usuario)
- * - asunto
- * - cuerpo
- * - adjuntos:
- *    - si viene upload (multer): req.files
- *    - si viene por body (retrocompat): req.body.adjuntos
- */
+function asArray(v) {
+  if (Array.isArray(v)) return v;
+  if (v === null || v === undefined) return [];
+  return [v];
+}
+
+function uniqStrings(list) {
+  return Array.from(
+    new Set(asArray(list).map((x) => String(x || "").trim()).filter(Boolean))
+  );
+}
+
+// ==========================
+// AGENDA TERRITORIAL
+// ==========================
+async function getAgenda(req, res) {
+  try {
+    const role = up(req.user?.role);
+    const barrioAsignado = String(req.user?.barrioAsignado || "").trim();
+    const misPermisos = Array.isArray(req.user?.permisos) ? req.user.permisos.map(up) : [];
+
+    const esTerritorial =
+      role === "PERMISIONARIO" &&
+      (misPermisos.includes("INSPECTOR") || misPermisos.includes("JEFE_DE_BARRIO"));
+
+    // Seguridad: sin barrio no hay territorialidad (pero igual devuelve admins)
+    if (role === "PERMISIONARIO" && !barrioAsignado) {
+      const admins = await User.find({
+        activo: true,
+        bloqueado: false,
+        archivado: false,
+        role: { $in: ["ADMIN_GENERAL", "ADMIN"] },
+      })
+        .select("_id nombre apellido role permisos barrioAsignado activo archivado")
+        .sort({ apellido: 1, nombre: 1 })
+        .lean();
+
+      return res.json({ usuarios: Array.isArray(admins) ? admins : [] });
+    }
+
+    let query;
+
+    // PERMISIONARIO común: ve admins + autoridades territoriales (permisionario con permisos INSPECTOR/JEFE)
+    if (role === "PERMISIONARIO" && !esTerritorial) {
+      query = {
+        activo: true,
+        bloqueado: false,
+        archivado: false,
+        $or: [
+          { role: { $in: ["ADMIN_GENERAL", "ADMIN"] } },
+          {
+            role: "PERMISIONARIO",
+            barrioAsignado,
+            permisos: { $in: ["INSPECTOR", "JEFE_DE_BARRIO"] },
+          },
+        ],
+      };
+    }
+    // INSPECTOR/JEFE (PERMISIONARIO con permisos): ve admins + todos los permisionarios del barrio
+    else if (role === "PERMISIONARIO" && esTerritorial) {
+      query = {
+        activo: true,
+        bloqueado: false,
+        archivado: false,
+        $or: [{ role: { $in: ["ADMIN_GENERAL", "ADMIN"] } }, { role: "PERMISIONARIO", barrioAsignado }],
+      };
+    }
+    // ADMIN / ADMIN_GENERAL: agenda completa
+    else {
+      query = { activo: true, bloqueado: false, archivado: false };
+    }
+
+    const usuarios = await User.find(query)
+      .select("_id nombre apellido role permisos barrioAsignado activo archivado")
+      .sort({ apellido: 1, nombre: 1 })
+      .lean();
+
+    return res.json({ usuarios: Array.isArray(usuarios) ? usuarios : [] });
+  } catch (error) {
+    console.error("[mensajes][agenda] error:", error);
+    return res.status(500).json({ message: "No es posible procesar su solicitud" });
+  }
+}
+
+// ==========================
+// BANDEJA ENTRADA
+// ==========================
+async function getEntrada(req, res) {
+  try {
+    const myId = String(req.user?._id || "").trim();
+    if (!myId) return res.status(401).json({ message: "No autenticado" });
+
+    const mensajes = await Mensaje.find({ destinatarios: myId })
+      .sort({ creadoEn: -1, createdAt: -1 })
+      .lean();
+
+    return res.json({ mensajes: Array.isArray(mensajes) ? mensajes : [] });
+  } catch (error) {
+    console.error("[mensajes][entrada] error:", error);
+    return res.status(500).json({ message: "No es posible procesar su solicitud" });
+  }
+}
+
+// ==========================
+// BANDEJA ENVIADOS
+// ==========================
+async function getEnviados(req, res) {
+  try {
+    const myId = String(req.user?._id || "").trim();
+    if (!myId) return res.status(401).json({ message: "No autenticado" });
+
+    const mensajes = await Mensaje.find({ remitente: myId })
+      .sort({ creadoEn: -1, createdAt: -1 })
+      .lean();
+
+    return res.json({ mensajes: Array.isArray(mensajes) ? mensajes : [] });
+  } catch (error) {
+    console.error("[mensajes][enviados] error:", error);
+    return res.status(500).json({ message: "No es posible procesar su solicitud" });
+  }
+}
+
+// ==========================
+// OBTENER MENSAJE POR ID
+// ==========================
+async function getMensaje(req, res) {
+  try {
+    const myId = String(req.user?._id || "").trim();
+    const id = String(req.params?.id || "").trim();
+    if (!myId || !id) return res.status(404).json({ message: "No es posible procesar su solicitud" });
+
+    const mensaje = await Mensaje.findById(id).lean();
+    if (!mensaje) return res.status(404).json({ message: "No es posible procesar su solicitud" });
+
+    const remitenteId = String(mensaje.remitente || "");
+    const dests = Array.isArray(mensaje.destinatarios) ? mensaje.destinatarios.map(String) : [];
+
+    const participa = remitenteId === myId || dests.includes(myId);
+    if (!participa) return res.status(404).json({ message: "No es posible procesar su solicitud" });
+
+    return res.json({ mensaje });
+  } catch (error) {
+    console.error("[mensajes][get] error:", error);
+    return res.status(404).json({ message: "No es posible procesar su solicitud" });
+  }
+}
+
+// ==========================
+// MARCAR LEÍDO
+// ==========================
+async function marcarLeido(req, res) {
+  try {
+    const myId = String(req.user?._id || "").trim();
+    const id = String(req.params?.id || "").trim();
+    if (!myId || !id) return res.status(404).json({ message: "No es posible procesar su solicitud" });
+
+    const mensaje = await Mensaje.findById(id);
+    if (!mensaje) return res.status(404).json({ message: "No es posible procesar su solicitud" });
+
+    const remitenteId = String(mensaje.remitente || "");
+    const dests = Array.isArray(mensaje.destinatarios) ? mensaje.destinatarios.map(String) : [];
+    const participa = remitenteId === myId || dests.includes(myId);
+    if (!participa) return res.status(404).json({ message: "No es posible procesar su solicitud" });
+
+    const curr = Array.isArray(mensaje.leidoPor) ? mensaje.leidoPor.map(String) : [];
+    if (!curr.includes(myId)) curr.push(myId);
+    mensaje.leidoPor = curr;
+
+    await mensaje.save();
+    return res.json({ ok: true });
+  } catch (error) {
+    console.error("[mensajes][leido] error:", error);
+    return res.status(404).json({ message: "No es posible procesar su solicitud" });
+  }
+}
+
+// ==========================
+// ENVIAR MENSAJE (JSON o MULTIPART)
+// ==========================
 async function enviarMensaje(req, res) {
   try {
-    const usuarioId = getUserId(req);
-    if (!usuarioId) {
-      return res.status(401).json({ error: "Usuario no autenticado" });
+    const role = up(req.user?.role);
+    const myBarrio = up(req.user?.barrioAsignado);
+    const remitenteId = String(req.user?._id || "").trim();
+    if (!remitenteId) return res.status(401).json({ message: "No autenticado" });
+
+    const misPermisos = Array.isArray(req.user?.permisos) ? req.user.permisos.map(up) : [];
+    const soyAutoridadTerritorial =
+      role === "PERMISIONARIO" &&
+      (misPermisos.includes("INSPECTOR") || misPermisos.includes("JEFE_DE_BARRIO"));
+
+    // Compat: para / para[] / destinatarios / destinatarioId
+    const paraRaw =
+      req.body?.para ??
+      req.body?.["para[]"] ??
+      req.body?.destinatarios ??
+      req.body?.destinatarioId;
+
+    const paraIds = uniqStrings(paraRaw);
+
+    const asunto = String(req.body?.asunto || "").trim();
+    const cuerpo = String(req.body?.cuerpo ?? req.body?.contenido ?? "").trim();
+
+    // replyTo puede venir como "undefined"/"null" (string)
+    const rawReplyTo = req.body?.replyTo;
+    let replyTo = null;
+    if (rawReplyTo !== undefined && rawReplyTo !== null) {
+      const s = String(rawReplyTo).trim();
+      if (s && s !== "undefined" && s !== "null") {
+        if (mongoose.Types.ObjectId.isValid(s)) replyTo = s;
+      }
     }
 
-    // ⚠️ puede venir como para (array) o como para[] (formdata)
-    const rawPara = req.body?.para ?? req.body?.["para[]"];
-    const para = Array.isArray(rawPara) ? rawPara : rawPara ? [rawPara] : [];
-
-    const asunto = req.body?.asunto || "";
-    const cuerpo = req.body?.cuerpo || "";
-
-    if (!Array.isArray(para) || para.length === 0) {
-      return res.status(400).json({ error: "Debe indicar al menos un destinatario" });
+    if (!paraIds.length || !cuerpo) {
+      return res.status(400).json({ message: "No es posible procesar su solicitud" });
     }
 
-    // ✅ adjuntos por upload (si existen)
-    const adjuntosUpload = Array.isArray(req.files)
-      ? req.files.map((f) => ({
-          // mantenemos estructura base; si tu schema tiene fileId obligatorio lo generamos
-          fileId: new mongoose.Types.ObjectId(),
-          nombre: f.originalname,
-          mimetype: f.mimetype,
-          size: f.size,
-          // guardamos path público (server expone /uploads)
-          path: `/uploads/mensajes/${f.filename}`,
-        }))
-      : [];
+    // Cargar destinatarios (incluye permisos para poder evaluar autoridad territorial)
+    const destinatarios = await User.find({ _id: { $in: paraIds } })
+      .select("_id role permisos barrioAsignado activo bloqueado archivado")
+      .lean();
 
-    // ✅ retrocompat: adjuntos desde body (si tu implementación previa lo usaba)
-    const adjuntosBody = Array.isArray(req.body?.adjuntos) ? req.body.adjuntos : [];
+    if (!Array.isArray(destinatarios) || destinatarios.length === 0) {
+      return res.status(404).json({ message: "No es posible procesar su solicitud" });
+    }
 
-    const nuevoMensaje = new Message({
-      remitente: new mongoose.Types.ObjectId(usuarioId),
-      destinatarios: para.map((id) => new mongoose.Types.ObjectId(id)),
-      asunto,
+    // Reglas PERMISIONARIO (conservadoras y territoriales)
+    if (role === "PERMISIONARIO") {
+      for (const u of destinatarios) {
+        if (!u || u.activo === false || u.bloqueado === true || u.archivado === true) {
+          return res.status(404).json({ message: "No es posible procesar su solicitud" });
+        }
+
+        const r = up(u.role);
+        const b = up(u.barrioAsignado);
+        const mismoBarrio = !!myBarrio && !!b && b === myBarrio;
+
+        const esAdminGlobal = r === "ADMIN_GENERAL" || r === "ADMIN";
+        const esLegacyAutoridad = r === "INSPECTOR" || r === "JEFE_DE_BARRIO";
+        const esPermisionario = r === "PERMISIONARIO";
+
+        const permisosDest = Array.isArray(u.permisos) ? u.permisos.map(up) : [];
+        const destEsAutoridadPorPermiso =
+          esPermisionario && permisosDest.some((p) => p === "INSPECTOR" || p === "JEFE_DE_BARRIO");
+
+        // Permitido:
+        // - admins globales siempre
+        // - compat legacy: roles INSPECTOR/JEFE (si existieran) dentro del barrio
+        // - permisionario común puede escribir a autoridad territorial (por permiso) de su barrio
+        // - autoridad territorial (yo) puede escribir a cualquier permisionario de mi barrio
+        const permitido =
+          esAdminGlobal ||
+          (esLegacyAutoridad && mismoBarrio) ||
+          (destEsAutoridadPorPermiso && mismoBarrio) ||
+          (soyAutoridadTerritorial && esPermisionario && mismoBarrio);
+
+        if (!permitido) {
+          return res.status(403).json({ message: "No es posible procesar su solicitud" });
+        }
+      }
+    }
+
+    const files = Array.isArray(req.files) ? req.files : [];
+    const adjuntos = files.map((f) => ({
+      fileId: f.id || f.filename || undefined,
+      nombre: f.originalname || undefined,
+      mimetype: f.mimetype || undefined,
+      size: f.size || undefined,
+    }));
+
+    const created = await Mensaje.create({
+      remitente: remitenteId,
+      destinatarios: paraIds,
+      asunto: asunto || undefined,
       cuerpo,
-      adjuntos: [...adjuntosBody, ...adjuntosUpload],
-      leidoPor: [],
+      adjuntos,
+      ...(replyTo ? { replyTo } : {}),
     });
 
-    await nuevoMensaje.save();
-
-    return res.status(201).json({
-      message: "Mensaje enviado correctamente",
-      mensajeId: nuevoMensaje._id,
-    });
-  } catch (err) {
-    console.error("Error al enviar mensaje:", err);
-    return res.status(500).json({ error: "Error interno al enviar mensaje" });
-  }
-}
-
-/**
- * Listar bandeja de entrada del usuario autenticado
- */
-async function listarEntrada(req, res) {
-  try {
-    const usuarioId = getUserId(req);
-    if (!usuarioId) {
-      return res.status(401).json({ error: "Usuario no autenticado" });
-    }
-
-    const mensajes = await Message.find({
-      destinatarios: new mongoose.Types.ObjectId(usuarioId),
-    })
-      .sort({ creadoEn: -1 })
-      .lean();
-
-    return res.json(mensajes);
-  } catch (err) {
-    console.error("Error al listar bandeja de entrada:", err);
-    return res.status(500).json({ error: "Error interno" });
-  }
-}
-
-/**
- * Listar mensajes enviados por el usuario autenticado
- */
-async function listarEnviados(req, res) {
-  try {
-    const usuarioId = getUserId(req);
-    if (!usuarioId) {
-      return res.status(401).json({ error: "Usuario no autenticado" });
-    }
-
-    const mensajes = await Message.find({
-      remitente: new mongoose.Types.ObjectId(usuarioId),
-    })
-      .sort({ creadoEn: -1 })
-      .lean();
-
-    return res.json(mensajes);
-  } catch (err) {
-    console.error("Error al listar enviados:", err);
-    return res.status(500).json({ error: "Error interno" });
-  }
-}
-
-/**
- * Obtener un mensaje por ID, verificando acceso
- */
-async function obtenerMensaje(req, res) {
-  try {
-    const usuarioId = getUserId(req);
-    if (!usuarioId) {
-      return res.status(401).json({ error: "Usuario no autenticado" });
-    }
-
-    const { id } = req.params;
-
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: "ID de mensaje inválido" });
-    }
-
-    const mensaje = await Message.findById(id).lean();
-    if (!mensaje) {
-      return res.status(404).json({ error: "Mensaje no encontrado" });
-    }
-
-    const esRemitente = String(mensaje.remitente) === String(usuarioId);
-    const esDestinatario = Array.isArray(mensaje.destinatarios) && mensaje.destinatarios.some((d) => String(d) === String(usuarioId));
-
-    if (!esRemitente && !esDestinatario) {
-      return res.status(403).json({ error: "No tiene acceso a este mensaje" });
-    }
-
-    return res.json(mensaje);
-  } catch (err) {
-    console.error("Error al obtener mensaje:", err);
-    return res.status(500).json({ error: "Error interno" });
-  }
-}
-
-/**
- * Marcar mensaje como leído
- */
-async function marcarComoLeido(req, res) {
-  try {
-    const usuarioId = getUserId(req);
-    if (!usuarioId) {
-      return res.status(401).json({ error: "Usuario no autenticado" });
-    }
-
-    const { id } = req.params;
-
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: "ID de mensaje inválido" });
-    }
-
-    const mensaje = await Message.findById(id);
-    if (!mensaje) {
-      return res.status(404).json({ error: "Mensaje no encontrado" });
-    }
-
-    const esDestinatario = Array.isArray(mensaje.destinatarios) && mensaje.destinatarios.some((d) => String(d) === String(usuarioId));
-    if (!esDestinatario) {
-      return res.status(403).json({ error: "Solo los destinatarios pueden marcar como leído" });
-    }
-
-    if (!mensaje.leidoPor) mensaje.leidoPor = [];
-    if (!mensaje.leidoPor.some((u) => String(u) === String(usuarioId))) {
-      mensaje.leidoPor.push(new mongoose.Types.ObjectId(usuarioId));
-      await mensaje.save();
-    }
-
-    return res.json({ message: "Mensaje marcado como leído" });
-  } catch (err) {
-    console.error("Error al marcar mensaje como leído:", err);
-    return res.status(500).json({ error: "Error interno" });
-  }
-}
-
-/**
- * Auditoría (lista todos)
- */
-async function listarTodos(req, res) {
-  try {
-    const mensajes = await Message.find({}).sort({ creadoEn: -1 }).lean();
-    return res.json(mensajes);
-  } catch (err) {
-    console.error("Error al listar todos los mensajes:", err);
-    return res.status(500).json({ error: "Error interno" });
+    return res.status(201).json({ mensaje: created });
+  } catch (error) {
+    console.error("[mensajes][send] error:", error);
+    return res.status(500).json({ message: "No es posible procesar su solicitud" });
   }
 }
 
 module.exports = {
+  getAgenda,
+  getEntrada,
+  getEnviados,
+  getMensaje,
+  marcarLeido,
   enviarMensaje,
-  listarEntrada,
-  listarEnviados,
-  obtenerMensaje,
-  marcarComoLeido,
-  listarTodos,
 };

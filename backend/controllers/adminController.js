@@ -1,45 +1,121 @@
 // controllers/adminController.js
 
-const mongoose = require('mongoose');
-const { User } = require('../models/user'); // <- IMPORT CORRECTO DEL MODELO
-const Vivienda = require('../models/vivienda');
-const Alojamiento = require('../models/Alojamiento');
-const AuditLog = require('../models/AuditLog');
+const mongoose = require("mongoose");
+const { User } = require("../models/user"); // IMPORT correcto
+const Vivienda = require("../models/vivienda");
+const Alojamiento = require("../models/Alojamiento");
+const { AuditLog } = require("../models/AuditLog");
 
-/**
- * Helper: registrar cambios en el log de auditoría
- */
-async function registrarAuditoria({ actorId, targetUserId, tipo, detalle }) {
-  try {
-    if (!AuditLog) return;
-    await AuditLog.create({
-      actor: actorId,
-      usuarioAfectado: targetUserId,
-      tipo,
-      detalle,
-      fecha: new Date(),
-    });
-  } catch (err) {
-    console.error('Error registrando auditoría ADMIN:', err);
-  }
+// ------------------------------------------------------------
+// Helpers auditoría (A6)
+// ------------------------------------------------------------
+
+function getRequestId(req) {
+  const h = req.headers["x-request-id"];
+  if (typeof h === "string" && h.trim()) return h.trim();
+  return req.requestId || "";
+}
+
+function getClientIp(req) {
+  const xff = req.headers["x-forwarded-for"];
+  if (typeof xff === "string" && xff.trim()) return xff.split(",")[0].trim();
+  return req.ip || "";
+}
+
+function safeActor(req) {
+  const actor = req.user || req.admin || {};
+  return {
+    id: actor._id || null,
+    email: actor.email || "",
+    role: actor.role || actor.rol || "",
+  };
 }
 
 /**
- * Listar usuarios con filtros (rol, estado, barrio, búsqueda de texto).
- *
- * Frontend envía:
- *  - role
- *  - estadoHabitacional
- *  - barrio
- *  - buscar
- *
- * También aceptamos los nombres viejos por compatibilidad:
- *  - rol
- *  - barrioAsignado
- *  - texto
+ * Registrar auditoría (SUCCESS/FAIL) sin sensibles.
+ * - NO guarda password / tokens / body completo
+ * - meta: solo whitelisted fields (pasados por quien llama)
  */
+async function registrarAuditoria(req, { action, entity, result = "SUCCESS", meta = {}, error = null }) {
+  try {
+    if (!AuditLog) return;
+
+    const actor = safeActor(req);
+    const requestId = getRequestId(req);
+    const ip = getClientIp(req);
+    const userAgent = req.headers["user-agent"] || "";
+
+    const event = {
+      timestamp: new Date(),
+      requestId,
+
+      actor,
+      action,
+      entity: {
+        type: entity?.type || "",
+        id: entity?.id ? String(entity.id) : "",
+      },
+
+      result: result === "FAIL" ? "FAIL" : "SUCCESS",
+      meta: meta || {},
+
+      ip,
+      userAgent,
+
+      error: error
+        ? {
+            name: String(error.name || "Error"),
+            message: String(error.message || "").slice(0, 500),
+            code: String(error.code || ""),
+          }
+        : undefined,
+
+      // Legacy mirror (compat)
+      actorId: actor.id,
+      actorRole: actor.role,
+      targetType: entity?.type || "",
+      targetId: entity?.id ? String(entity.id) : "",
+      metadata: meta || {},
+
+      // Compat viejo
+      usuario: actor.id,
+      rolEnMomento: actor.role,
+      accion: action,
+      recursoTipo: entity?.type || "UNKNOWN",
+      recursoId: entity?.id ? String(entity.id) : "",
+      detalle: "",
+    };
+
+    // No romper performance: write async (pero mantengo await porque es controller;
+    // si querés fire-and-forget, cambiá por setImmediate + create().catch)
+    await AuditLog.create(event);
+  } catch (err) {
+    console.error("Error registrando auditoría ADMIN:", err?.message || err);
+  }
+}
+
+function deny(res) {
+  return res.status(404).json({ error: "Recurso no disponible" });
+}
+
+function ensureAdminGeneral(actor) {
+  return actor && actor.role === "ADMIN_GENERAL";
+}
+
+function ensureAdminOrGeneral(actor) {
+  return actor && (actor.role === "ADMIN_GENERAL" || actor.role === "ADMIN");
+}
+
+// ------------------------------------------------------------
+// Controllers
+// ------------------------------------------------------------
+
 async function listarUsuarios(req, res) {
   try {
+    const actor = req.user;
+    if (!actor || !actor.role) return deny(res);
+    if (!ensureAdminOrGeneral(actor)) return deny(res);
+
     const {
       rol,
       role,
@@ -54,528 +130,451 @@ async function listarUsuarios(req, res) {
 
     const filtro = {};
 
-    // Rol (aceptamos role o rol)
-    if (rol || role) {
-      filtro.role = rol || role;
+    if (rol || role) filtro.role = rol || role;
+    if (estadoHabitacional) filtro.estadoHabitacional = estadoHabitacional;
+    if (barrio || barrioAsignado) filtro.barrioAsignado = barrio || barrioAsignado;
+    if (matricula) filtro.mr = matricula;
+    if (grado) filtro.grado = grado;
+
+    const q = texto || buscar;
+    if (q && String(q).trim().length > 0) {
+      const regex = new RegExp(String(q).trim(), "i");
+      filtro.$or = [{ mr: regex }, { apellido: regex }, { nombres: regex }, { nombre: regex }, { email: regex }];
     }
 
-    // Estado habitacional
-    if (estadoHabitacional) {
-      filtro.estadoHabitacional = estadoHabitacional;
-    }
+    const usuarios = await User.find(filtro).select("-password").sort({ createdAt: -1 });
 
-    // Barrio asignado (nuevo: barrio, viejo: barrioAsignado)
-    if (barrio || barrioAsignado) {
-      filtro.barrioAsignado = barrio || barrioAsignado;
-    }
+    // Auditoría: acceso administrativo a listado (sin incluir resultados)
+    await registrarAuditoria(req, {
+      action: "ADMIN_LIST_USERS",
+      entity: { type: "User", id: "LIST" },
+      meta: {
+        filtrosAplicados: {
+          role: filtro.role || null,
+          estadoHabitacional: filtro.estadoHabitacional || null,
+          barrioAsignado: filtro.barrioAsignado || null,
+          mr: filtro.mr || null,
+          grado: filtro.grado || null,
+          hasSearch: !!q,
+        },
+        resultCount: Array.isArray(usuarios) ? usuarios.length : 0,
+      },
+    });
 
-    // Matricula (en el modelo nuevo es "matricula")
-    if (matricula) {
-      filtro.matricula = matricula;
-    }
-
-    // Por ahora ignoramos "grado" porque el modelo actual no lo define
-
-    const textoLibre = buscar || texto;
-    if (textoLibre) {
-      const regex = new RegExp(textoLibre, 'i');
-      filtro.$or = [
-        { apellido: regex },
-        { nombre: regex },
-        { email: regex },
-        { dni: regex },
-        { matricula: regex },
-      ];
-    }
-
-    // Solo devolvemos campos útiles para el panel
-    const usuarios = await User.find(filtro)
-      .select(
-        'nombre apellido email role estadoHabitacional barrioAsignado viviendaAsignada alojamientoAsignado activo bloqueado'
-      )
-      .lean();
-
-    return res.json(usuarios);
+    return res.json({ usuarios });
   } catch (err) {
-    console.error('Error en listarUsuarios:', err);
-    return res.status(500).json({ error: 'Error interno al listar usuarios' });
+    console.error("Error en listarUsuarios (ADMIN):", err);
+    return res.status(500).json({ error: "Error interno al listar usuarios" });
   }
 }
 
-/**
- * Crear usuario manualmente
- */
 async function crearUsuario(req, res) {
   try {
-    const data = req.body;
+    const actor = req.user;
+    if (!actor || !actor.role) return deny(res);
+    if (!ensureAdminGeneral(actor)) return deny(res);
+
+    const data = req.body || {};
 
     if (!data.mr || !data.apellido || !data.nombres) {
       return res.status(400).json({
-        error: 'MR, apellido y nombres son obligatorios para crear usuario',
+        error: "MR, apellido y nombres son obligatorios para crear usuario",
       });
     }
 
     const existente = await User.findOne({ mr: data.mr });
     if (existente) {
-      return res
-        .status(409)
-        .json({ error: 'Ya existe un usuario con esa matrícula (MR)' });
+      return res.status(409).json({ error: "Ya existe un usuario con esa matrícula (MR)" });
     }
 
     const nuevo = new User({
       ...data,
-      creadoPorAdmin: true,
+      // ⚠️ Auditoría: NO loggear password; pero acá sí setea default.
+      password: data.password || "123456",
     });
 
     await nuevo.save();
 
-    await registrarAuditoria({
-      actorId: req.user._id,
-      targetUserId: nuevo._id,
-      tipo: 'CREAR_USUARIO',
-      detalle: `Usuario creado manualmente por ADMIN_GENERAL`,
+    await registrarAuditoria(req, {
+      action: "ADMIN_CREATE_USER",
+      entity: { type: "User", id: nuevo._id },
+      meta: {
+        // whitelist de datos NO sensibles
+        mr: nuevo.mr,
+        role: nuevo.role || null,
+        barrioAsignado: nuevo.barrioAsignado || null,
+        estadoHabitacional: nuevo.estadoHabitacional || null,
+        activo: typeof nuevo.activo === "boolean" ? nuevo.activo : null,
+      },
     });
 
     return res.status(201).json({
-      message: 'Usuario creado correctamente',
+      message: "Usuario creado correctamente",
       usuarioId: nuevo._id,
     });
   } catch (err) {
-    console.error('Error en crearUsuario:', err);
-    return res.status(500).json({ error: 'Error interno al crear usuario' });
+    console.error("Error en crearUsuario:", err);
+    return res.status(500).json({ error: "Error interno al crear usuario" });
   }
 }
 
-/**
- * Actualizar datos administrativos del usuario
- */
 async function actualizarUsuario(req, res) {
   try {
+    const actor = req.user;
+    if (!actor || !actor.role) return deny(res);
+    if (!ensureAdminGeneral(actor)) return deny(res);
+
     const { id } = req.params;
-    const data = req.body;
+    const data = req.body || {};
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: 'ID de usuario inválido' });
+      return res.status(400).json({ error: "ID de usuario inválido" });
     }
 
     const usuario = await User.findById(id);
-    if (!usuario) {
-      return res.status(404).json({ error: 'Usuario no encontrado' });
-    }
+    if (!usuario) return deny(res);
 
     const camposPermitidos = [
-      'apellido',
-      'nombres',
-      'grado',
-      'escalafon',
-      'destinoActual',
-      'destinoFuturo',
-      'telefonoActual',
-      'telefonoFuturo',
-      'barrioAsignado',
-      'estadoHabitacional',
-      'observacionesAdministrativas',
+      "apellido",
+      "nombres",
+      "mr",
+      "email",
+      "telefono",
+      "grado",
+      "barrioAsignado",
+      "estadoHabitacional",
+      "activo",
     ];
+
+    // meta: registrar solo qué campos se tocaron, no valores (menos riesgo PII)
+    const changed = [];
 
     camposPermitidos.forEach((campo) => {
       if (data[campo] !== undefined) {
         usuario[campo] = data[campo];
+        changed.push(campo);
       }
     });
 
     await usuario.save();
 
-    await registrarAuditoria({
-      actorId: req.user._id,
-      targetUserId: usuario._id,
-      tipo: 'ACTUALIZAR_USUARIO',
-      detalle: `Datos administrativos actualizados`,
+    await registrarAuditoria(req, {
+      action: "ADMIN_UPDATE_USER",
+      entity: { type: "User", id: usuario._id },
+      meta: {
+        changedFields: changed,
+      },
     });
 
-    return res.json({ message: 'Usuario actualizado correctamente' });
+    return res.json({ message: "Usuario actualizado correctamente" });
   } catch (err) {
-    console.error('Error en actualizarUsuario:', err);
-    return res.status(500).json({ error: 'Error interno al actualizar usuario' });
+    console.error("Error en actualizarUsuario:", err);
+    return res.status(500).json({ error: "Error interno al actualizar usuario" });
   }
 }
 
-/**
- * Cambiar rol (solo ADMIN_GENERAL, pero la ruta se encarga del control por ahora)
- */
 async function cambiarRol(req, res) {
   try {
+    const actor = req.user;
+    if (!actor || !actor.role) return deny(res);
+    if (!ensureAdminGeneral(actor)) return deny(res);
+
     const { id } = req.params;
-    const { nuevoRol } = req.body;
+    const { nuevoRol } = req.body || {};
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: 'ID de usuario inválido' });
-    }
-
-    if (!nuevoRol) {
-      return res.status(400).json({ error: 'Debe indicar nuevoRol' });
-    }
+    if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ error: "ID de usuario inválido" });
+    if (!nuevoRol) return res.status(400).json({ error: "nuevoRol es obligatorio" });
 
     const usuario = await User.findById(id);
-    if (!usuario) {
-      return res.status(404).json({ error: 'Usuario no encontrado' });
-    }
+    if (!usuario) return deny(res);
 
-    const rolAnterior = usuario.role;
+    const prev = usuario.role;
     usuario.role = nuevoRol;
     await usuario.save();
 
-    await registrarAuditoria({
-      actorId: req.user._id,
-      targetUserId: usuario._id,
-      tipo: 'CAMBIAR_ROL',
-      detalle: `Rol cambiado de ${rolAnterior} a ${nuevoRol}`,
+    await registrarAuditoria(req, {
+      action: "ADMIN_CHANGE_ROLE",
+      entity: { type: "User", id: usuario._id },
+      meta: {
+        previousRole: prev || null,
+        newRole: nuevoRol,
+      },
     });
 
-    return res.json({ message: 'Rol actualizado correctamente' });
+    return res.json({ message: "Rol actualizado correctamente" });
   } catch (err) {
-    console.error('Error en cambiarRol:', err);
-    return res.status(500).json({ error: 'Error interno al cambiar rol' });
+    console.error("Error en cambiarRol:", err);
+    return res.status(500).json({ error: "Error interno al cambiar rol" });
   }
 }
 
-/**
- * Cambiar estado habitacional
- */
 async function cambiarEstadoHabitacional(req, res) {
   try {
+    const actor = req.user;
+    if (!actor || !actor.role) return deny(res);
+    if (!ensureAdminGeneral(actor)) return deny(res);
+
     const { id } = req.params;
-    const { nuevoEstado } = req.body;
+    const { estadoHabitacional } = req.body || {};
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: 'ID de usuario inválido' });
-    }
-
-    if (!nuevoEstado) {
-      return res.status(400).json({ error: 'Debe indicar nuevoEstado' });
-    }
+    if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ error: "ID de usuario inválido" });
+    if (!estadoHabitacional) return res.status(400).json({ error: "estadoHabitacional es obligatorio" });
 
     const usuario = await User.findById(id);
-    if (!usuario) {
-      return res.status(404).json({ error: 'Usuario no encontrado' });
-    }
+    if (!usuario) return deny(res);
 
-    const estadoAnterior = usuario.estadoHabitacional;
-    usuario.estadoHabitacional = nuevoEstado;
+    const prev = usuario.estadoHabitacional;
+    usuario.estadoHabitacional = estadoHabitacional;
     await usuario.save();
 
-    await registrarAuditoria({
-      actorId: req.user._id,
-      targetUserId: usuario._id,
-      tipo: 'CAMBIAR_ESTADO_HABITACIONAL',
-      detalle: `Estado habitacional de ${estadoAnterior} a ${nuevoEstado}`,
+    await registrarAuditoria(req, {
+      action: "ADMIN_CHANGE_HOUSING_STATUS",
+      entity: { type: "User", id: usuario._id },
+      meta: {
+        previousStatus: prev || null,
+        newStatus: estadoHabitacional,
+      },
     });
 
-    return res.json({ message: 'Estado habitacional actualizado' });
+    return res.json({ message: "Estado habitacional actualizado correctamente" });
   } catch (err) {
-    console.error('Error en cambiarEstadoHabitacional:', err);
-    return res
-      .status(500)
-      .json({ error: 'Error interno al cambiar estado habitacional' });
+    console.error("Error en cambiarEstadoHabitacional:", err);
+    return res.status(500).json({ error: "Error interno al cambiar estado habitacional" });
   }
 }
 
-/**
- * Bloquear / Desbloquear usuario
- */
 async function cambiarBloqueo(req, res) {
   try {
+    const actor = req.user;
+    if (!actor || !actor.role) return deny(res);
+    if (!ensureAdminGeneral(actor)) return deny(res);
+
     const { id } = req.params;
-    const { bloqueado } = req.body;
+    const { bloqueado } = req.body || {};
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: 'ID de usuario inválido' });
-    }
-
-    if (typeof bloqueado !== 'boolean') {
-      return res.status(400).json({ error: 'Debe indicar bloqueado: true/false' });
-    }
+    if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ error: "ID de usuario inválido" });
+    if (bloqueado === undefined) return res.status(400).json({ error: "bloqueado es obligatorio (true/false)" });
 
     const usuario = await User.findById(id);
-    if (!usuario) {
-      return res.status(404).json({ error: 'Usuario no encontrado' });
-    }
+    if (!usuario) return deny(res);
 
-    usuario.bloqueado = bloqueado;
+    const prev = !!usuario.bloqueado;
+    usuario.bloqueado = !!bloqueado;
     await usuario.save();
 
-    await registrarAuditoria({
-      actorId: req.user._id,
-      targetUserId: usuario._id,
-      tipo: 'CAMBIAR_BLOQUEO',
-      detalle: `Usuario ${bloqueado ? 'bloqueado' : 'desbloqueado'}`,
+    await registrarAuditoria(req, {
+      action: "ADMIN_TOGGLE_BLOCK",
+      entity: { type: "User", id: usuario._id },
+      meta: {
+        previousBlocked: prev,
+        newBlocked: !!bloqueado,
+      },
     });
 
-    return res.json({ message: 'Estado de bloqueo actualizado' });
+    return res.json({ message: "Bloqueo actualizado correctamente" });
   } catch (err) {
-    console.error('Error en cambiarBloqueo:', err);
-    return res.status(500).json({ error: 'Error interno al cambiar bloqueo' });
+    console.error("Error en cambiarBloqueo:", err);
+    return res.status(500).json({ error: "Error interno al cambiar bloqueo" });
   }
 }
 
-/**
- * Resetear contraseña (generar temporal)
- */
 async function resetearPassword(req, res) {
   try {
-    const { id } = req.params;
+    const actor = req.user;
+    if (!actor || !actor.role) return deny(res);
+    if (!ensureAdminGeneral(actor)) return deny(res);
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: 'ID de usuario inválido' });
-    }
+    const { id } = req.params;
+    const { nuevaPassword } = req.body || {};
+
+    if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ error: "ID de usuario inválido" });
+    if (!nuevaPassword) return res.status(400).json({ error: "nuevaPassword es obligatoria" });
 
     const usuario = await User.findById(id);
-    if (!usuario) {
-      return res.status(404).json({ error: 'Usuario no encontrado' });
-    }
+    if (!usuario) return deny(res);
 
-    const tempPassword = Math.random().toString(36).slice(-8);
-    usuario.passwordTemporal = tempPassword;
-    usuario.debeCambiarPassword = true;
+    usuario.password = nuevaPassword; // asume hashing en pre-save
     await usuario.save();
 
-    await registrarAuditoria({
-      actorId: req.user._id,
-      targetUserId: usuario._id,
-      tipo: 'RESET_PASSWORD',
-      detalle: 'Contraseña temporal generada',
+    // ✅ Auditoría: NO guardar password ni longitud ni hash ni nada.
+    await registrarAuditoria(req, {
+      action: "ADMIN_RESET_PASSWORD",
+      entity: { type: "User", id: usuario._id },
+      meta: {
+        reset: true,
+      },
     });
 
-    return res.json({
-      message: 'Contraseña temporal generada',
-      passwordTemporal: tempPassword,
-    });
+    return res.json({ message: "Password reseteada correctamente" });
   } catch (err) {
-    console.error('Error en resetearPassword:', err);
-    return res
-      .status(500)
-      .json({ error: 'Error interno al resetear contraseña' });
+    console.error("Error en resetearPassword:", err);
+    return res.status(500).json({ error: "Error interno al resetear password" });
   }
 }
 
-/**
- * Ver historial de cambios del usuario
- */
 async function verHistorial(req, res) {
   try {
+    const actor = req.user;
+    if (!actor || !actor.role) return deny(res);
+    if (!ensureAdminGeneral(actor)) return deny(res);
+
     const { id } = req.params;
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: 'ID de usuario inválido' });
-    }
+    if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ error: "ID de usuario inválido" });
 
-    const logs = await AuditLog.find({ usuarioAfectado: id })
-      .sort({ fecha: -1 })
-      .lean();
+    const usuario = await User.findById(id);
+    if (!usuario) return deny(res);
 
-    return res.json(logs);
+    // Compat: buscar por usuarioAfectado (viejo) OR entity
+    const historial = await AuditLog.find({
+      $or: [
+        { usuarioAfectado: usuario._id },
+        { "entity.type": "User", "entity.id": String(usuario._id) },
+        { recursoTipo: "User", recursoId: String(usuario._id) },
+      ],
+    })
+      .sort({ timestamp: -1, fecha: -1, createdAt: -1 })
+      .limit(200);
+
+    // Auditoría del acceso a historial (sin devolver contenido en el log)
+    await registrarAuditoria(req, {
+      action: "ADMIN_VIEW_AUDIT_HISTORY",
+      entity: { type: "User", id: usuario._id },
+      meta: { limit: 200 },
+    });
+
+    return res.json({ historial });
   } catch (err) {
-    console.error('Error en verHistorial:', err);
-    return res.status(500).json({ error: 'Error interno al ver historial' });
+    console.error("Error en verHistorial:", err);
+    return res.status(500).json({ error: "Error interno al ver historial" });
   }
 }
 
-/**
- * Asignar vivienda POR ORDEN SUPERIOR
- */
 async function asignarViviendaPorOrdenSuperior(req, res) {
   try {
-    const { id } = req.params;
-    const { viviendaId, motivo } = req.body;
+    const actor = req.user;
+    if (!actor || !actor.role) return deny(res);
+    if (!ensureAdminGeneral(actor)) return deny(res);
 
-    if (
-      !mongoose.Types.ObjectId.isValid(id) ||
-      !mongoose.Types.ObjectId.isValid(viviendaId)
-    ) {
-      return res
-        .status(400)
-        .json({ error: 'ID de usuario o vivienda inválidos' });
-    }
+    const { id } = req.params;
+    const { viviendaId } = req.body || {};
+
+    if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ error: "ID de usuario inválido" });
+    if (!mongoose.Types.ObjectId.isValid(viviendaId)) return res.status(400).json({ error: "ID de vivienda inválido" });
 
     const usuario = await User.findById(id);
-    if (!usuario) return res.status(404).json({ error: 'Usuario no encontrado' });
+    if (!usuario) return deny(res);
 
     const vivienda = await Vivienda.findById(viviendaId);
-    if (!vivienda) return res.status(404).json({ error: 'Vivienda no encontrada' });
+    if (!vivienda) return res.status(404).json({ error: "Vivienda no encontrada" });
 
     usuario.viviendaAsignada = vivienda._id;
-    usuario.estadoHabitacional = 'PERMISIONARIO_ACTIVO';
+    usuario.estadoHabitacional = "VIVIENDA";
     await usuario.save();
 
-    vivienda.estado = 'OCUPADA';
-    vivienda.ocupacionActual = {
-      usuario: usuario._id,
-      motivo: motivo || 'POR ORDEN SUPERIOR',
-      fecha: new Date(),
-    };
-    await vivienda.save();
-
-    await registrarAuditoria({
-      actorId: req.user._id,
-      targetUserId: usuario._id,
-      tipo: 'ASIGNAR_VIVIENDA_ORDEN_SUPERIOR',
-      detalle: motivo || 'POR ORDEN SUPERIOR',
+    await registrarAuditoria(req, {
+      action: "ADMIN_ASSIGN_HOUSE",
+      entity: { type: "User", id: usuario._id },
+      meta: { viviendaId: String(viviendaId) },
     });
 
-    return res.json({ message: 'Vivienda asignada POR ORDEN SUPERIOR' });
+    return res.json({ message: "Vivienda asignada correctamente" });
   } catch (err) {
-    console.error('Error en asignarViviendaPorOrdenSuperior:', err);
-    return res
-      .status(500)
-      .json({ error: 'Error interno al asignar vivienda' });
+    console.error("Error en asignarViviendaPorOrdenSuperior:", err);
+    return res.status(500).json({ error: "Error interno al asignar vivienda" });
   }
 }
 
-/**
- * Desasignar vivienda POR ORDEN SUPERIOR
- */
 async function desasignarViviendaPorOrdenSuperior(req, res) {
   try {
-    const { id } = req.params;
-    const { motivo } = req.body;
+    const actor = req.user;
+    if (!actor || !actor.role) return deny(res);
+    if (!ensureAdminGeneral(actor)) return deny(res);
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: 'ID de usuario inválido' });
-    }
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ error: "ID de usuario inválido" });
 
     const usuario = await User.findById(id);
-    if (!usuario) return res.status(404).json({ error: 'Usuario no encontrado' });
-
-    const viviendaId = usuario.viviendaAsignada;
-    if (!viviendaId) {
-      return res
-        .status(400)
-        .json({ error: 'El usuario no tiene vivienda asignada' });
-    }
-
-    const vivienda = await Vivienda.findById(viviendaId);
-    if (vivienda) {
-      vivienda.estado = 'DISPONIBLE';
-      vivienda.ocupacionActual = null;
-      await vivienda.save();
-    }
+    if (!usuario) return deny(res);
 
     usuario.viviendaAsignada = null;
-    usuario.estadoHabitacional = 'SIN_VIVIENDA';
+    if (usuario.estadoHabitacional === "VIVIENDA") usuario.estadoHabitacional = "SIN_DEFINIR";
     await usuario.save();
 
-    await registrarAuditoria({
-      actorId: req.user._id,
-      targetUserId: usuario._id,
-      tipo: 'DESASIGNAR_VIVIENDA_ORDEN_SUPERIOR',
-      detalle: motivo || 'POR ORDEN SUPERIOR',
+    await registrarAuditoria(req, {
+      action: "ADMIN_UNASSIGN_HOUSE",
+      entity: { type: "User", id: usuario._id },
+      meta: { viviendaId: null },
     });
 
-    return res.json({ message: 'Vivienda desasignada POR ORDEN SUPERIOR' });
+    return res.json({ message: "Vivienda desasignada correctamente" });
   } catch (err) {
-    console.error('Error en desasignarViviendaPorOrdenSuperior:', err);
-    return res
-      .status(500)
-      .json({ error: 'Error interno al desasignar vivienda' });
+    console.error("Error en desasignarViviendaPorOrdenSuperior:", err);
+    return res.status(500).json({ error: "Error interno al desasignar vivienda" });
   }
 }
 
-/**
- * Asignar alojamiento POR ORDEN SUPERIOR
- */
 async function asignarAlojamientoPorOrdenSuperior(req, res) {
   try {
-    const { id } = req.params;
-    const { alojamientoId, motivo } = req.body;
+    const actor = req.user;
+    if (!actor || !actor.role) return deny(res);
+    if (!ensureAdminGeneral(actor)) return deny(res);
 
-    if (
-      !mongoose.Types.ObjectId.isValid(id) ||
-      !mongoose.Types.ObjectId.isValid(alojamientoId)
-    ) {
-      return res
-        .status(400)
-        .json({ error: 'ID de usuario o alojamiento inválidos' });
-    }
+    const { id } = req.params;
+    const { alojamientoId } = req.body || {};
+
+    if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ error: "ID de usuario inválido" });
+    if (!mongoose.Types.ObjectId.isValid(alojamientoId)) return res.status(400).json({ error: "ID de alojamiento inválido" });
 
     const usuario = await User.findById(id);
-    if (!usuario) return res.status(404).json({ error: 'Usuario no encontrado' });
+    if (!usuario) return deny(res);
 
     const alojamiento = await Alojamiento.findById(alojamientoId);
-    if (!alojamiento) {
-      return res.status(404).json({ error: 'Alojamiento no encontrado' });
-    }
+    if (!alojamiento) return res.status(404).json({ error: "Alojamiento no encontrado" });
 
     usuario.alojamientoAsignado = alojamiento._id;
+    usuario.estadoHabitacional = "ALOJAMIENTO";
     await usuario.save();
 
-    alojamiento.estado = 'OCUPADO';
-    alojamiento.ocupacionActual = {
-      usuario: usuario._id,
-      motivo: motivo || 'POR ORDEN SUPERIOR',
-      fecha: new Date(),
-    };
-    await alojamiento.save();
-
-    await registrarAuditoria({
-      actorId: req.user._id,
-      targetUserId: usuario._id,
-      tipo: 'ASIGNAR_ALOJAMIENTO_ORDEN_SUPERIOR',
-      detalle: motivo || 'POR ORDEN SUPERIOR',
+    await registrarAuditoria(req, {
+      action: "ADMIN_ASSIGN_LODGING",
+      entity: { type: "User", id: usuario._id },
+      meta: { alojamientoId: String(alojamientoId) },
     });
 
-    return res.json({ message: 'Alojamiento asignado POR ORDEN SUPERIOR' });
+    return res.json({ message: "Alojamiento asignado correctamente" });
   } catch (err) {
-    console.error('Error en asignarAlojamientoPorOrdenSuperior:', err);
-    return res
-      .status(500)
-      .json({ error: 'Error interno al asignar alojamiento' });
+    console.error("Error en asignarAlojamientoPorOrdenSuperior:", err);
+    return res.status(500).json({ error: "Error interno al asignar alojamiento" });
   }
 }
 
-/**
- * Desasignar alojamiento POR ORDEN SUPERIOR
- */
 async function desasignarAlojamientoPorOrdenSuperior(req, res) {
   try {
-    const { id } = req.params;
-    const { motivo } = req.body;
+    const actor = req.user;
+    if (!actor || !actor.role) return deny(res);
+    if (!ensureAdminGeneral(actor)) return deny(res);
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: 'ID de usuario inválido' });
-    }
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ error: "ID de usuario inválido" });
 
     const usuario = await User.findById(id);
-    if (!usuario) return res.status(404).json({ error: 'Usuario no encontrado' });
-
-    const alojamientoId = usuario.alojamientoAsignado;
-    if (!alojamientoId) {
-      return res
-        .status(400)
-        .json({ error: 'El usuario no tiene alojamiento asignado' });
-    }
-
-    const alojamiento = await Alojamiento.findById(alojamientoId);
-    if (alojamiento) {
-      alojamiento.estado = 'DISPONIBLE';
-      alojamiento.ocupacionActual = null;
-      await alojamiento.save();
-    }
+    if (!usuario) return deny(res);
 
     usuario.alojamientoAsignado = null;
+    if (usuario.estadoHabitacional === "ALOJAMIENTO") usuario.estadoHabitacional = "SIN_DEFINIR";
     await usuario.save();
 
-    await registrarAuditoria({
-      actorId: req.user._id,
-      targetUserId: usuario._id,
-      tipo: 'DESASIGNAR_ALOJAMIENTO_ORDEN_SUPERIOR',
-      detalle: motivo || 'POR ORDEN SUPERIOR',
+    await registrarAuditoria(req, {
+      action: "ADMIN_UNASSIGN_LODGING",
+      entity: { type: "User", id: usuario._id },
+      meta: { alojamientoId: null },
     });
 
-    return res.json({ message: 'Alojamiento desasignado POR ORDEN SUPERIOR' });
+    return res.json({ message: "Alojamiento desasignado correctamente" });
   } catch (err) {
-    console.error('Error en desasignarAlojamientoPorOrdenSuperior:', err);
-    return res
-      .status(500)
-      .json({ error: 'Error interno al desasignar alojamiento' });
+    console.error("Error en desasignarAlojamientoPorOrdenSuperior:", err);
+    return res.status(500).json({ error: "Error interno al desasignar alojamiento" });
   }
 }
 

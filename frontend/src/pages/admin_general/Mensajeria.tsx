@@ -10,9 +10,11 @@ type Usuario = {
   dni?: string;
   matricula?: string;
   role?: string;
+  permisos?: string[];
   barrioAsignado?: string;
   activo?: boolean;
   archivado?: boolean;
+  viviendaLabel?: string; // AB-702 (solo si ocupa por ANEXO_03)
 };
 
 type MensajeAdjunto = {
@@ -20,7 +22,7 @@ type MensajeAdjunto = {
   nombre?: string;
   mimetype?: string;
   size?: number;
-  path?: string; // si backend lo guarda /uploads/mensajes/...
+  path?: string; // legacy path público (no usar)
 };
 
 type Mensaje = {
@@ -32,9 +34,16 @@ type Mensaje = {
   adjuntos?: MensajeAdjunto[];
   leidoPor?: string[];
   creadoEn?: string;
+  replyTo?: string | null;
+  threadId?: string | null;
 };
 
 type Tab = "entrada" | "enviados" | "nuevo";
+
+type MensajeriaProps = {
+  lockedBarrio?: string;      // si existe, se fuerza el barrio
+  hideBarrioSelect?: boolean; // oculta selector de barrio
+};
 
 function safe(v: unknown) {
   return v === null || v === undefined || v === "" ? "-" : String(v);
@@ -54,6 +63,41 @@ function nombreUsuario(u?: Usuario | null) {
   return u.email || "-";
 }
 
+function idUsuario(x: any): string {
+  if (!x) return "";
+  if (typeof x === "string") return x;
+  if (typeof x === "object" && (x as any)._id) return String((x as any)._id);
+  return "";
+}
+
+function etiquetaRol(u?: Usuario | null) {
+  if (!u) return "-";
+  const role = String(u.role || "").trim();
+  const perms = Array.isArray(u.permisos) ? u.permisos.map(String) : [];
+  if (role === "ADMIN_GENERAL") return "ADMIN_GENERAL";
+  if (role === "ADMIN") return "ADMIN";
+  if (role === "PERMISIONARIO") {
+    if (perms.includes("JEFE_DE_BARRIO")) return "JEFE DE BARRIO";
+    if (perms.includes("INSPECTOR")) return "INSPECTOR DE BARRIO";
+    return "PERMISIONARIO";
+  }
+  return role || "-";
+}
+
+function claveRolFiltro(u?: Usuario | null) {
+  if (!u) return "";
+  const role = String(u.role || "").trim();
+  const perms = Array.isArray(u.permisos) ? u.permisos.map(String) : [];
+  if (role === "ADMIN_GENERAL") return "ADMIN_GENERAL";
+  if (role === "ADMIN") return "ADMIN";
+  if (role === "PERMISIONARIO") {
+    if (perms.includes("JEFE_DE_BARRIO")) return "JEFE_DE_BARRIO";
+    if (perms.includes("INSPECTOR")) return "INSPECTOR";
+    return "PERMISIONARIO";
+  }
+  return role || "";
+}
+
 function resumenMensaje(m?: Mensaje) {
   const asunto = (m?.asunto || "").trim();
   const cuerpo = (m?.cuerpo || "").trim();
@@ -61,7 +105,11 @@ function resumenMensaje(m?: Mensaje) {
   return base.length > 70 ? base.slice(0, 70) + "…" : base;
 }
 
-export default function Mensajeria() {
+function up(v: unknown) {
+  return String(v || "").toUpperCase().trim();
+}
+
+export default function Mensajeria(props: MensajeriaProps = {}) {
   const [tab, setTab] = useState<Tab>("entrada");
 
   const [loading, setLoading] = useState(false);
@@ -88,17 +136,23 @@ export default function Mensajeria() {
   const [cuerpo, setCuerpo] = useState("");
   const [buscaUsuario, setBuscaUsuario] = useState("");
   const [filtroRole, setFiltroRole] = useState("");
-  const [filtroBarrio, setFiltroBarrio] = useState("");
+  const [filtroBarrio, setFiltroBarrio] = useState(props.lockedBarrio ? String(props.lockedBarrio) : "");
   const [files, setFiles] = useState<File[]>([]);
+  const [replyToId, setReplyToId] = useState<string | null>(null);
+
+  // ✅ límite: 200 para todos, excepto ADMIN/ADMIN_GENERAL: 1000
+  const limiteVisible = useMemo(() => {
+    // Si NO hay lockedBarrio significa que estamos en el panel ADMIN_GENERAL (no subpanel inspector/jefe).
+    // En subpaneles se pasa lockedBarrio.
+    const adminLike = !props.lockedBarrio;
+    return adminLike ? 1000 : 200;
+  }, [props.lockedBarrio]);
 
   const rolesDisponibles = useMemo(() => {
-    const set = new Set<string>();
-    usuarios.forEach((u) => {
-      const r = String(u.role || "").trim();
-      if (r) set.add(r);
-    });
-    return Array.from(set).sort();
-  }, [usuarios]);
+    // ✅ Incluimos PERMISIONARIO (solicitado)
+    // Recordatorio: INSPECTOR y JEFE_DE_BARRIO NO son roles base, son permisos dentro de PERMISIONARIO.
+    return ["ADMIN_GENERAL", "ADMIN", "INSPECTOR", "JEFE_DE_BARRIO", "PERMISIONARIO"];
+  }, []);
 
   const barriosDisponibles = useMemo(() => {
     const set = new Set<string>();
@@ -111,15 +165,24 @@ export default function Mensajeria() {
 
   const usuariosFiltrados = useMemo(() => {
     const q = buscaUsuario.trim().toLowerCase();
+    const locked = props.lockedBarrio ? String(props.lockedBarrio) : "";
 
     return usuarios
       .filter((u) => {
-        // por defecto: solo activos y no archivados para enviar
         if (u.activo === false) return false;
         if (u.archivado === true) return false;
 
-        if (filtroRole && String(u.role || "") !== filtroRole) return false;
-        if (filtroBarrio && String(u.barrioAsignado || "") !== filtroBarrio) return false;
+        // 🔒 Si hay barrio bloqueado, se fuerza en frontend (UX). Seguridad real está en backend.
+        if (locked) {
+          const k = claveRolFiltro(u);
+          // ✅ Admins/globales no se restringen por barrio (requerimiento PERMISIONARIO)
+          if (k !== "ADMIN" && k !== "ADMIN_GENERAL" && String(u.barrioAsignado || "") !== locked) return false;
+        }
+
+        if (filtroRole && claveRolFiltro(u) !== filtroRole) return false;
+
+        // solo aplica filtroBarrio si NO está locked
+        if (!locked && filtroBarrio && String(u.barrioAsignado || "") !== filtroBarrio) return false;
 
         if (!q) return true;
 
@@ -131,6 +194,7 @@ export default function Mensajeria() {
           u.matricula,
           u.role,
           u.barrioAsignado,
+          u.viviendaLabel,
         ]
           .filter(Boolean)
           .join(" ")
@@ -143,7 +207,22 @@ export default function Mensajeria() {
           String(b.apellido || "") + String(b.nombre || "")
         )
       );
-  }, [usuarios, buscaUsuario, filtroRole, filtroBarrio]);
+  }, [usuarios, buscaUsuario, filtroRole, filtroBarrio, props.lockedBarrio]);
+
+  const usuariosVisibles = useMemo(() => {
+    return usuariosFiltrados.slice(0, limiteVisible);
+  }, [usuariosFiltrados, limiteVisible]);
+
+  // ✅ estado del checkbox "seleccionar todos"
+  const todosVisiblesSeleccionados = useMemo(() => {
+    if (!usuariosVisibles.length) return false;
+    return usuariosVisibles.every((u) => paraIds.includes(String(u._id)));
+  }, [usuariosVisibles, paraIds]);
+
+  const algunosVisiblesSeleccionados = useMemo(() => {
+    if (!usuariosVisibles.length) return false;
+    return usuariosVisibles.some((u) => paraIds.includes(String(u._id)));
+  }, [usuariosVisibles, paraIds]);
 
   function togglePara(id: string) {
     setParaIds((curr) => (curr.includes(id) ? curr.filter((x) => x !== id) : [...curr, id]));
@@ -154,10 +233,29 @@ export default function Mensajeria() {
   }
 
   function seleccionarPorFiltroActual() {
-    const ids = usuariosFiltrados.map((u) => String(u._id));
+    const ids = usuariosVisibles.map((u) => String(u._id));
     setParaIds((curr) => {
       const set = new Set(curr);
       ids.forEach((id) => set.add(id));
+      return Array.from(set);
+    });
+  }
+
+  function toggleSeleccionarTodosVisibles() {
+    const ids = usuariosVisibles.map((u) => String(u._id));
+    if (!ids.length) return;
+
+    setParaIds((curr) => {
+      const set = new Set(curr);
+      const allSelected = ids.every((id) => set.has(id));
+
+      if (allSelected) {
+        // si ya estaban todos visibles, deseleccionamos solo los visibles
+        ids.forEach((id) => set.delete(id));
+      } else {
+        // si faltaba alguno, seleccionamos todos los visibles
+        ids.forEach((id) => set.add(id));
+      }
       return Array.from(set);
     });
   }
@@ -168,21 +266,22 @@ export default function Mensajeria() {
     setCuerpo("");
     setBuscaUsuario("");
     setFiltroRole("");
-    setFiltroBarrio("");
+    setFiltroBarrio(props.lockedBarrio ? String(props.lockedBarrio) : "");
     setFiles([]);
+    setReplyToId(null);
   }
 
   async function cargarUsuarios() {
-    try {
-      // tu módulo usuarios ya lo usa -> /api/users
-      const res = await http.get("/users", { params: { sortBy: "apellido", sortDir: "asc" } });
-      const lista = Array.isArray(res.data) ? res.data : res.data?.usuarios;
-      setUsuarios(Array.isArray(lista) ? lista : []);
-    } catch (err) {
-      console.error("[Mensajeria] Error cargando usuarios", err);
-      setUsuarios([]);
-    }
+  try {
+    // ✅ agenda institucional unificada (sirve para admins y permisionarios)
+    const res = await http.get("/mensajes/agenda");
+    const lista = Array.isArray(res.data) ? res.data : res.data?.usuarios;
+    setUsuarios(Array.isArray(lista) ? lista : []);
+  } catch (err) {
+    console.error("[Mensajeria] Error cargando agenda", err);
+    setUsuarios([]);
   }
+}
 
   async function cargarBandejas() {
     setLoading(true);
@@ -193,8 +292,8 @@ export default function Mensajeria() {
         http.get("/mensajes/enviados"),
       ]);
 
-      setEntrada(Array.isArray(inboxRes.data) ? inboxRes.data : []);
-      setEnviados(Array.isArray(sentRes.data) ? sentRes.data : []);
+      setEntrada(Array.isArray(inboxRes.data) ? inboxRes.data : (inboxRes.data?.mensajes || []));
+setEnviados(Array.isArray(sentRes.data) ? sentRes.data : (sentRes.data?.mensajes || []));
     } catch (err) {
       console.error("[Mensajeria] Error cargando bandejas", err);
       setEntrada([]);
@@ -213,9 +312,15 @@ export default function Mensajeria() {
 
     try {
       const res = await http.get(`/mensajes/${id}`);
-      setOpenMsg(res.data || null);
 
-      // best-effort: marcar leído si es de entrada
+const msg = res.data?.mensaje;
+if (!msg || !msg._id) {
+  throw new Error("Payload de mensaje inválido");
+}
+
+setOpenMsg(msg);
+
+
       if (desde === "entrada") {
         try {
           await http.patch(`/mensajes/${id}/leido`);
@@ -239,6 +344,46 @@ export default function Mensajeria() {
     setOpenMsg(null);
   }
 
+  function responderAlMensaje(msg: Mensaje) {
+  if (!msg || !msg._id) return;
+
+    // ✅ Respuesta: preselecciona remitente como destinatario y enlaza hilo
+    const remitenteId = typeof (msg as any)?.remitente === "object"
+      ? String((msg as any)?.remitente?._id || "")
+      : String((msg as any)?.remitente || "");
+
+    if (remitenteId) setParaIds([remitenteId]);
+    else setParaIds([]);
+
+    const asuntoBase = String((msg as any)?.asunto || "").trim();
+    const nuevoAsunto = asuntoBase.toUpperCase().startsWith("RE:") ? asuntoBase : `RE: ${asuntoBase}`;
+    setAsunto(nuevoAsunto);
+
+    // Enlace de hilo en backend
+    setReplyToId(String((msg as any)?._id));
+
+    const quoted = [
+      "",
+      "----- Mensaje anterior -----",
+      (msg as any)?.creadoEn ? `Fecha: ${formatFecha((msg as any).creadoEn)}` : undefined,
+      asuntoBase ? `Asunto: ${asuntoBase}` : undefined,
+      remitenteId ? `Remitente: ${nombreUsuario(usuariosById.get(remitenteId))}` : undefined,
+      "",
+      String((msg as any)?.cuerpo || ""),
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    setCuerpo((prev) => {
+      const p = String(prev || "");
+      if (p.trim().length > 0) return p;
+      return quoted;
+    });
+
+    cerrarMensaje();
+    setTab("nuevo");
+  }
+
   function archivosPermitidos(files: File[]) {
     const allowed = ["application/pdf", "image/jpeg", "image/png"];
     return files.filter((f) => allowed.includes(f.type));
@@ -254,15 +399,14 @@ export default function Mensajeria() {
 
     setLoading(true);
     try {
-      // Si backend ya soporta multipart + multer, usamos FormData.
-      // Si no, enviamos JSON sin adjuntos.
       const adj = archivosPermitidos(files);
 
       if (adj.length > 0) {
         const fd = new FormData();
-        paraIds.forEach((id) => fd.append("para", id)); // backend tolera para o para[]
+        paraIds.forEach((id) => fd.append("para", id));
         fd.append("asunto", asunto || "");
         fd.append("cuerpo", cuerpo || "");
+        if (replyToId) fd.append("replyTo", replyToId);
         adj.forEach((f) => fd.append("adjuntos", f));
 
         await http.post("/mensajes", fd, {
@@ -273,6 +417,7 @@ export default function Mensajeria() {
           para: paraIds,
           asunto: asunto || "",
           cuerpo: cuerpo || "",
+          replyTo: replyToId,
           adjuntos: [],
         });
       }
@@ -312,7 +457,6 @@ export default function Mensajeria() {
     <>
       <h1>Mensajería</h1>
 
-      {/* Tabs */}
       <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
         <button style={btnStyle(tab === "entrada")} onClick={() => setTab("entrada")} disabled={loading}>
           Entrada
@@ -328,7 +472,6 @@ export default function Mensajeria() {
         </button>
       </div>
 
-      {/* Error institucional */}
       {errorMsg ? (
         <div style={{ marginBottom: 12, padding: "10px 12px", border: "1px solid #ccc", background: "#f7f7f7" }}>
           {errorMsg}
@@ -358,7 +501,7 @@ export default function Mensajeria() {
                   <tr key={m._id}>
                     <td style={{ whiteSpace: "nowrap" }}>{formatFecha(m.creadoEn)}</td>
                     <td>{resumenMensaje(m)}</td>
-                    <td>{nombreUsuario(usuariosById.get(String(m.remitente)))}</td>
+                    <td>{nombreUsuario(usuariosById.get(idUsuario(m.remitente)))}</td>
                     <td>
                       <button onClick={() => abrirMensaje(m._id, "entrada")} disabled={loading || openLoading}>
                         Ver
@@ -434,7 +577,6 @@ export default function Mensajeria() {
               disabled={loading}
             />
 
-            {/* Adjuntos */}
             <div style={{ padding: 10, border: "1px dashed #ccc", background: "#fafafa" }}>
               <strong>Adjuntos (PDF / JPG / PNG)</strong>
               <div style={{ marginTop: 8, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
@@ -452,23 +594,8 @@ export default function Mensajeria() {
               <div style={{ marginTop: 8, fontSize: 12 }}>
                 Adjuntos seleccionados: <strong>{files.length}</strong>
               </div>
-              {files.length > 0 ? (
-                <ul style={{ marginTop: 8 }}>
-                  {archivosPermitidos(files).map((f, idx) => (
-                    <li key={idx}>
-                      {f.name} — {Math.round(f.size / 1024)} KB
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-              {files.length > 0 && archivosPermitidos(files).length === 0 ? (
-                <p style={{ marginTop: 8 }}>
-                  No hay archivos válidos. Solo se permite PDF/JPG/PNG.
-                </p>
-              ) : null}
             </div>
 
-            {/* Filtros destinatarios */}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
               <input
                 placeholder="Buscar destinatario (nombre/email/dni/matrícula)"
@@ -482,19 +609,41 @@ export default function Mensajeria() {
                 <option value="">Todos los roles</option>
                 {rolesDisponibles.map((r) => (
                   <option key={r} value={r}>
-                    {r}
+                    {r === "ADMIN_GENERAL"
+                      ? "ADMIN_GENERAL"
+                      : r === "ADMIN"
+                      ? "ADMIN"
+                      : r === "INSPECTOR"
+                      ? "INSPECTOR DE BARRIO"
+                      : r === "JEFE_DE_BARRIO"
+                      ? "JEFE DE BARRIO"
+                      : r === "PERMISIONARIO"
+                      ? "PERMISIONARIO"
+                      : r}
                   </option>
                 ))}
               </select>
 
-              <select value={filtroBarrio} onChange={(e) => setFiltroBarrio(e.target.value)} disabled={loading}>
-                <option value="">Todos los barrios</option>
-                {barriosDisponibles.map((b) => (
-                  <option key={b} value={b}>
-                    {b}
+              {/* ✅ barrio: si está locked se oculta o se deshabilita */}
+              {!props.hideBarrioSelect ? (
+                <select
+                  value={props.lockedBarrio ? String(props.lockedBarrio) : filtroBarrio}
+                  onChange={(e) => {
+                    if (!props.lockedBarrio) setFiltroBarrio(e.target.value);
+                  }}
+                  disabled={loading || !!props.lockedBarrio}
+                >
+                  <option value="">
+                    {props.lockedBarrio ? String(props.lockedBarrio) : "Todos los barrios"}
                   </option>
-                ))}
-              </select>
+                  {!props.lockedBarrio &&
+                    barriosDisponibles.map((b) => (
+                      <option key={b} value={b}>
+                        {b}
+                      </option>
+                    ))}
+                </select>
+              ) : null}
 
               <button onClick={seleccionarPorFiltroActual} disabled={loading}>
                 Agregar filtrados
@@ -509,29 +658,39 @@ export default function Mensajeria() {
               <table border={0} cellPadding={6} cellSpacing={0} style={{ width: "100%" }}>
                 <thead>
                   <tr>
-                    <th></th>
+                    {/* ✅ checkbox maestro */}
+                    <th style={{ textAlign: "center", width: 40 }}>
+                      <input
+                        type="checkbox"
+                        checked={todosVisiblesSeleccionados}
+                        ref={(el) => {
+                          if (!el) return;
+                          el.indeterminate = !todosVisiblesSeleccionados && algunosVisiblesSeleccionados;
+                        }}
+                        onChange={toggleSeleccionarTodosVisibles}
+                        disabled={loading || usuariosVisibles.length === 0}
+                        title="Seleccionar todos los visibles"
+                      />
+                    </th>
                     <th>Usuario</th>
                     <th>Rol</th>
                     <th>Barrio</th>
+                    <th>Vivienda</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {usuariosFiltrados.slice(0, 200).map((u) => {
+                  {usuariosVisibles.map((u) => {
                     const id = String(u._id);
                     const checked = paraIds.includes(id);
                     return (
                       <tr key={id}>
                         <td style={{ textAlign: "center" }}>
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => togglePara(id)}
-                            disabled={loading}
-                          />
+                          <input type="checkbox" checked={checked} onChange={() => togglePara(id)} disabled={loading} />
                         </td>
                         <td>{nombreUsuario(u)}</td>
-                        <td>{safe(u.role)}</td>
+                        <td>{etiquetaRol(u)}</td>
                         <td>{safe(u.barrioAsignado)}</td>
+                        <td>{u.viviendaLabel || "-"}</td>
                       </tr>
                     );
                   })}
@@ -540,7 +699,8 @@ export default function Mensajeria() {
             </div>
 
             <p style={{ margin: 0, fontSize: 12 }}>
-              Destinatarios seleccionados: <strong>{paraIds.length}</strong> (se muestran hasta 200 usuarios filtrados)
+              Destinatarios seleccionados: <strong>{paraIds.length}</strong> (se muestran hasta{" "}
+              <strong>{limiteVisible}</strong> usuarios filtrados)
             </p>
 
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -584,7 +744,29 @@ export default function Mensajeria() {
           >
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
               <strong>Mensaje</strong>
-              <button onClick={cerrarMensaje}>Cerrar</button>
+              {openMsg ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    openMsg && responderAlMensaje(openMsg);
+                  }}
+                  disabled={openLoading}
+                >
+                  Responder
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  cerrarMensaje();
+                }}
+              >
+                Cerrar
+              </button>
             </div>
 
             {openLoading ? <p>Cargando…</p> : null}
@@ -598,7 +780,7 @@ export default function Mensajeria() {
                   <strong>Asunto:</strong> {safe(openMsg.asunto)}
                 </p>
                 <p style={{ marginBottom: 6 }}>
-                  <strong>Remitente:</strong> {nombreUsuario(usuariosById.get(String(openMsg.remitente)))}
+                  <strong>Remitente:</strong> {nombreUsuario(usuariosById.get(idUsuario(openMsg.remitente)))}
                 </p>
                 <p style={{ marginBottom: 6 }}>
                   <strong>Destinatarios:</strong>{" "}
@@ -619,8 +801,12 @@ export default function Mensajeria() {
                     <ul>
                       {openMsg.adjuntos.map((a, idx) => (
                         <li key={idx}>
-                          {a.path ? (
-                            <a href={a.path} target="_blank" rel="noopener noreferrer">
+                          {a.fileId ? (
+                            <a
+                              href={`/api/mensajes/${openMsg._id}/adjuntos/${a.fileId}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
                               {safe(a.nombre)}
                             </a>
                           ) : (

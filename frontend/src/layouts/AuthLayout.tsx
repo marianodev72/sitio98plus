@@ -1,26 +1,27 @@
-import { Outlet, useNavigate } from "react-router-dom";
+// frontend/src/layouts/AuthLayout.tsx
+import { Outlet, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
+import { panelPathForUser } from "../routes/panelPathForUser";
 
+/**
+ * Layout PÚBLICO:
+ * - si NO hay user => deja pasar (login/registro)
+ * - si YA hay user => redirige al panel (ruta existente)
+ */
 export default function AuthLayout() {
-  const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { initialized, user } = useAuth();
+  const loc = useLocation();
 
-  async function handleLogout() {
-    await logout();
-    navigate("/", { replace: true });
+  if (!initialized) {
+    return <div style={{ padding: 24 }}>Cargando…</div>;
   }
 
-  return (
-    <>
-      <header style={{ padding: "1rem", borderBottom: "1px solid #ccc" }}>
-        <button onClick={() => navigate(-1)}>🔙 Volver atrás</button>
-        <button onClick={handleLogout} style={{ marginLeft: "1rem" }}>
-          🔒 Cerrar sesión
-        </button>
-      </header>
-      <main style={{ padding: "2rem" }}>
-        <Outlet />
-      </main>
-    </>
-  );
+  const path = String(loc.pathname || "");
+  const esPublica = path.startsWith("/login") || path.startsWith("/registro");
+
+  if (user && esPublica) {
+    return <Navigate to={panelPathForUser(user)} replace />;
+  }
+
+  return <Outlet />;
 }

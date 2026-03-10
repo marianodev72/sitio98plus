@@ -1,3 +1,4 @@
+// frontend/src/routes/ProtectedRoutes.tsx
 import { Routes, Route } from "react-router-dom";
 import RequireAuth from "../guards/RequireAuth";
 import AuthLayout from "../layouts/AuthLayout";

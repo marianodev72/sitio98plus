@@ -10,7 +10,15 @@ type Anexo = {
   estado: string;
   estadoInstitucional?: string | null;
   createdAt?: string;
+  updatedAt?: string;
   datos?: any;
+  usuario?: {
+    _id?: string;
+    nombre?: string;
+    apellido?: string;
+    email?: string;
+    role?: string;
+  };
 };
 
 type Panel = "PERMISIONARIOS" | "ALOJADOS";
@@ -59,6 +67,51 @@ function safeFileNameDate() {
   )}-${pad(d.getMinutes())}`;
 }
 
+/** Etiqueta amigable de vivienda / unidad */
+function viviendaLabel(a: Anexo): string {
+  const d = a?.datos || {};
+
+  const label =
+    (typeof d.viviendaLabel === "string" && d.viviendaLabel.trim()) ||
+    (typeof d.viviendaCodigo === "string" && d.viviendaCodigo.trim()) ||
+    (typeof d.unidadHabitacional === "string" && d.unidadHabitacional.trim()) ||
+    (typeof d.casa === "string" && d.casa.trim()) ||
+    "";
+
+  if (label) return label;
+
+  // Último fallback: si viene ObjectId, no mostrarlo entero
+  const vid = typeof d.viviendaId === "string" ? d.viviendaId.trim() : "";
+  if (/^[0-9a-fA-F]{24}$/.test(vid)) return `…${vid.slice(-6)}`;
+
+  return "—";
+}
+
+/** Etiqueta amigable de persona (postulante / permisionario / titular) */
+function personaLabel(a: Anexo): string {
+  const d = a.datos || {};
+
+  if (typeof d.apellidoNombres === "string" && d.apellidoNombres.trim()) {
+    return d.apellidoNombres.trim();
+  }
+  if (typeof d.permisionarioNombre === "string" && d.permisionarioNombre.trim()) {
+    return d.permisionarioNombre.trim();
+  }
+  if (typeof d.postulanteNombre === "string" && d.postulanteNombre.trim()) {
+    return d.postulanteNombre.trim();
+  }
+  if (typeof d.titularNombre === "string" && d.titularNombre.trim()) {
+    return d.titularNombre.trim();
+  }
+
+  // 👇 Fallback para ANEXO_01: usamos los datos del usuario creador
+  const ape = a.usuario?.apellido ? String(a.usuario.apellido).trim() : "";
+  const nom = a.usuario?.nombre ? String(a.usuario.nombre).trim() : "";
+  const full = `${ape} ${nom}`.trim();
+
+  return full || "—";
+}
+
 export default function Gestiones() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -79,7 +132,8 @@ export default function Gestiones() {
   const esAdmin = myRole === "ADMIN" || myRole === "ADMIN_GENERAL";
 
   useEffect(() => {
-    const first = panel === "PERMISIONARIOS" ? ANEXOS_PERMISIONARIO[0] : ANEXOS_ALOJADO[0];
+    const first =
+      panel === "PERMISIONARIOS" ? ANEXOS_PERMISIONARIO[0] : ANEXOS_ALOJADO[0];
     setCodigo(first);
   }, [panel]);
 
@@ -100,7 +154,9 @@ export default function Gestiones() {
       }
     } catch (err) {
       console.error("[GESTIONES] Error listando", err);
-      setErrorMsg("La página solicitada no está disponible. Por favor, contacte al administrador.");
+      setErrorMsg(
+        "La página solicitada no está disponible. Por favor, contacte al administrador."
+      );
       setItems([]);
     } finally {
       setLoading(false);
@@ -127,7 +183,9 @@ export default function Gestiones() {
       window.URL.revokeObjectURL(url);
     } catch (err) {
       console.error("[GESTIONES] Error PDF", err);
-      setErrorMsg("La operación solicitada no está disponible. Por favor, contacte al administrador.");
+      setErrorMsg(
+        "La operación solicitada no está disponible. Por favor, contacte al administrador."
+      );
     } finally {
       setBusyId(null);
     }
@@ -144,23 +202,42 @@ export default function Gestiones() {
 
       {/* Paneles */}
       <section style={{ display: "flex", gap: 12, marginBottom: 12 }}>
-        <button onClick={() => setPanel("PERMISIONARIOS")} style={{ background: panel === "PERMISIONARIOS" ? "#eee" : "white" }}>
+        <button
+          onClick={() => setPanel("PERMISIONARIOS")}
+          style={{ background: panel === "PERMISIONARIOS" ? "#eee" : "white" }}
+        >
           Permisionarios
         </button>
-        <button onClick={() => setPanel("ALOJADOS")} style={{ background: panel === "ALOJADOS" ? "#eee" : "white" }}>
+        <button
+          onClick={() => setPanel("ALOJADOS")}
+          style={{ background: panel === "ALOJADOS" ? "#eee" : "white" }}
+        >
           Alojados
         </button>
       </section>
 
       {errorMsg ? (
-        <div style={{ marginBottom: 12, padding: 10, border: "1px solid #ccc", background: "#f7f7f7" }}>
+        <div
+          style={{
+            marginBottom: 12,
+            padding: 10,
+            border: "1px solid #ccc",
+            background: "#f7f7f7",
+          }}
+        >
           {errorMsg}
         </div>
       ) : null}
 
       {/* Selector */}
-      <section style={{ marginBottom: 12, padding: 12, border: "1px solid #ddd" }}>
-        <select value={codigo} onChange={(e) => setCodigo(e.target.value)} disabled={loading}>
+      <section
+        style={{ marginBottom: 12, padding: 12, border: "1px solid #ddd" }}
+      >
+        <select
+          value={codigo}
+          onChange={(e) => setCodigo(e.target.value)}
+          disabled={loading}
+        >
           {anexosDisponibles.map((c) => (
             <option key={c} value={c}>
               {c}
@@ -180,11 +257,18 @@ export default function Gestiones() {
         ) : items.length === 0 ? (
           <p>No hay anexos.</p>
         ) : (
-          <table border={1} cellPadding={6} cellSpacing={0} style={{ width: "100%" }}>
+          <table
+            border={1}
+            cellPadding={6}
+            cellSpacing={0}
+            style={{ width: "100%" }}
+          >
             <thead>
               <tr>
                 <th>Código</th>
                 <th>Estado</th>
+                <th>Vivienda / Unidad</th>
+                <th>Postulante / Permisionario</th>
                 <th>Fecha</th>
                 <th>Acciones</th>
               </tr>
@@ -198,14 +282,26 @@ export default function Gestiones() {
                     <td>{safe(an.codigo)}</td>
                     <td>
                       {safe(an.estado)}
-                      {an.estadoInstitucional ? ` / ${safe(an.estadoInstitucional)}` : ""}
+                      {an.estadoInstitucional
+                        ? ` / ${safe(an.estadoInstitucional)}`
+                        : ""}
                     </td>
-                    <td>{fmtDate(an.createdAt)}</td>
+                    <td>{viviendaLabel(an)}</td>
+                    <td>{personaLabel(an)}</td>
+                    <td>{fmtDate(an.updatedAt || an.createdAt)}</td>
                     <td style={{ whiteSpace: "nowrap" }}>
-                      <button disabled={busy} onClick={() => navigate(`/app/admin-general/gestiones/${an._id}`)}>
+                      <button
+                        disabled={busy}
+                        onClick={() =>
+                          navigate(`/app/admin-general/gestiones/${an._id}`)
+                        }
+                      >
                         Gestionar
                       </button>{" "}
-                      <button disabled={busy} onClick={() => descargarPdf(an._id, up(an.codigo))}>
+                      <button
+                        disabled={busy}
+                        onClick={() => descargarPdf(an._id, up(an.codigo))}
+                      >
                         PDF
                       </button>
                     </td>

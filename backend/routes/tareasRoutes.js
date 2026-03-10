@@ -9,12 +9,14 @@ const {
 } = require('../controllers/tareasController');
 
 const { authRequired, requireRole } = require('../middleware/auth');
+const { refreshUserPrivileges } = require('../middleware/refreshUserPrivileges');
 
 // Ejecutar recordatorios de desocupación (90 días antes)
 // Pensado para ser llamado por ADMIN_GENERAL o por un job programado
 router.post(
   '/recordatorios-desocupacion/run',
   authRequired,
+  refreshUserPrivileges,
   requireRole('ADMIN_GENERAL'),
   runRecordatoriosDesocupacion
 );

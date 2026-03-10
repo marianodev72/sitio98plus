@@ -49,19 +49,22 @@ async function setEstadoInstitucional(req, res) {
     const user = req.user;
     const role = up(user?.role);
 
-    // Ajustá esto si querés permitir ADMIN también
+    // Fail-closed: usuario o rol no determinable
     const esAdmin = role === "ADMIN_GENERAL" || role === "ADMIN";
-    if (!esAdmin) return genericDenied(res);
+    if (!user || !esAdmin) return genericDenied(res);
 
     const { id } = req.params;
+    // Validación temprana de ID (evita lookup ambiguo)
     if (!isObjectId(id)) return genericDenied(res);
 
     const { estadoInstitucional, motivo } = req.body || {};
     const ei = up(estadoInstitucional);
 
+    // Estado requerido
     if (!ei) return badRequest(res);
 
     const anexo = await FormSubmission.findById(id);
+    // Opacidad: no distinguir inexistente / no autorizado
     if (!anexo) return genericDenied(res);
 
     const allowed = allowedEstadosByCodigo(anexo.codigo);
@@ -70,7 +73,7 @@ async function setEstadoInstitucional(req, res) {
     // Set estadoInstitucional en el documento
     anexo.estadoInstitucional = ei;
 
-    // Guardamos un historial dentro de datos (porque el schema no trae historial institucional propio)
+    // Historial institucional
     anexo.datos = anexo.datos && typeof anexo.datos === "object" ? anexo.datos : {};
     anexo.datos._historialInstitucional = Array.isArray(anexo.datos._historialInstitucional)
       ? anexo.datos._historialInstitucional

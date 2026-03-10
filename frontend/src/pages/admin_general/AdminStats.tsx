@@ -1,8 +1,525 @@
-export default function AdminStats() {
+import React, { useEffect, useMemo, useState } from "react";
+import http from "../../api/http";
+
+/* ================= UTILIDADES ================= */
+
+// Colores fallback (cuando el label no tiene semántica fija)
+const FALLBACK_COLORS = [
+  "#4CAF50",
+  "#FFC107",
+  "#F44336",
+  "#2196F3",
+  "#9C27B0",
+  "#FF9800",
+  "#00BCD4",
+  "#795548",
+];
+
+// ✅ Colores fijos por significado institucional (semánticos)
+const COLOR_MAP: Record<string, string> = {
+  // Hacinamiento
+  ROJO: "#E53935",
+  AMARILLO: "#FBC02D",
+  VERDE: "#43A047",
+
+  // Estado vivienda (ajustá si tenés otros estados)
+  OCUPADA: "#43A047",
+  DISPONIBLE: "#1E88E5",
+  RESERVADA: "#8E24AA",
+  REPARACION: "#FB8C00",
+  REPARACIÓN: "#FB8C00",
+
+  // Buckets y normalizaciones
+  OTROS: "#9E9E9E",
+  SIN_DATO: "#BDBDBD",
+  SIN_BARRIO: "#BDBDBD",
+  SIN_ESTADO: "#BDBDBD",
+};
+
+function normalizeKey(v: unknown) {
+  return String(v ?? "")
+    .toUpperCase()
+    .trim()
+    .replace(/\s+/g, "_");
+}
+
+function pickColor(label: string, i: number) {
+  const k = normalizeKey(label);
+  return COLOR_MAP[k] ?? FALLBACK_COLORS[i % FALLBACK_COLORS.length];
+}
+
+function download(filename: string, content: string, type = "text/plain") {
+  const blob = new Blob([content], { type });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+const ORG_HEADER = "BASE NAVAL USHUAIA - DEPARTAMENTO ALCALDIA";
+const ORG_SUBHEADER = "Estadísticas Institucionales – ORGANO ADMINISTRADOR VVFFZN98";
+
+function safeFile(s: string) {
+  return String(s || "grafico")
+    .replace(/[\\/:*?"<>|]/g, "-")
+    .replace(/\s+/g, "_")
+    .slice(0, 120);
+}
+
+function escapeXml(s: string) {
+  return String(s ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
+}
+
+/* ================= UI BLOQUES (INSTITUCIONAL) ================= */
+
+function Card({
+  children,
+  title,
+  subtitle,
+}: {
+  children: React.ReactNode;
+  title: string;
+  subtitle?: string;
+}) {
   return (
-    <>
-      <h2>Estadísticas Generales</h2>
-      <p>Sección reservada para métricas institucionales.</p>
-    </>
+    <div
+      style={{
+        border: "1px solid #e5e5e5",
+        borderRadius: 14,
+        padding: 16,
+        background: "#fff",
+      }}
+    >
+      <div style={{ fontSize: 15, fontWeight: 900 }}>{title}</div>
+      {subtitle ? (
+        <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>{subtitle}</div>
+      ) : null}
+      <div style={{ marginTop: 10 }}>{children}</div>
+    </div>
+  );
+}
+
+function KpiCard({
+  title,
+  value,
+  subtitle,
+  accent = "#111",
+}: {
+  title: string;
+  value: string | number;
+  subtitle?: string;
+  accent?: string;
+}) {
+  return (
+    <div
+      style={{
+        border: "1px solid #e5e5e5",
+        borderRadius: 14,
+        padding: 16,
+        background: "#fff",
+        position: "relative",
+        overflow: "hidden",
+        width: "100%",
+        maxWidth: 320,
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: 6,
+          background: accent,
+          opacity: 0.95,
+        }}
+      />
+      <div style={{ paddingLeft: 10, textAlign: "center" }}>
+        <div style={{ fontSize: 13, fontWeight: 900, opacity: 0.9 }}>{title}</div>
+        <div style={{ marginTop: 10, fontSize: 36, fontWeight: 900, letterSpacing: -0.4 }}>
+          {value}
+        </div>
+        {subtitle ? <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>{subtitle}</div> : null}
+      </div>
+    </div>
+  );
+}
+
+/* ================= PIE CHART SVG ================= */
+
+function PieChart({
+  title,
+  subtitle,
+  data,
+  scopeLabel,
+}: {
+  title: string;
+  subtitle?: string;
+  data: { label: string; value: number }[];
+  scopeLabel?: string;
+}) {
+  const total = (data || []).reduce((a, b) => a + (Number(b.value) || 0), 0);
+
+  // Orden institucional: mayor a menor para lectura
+  const sorted = useMemo(() => {
+    return [...(data || [])].sort((a, b) => (Number(b.value) || 0) - (Number(a.value) || 0));
+  }, [data]);
+
+  const safeData = total > 0 ? sorted.filter((d) => Number(d.value || 0) > 0) : [];
+  let acc = 0;
+
+  const paths = safeData.map((d, i) => {
+    const start = (acc / total) * 2 * Math.PI;
+    acc += Number(d.value || 0);
+    const end = (acc / total) * 2 * Math.PI;
+
+    const x1 = 50 + 40 * Math.cos(start);
+    const y1 = 50 + 40 * Math.sin(start);
+    const x2 = 50 + 40 * Math.cos(end);
+    const y2 = 50 + 40 * Math.sin(end);
+
+    const large = end - start > Math.PI ? 1 : 0;
+    const path = `M 50 50 L ${x1} ${y1} A 40 40 0 ${large} 1 ${x2} ${y2} Z`;
+
+    const fill = pickColor(d.label, i);
+    return <path key={i} d={path} fill={fill} />;
+  });
+
+  const onDownloadSVG = () => {
+    const stamp = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const fecha = `${pad(stamp.getDate())}/${pad(stamp.getMonth() + 1)}/${stamp.getFullYear()} ${pad(
+      stamp.getHours()
+    )}:${pad(stamp.getMinutes())}`;
+
+    const W = 1100;
+    const H = 720;
+
+    const cx = 330;
+    const cy = 400;
+    const r = 180;
+
+    const slices = total > 0 ? safeData : [];
+    let acc2 = 0;
+
+    const slicePaths = slices.map((d, i) => {
+      const v = Number(d.value || 0);
+      const start = (acc2 / total) * 2 * Math.PI;
+      acc2 += v;
+      const end = (acc2 / total) * 2 * Math.PI;
+
+      const x1 = cx + r * Math.cos(start);
+      const y1 = cy + r * Math.sin(start);
+      const x2 = cx + r * Math.cos(end);
+      const y2 = cy + r * Math.sin(end);
+
+      const large = end - start > Math.PI ? 1 : 0;
+      const path = `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z`;
+
+      const fill = pickColor(d.label, i);
+      return `<path d="${path}" fill="${fill}" />`;
+    });
+
+    const legendX = 640;
+    const legendY = 290;
+    const lineH = 26;
+
+    const legendItems = (slices.length ? slices : sorted).slice(0, 24).map((d, i) => {
+      const fill = pickColor(d.label, i);
+      const v = Number(d.value || 0);
+      const pct = total > 0 ? Math.round((v / total) * 100) : 0;
+      const y = legendY + i * lineH;
+
+      return `
+        <rect x="${legendX}" y="${y - 12}" width="14" height="14" fill="${fill}" />
+        <text x="${legendX + 22}" y="${y}" font-size="14" fill="#111">
+          ${escapeXml(String(d.label ?? "SIN_DATO"))}: ${v}${total > 0 ? ` (${pct}%)` : ""}
+        </text>
+      `;
+    });
+
+    const header = `
+      <text x="60" y="70" font-size="24" font-weight="700" fill="#111">${escapeXml(ORG_HEADER)}</text>
+      <text x="60" y="105" font-size="16" font-weight="600" fill="#111">${escapeXml(ORG_SUBHEADER)}</text>
+
+      <text x="60" y="150" font-size="20" font-weight="700" fill="#111">${escapeXml(title)}</text>
+      ${
+        subtitle
+          ? `<text x="60" y="178" font-size="13" fill="#333">${escapeXml(subtitle)}</text>`
+          : ""
+      }
+
+      <text x="60" y="205" font-size="13" fill="#333">${escapeXml(
+        scopeLabel || "Ámbito: Todos"
+      )} • Emitido: ${fecha}</text>
+      <line x1="60" y1="225" x2="${W - 60}" y2="225" stroke="#ddd" stroke-width="2" />
+    `;
+
+    const footer = `
+      <line x1="60" y1="${H - 90}" x2="${W - 60}" y2="${H - 90}" stroke="#eee" stroke-width="2" />
+      <text x="60" y="${H - 58}" font-size="12" fill="#666">
+        Documento de uso interno. Salida agregada y opaca. No contiene datos nominales ni registros individuales.
+      </text>
+      <text x="60" y="${H - 38}" font-size="12" fill="#666">
+        Acceso exclusivo ADMIN_GENERAL.
+      </text>
+    `;
+
+    const empty =
+      total <= 0
+        ? `<text x="${cx}" y="${cy}" text-anchor="middle" font-size="16" fill="#555">Sin datos</text>`
+        : "";
+
+    const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+  <rect x="0" y="0" width="${W}" height="${H}" fill="#fff"/>
+  ${header}
+
+  ${slicePaths.join("\n")}
+  ${empty}
+
+  <text x="${cx}" y="${cy + r + 40}" text-anchor="middle" font-size="14" fill="#111">
+    Total: ${total}
+  </text>
+
+  <text x="${legendX}" y="${legendY - 40}" font-size="16" font-weight="700" fill="#111">Referencias</text>
+  ${legendItems.join("\n")}
+
+  ${footer}
+</svg>`;
+
+    download(`${safeFile(title)}_${safeFile(scopeLabel || "TODOS")}.svg`, svg, "image/svg+xml;charset=utf-8");
+  };
+
+  const onDownloadCSV = () => {
+    const stamp = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const fecha = `${pad(stamp.getDate())}/${pad(stamp.getMonth() + 1)}/${stamp.getFullYear()} ${pad(
+      stamp.getHours()
+    )}:${pad(stamp.getMinutes())}`;
+
+    const rows = (sorted || []).map((d) => {
+      const v = Number(d.value || 0);
+      const pct = total > 0 ? Math.round((v / total) * 100) : 0;
+      return { label: String(d.label ?? "SIN_DATO"), value: v, pct };
+    });
+
+    const header =
+      `${ORG_HEADER}\n` +
+      `${ORG_SUBHEADER}\n` +
+      `${title}\n` +
+      (subtitle ? `${subtitle}\n` : "") +
+      `${scopeLabel || "Ámbito: Todos"}\n` +
+      `Emitido: ${fecha}\n\n`;
+
+    const csv =
+      header +
+      `Etiqueta,Cantidad,Porcentaje\n` +
+      rows.map((r) => `"${r.label.replaceAll('"', '""')}",${r.value},${r.pct}%`).join("\n") +
+      `\n`;
+
+    download(`${safeFile(title)}_${safeFile(scopeLabel || "TODOS")}.csv`, csv, "text/csv;charset=utf-8");
+  };
+
+  return (
+    <div>
+      <svg width="220" height="220" viewBox="0 0 100 100" aria-label={title} style={{ marginTop: 8 }}>
+        {paths}
+        {total <= 0 ? (
+          <text x="50" y="52" textAnchor="middle" fontSize="8">
+            Sin datos
+          </text>
+        ) : null}
+      </svg>
+
+      <ul style={{ marginTop: 8 }}>
+        {(sorted || []).map((d, i) => {
+          const v = Number(d.value || 0);
+          const pct = total > 0 ? Math.round((v / total) * 100) : 0;
+          const fill = pickColor(d.label, i);
+          return (
+            <li key={i}>
+              <span
+                style={{
+                  display: "inline-block",
+                  width: 12,
+                  height: 12,
+                  background: fill,
+                  marginRight: 6,
+                }}
+              />
+              {d.label}: {v}
+              {total > 0 ? ` (${pct}%)` : ""}
+            </li>
+          );
+        })}
+      </ul>
+
+      <div style={{ marginTop: 8 }}>
+        <button onClick={onDownloadSVG}>Descargar gráfico</button>{" "}
+        <button onClick={onDownloadCSV}>Descargar datos</button>
+      </div>
+    </div>
+  );
+}
+
+/* ================= PAGE ================= */
+
+export default function AdminStats() {
+  const [barrios, setBarrios] = useState<string[]>([]);
+  const [barrio, setBarrio] = useState<string>("TODOS");
+  const [data, setData] = useState<any>(null);
+  const [emittedLabel, setEmittedLabel] = useState<string>("");
+
+  useEffect(() => {
+    http.get("/stats/barrios").then((r) => setBarrios(r.data || []));
+  }, []);
+
+  useEffect(() => {
+    const url = barrio === "TODOS" ? "/stats/resumen" : `/stats/barrio/${encodeURIComponent(barrio)}`;
+    http.get(url).then((r) => setData(r.data));
+  }, [barrio]);
+
+  useEffect(() => {
+    const stamp = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const txt = `Emitido: ${pad(stamp.getDate())}/${pad(stamp.getMonth() + 1)}/${stamp.getFullYear()} ${pad(
+      stamp.getHours()
+    )}:${pad(stamp.getMinutes())}`;
+    setEmittedLabel(txt);
+  }, [barrio]);
+
+  const charts = useMemo(() => {
+    if (!data) return null;
+
+    return [
+      {
+        title: "Distribución de Habitantes por Vivienda",
+        subtitle: "Cantidad de habitantes por vivienda (bucket 1..6, 7+).",
+        rows: (data.habDist || []).map((x: any) => ({ label: x._id, value: x.cantidad })),
+      },
+      {
+        title: "Hacinamiento por Semáforo",
+        subtitle: "Semáforo por relación dormitorios vs ocupación (VERDE/AMARILLO/ROJO).",
+        rows: (data.hacColor || []).map((x: any) => ({ label: x._id, value: x.cantidad })),
+      },
+      {
+        title: "Viviendas por Dormitorios",
+        subtitle: "Distribución de viviendas según cantidad de dormitorios declarados.",
+        rows: (data.viviendasPorDorm || []).map((x: any) => ({ label: String(x._id), value: x.cantidad })),
+      },
+      {
+        title: "Viviendas por Estado",
+        subtitle: "Distribución de viviendas por estado administrativo (ocupada, disponible, etc.).",
+        rows: (data.viviendasPorEstado || []).map((x: any) => ({ label: x._id, value: x.cantidad })),
+      },
+      {
+        title: "Pedidos de Trabajo (ANEXO_11)",
+        subtitle: "Cantidad de formularios ANEXO_11 ingresados (agregado).",
+        rows: (data.pedidosTrabajo || []).map((x: any) => ({ label: x._id || "SIN_BARRIO", value: x.cantidad })),
+      },
+    ];
+  }, [data]);
+
+  const scopeLabel = barrio === "TODOS" ? "Ámbito: Todos" : `Ámbito: Barrio ${barrio}`;
+
+  // KPI helpers
+  const vTotal = data?.viviendas?.total ?? data?.viviendas ?? 0;
+  const est = data?.viviendasPorEstado || [];
+  const ocupadas = est.find((x: any) => normalizeKey(x._id) === "OCUPADA")?.cantidad ?? 0;
+  const disponibles = est.find((x: any) => normalizeKey(x._id) === "DISPONIBLE")?.cantidad ?? 0;
+  const hac = data?.hacColor || [];
+  const rojo = hac.find((x: any) => normalizeKey(x._id) === "ROJO")?.cantidad ?? 0;
+  const pt = data?.pedidosTrabajo || [];
+  const pedidosTotal = pt.reduce((a: number, b: any) => a + (b.cantidad || 0), 0);
+
+  return (
+    <div style={{ padding: 24, background: "#f6f7f9", minHeight: "100vh" }}>
+      {/* HEADER */}
+      <div style={{ border: "1px solid #e5e5e5", borderRadius: 12, padding: 18, background: "#fff" }}>
+        <div style={{ fontSize: 22, fontWeight: 900 }}>{ORG_HEADER}</div>
+        <div style={{ marginTop: 6, fontSize: 14, fontWeight: 700, opacity: 0.85 }}>{ORG_SUBHEADER}</div>
+
+        <div
+          style={{
+            marginTop: 14,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <span style={{ fontWeight: 900 }}>Ámbito:</span>
+            <select
+              value={barrio}
+              onChange={(e) => setBarrio(e.target.value)}
+              style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #ccc" }}
+            >
+              <option value="TODOS">Todos</option>
+              {barrios.map((b) => (
+                <option key={b} value={b}>
+                  {b}
+                </option>
+              ))}
+            </select>
+            <span style={{ fontSize: 13, opacity: 0.8 }}>{emittedLabel}</span>
+          </div>
+
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button disabled style={{ padding: "7px 10px", borderRadius: 8, border: "1px solid #ddd", opacity: 0.6 }}>
+              Descargar informe (PDF)
+            </button>
+            <button disabled style={{ padding: "7px 10px", borderRadius: 8, border: "1px solid #ddd", opacity: 0.6 }}>
+              Descargar tablero (CSV)
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* KPIs */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
+          gap: 12,
+          marginTop: 14,
+          justifyItems: "center",
+        }}
+      >
+        <KpiCard title="Viviendas Totales" value={vTotal} accent="#111" subtitle={scopeLabel} />
+        <KpiCard
+          title="Ocupadas / Disponibles"
+          value={`${ocupadas} / ${disponibles}`}
+          accent="#1E88E5"
+          subtitle="Resumen por estado"
+        />
+        <KpiCard title="Hacinamiento ROJO" value={rojo} accent="#E53935" subtitle="Crítico" />
+        <KpiCard title="Pedidos de Trabajo (ANEXO_11)" value={pedidosTotal} accent="#8E24AA" subtitle="Total agregado" />
+      </div>
+
+      {/* GRÁFICOS */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+          gap: 12,
+          marginTop: 14,
+        }}
+      >
+        {charts?.map((c, i) => (
+          <Card key={i} title={c.title} subtitle={c.subtitle}>
+            <PieChart title={c.title} subtitle={c.subtitle} data={c.rows} scopeLabel={scopeLabel} />
+          </Card>
+        ))}
+      </div>
+    </div>
   );
 }

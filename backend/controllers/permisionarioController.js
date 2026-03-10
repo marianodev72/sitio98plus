@@ -9,7 +9,32 @@ exports.getMisDatos = async (req, res) => {
   try {
     const userId = req.user._id;
 
-    const datos = await Permisionario.findOne({ user: userId });
+    // ✅ A5 Minimización técnica:
+    // - NO se devuelve el documento completo
+    // - Se usa allowlist explícita
+    // - Se incluyen datos de servicios (considerados públicos / asociados a la vivienda)
+    // - Se mantiene el contrato { ok: true, datos }
+    const datos = await Permisionario.findOne({ user: userId }).select(
+      [
+        "user",
+        "nombreCompleto",
+        "dni",
+        "cuit",
+        "telefono",
+        "email",
+        "domicilio",
+        "destinoActual",
+        "grado",
+        "fechaUltimoAscenso",
+        "grupoFamiliar",
+        "animales",
+        "casaNumero",
+        "servicioLuz",
+        "servicioAgua",
+        "servicioGas",
+        "fechaAlta",
+      ].join(" ")
+    );
 
     if (!datos) {
       return res.status(404).json({

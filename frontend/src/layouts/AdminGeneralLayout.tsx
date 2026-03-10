@@ -1,88 +1,97 @@
-// src/layouts/AdminGeneralLayout.tsx
-import { useEffect } from "react";
-import { Link, Outlet, useNavigate } from "react-router-dom";
-import { http } from "../api/http";
+// frontend/src/layouts/AdminGeneralLayout.tsx
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
+
+function linkStyle({ isActive }: { isActive: boolean }) {
+  return {
+    padding: "8px 10px",
+    borderRadius: 8,
+    textDecoration: "none",
+    fontWeight: 800,
+    color: isActive ? "white" : "#111",
+    background: isActive ? "#111" : "transparent",
+    border: "1px solid #e5e5e5",
+  } as const;
+}
 
 export default function AdminGeneralLayout() {
   const navigate = useNavigate();
-  const { user, logout, refresh } = useAuth();
+  const { user, logout } = useAuth();
 
-  // 🔒 Guard institucional: SOLO ADMIN_GENERAL
-  useEffect(() => {
-    let alive = true;
-
-    (async () => {
-      // Si el user todavía no está cargado, intentamos refrescar sesión
-      if (!user) {
-        try {
-          await refresh();
-        } catch {
-          // silencio
-        }
-      }
-
-      if (!alive) return;
-
-      const role = String(user?.role || "").toUpperCase();
-      if (role !== "ADMIN_GENERAL") {
-        navigate("/login", { replace: true });
-      }
-    })();
-
-    return () => {
-      alive = false;
-    };
-  }, [user, refresh, navigate]);
-
-  async function cerrarSesion() {
+  async function handleLogout() {
     try {
-      await http.post("/auth/logout");
-    } catch {
-      // silencio
+      await logout();
     } finally {
-      try {
-        await logout(); // limpia estado local
-      } catch {
-        // silencio
-      }
-      navigate("/login", { replace: true });
+      navigate("/", { replace: true });
     }
   }
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+    <div style={{ minHeight: "100vh", background: "#fafafa" }}>
       <header
         style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
+          background: "white",
+          borderBottom: "1px solid #e5e5e5",
           padding: "12px 16px",
-          borderBottom: "1px solid #ddd",
+          position: "sticky",
+          top: 0,
+          zIndex: 5,
         }}
       >
-        <button onClick={() => navigate(-1)}>← Volver</button>
-        <strong>Sitio 98</strong>
-        <button onClick={cerrarSesion}>Cerrar sesión</button>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 900 }}>Panel ADMIN GENERAL</div>
+            <div style={{ fontSize: 12, opacity: 0.8 }}>
+              {user?.apellido} {user?.nombre} — <b>{String(user?.role || "")}</b>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <button onClick={() => navigate(-1)}>Volver</button>
+            <button onClick={handleLogout}>Cerrar sesión</button>
+          </div>
+        </div>
+
+        <nav style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <NavLink to="." end style={linkStyle}>
+            Dashboard
+          </NavLink>
+          <NavLink to="estadisticas" style={linkStyle}>
+            Estadísticas
+          </NavLink>
+          <NavLink to="usuarios" style={linkStyle}>
+            Usuarios
+          </NavLink>
+          <NavLink to="registros" style={linkStyle}>
+            Registros
+          </NavLink>
+          <NavLink to="viviendas" style={linkStyle}>
+            Viviendas
+          </NavLink>
+          <NavLink to="liquidaciones" style={linkStyle}>
+            Liquidaciones
+          </NavLink>
+          <NavLink to="servicios" style={linkStyle}>
+            Servicios
+          </NavLink>
+          <NavLink to="gestiones" style={linkStyle}>
+            Gestiones
+          </NavLink>
+          <NavLink to="mantenimientos" style={linkStyle}>
+            Mantenimientos
+          </NavLink>
+          <NavLink to="mensajeria" style={linkStyle}>
+            Mensajería
+          </NavLink>
+
+          {/* ✅ NUEVO */}
+          <NavLink to="auditoria" style={linkStyle}>
+            Auditoría Institucional
+          </NavLink>
+        </nav>
       </header>
 
-      <nav
-        style={{
-          display: "flex",
-          gap: 12,
-          padding: "10px 16px",
-          borderBottom: "1px solid #eee",
-          flexWrap: "wrap",
-        }}
-      >
-        <Link to="/app/admin-general/viviendas">Viviendas</Link>
-        <Link to="/app/admin-general/mensajeria">Mensajería</Link>
-        <Link to="/app/admin-general/gestiones">Gestiones</Link>
-        <Link to="/app/admin-general/usuarios">Usuarios</Link>
-        <Link to="/app/admin-general/estadisticas">Estadísticas</Link>
-      </nav>
-
-      <main style={{ flex: 1, padding: "16px" }}>
+      <main style={{ padding: 16 }}>
         <Outlet />
       </main>
     </div>

@@ -1,197 +1,209 @@
 // backend/controllers/statsController.js
-// Controlador de estadísticas institucionales ZN98 / Sitio 98 Plus
 
-const Vivienda = require('../models/vivienda');
-const { User } = require('../models/user'); // 👈 IMPORTACIÓN CORRECTA
-const { FormSubmission } = require('../models/FormSubmission'); // ✅ FIX: faltaba esto
+const Vivienda = require("../models/vivienda");
+const { User } = require("../models/user");
+const { FormSubmission } = require("../models/FormSubmission");
 
-// Estos modelos pueden no existir todavía.
-// Si no existen, usamos stubs y dejamos 0 en esas secciones.
-let Alojamiento = null;
-let PedidoTrabajoVivienda = null;
-let PedidoTrabajoAlojamiento = null;
+const MIS_DATOS_COLL = "misdatosdeclaradosupdates";
+const STATS_K = 3;
 
-try {
-  Alojamiento = require('../models/alojamiento');
-} catch (err) {
-  console.log('[STATS] Modelo Alojamiento no encontrado, se usará 0 en alojamientos.');
+/* ================= UTILIDADES ================= */
+
+function up(v) {
+  return String(v || "").toUpperCase().trim();
 }
 
-try {
-  PedidoTrabajoVivienda = require('../models/PedidoTrabajoVivienda');
-} catch (err) {
-  console.log('[STATS] Modelo PedidoTrabajoVivienda no encontrado, se usará 0 en pedidos vivienda.');
+function deny(res) {
+  return res
+    .status(404)
+    .json({ message: "No es posible procesar su solicitud, contacte al Administrador" });
 }
 
-try {
-  PedidoTrabajoAlojamiento = require('../models/PedidoTrabajoAlojamiento');
-} catch (err) {
-  console.log('[STATS] Modelo PedidoTrabajoAlojamiento no encontrado, se usará 0 en pedidos alojamiento.');
+function isAdminGeneral(req) {
+  return up(req.user?.role) === "ADMIN_GENERAL";
 }
 
-/**
- * GET /api/stats/resumen
- * Devuelve un resumen estadístico para el panel del ADMIN_GENERAL.
- */
+function kAnonBucket(list, labelKey, countKey, k = STATS_K) {
+  if (!Array.isArray(list)) return [];
+  let otros = 0;
+  const out = [];
+
+  for (const it of list) {
+    const n = Number(it?.[countKey] || 0);
+    if (n > 0 && n < k) otros += n;
+    else out.push(it);
+  }
+
+  if (otros > 0) out.push({ [labelKey]: "OTROS", [countKey]: otros });
+  return out;
+}
+
+function csvEscape(v) {
+  const s = String(v ?? "");
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+/* ================= HACINAMIENTO ================= */
+
+function hacinamientoPipelineBase(matchExtra = {}) {
+  return [
+    { $match: { ...matchExtra } },
+    {
+      $lookup: {
+        from: MIS_DATOS_COLL,
+        let: { uid: "$ocupacionActual.permisionario" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $or: [
+                  { $eq: ["$usuario", "$$uid"] },
+                  { $eq: [{ $toString: "$usuario" }, { $toString: "$$uid" }] },
+                ],
+              },
+            },
+          },
+          { $sort: { createdAt: -1 } },
+          { $limit: 1 },
+          { $project: { datos: 1 } },
+        ],
+        as: "md",
+      },
+    },
+    { $addFields: { md: { $arrayElemAt: ["$md", 0] } } },
+    {
+      $addFields: {
+        habitantes: {
+          $cond: [
+            { $gt: [{ $ifNull: ["$md.datos.cantidadAdultos", 0] }, 0] },
+            {
+              $add: [
+                "$md.datos.cantidadAdultos",
+                { $ifNull: ["$md.datos.cantidadHijos", 0] },
+              ],
+            },
+            { $ifNull: ["$cantidadHabitantes", 1] },
+          ],
+        },
+      },
+    },
+    {
+      $addFields: {
+        habBucket: {
+          $cond: [
+            { $gte: ["$habitantes", 7] },
+            "7+",
+            { $toString: "$habitantes" },
+          ],
+        },
+      },
+    },
+    {
+      $addFields: {
+        hacinamiento: {
+          $cond: [
+            { $lt: ["$dormitorios", "$habitantes"] },
+            "ROJO",
+            {
+              $cond: [
+                { $eq: ["$dormitorios", "$habitantes"] },
+                "AMARILLO",
+                "VERDE",
+              ],
+            },
+          ],
+        },
+      },
+    },
+  ];
+}
+
+/* ================= BARRIOS DISPONIBLES ================= */
+
+exports.getStatsBarrios = async (req, res) => {
+  try {
+    if (!isAdminGeneral(req)) return deny(res);
+
+    const raw = await Vivienda.aggregate([
+      { $group: { _id: "$barrio", cantidad: { $sum: 1 } } },
+    ]);
+
+    let barrios = raw.map((b) => ({
+      barrio: b._id || "SIN_BARRIO",
+      cantidad: b.cantidad,
+    }));
+
+    barrios = kAnonBucket(barrios, "barrio", "cantidad");
+
+    return res.json(barrios.map((b) => b.barrio));
+  } catch (e) {
+    console.error("[STATS] barrios", e);
+    return deny(res);
+  }
+};
+
+/* ================= RESUMEN GLOBAL ================= */
+
+async function buildResumen(matchExtra = {}) {
+  const viviendasTotal = await Vivienda.countDocuments(matchExtra);
+
+  const viviendasPorEstado = await Vivienda.aggregate([
+    { $match: matchExtra },
+    { $group: { _id: "$estado", cantidad: { $sum: 1 } } },
+  ]);
+
+  const viviendasPorDorm = await Vivienda.aggregate([
+    { $match: matchExtra },
+    { $group: { _id: "$dormitorios", cantidad: { $sum: 1 } } },
+  ]);
+
+  const pedidosTrabajo = await FormSubmission.aggregate([
+    { $match: { codigo: "ANEXO_11", ...matchExtra } },
+    { $group: { _id: "$barrio", cantidad: { $sum: 1 } } },
+  ]);
+
+  const hacColor = await Vivienda.aggregate([
+    ...hacinamientoPipelineBase(matchExtra),
+    { $group: { _id: "$hacinamiento", cantidad: { $sum: 1 } } },
+  ]);
+
+  const habDist = await Vivienda.aggregate([
+    ...hacinamientoPipelineBase(matchExtra),
+    { $group: { _id: "$habBucket", cantidad: { $sum: 1 } } },
+  ]);
+
+  return {
+    viviendas: viviendasTotal,
+    viviendasPorEstado,
+    viviendasPorDorm,
+    pedidosTrabajo,
+    hacColor,
+    habDist,
+  };
+}
+
+/* ================= ENDPOINTS ================= */
+
 exports.getResumenStats = async (req, res) => {
   try {
-    // ─────────────────────────────────────────────
-    // 0) Formularios / Postulaciones (ANEXO_01 / ANEXO_02)
-    // ─────────────────────────────────────────────
-    const anexos01TotalPromise = FormSubmission.countDocuments({ codigo: 'ANEXO_01' });
-    const anexos02TotalPromise = FormSubmission.countDocuments({ codigo: 'ANEXO_02' });
+    if (!isAdminGeneral(req)) return deny(res);
+    const data = await buildResumen({});
+    return res.json(data);
+  } catch (e) {
+    console.error("[STATS] resumen", e);
+    return deny(res);
+  }
+};
 
-    // ─────────────────────────────────────────────
-    // 1) Viviendas: totales, ocupadas, por estado, por barrio, por dormitorios
-    // ─────────────────────────────────────────────
-    const viviendasTotalPromise = Vivienda.countDocuments({});
-    const viviendasOcupadasPromise = Vivienda.countDocuments({ estado: 'OCUPADA' });
-
-    const viviendasPorEstadoPromise = Vivienda.aggregate([
-      { $group: { _id: '$estado', cantidad: { $sum: 1 } } },
-    ]);
-
-    const viviendasPorBarrioPromise = Vivienda.aggregate([
-      { $group: { _id: '$barrio', cantidad: { $sum: 1 } } },
-      { $sort: { cantidad: -1 } },
-    ]);
-
-    const viviendasPorDormPromise = Vivienda.aggregate([
-      { $group: { _id: '$dormitorios', cantidad: { $sum: 1 } } },
-      { $sort: { _id: 1 } },
-    ]);
-
-    // ─────────────────────────────────────────────
-    // 2) Usuarios: por rol
-    // ─────────────────────────────────────────────
-    const usuariosPorRolPromise = User.aggregate([
-      { $group: { _id: '$role', cantidad: { $sum: 1 } } },
-      { $sort: { cantidad: -1 } },
-    ]);
-
-    // ─────────────────────────────────────────────
-    // 3) Pedidos de trabajo y alojamientos (si existen modelos)
-    // ─────────────────────────────────────────────
-    const pedidosViviendaCountPromise = PedidoTrabajoVivienda
-      ? PedidoTrabajoVivienda.countDocuments({})
-      : Promise.resolve(0);
-
-    const pedidosAlojamientoCountPromise = PedidoTrabajoAlojamiento
-      ? PedidoTrabajoAlojamiento.countDocuments({})
-      : Promise.resolve(0);
-
-    const alojamientosTotalPromise = Alojamiento
-      ? Alojamiento.countDocuments({})
-      : Promise.resolve(0);
-
-    const alojadosPorTipoPromise = Alojamiento
-      ? Alojamiento.aggregate([
-          { $group: { _id: '$tipo', cantidad: { $sum: 1 } } },
-        ])
-      : Promise.resolve([]);
-
-    // ─────────────────────────────────────────────
-    // 4) Ejecutar todas las promesas en paralelo
-    // ─────────────────────────────────────────────
-    const [
-      anexos01Total,
-      anexos02Total,
-
-      viviendasTotal,
-      viviendasOcupadas,
-      viviendasPorEstadoRaw,
-      viviendasPorBarrioRaw,
-      viviendasPorDormRaw,
-      usuariosPorRolRaw,
-      pedidosViviendaTotal,
-      pedidosAlojamientoTotal,
-      alojamientosTotal,
-      alojadosPorTipoRaw,
-    ] = await Promise.all([
-      anexos01TotalPromise,
-      anexos02TotalPromise,
-
-      viviendasTotalPromise,
-      viviendasOcupadasPromise,
-      viviendasPorEstadoPromise,
-      viviendasPorBarrioPromise,
-      viviendasPorDormPromise,
-      usuariosPorRolPromise,
-      pedidosViviendaCountPromise,
-      pedidosAlojamientoCountPromise,
-      alojamientosTotalPromise,
-      alojadosPorTipoPromise,
-    ]);
-
-    // ─────────────────────────────────────────────
-    // 5) Normalizar datos para el frontend
-    // ─────────────────────────────────────────────
-    const viviendasPorEstado = (viviendasPorEstadoRaw || []).map((doc) => ({
-      estado: doc._id || 'SIN_ESTADO',
-      cantidad: doc.cantidad || 0,
-    }));
-
-    const viviendasPorBarrio = (viviendasPorBarrioRaw || []).map((doc) => ({
-      barrio: doc._id || 'SIN_BARRIO',
-      cantidad: doc.cantidad || 0,
-    }));
-
-    const viviendasPorDorm = (viviendasPorDormRaw || []).map((doc) => ({
-      dorm: doc._id == null ? 'SIN_DATO' : String(doc._id),
-      cantidad: doc.cantidad || 0,
-    }));
-
-    const usuariosPorRol = (usuariosPorRolRaw || []).map((doc) => ({
-      rol: doc._id || 'SIN_ROL',
-      cantidad: doc.cantidad || 0,
-    }));
-
-    const alojadosPorTipo = (alojadosPorTipoRaw || []).map((doc) => ({
-      tipo: doc._id || 'SIN_TIPO',
-      cantidad: doc.cantidad || 0,
-    }));
-
-    // ─────────────────────────────────────────────
-    // 6) Construir respuesta final
-    // ─────────────────────────────────────────────
-    const respuesta = {
-      // ✅ Nuevo bloque: formularios
-      formularios: {
-        anexos01Total: anexos01Total || 0,
-        anexos02Total: anexos02Total || 0,
-      },
-
-      viviendas: {
-        total: viviendasTotal || 0,
-        ocupadas: viviendasOcupadas || 0,
-      },
-      viviendasPorEstado,
-      viviendasPorBarrio,
-      viviendasPorDorm,
-
-      usuarios: {
-        total: usuariosPorRol.reduce((acc, u) => acc + (u.cantidad || 0), 0),
-      },
-      usuariosPorRol,
-
-      pedidos: {
-        total: (pedidosViviendaTotal || 0) + (pedidosAlojamientoTotal || 0),
-        viviendas: pedidosViviendaTotal || 0,
-        alojamientos: pedidosAlojamientoTotal || 0,
-      },
-
-      alojamientos: {
-        total: alojamientosTotal || 0,
-      },
-      alojadosPorTipo,
-    };
-
-    return res.json(respuesta);
-  } catch (err) {
-    console.error('[STATS] Error en getResumenStats:', err);
-    return res.status(500).json({
-      message: 'Error al obtener estadísticas',
-      error: err.message,
-    });
+exports.getStatsPorBarrio = async (req, res) => {
+  try {
+    if (!isAdminGeneral(req)) return deny(res);
+    const barrio = req.params.barrio;
+    const data = await buildResumen({ barrio });
+    return res.json(data);
+  } catch (e) {
+    console.error("[STATS] barrio", e);
+    return deny(res);
   }
 };

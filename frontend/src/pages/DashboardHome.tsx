@@ -1,49 +1,37 @@
 // frontend/src/pages/DashboardHome.tsx
-import { Link } from "react-router-dom";
+import { Navigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 
-function roleToAppPath(role: string) {
-  const r = String(role || "").toUpperCase();
-
-  switch (r) {
-    case "ADMIN_GENERAL":
-      return "/app/admin-general";
-    case "ADMIN":
-      return "/app/admin";
-    case "INSPECTOR":
-      return "/app/inspector";
-    case "JEFE_DE_BARRIO":
-      return "/app/jefe-de-barrio";
-    case "PERMISIONARIO":
-      return "/app/permisionario";
-    case "ALOJADO":
-      return "/app/alojado";
-    case "POSTULANTE":
-      return "/app/postulante";
-    default:
-      return "/app";
-  }
+function up(v: unknown) {
+  return String(v || "").toUpperCase().trim();
 }
 
 export default function DashboardHome() {
   const { user } = useAuth();
-  const destino = roleToAppPath(user?.role || "");
+  const role = up(user?.role);
 
+  // Si por algún motivo todavía no está cargado el usuario
+  if (!user) {
+    return (
+      <div style={{ padding: 24 }}>
+        <h2>Cargando…</h2>
+      </div>
+    );
+  }
+
+  // ✅ Redirección por rol
+  if (role === "ADMIN_GENERAL") return <Navigate to="/app/admin-general" replace />;
+  if (role === "ADMIN") return <Navigate to="/app/admin-general" replace />;
+
+  if (role === "POSTULANTE") return <Navigate to="/app/postulante" replace />;
+  if (role === "PERMISIONARIO") return <Navigate to="/app/permisionario" replace />;
+
+  // Otros roles (a futuro)
   return (
-    <div style={{ padding: 24 }}>
-      <h1>Inicio</h1>
-
-      <p>
-        Usuario: {user?.nombre} {user?.apellido} — Rol: <b>{user?.role}</b>
-      </p>
-
-      <p style={{ marginTop: 12 }}>
-        <Link to={destino}>Ir a mi panel</Link>
-      </p>
-
-      <p style={{ marginTop: 16, opacity: 0.8 }}>
-        (Paneles por rol: en progreso)
-      </p>
+    <div style={{ padding: 32 }}>
+      <h2>La página solicitada no está disponible.</h2>
+      <p>Por favor, contacte al administrador.</p>
+      <p style={{ opacity: 0.7 }}>Rol detectado: <b>{role || "—"}</b></p>
     </div>
   );
 }

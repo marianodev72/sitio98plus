@@ -3,30 +3,31 @@ const express = require("express");
 const router = express.Router();
 
 const { authRequired } = require("../middleware/auth");
-const uploadMensajes = require("../middleware/uploadMensajes");
-const mensajeController = require("../controllers/mensajeController");
+const { refreshUserPrivileges } = require("../middleware/refreshUserPrivileges");
 
-// Enviar mensaje con adjuntos
-router.post(
-  "/",
-  authRequired,
-  uploadMensajes,
-  mensajeController.enviarMensaje
-);
+const {
+  getAgenda,
+  getEntrada,
+  getEnviados,
+  getMensaje,
+  marcarLeido,
+  enviarMensaje,
+} = require("../controllers/mensajeController");
 
-// Bandeja de entrada
-router.get("/entrada", authRequired, mensajeController.listarEntrada);
+router.use(authRequired, refreshUserPrivileges);
 
-// Enviados
-router.get("/enviados", authRequired, mensajeController.listarEnviados);
+// agenda institucional (territorial o completa según rol)
+router.get("/agenda", getAgenda);
 
-// Obtener mensaje
-router.get("/:id", authRequired, mensajeController.obtenerMensaje);
+// bandejas
+router.get("/entrada", getEntrada);
+router.get("/enviados", getEnviados);
 
-// Marcar leído
-router.patch("/:id/leido", authRequired, mensajeController.marcarComoLeido);
+// detalle + leído
+router.get("/:id", getMensaje);
+router.patch("/:id/leido", marcarLeido);
 
-// Auditoría
-router.get("/", authRequired, mensajeController.listarTodos);
+// enviar
+router.post("/", enviarMensaje);
 
 module.exports = router;

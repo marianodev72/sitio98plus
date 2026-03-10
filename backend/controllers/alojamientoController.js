@@ -13,8 +13,9 @@ function tieneAccesoGlobal(role) {
 /**
  * Helper: roles que pueden ver alojamientos por barrio.
  */
-function tieneAccesoPorBarrio(role) {
-  return role === 'INSPECTOR' || role === 'JEFE_DE_BARRIO';
+function tieneAccesoPorBarrio(user) {
+  const permisos = Array.isArray(user?.permisos) ? user.permisos : [];
+  return permisos.includes('INSPECTOR') || permisos.includes('JEFE_DE_BARRIO');
 }
 
 /**
@@ -27,25 +28,32 @@ function tieneAccesoPorBarrio(role) {
 async function listar(req, res) {
   try {
     const user = req.user;
-    const role = user.role;
+    const role = user?.role;
 
-    let filtro = {};
-    const { barrio, estado, codigo } = req.query;
+    if (!user || !role) {
+      return res.status(404).json({ error: 'Recurso no disponible' });
+    }
 
-    if (barrio) filtro.barrio = barrio;
-    if (estado && ESTADOS_ALOJAMIENTO.includes(estado)) filtro.estado = estado;
-    if (codigo) filtro.codigo = codigo;
+    const { estado, codigo } = req.query;
+    const filtro = {};
 
+    if (estado && ESTADOS_ALOJAMIENTO.includes(estado)) {
+      filtro.estado = estado;
+    }
+    if (codigo) {
+      filtro.codigo = codigo;
+    }
+
+    // ADMIN / ADMIN_GENERAL → lectura global
     if (tieneAccesoGlobal(role)) {
       const alojamientos = await Alojamiento.find(filtro).lean();
       return res.json(alojamientos);
     }
 
-    if (tieneAccesoPorBarrio(role)) {
+    // Territorial → SOLO su barrioAsignado
+    if (tieneAccesoPorBarrio(user)) {
       if (!user.barrioAsignado) {
-        return res.status(400).json({
-          error: 'El usuario no tiene un barrioAsignado configurado'
-        });
+        return res.status(404).json({ error: 'Recurso no disponible' });
       }
 
       filtro.barrio = user.barrioAsignado;
@@ -53,27 +61,24 @@ async function listar(req, res) {
       return res.json(alojamientos);
     }
 
+    // ALOJADO → SOLO su alojamientoAsignado
     if (role === 'ALOJADO') {
-      if (!user.alojamientoAsignado) {
-        return res.json([]);
-      }
-
-      if (!mongoose.Types.ObjectId.isValid(user.alojamientoAsignado)) {
-        return res.status(400).json({
-          error: 'alojamientoAsignado del usuario es inválido'
-        });
+      if (
+        !user.alojamientoAsignado ||
+        !mongoose.Types.ObjectId.isValid(user.alojamientoAsignado)
+      ) {
+        return res.status(404).json({ error: 'Recurso no disponible' });
       }
 
       const alojamiento = await Alojamiento.findById(user.alojamientoAsignado).lean();
       if (!alojamiento) {
-        return res.json([]);
+        return res.status(404).json({ error: 'Recurso no disponible' });
       }
+
       return res.json([alojamiento]);
     }
 
-    return res.status(403).json({
-      error: `El rol ${role} no está autorizado para listar alojamientos`
-    });
+    return res.status(404).json({ error: 'Recurso no disponible' });
   } catch (err) {
     console.error('Error en listar alojamientos:', err);
     return res.status(500).json({ error: 'Error interno al listar alojamientos' });
@@ -82,58 +87,59 @@ async function listar(req, res) {
 
 /**
  * GET /api/alojamientos/:id
- * Obtiene un alojamiento por ID respetando las reglas de visibilidad por rol.
+ * Obtener alojamiento por ID.
+ * - ADMIN/ADMIN_GENERAL: acceso global
+ * - INSPECTOR/JEFE_DE_BARRIO: solo si el alojamiento pertenece a su barrioAsignado
+ * - ALOJADO: solo su alojamientoAsignado
  */
 async function obtenerPorId(req, res) {
   try {
     const user = req.user;
-    const role = user.role;
+    const role = user?.role;
     const { id } = req.params;
 
+    if (!user || !role) {
+      return res.status(404).json({ error: 'Recurso no disponible' });
+    }
+
+    // Fail-closed: no distinguir ID inválido vs inexistente
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: 'ID de alojamiento inválido' });
+      return res.status(404).json({ error: 'Recurso no disponible' });
     }
 
     const alojamiento = await Alojamiento.findById(id).lean();
     if (!alojamiento) {
-      return res.status(404).json({ error: 'Alojamiento no encontrado' });
+      return res.status(404).json({ error: 'Recurso no disponible' });
     }
 
+    // ADMIN / ADMIN_GENERAL
     if (tieneAccesoGlobal(role)) {
       return res.json(alojamiento);
     }
 
-    if (tieneAccesoPorBarrio(role)) {
+    // Territorial
+    if (tieneAccesoPorBarrio(user)) {
       if (!user.barrioAsignado) {
-        return res.status(400).json({
-          error: 'El usuario no tiene un barrioAsignado configurado'
-        });
+        return res.status(404).json({ error: 'Recurso no disponible' });
       }
       if (alojamiento.barrio !== user.barrioAsignado) {
-        return res.status(403).json({
-          error: 'No tiene permiso para ver alojamientos de otro barrio'
-        });
+        return res.status(404).json({ error: 'Recurso no disponible' });
       }
       return res.json(alojamiento);
     }
 
+    // ALOJADO
     if (role === 'ALOJADO') {
-      if (!user.alojamientoAsignado) {
-        return res.status(403).json({
-          error: 'No tiene alojamiento asignado'
-        });
-      }
-      if (String(user.alojamientoAsignado) !== String(alojamiento._id)) {
-        return res.status(403).json({
-          error: 'No tiene permiso para ver este alojamiento'
-        });
+      if (
+        !user.alojamientoAsignado ||
+        String(user.alojamientoAsignado) !== String(alojamiento._id)
+      ) {
+        return res.status(404).json({ error: 'Recurso no disponible' });
       }
       return res.json(alojamiento);
     }
 
-    return res.status(403).json({
-      error: `El rol ${role} no está autorizado para ver alojamientos`
-    });
+    return res.status(404).json({ error: 'Recurso no disponible' });
   } catch (err) {
     console.error('Error en obtener alojamiento por ID:', err);
     return res.status(500).json({ error: 'Error interno al obtener alojamiento' });
@@ -142,19 +148,19 @@ async function obtenerPorId(req, res) {
 
 /**
  * POST /api/alojamientos
- * Crea un nuevo alojamiento.
- * SOLO ADMIN y ADMIN_GENERAL.
- * No se toca ocupacionActual ni historialOcupacion desde acá.
+ * Crear alojamiento (ADMIN/ADMIN_GENERAL)
  */
 async function crear(req, res) {
   try {
     const user = req.user;
-    const role = user.role;
+    const role = user?.role;
 
-    if (!tieneAccesoGlobal(role)) {
-      return res.status(403).json({
-        error: 'Solo ADMIN o ADMIN_GENERAL pueden crear alojamientos'
-      });
+    if (!user || !role) {
+      return res.status(404).json({ error: 'Recurso no disponible' });
+    }
+
+    if (role !== 'ADMIN_GENERAL') {
+      return res.status(404).json({ error: 'Recurso no disponible' });
     }
 
     const data = req.validatedBody;
@@ -183,21 +189,21 @@ async function crear(req, res) {
 }
 
 /**
- * PATCH /api/alojamientos/:id
- * Actualiza campos permitidos de un alojamiento.
- * SOLO ADMIN y ADMIN_GENERAL.
- * NO permite modificar ocupación directamente.
+ * PUT /api/alojamientos/:id
+ * Actualizar alojamiento (ADMIN/ADMIN_GENERAL)
  */
 async function actualizar(req, res) {
   try {
     const user = req.user;
-    const role = user.role;
+    const role = user?.role;
     const { id } = req.params;
 
-    if (!tieneAccesoGlobal(role)) {
-      return res.status(403).json({
-        error: 'Solo ADMIN o ADMIN_GENERAL pueden actualizar alojamientos'
-      });
+    if (!user || !role) {
+      return res.status(404).json({ error: 'Recurso no disponible' });
+    }
+
+    if (role !== 'ADMIN_GENERAL') {
+      return res.status(404).json({ error: 'Recurso no disponible' });
     }
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -206,7 +212,7 @@ async function actualizar(req, res) {
 
     const alojamiento = await Alojamiento.findById(id);
     if (!alojamiento) {
-      return res.status(404).json({ error: 'Alojamiento no encontrado' });
+      return res.status(404).json({ error: 'Recurso no disponible' });
     }
 
     const data = req.validatedBody;
@@ -218,7 +224,7 @@ async function actualizar(req, res) {
       if (tieneOcupante && data.estado !== 'OCUPADO') {
         return res.status(400).json({
           error:
-            'No se puede cambiar el estado de un alojamiento con ocupación activa desde este endpoint. Use el flujo institucional (ANEXO_26 / baja).'
+            'No se puede cambiar el estado de un alojamiento OCUPADO desde este endpoint. Use el flujo institucional (ANEXO_26 / baja).'
         });
       }
 
@@ -244,22 +250,20 @@ async function actualizar(req, res) {
 
 /**
  * DELETE /api/alojamientos/:id
- * "Baja lógica" de un alojamiento.
- * SOLO ADMIN_GENERAL.
- * 
- * En lugar de borrar, marcamos estado=BAJA,
- * siempre que no tenga ocupación activa.
+ * Baja lógica (ADMIN_GENERAL)
  */
 async function bajaLogica(req, res) {
   try {
     const user = req.user;
-    const role = user.role;
+    const role = user?.role;
     const { id } = req.params;
 
+    if (!user || !role) {
+      return res.status(404).json({ error: 'Recurso no disponible' });
+    }
+
     if (role !== 'ADMIN_GENERAL') {
-      return res.status(403).json({
-        error: 'Solo ADMIN_GENERAL puede dar de baja alojamientos'
-      });
+      return res.status(404).json({ error: 'Recurso no disponible' });
     }
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -268,7 +272,7 @@ async function bajaLogica(req, res) {
 
     const alojamiento = await Alojamiento.findById(id);
     if (!alojamiento) {
-      return res.status(404).json({ error: 'Alojamiento no encontrado' });
+      return res.status(404).json({ error: 'Recurso no disponible' });
     }
 
     const tieneOcupante =
@@ -277,7 +281,7 @@ async function bajaLogica(req, res) {
     if (tieneOcupante) {
       return res.status(400).json({
         error:
-          'No se puede dar de baja un alojamiento con ocupación activa. Debe gestionarse la desocupación por los anexos correspondientes.'
+          'No se puede dar de baja un alojamiento con ocupación actual. Debe gestionarse la desocupación por los anexos correspondientes.'
       });
     }
 

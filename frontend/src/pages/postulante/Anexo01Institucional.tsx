@@ -1,3 +1,4 @@
+//frontend/src/pages/postulante/Anexo01Institucional.tsx
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { http } from "../../api/http";
@@ -10,7 +11,7 @@ type Conviviente = {
   aCargo: "SI" | "NO" | "";
   edad: string;
   dni: string;
-  diba: string;
+  OSFA: string;
 };
 
 type Mascota = {
@@ -102,12 +103,30 @@ function YesNoControl({
   );
 }
 
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+function options00a50() {
+  const arr: string[] = [];
+  for (let i = 0; i <= 50; i++) arr.push(pad2(i));
+  return arr;
+}
+
+function options00a99() {
+  const arr: string[] = [];
+  for (let i = 0; i <= 99; i++) arr.push(pad2(i));
+  return arr;
+}
+
 export default function Anexo01Institucional() {
   const navigate = useNavigate();
 
-  // Encabezado (Lugar y fecha / AL SEÑOR)
-  const [lugarYFecha, setLugarYFecha] = useState("");
-  const [alSenor, setAlSenor] = useState("");
+  // Encabezado (Lugar y fecha / Autoridad de Asignación)
+  const [lugar, setLugar] = useState("");
+  const [fechaLugar, setFechaLugar] = useState(""); // date (igual a punto 16)
+  const autoridadAsignacionFija = "Autoridad de Asignación";
+  const [zonaNaval, setZonaNaval] = useState(""); // 00-99
 
   // Opciones de inscripción (marcar con X una)
   const [tipoSolicitud, setTipoSolicitud] = useState<
@@ -119,7 +138,7 @@ export default function Anexo01Institucional() {
 
   // Punto 2 (datos personales)
   const [mr, setMr] = useState("");
-  const [afiliadoDiba, setAfiliadoDiba] = useState("");
+  const [afiliadoOSFA, setAfiliadoOSFA] = useState("");
   const [gradoEscalafon, setGradoEscalafon] = useState("");
   const [apellido, setApellido] = useState("");
   const [nombres, setNombres] = useState("");
@@ -129,8 +148,8 @@ export default function Anexo01Institucional() {
   const [telefonoFuturo, setTelefonoFuturo] = useState("");
 
   // Punto 3
-  const [fechaUltimoAscenso, setFechaUltimoAscenso] = useState("");
-  const [aniosServicioRecibo, setAniosServicioRecibo] = useState("");
+  const [fechaUltimoAscenso, setFechaUltimoAscenso] = useState(""); // ahora date
+  const [aniosServicioRecibo, setAniosServicioRecibo] = useState(""); // ahora select 00-50
 
   // Punto 4 (FIDOFAC)
   const [agregaFidofac, setAgregaFidofac] = useState<YesNo>("");
@@ -147,7 +166,7 @@ export default function Anexo01Institucional() {
         aCargo: "",
         edad: "",
         dni: "",
-        diba: "",
+        OSFA: "",
       },
     ]);
   }
@@ -165,7 +184,14 @@ export default function Anexo01Institucional() {
   function addMascota() {
     setMascotas((p) => [
       ...p,
-      { especie: "", raza: "", edad: "", sexo: "", peso: "", certificadoFile: null },
+      {
+        especie: "",
+        raza: "",
+        edad: "",
+        sexo: "",
+        peso: "",
+        certificadoFile: null,
+      },
     ]);
   }
   function removeMascota(idx: number) {
@@ -207,7 +233,7 @@ export default function Anexo01Institucional() {
   const [agregaReciboHaberes, setAgregaReciboHaberes] = useState<YesNo>("");
   const [reciboHaberesFile, setReciboHaberesFile] = useState<File | null>(null);
 
-  // Punto 12 (años ocupación previa)
+  // Punto 12 (años ocupación previa) — ahora select 00-50
   const [aniosOcupacionPrevia, setAniosOcupacionPrevia] = useState("");
 
   // Punto 13 (representantes)
@@ -256,12 +282,20 @@ export default function Anexo01Institucional() {
     []
   );
 
+  const years00a50 = useMemo(() => options00a50(), []);
+  const zones00a99 = useMemo(() => options00a99(), []);
+
   function validarMinimo(): boolean {
     if (!tipoSolicitud) return false;
     if (!aceptaReglamento) return false;
 
     if (!apellido.trim() || !nombres.trim()) return false;
     if (!mr.trim()) return false;
+
+    // Cabecera mínima
+    if (!lugar.trim()) return false;
+    if (!fechaLugar.trim()) return false;
+    if (!zonaNaval.trim()) return false;
 
     return true;
   }
@@ -276,10 +310,30 @@ export default function Anexo01Institucional() {
       return;
     }
 
+console.log("[ANEXO_01] validarMinimo FALLÓ", {
+  tipoSolicitud,
+  aceptaReglamento,
+  apellido: apellido.trim(),
+  nombres: nombres.trim(),
+  mr: mr.trim(),
+  lugar: lugar.trim(),
+  fechaLugar: fechaLugar.trim(),
+  zonaNaval: zonaNaval.trim(),
+});
+    
+// Compatibilidad: mantenemos los campos legacy
+    const lugarYFecha = `${lugar}`.trim() + (fechaLugar ? ` ${fechaLugar}` : "");
+    const alSenor = `${autoridadAsignacionFija} - Zona Naval ${zonaNaval}`;
+
     const datos = {
-      // Cabecera
-      lugarYFecha: lugarYFecha || null,
-      alSenor: alSenor || null,
+      // Cabecera (nuevo + compat)
+      lugar: lugar || null,
+      fechaLugar: fechaLugar || null,
+      lugarYFecha: lugarYFecha || null, // compat
+      autoridadAsignacion: autoridadAsignacionFija,
+      zonaNaval: zonaNaval || null,
+      alSenor: alSenor || null, // compat
+
       tipoSolicitud,
 
       // Punto 1
@@ -287,7 +341,7 @@ export default function Anexo01Institucional() {
 
       // Punto 2
       mr,
-      afiliadoDiba,
+      afiliadoOSFA,
       gradoEscalafon,
       apellido,
       nombres,
@@ -360,7 +414,8 @@ export default function Anexo01Institucional() {
 
     if (fidofacFile) fd.append("adj_fidofac", fidofacFile);
     if (reciboHaberesFile) fd.append("adj_recibo_haberes", reciboHaberesFile);
-    if (escriturasYContratosFile) fd.append("adj_escrituras_contratos", escriturasYContratosFile);
+    if (escriturasYContratosFile)
+      fd.append("adj_escrituras_contratos", escriturasYContratosFile);
 
     // Certificados por mascota (si adjuntan)
     mascotas.forEach((m, idx) => {
@@ -375,11 +430,19 @@ export default function Anexo01Institucional() {
 
       setOk(resp.data?.message || "Formulario enviado.");
       navigate("/app/postulante", { replace: true });
-    } catch {
-      errorGenerico();
-    } finally {
-      setLoading(false);
-    }
+    } catch (e: any) {
+  console.error("[ANEXO_01] error real:", e);
+
+  const msg =
+    e?.response?.data?.message ||
+    e?.response?.data?.error ||
+    "No se ha podido procesar su solicitud, contacte al administrador.";
+
+  setErr(msg);
+} finally {
+  setLoading(false);
+}
+
   }
 
   return (
@@ -430,21 +493,59 @@ export default function Anexo01Institucional() {
             }}
           >
             <Row label="Lugar y fecha:" requiredMark>
-              <input
-                value={lugarYFecha}
-                onChange={(e) => setLugarYFecha(e.target.value)}
-                placeholder="Ej: Puerto Belgrano, 19/12/2025"
-                style={{ width: "100%" }}
-              />
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 190px",
+                  gap: 10,
+                }}
+              >
+                <input
+                  value={lugar}
+                  onChange={(e) => setLugar(e.target.value)}
+                  placeholder="Lugar (ej: Puerto Belgrano)"
+                  style={{ width: "100%" }}
+                />
+                <input
+                  type="date"
+                  value={fechaLugar}
+                  onChange={(e) => setFechaLugar(e.target.value)}
+                  style={{ width: "100%" }}
+                />
+              </div>
+              <div style={{ marginTop: 6, ...small }}>
+                (La fecha usa el mismo formato que el punto 16)
+              </div>
             </Row>
 
-            <Row label="AL SEÑOR:" requiredMark>
-              <input
-                value={alSenor}
-                onChange={(e) => setAlSenor(e.target.value)}
-                placeholder="Ej: Jefe de la Oficina de Viviendas — Zona Naval"
-                style={{ width: "100%" }}
-              />
+            <Row label="Autoridad de Asignación / Zona Naval:" requiredMark>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 120px 110px",
+                  gap: 10,
+                  alignItems: "center",
+                }}
+              >
+                <input
+                  value={autoridadAsignacionFija}
+                  readOnly
+                  style={{ width: "100%", background: "#f4f4f4" }}
+                />
+                <div style={{ fontWeight: 800, fontSize: 13 }}>Zona Naval</div>
+                <select
+                  value={zonaNaval}
+                  onChange={(e) => setZonaNaval(e.target.value)}
+                  style={{ width: "100%" }}
+                >
+                  <option value="">—</option>
+                  {zones00a99.map((z) => (
+                    <option key={z} value={z}>
+                      {z}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </Row>
           </div>
 
@@ -529,10 +630,10 @@ export default function Anexo01Institucional() {
               />
             </Row>
 
-            <Row label="Nº Afiliado DIBA:">
+            <Row label="Nº Afiliado OSFA:">
               <input
-                value={afiliadoDiba}
-                onChange={(e) => setAfiliadoDiba(e.target.value)}
+                value={afiliadoOSFA}
+                onChange={(e) => setAfiliadoOSFA(e.target.value)}
                 style={{ width: "100%" }}
               />
             </Row>
@@ -550,30 +651,72 @@ export default function Anexo01Institucional() {
             </Row>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 10,
+            }}
+          >
             <Row label="Apellido:" requiredMark>
-              <input value={apellido} onChange={(e) => setApellido(e.target.value)} style={{ width: "100%" }} />
+              <input
+                value={apellido}
+                onChange={(e) => setApellido(e.target.value)}
+                style={{ width: "100%" }}
+              />
             </Row>
             <Row label="Nombres:" requiredMark>
-              <input value={nombres} onChange={(e) => setNombres(e.target.value)} style={{ width: "100%" }} />
+              <input
+                value={nombres}
+                onChange={(e) => setNombres(e.target.value)}
+                style={{ width: "100%" }}
+              />
             </Row>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 10,
+            }}
+          >
             <Row label="Destino actual:">
-              <input value={destinoActual} onChange={(e) => setDestinoActual(e.target.value)} style={{ width: "100%" }} />
+              <input
+                value={destinoActual}
+                onChange={(e) => setDestinoActual(e.target.value)}
+                style={{ width: "100%" }}
+              />
             </Row>
             <Row label="Destino futuro:">
-              <input value={destinoFuturo} onChange={(e) => setDestinoFuturo(e.target.value)} style={{ width: "100%" }} />
+              <input
+                value={destinoFuturo}
+                onChange={(e) => setDestinoFuturo(e.target.value)}
+                style={{ width: "100%" }}
+              />
             </Row>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 10,
+            }}
+          >
             <Row label="Teléfono actual:">
-              <input value={telefonoActual} onChange={(e) => setTelefonoActual(e.target.value)} style={{ width: "100%" }} />
+              <input
+                value={telefonoActual}
+                onChange={(e) => setTelefonoActual(e.target.value)}
+                style={{ width: "100%" }}
+              />
             </Row>
             <Row label="Teléfono futuro:">
-              <input value={telefonoFuturo} onChange={(e) => setTelefonoFuturo(e.target.value)} style={{ width: "100%" }} />
+              <input
+                value={telefonoFuturo}
+                onChange={(e) => setTelefonoFuturo(e.target.value)}
+                style={{ width: "100%" }}
+              />
             </Row>
           </div>
         </Box>
@@ -582,35 +725,74 @@ export default function Anexo01Institucional() {
           <div style={{ fontWeight: 800, marginBottom: 10 }}>
             3. Fecha último ascenso / Años de servicio según Recibo de Haberes
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 10,
+            }}
+          >
             <Row label="Fecha último ascenso:">
-              <input value={fechaUltimoAscenso} onChange={(e) => setFechaUltimoAscenso(e.target.value)} style={{ width: "100%" }} />
+              <input
+                type="date"
+                value={fechaUltimoAscenso}
+                onChange={(e) => setFechaUltimoAscenso(e.target.value)}
+                style={{ width: "100%" }}
+              />
             </Row>
+
             <Row label="Años de servicio (recibo):">
-              <input value={aniosServicioRecibo} onChange={(e) => setAniosServicioRecibo(e.target.value)} style={{ width: "100%" }} />
+              <select
+                value={aniosServicioRecibo}
+                onChange={(e) => setAniosServicioRecibo(e.target.value)}
+                style={{ width: "100%" }}
+              >
+                <option value="">—</option>
+                {years00a50.map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
             </Row>
           </div>
         </Box>
 
         <Box>
           <div style={{ fontWeight: 800, marginBottom: 8 }}>
-            4. Agrego fotocopia autenticada de la FIDOFAC / Actualización de FIDOFAC
+            4. Agrego fotocopia autenticada de la FIDOFAC / Actualización de
+            FIDOFAC
           </div>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              gap: 12,
+              alignItems: "center",
+            }}
+          >
             <YesNoControl value={agregaFidofac} onChange={setAgregaFidofac} />
             <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-              <div style={{ fontWeight: 700, fontSize: 13 }}>Adjuntar (opcional):</div>
-              <input type="file" onChange={(e) => setFidofacFile(e.target.files?.[0] || null)} />
+              <div style={{ fontWeight: 700, fontSize: 13 }}>
+                Adjuntar (opcional):
+              </div>
+              <input
+                type="file"
+                onChange={(e) => setFidofacFile(e.target.files?.[0] || null)}
+              />
             </div>
           </div>
         </Box>
 
         <Box>
           <div style={{ fontWeight: 800, marginBottom: 8 }}>
-            5. Conviviré con las siguientes personas de cuya conducta y actos asumo la absoluta responsabilidad.
+            5. Conviviré con las siguientes personas de cuya conducta y actos
+            asumo la absoluta responsabilidad.
           </div>
 
-          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+          <div
+            style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}
+          >
             <button type="button" onClick={addConviviente}>
               ➕ Agregar renglón
             </button>
@@ -620,8 +802,23 @@ export default function Anexo01Institucional() {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
-                  {["APELLIDO Y NOMBRES", "RELACIÓN", "A CARGO (SI/NO)", "EDAD", "DNI", "DIBA", ""].map((h) => (
-                    <th key={h} style={{ border: "1px solid #222", padding: 8, textAlign: "left" }}>
+                  {[
+                    "APELLIDO Y NOMBRES",
+                    "RELACIÓN",
+                    "A CARGO (SI/NO)",
+                    "EDAD",
+                    "DNI",
+                    "OSFA",
+                    "",
+                  ].map((h) => (
+                    <th
+                      key={h}
+                      style={{
+                        border: "1px solid #222",
+                        padding: 8,
+                        textAlign: "left",
+                      }}
+                    >
                       {h}
                     </th>
                   ))}
@@ -630,7 +827,14 @@ export default function Anexo01Institucional() {
               <tbody>
                 {convivientes.length === 0 ? (
                   <tr>
-                    <td colSpan={7} style={{ border: "1px solid #222", padding: 10, opacity: 0.8 }}>
+                    <td
+                      colSpan={7}
+                      style={{
+                        border: "1px solid #222",
+                        padding: 10,
+                        opacity: 0.8,
+                      }}
+                    >
                       Sin renglones. Use “Agregar renglón”.
                     </td>
                   </tr>
@@ -638,29 +842,72 @@ export default function Anexo01Institucional() {
                   convivientes.map((c, idx) => (
                     <tr key={`conv_${idx}`}>
                       <td style={{ border: "1px solid #222", padding: 6 }}>
-                        <input value={c.apellidoNombres} onChange={(e) => updateConviviente(idx, { apellidoNombres: e.target.value })} style={{ width: "100%" }} />
+                        <input
+                          value={c.apellidoNombres}
+                          onChange={(e) =>
+                            updateConviviente(idx, {
+                              apellidoNombres: e.target.value,
+                            })
+                          }
+                          style={{ width: "100%" }}
+                        />
                       </td>
                       <td style={{ border: "1px solid #222", padding: 6 }}>
-                        <input value={c.relacion} onChange={(e) => updateConviviente(idx, { relacion: e.target.value })} style={{ width: "100%" }} />
+                        <input
+                          value={c.relacion}
+                          onChange={(e) =>
+                            updateConviviente(idx, { relacion: e.target.value })
+                          }
+                          style={{ width: "100%" }}
+                        />
                       </td>
                       <td style={{ border: "1px solid #222", padding: 6 }}>
-                        <select value={c.aCargo} onChange={(e) => updateConviviente(idx, { aCargo: e.target.value as any })} style={{ width: "100%" }}>
+                        <select
+                          value={c.aCargo}
+                          onChange={(e) =>
+                            updateConviviente(idx, {
+                              aCargo: e.target.value as any,
+                            })
+                          }
+                          style={{ width: "100%" }}
+                        >
                           <option value="">—</option>
                           <option value="SI">SI</option>
                           <option value="NO">NO</option>
                         </select>
                       </td>
                       <td style={{ border: "1px solid #222", padding: 6 }}>
-                        <input value={c.edad} onChange={(e) => updateConviviente(idx, { edad: e.target.value })} style={{ width: "100%" }} />
+                        <input
+                          value={c.edad}
+                          onChange={(e) =>
+                            updateConviviente(idx, { edad: e.target.value })
+                          }
+                          style={{ width: "100%" }}
+                        />
                       </td>
                       <td style={{ border: "1px solid #222", padding: 6 }}>
-                        <input value={c.dni} onChange={(e) => updateConviviente(idx, { dni: e.target.value })} style={{ width: "100%" }} />
+                        <input
+                          value={c.dni}
+                          onChange={(e) =>
+                            updateConviviente(idx, { dni: e.target.value })
+                          }
+                          style={{ width: "100%" }}
+                        />
                       </td>
                       <td style={{ border: "1px solid #222", padding: 6 }}>
-                        <input value={c.diba} onChange={(e) => updateConviviente(idx, { diba: e.target.value })} style={{ width: "100%" }} />
+                        <input
+                          value={c.OSFA}
+                          onChange={(e) =>
+                            updateConviviente(idx, { OSFA: e.target.value })
+                          }
+                          style={{ width: "100%" }}
+                        />
                       </td>
                       <td style={{ border: "1px solid #222", padding: 6 }}>
-                        <button type="button" onClick={() => removeConviviente(idx)}>
+                        <button
+                          type="button"
+                          onClick={() => removeConviviente(idx)}
+                        >
                           Quitar
                         </button>
                       </td>
@@ -674,10 +921,13 @@ export default function Anexo01Institucional() {
 
         <Box>
           <div style={{ fontWeight: 800, marginBottom: 8 }}>
-            6. Animales domésticos (vivienda tipo casa): indicar especie, raza, edad, sexo, peso, etc.
+            6. Animales domésticos (vivienda tipo casa): indicar especie, raza,
+            edad, sexo, peso, etc.
           </div>
 
-          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+          <div
+            style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}
+          >
             <button type="button" onClick={addMascota}>
               ➕ Agregar mascota
             </button>
@@ -687,8 +937,23 @@ export default function Anexo01Institucional() {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
-                  {["ESPECIE", "RAZA", "EDAD", "SEXO", "PESO", "CERT. VACUNACIÓN (archivo)", ""].map((h) => (
-                    <th key={h} style={{ border: "1px solid #222", padding: 8, textAlign: "left" }}>
+                  {[
+                    "ESPECIE",
+                    "RAZA",
+                    "EDAD",
+                    "SEXO",
+                    "PESO",
+                    "CERT. VACUNACIÓN (archivo)",
+                    "",
+                  ].map((h) => (
+                    <th
+                      key={h}
+                      style={{
+                        border: "1px solid #222",
+                        padding: 8,
+                        textAlign: "left",
+                      }}
+                    >
                       {h}
                     </th>
                   ))}
@@ -697,7 +962,14 @@ export default function Anexo01Institucional() {
               <tbody>
                 {mascotas.length === 0 ? (
                   <tr>
-                    <td colSpan={7} style={{ border: "1px solid #222", padding: 10, opacity: 0.8 }}>
+                    <td
+                      colSpan={7}
+                      style={{
+                        border: "1px solid #222",
+                        padding: 10,
+                        opacity: 0.8,
+                      }}
+                    >
                       Sin mascotas cargadas. Use “Agregar mascota”.
                     </td>
                   </tr>
@@ -705,28 +977,65 @@ export default function Anexo01Institucional() {
                   mascotas.map((m, idx) => (
                     <tr key={`mas_${idx}`}>
                       <td style={{ border: "1px solid #222", padding: 6 }}>
-                        <input value={m.especie} onChange={(e) => updateMascota(idx, { especie: e.target.value })} style={{ width: "100%" }} />
+                        <input
+                          value={m.especie}
+                          onChange={(e) =>
+                            updateMascota(idx, { especie: e.target.value })
+                          }
+                          style={{ width: "100%" }}
+                        />
                       </td>
                       <td style={{ border: "1px solid #222", padding: 6 }}>
-                        <input value={m.raza} onChange={(e) => updateMascota(idx, { raza: e.target.value })} style={{ width: "100%" }} />
+                        <input
+                          value={m.raza}
+                          onChange={(e) =>
+                            updateMascota(idx, { raza: e.target.value })
+                          }
+                          style={{ width: "100%" }}
+                        />
                       </td>
                       <td style={{ border: "1px solid #222", padding: 6 }}>
-                        <input value={m.edad} onChange={(e) => updateMascota(idx, { edad: e.target.value })} style={{ width: "100%" }} />
+                        <input
+                          value={m.edad}
+                          onChange={(e) =>
+                            updateMascota(idx, { edad: e.target.value })
+                          }
+                          style={{ width: "100%" }}
+                        />
                       </td>
                       <td style={{ border: "1px solid #222", padding: 6 }}>
-                        <input value={m.sexo} onChange={(e) => updateMascota(idx, { sexo: e.target.value })} style={{ width: "100%" }} />
+                        <input
+                          value={m.sexo}
+                          onChange={(e) =>
+                            updateMascota(idx, { sexo: e.target.value })
+                          }
+                          style={{ width: "100%" }}
+                        />
                       </td>
                       <td style={{ border: "1px solid #222", padding: 6 }}>
-                        <input value={m.peso} onChange={(e) => updateMascota(idx, { peso: e.target.value })} style={{ width: "100%" }} />
+                        <input
+                          value={m.peso}
+                          onChange={(e) =>
+                            updateMascota(idx, { peso: e.target.value })
+                          }
+                          style={{ width: "100%" }}
+                        />
                       </td>
                       <td style={{ border: "1px solid #222", padding: 6 }}>
                         <input
                           type="file"
-                          onChange={(e) => updateMascota(idx, { certificadoFile: e.target.files?.[0] || null })}
+                          onChange={(e) =>
+                            updateMascota(idx, {
+                              certificadoFile: e.target.files?.[0] || null,
+                            })
+                          }
                         />
                       </td>
                       <td style={{ border: "1px solid #222", padding: 6 }}>
-                        <button type="button" onClick={() => removeMascota(idx)}>
+                        <button
+                          type="button"
+                          onClick={() => removeMascota(idx)}
+                        >
                           Quitar
                         </button>
                       </td>
@@ -740,66 +1049,156 @@ export default function Anexo01Institucional() {
 
         <Box>
           <div style={{ fontWeight: 800, marginBottom: 8 }}>
-            7. Soy (o familiares a cargo) propietario de viviendas en la zona naval de interés. En caso afirmativo agrego escrituras y contratos.
+            7. Soy (o familiares a cargo) propietario de viviendas en la zona
+            naval de interés. En caso afirmativo agrego escrituras y contratos.
           </div>
 
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-            <YesNoControl value={tienePropiedadesZona} onChange={setTienePropiedadesZona} />
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 12,
+            }}
+          >
+            <YesNoControl
+              value={tienePropiedadesZona}
+              onChange={setTienePropiedadesZona}
+            />
             <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-              <div style={{ fontWeight: 700, fontSize: 13 }}>Adjuntar escrituras/contratos:</div>
-              <input type="file" onChange={(e) => setEscriturasYContratosFile(e.target.files?.[0] || null)} />
+              <div style={{ fontWeight: 700, fontSize: 13 }}>
+                Adjuntar escrituras/contratos:
+              </div>
+              <input
+                type="file"
+                onChange={(e) =>
+                  setEscriturasYContratosFile(e.target.files?.[0] || null)
+                }
+              />
             </div>
           </div>
 
-          <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "1fr", gap: 10 }}>
+          <div
+            style={{ marginTop: 10, display: "grid", gridTemplateColumns: "1fr", gap: 10 }}
+          >
             <div style={{ border: "1px solid #222", padding: 10 }}>
               <div style={{ fontWeight: 700, marginBottom: 6 }}>Dirección I</div>
-              <input value={prop1.direccion} onChange={(e) => setProp1((p) => ({ ...p, direccion: e.target.value }))} style={{ width: "100%" }} />
-              <div style={{ fontWeight: 700, marginTop: 8, marginBottom: 6 }}>Observaciones</div>
-              <input value={prop1.observaciones} onChange={(e) => setProp1((p) => ({ ...p, observaciones: e.target.value }))} style={{ width: "100%" }} />
+              <input
+                value={prop1.direccion}
+                onChange={(e) =>
+                  setProp1((p) => ({ ...p, direccion: e.target.value }))
+                }
+                style={{ width: "100%" }}
+              />
+              <div style={{ fontWeight: 700, marginTop: 8, marginBottom: 6 }}>
+                Observaciones
+              </div>
+              <input
+                value={prop1.observaciones}
+                onChange={(e) =>
+                  setProp1((p) => ({ ...p, observaciones: e.target.value }))
+                }
+                style={{ width: "100%" }}
+              />
             </div>
 
             <div style={{ border: "1px solid #222", padding: 10 }}>
-              <div style={{ fontWeight: 700, marginBottom: 6 }}>Dirección II</div>
-              <input value={prop2.direccion} onChange={(e) => setProp2((p) => ({ ...p, direccion: e.target.value }))} style={{ width: "100%" }} />
-              <div style={{ fontWeight: 700, marginTop: 8, marginBottom: 6 }}>Observaciones</div>
-              <input value={prop2.observaciones} onChange={(e) => setProp2((p) => ({ ...p, observaciones: e.target.value }))} style={{ width: "100%" }} />
+              <div style={{ fontWeight: 700, marginBottom: 6 }}>
+                Dirección II
+              </div>
+              <input
+                value={prop2.direccion}
+                onChange={(e) =>
+                  setProp2((p) => ({ ...p, direccion: e.target.value }))
+                }
+                style={{ width: "100%" }}
+              />
+              <div style={{ fontWeight: 700, marginTop: 8, marginBottom: 6 }}>
+                Observaciones
+              </div>
+              <input
+                value={prop2.observaciones}
+                onChange={(e) =>
+                  setProp2((p) => ({ ...p, observaciones: e.target.value }))
+                }
+                style={{ width: "100%" }}
+              />
             </div>
 
             <div style={{ border: "1px solid #222", padding: 10 }}>
-              <div style={{ fontWeight: 700, marginBottom: 6 }}>Dirección III</div>
-              <input value={prop3.direccion} onChange={(e) => setProp3((p) => ({ ...p, direccion: e.target.value }))} style={{ width: "100%" }} />
-              <div style={{ fontWeight: 700, marginTop: 8, marginBottom: 6 }}>Observaciones</div>
-              <input value={prop3.observaciones} onChange={(e) => setProp3((p) => ({ ...p, observaciones: e.target.value }))} style={{ width: "100%" }} />
+              <div style={{ fontWeight: 700, marginBottom: 6 }}>
+                Dirección III
+              </div>
+              <input
+                value={prop3.direccion}
+                onChange={(e) =>
+                  setProp3((p) => ({ ...p, direccion: e.target.value }))
+                }
+                style={{ width: "100%" }}
+              />
+              <div style={{ fontWeight: 700, marginTop: 8, marginBottom: 6 }}>
+                Observaciones
+              </div>
+              <input
+                value={prop3.observaciones}
+                onChange={(e) =>
+                  setProp3((p) => ({ ...p, observaciones: e.target.value }))
+                }
+                style={{ width: "100%" }}
+              />
             </div>
           </div>
 
-          <div style={{ marginTop: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ fontWeight: 800 }}>Verificó el contenido del Artículo 5.06., incisos 3 y 4.</div>
+          <div
+            style={{
+              marginTop: 10,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <div style={{ fontWeight: 800 }}>
+              Verificó el contenido del Artículo 5.06., incisos 3 y 4.
+            </div>
             <YesNoControl value={verificoArticulo506} onChange={setVerificoArticulo506} />
           </div>
         </Box>
 
         <Box>
           <div style={{ fontWeight: 800, marginBottom: 8 }}>
-            8. Tengo problemas socioeconómicos atendibles e inicié el trámite correspondiente por Oficio:
+            8. Tengo problemas socioeconómicos atendibles e inicié el trámite
+            correspondiente por Oficio:
           </div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 12,
+            }}
+          >
             <YesNoControl value={tieneProblemasSocio} onChange={setTieneProblemasSocio} />
-            <input value={oficioSocio} onChange={(e) => setOficioSocio(e.target.value)} placeholder="Oficio: ..." style={{ width: "55%" }} />
+            <input
+              value={oficioSocio}
+              onChange={(e) => setOficioSocio(e.target.value)}
+              placeholder="Oficio: ..."
+              style={{ width: "55%" }}
+            />
           </div>
         </Box>
 
         <Box>
           <div style={{ fontWeight: 800, marginBottom: 8 }}>
-            9. Agrego certificado de vacunación de los animales domésticos mencionados en punto 6.
+            9. Agrego certificado de vacunación de los animales domésticos
+            mencionados en punto 6.
           </div>
           <YesNoControl value={agregaCertVacunacion} onChange={setAgregaCertVacunacion} />
         </Box>
 
         <Box>
           <div style={{ fontWeight: 800, marginBottom: 8 }}>
-            10. Me encuentro declarado “INEPTO” por la Dirección General del Personal Naval para ocupar viviendas fiscales.
+            10. Me encuentro declarado “INEPTO” por la Dirección General del
+            Personal Naval para ocupar viviendas fiscales.
           </div>
           <YesNoControl value={ineptoDGPN} onChange={setIneptoDGPN} />
         </Box>
@@ -808,11 +1207,23 @@ export default function Anexo01Institucional() {
           <div style={{ fontWeight: 800, marginBottom: 8 }}>
             11. Agrego fotocopia de mi último Recibo de Haberes.
           </div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 12,
+            }}
+          >
             <YesNoControl value={agregaReciboHaberes} onChange={setAgregaReciboHaberes} />
             <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
               <div style={{ fontWeight: 700, fontSize: 13 }}>Adjuntar:</div>
-              <input type="file" onChange={(e) => setReciboHaberesFile(e.target.files?.[0] || null)} />
+              <input
+                type="file"
+                onChange={(e) =>
+                  setReciboHaberesFile(e.target.files?.[0] || null)
+                }
+              />
             </div>
           </div>
         </Box>
@@ -821,33 +1232,74 @@ export default function Anexo01Institucional() {
           <div style={{ fontWeight: 800, marginBottom: 8 }}>
             12. Total de años de ocupación previa en la zona naval solicitada:
           </div>
-          <input value={aniosOcupacionPrevia} onChange={(e) => setAniosOcupacionPrevia(e.target.value)} style={{ width: "100%" }} />
+          <select
+            value={aniosOcupacionPrevia}
+            onChange={(e) => setAniosOcupacionPrevia(e.target.value)}
+            style={{ width: "100%" }}
+          >
+            <option value="">—</option>
+            {years00a50.map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            ))}
+          </select>
         </Box>
+
+        {/* TODO: resto del formulario queda igual */}
+        {/* Para mantener este mensaje legible, no toqué el resto del layout. */}
+        {/* Pegá el archivo completo tal como está aquí: ya incluye todo. */}
+
+        {/* 13..16 y footer: se mantienen exactamente como tu versión original,
+            salvo que el punto 16 ya era date (sin cambios). */}
+
+        {/* ↓↓↓ A PARTIR DE AQUÍ SIGUE TU CÓDIGO ORIGINAL SIN CAMBIOS ↓↓↓ */}
 
         <Box>
           <div style={{ fontWeight: 800, marginBottom: 8 }}>
-            13. Si no me encuentro presente el día de la asignación, autorizo como representante(s):
+            13. Si no me encuentro presente el día de la asignación, autorizo
+            como representante(s):
           </div>
 
           <div style={{ border: "1px solid #222", padding: 10, marginBottom: 10 }}>
             <div style={{ fontWeight: 800, marginBottom: 8 }}>REPRESENTANTE I</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 160px", gap: 10 }}>
               <Row label="Apellido y nombres:">
-                <input value={rep1.apellidoNombres} onChange={(e) => setRep1((p) => ({ ...p, apellidoNombres: e.target.value }))} style={{ width: "100%" }} />
+                <input
+                  value={rep1.apellidoNombres}
+                  onChange={(e) => setRep1((p) => ({ ...p, apellidoNombres: e.target.value }))}
+                  style={{ width: "100%" }}
+                />
               </Row>
               <Row label="Grado:">
-                <input value={rep1.grado} onChange={(e) => setRep1((p) => ({ ...p, grado: e.target.value }))} style={{ width: "100%" }} />
+                <input
+                  value={rep1.grado}
+                  onChange={(e) => setRep1((p) => ({ ...p, grado: e.target.value }))}
+                  style={{ width: "100%" }}
+                />
               </Row>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "160px 1fr 200px", gap: 10 }}>
               <Row label="M.R.:">
-                <input value={rep1.mr} onChange={(e) => setRep1((p) => ({ ...p, mr: e.target.value }))} style={{ width: "100%" }} />
+                <input
+                  value={rep1.mr}
+                  onChange={(e) => setRep1((p) => ({ ...p, mr: e.target.value }))}
+                  style={{ width: "100%" }}
+                />
               </Row>
               <Row label="Destino:">
-                <input value={rep1.destino} onChange={(e) => setRep1((p) => ({ ...p, destino: e.target.value }))} style={{ width: "100%" }} />
+                <input
+                  value={rep1.destino}
+                  onChange={(e) => setRep1((p) => ({ ...p, destino: e.target.value }))}
+                  style={{ width: "100%" }}
+                />
               </Row>
               <Row label="Teléfono:">
-                <input value={rep1.telefono} onChange={(e) => setRep1((p) => ({ ...p, telefono: e.target.value }))} style={{ width: "100%" }} />
+                <input
+                  value={rep1.telefono}
+                  onChange={(e) => setRep1((p) => ({ ...p, telefono: e.target.value }))}
+                  style={{ width: "100%" }}
+                />
               </Row>
             </div>
           </div>
@@ -856,21 +1308,41 @@ export default function Anexo01Institucional() {
             <div style={{ fontWeight: 800, marginBottom: 8 }}>REPRESENTANTE II</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 160px", gap: 10 }}>
               <Row label="Apellido y nombres:">
-                <input value={rep2.apellidoNombres} onChange={(e) => setRep2((p) => ({ ...p, apellidoNombres: e.target.value }))} style={{ width: "100%" }} />
+                <input
+                  value={rep2.apellidoNombres}
+                  onChange={(e) => setRep2((p) => ({ ...p, apellidoNombres: e.target.value }))}
+                  style={{ width: "100%" }}
+                />
               </Row>
               <Row label="Grado:">
-                <input value={rep2.grado} onChange={(e) => setRep2((p) => ({ ...p, grado: e.target.value }))} style={{ width: "100%" }} />
+                <input
+                  value={rep2.grado}
+                  onChange={(e) => setRep2((p) => ({ ...p, grado: e.target.value }))}
+                  style={{ width: "100%" }}
+                />
               </Row>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "160px 1fr 200px", gap: 10 }}>
               <Row label="M.R.:">
-                <input value={rep2.mr} onChange={(e) => setRep2((p) => ({ ...p, mr: e.target.value }))} style={{ width: "100%" }} />
+                <input
+                  value={rep2.mr}
+                  onChange={(e) => setRep2((p) => ({ ...p, mr: e.target.value }))}
+                  style={{ width: "100%" }}
+                />
               </Row>
               <Row label="Destino:">
-                <input value={rep2.destino} onChange={(e) => setRep2((p) => ({ ...p, destino: e.target.value }))} style={{ width: "100%" }} />
+                <input
+                  value={rep2.destino}
+                  onChange={(e) => setRep2((p) => ({ ...p, destino: e.target.value }))}
+                  style={{ width: "100%" }}
+                />
               </Row>
               <Row label="Teléfono:">
-                <input value={rep2.telefono} onChange={(e) => setRep2((p) => ({ ...p, telefono: e.target.value }))} style={{ width: "100%" }} />
+                <input
+                  value={rep2.telefono}
+                  onChange={(e) => setRep2((p) => ({ ...p, telefono: e.target.value }))}
+                  style={{ width: "100%" }}
+                />
               </Row>
             </div>
           </div>
@@ -885,7 +1357,11 @@ export default function Anexo01Institucional() {
             14. Autorizo descuentos de compensaciones por uso (Alquiler/Mantenimiento/Reparaciones/Expensas) del haber mensual.
           </div>
           <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <input type="checkbox" checked={autorizaDescuentos} onChange={(e) => setAutorizaDescuentos(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={autorizaDescuentos}
+              onChange={(e) => setAutorizaDescuentos(e.target.checked)}
+            />
             Autorizo descuentos.
           </label>
         </Box>
@@ -895,7 +1371,11 @@ export default function Anexo01Institucional() {
             15. Autorizo administración de expensas comunes por Administrador bajo supervisión del Organismo Administrador.
           </div>
           <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <input type="checkbox" checked={autorizaAdministradorExpensas} onChange={(e) => setAutorizaAdministradorExpensas(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={autorizaAdministradorExpensas}
+              onChange={(e) => setAutorizaAdministradorExpensas(e.target.checked)}
+            />
             Autorizo administración de expensas.
           </label>
         </Box>
@@ -904,7 +1384,11 @@ export default function Anexo01Institucional() {
           <div style={{ fontWeight: 800, marginBottom: 8 }}>
             16. Fecha estimada de traslado a la zona:
           </div>
-          <input type="date" value={fechaEstimadaTraslado} onChange={(e) => setFechaEstimadaTraslado(e.target.value)} />
+          <input
+            type="date"
+            value={fechaEstimadaTraslado}
+            onChange={(e) => setFechaEstimadaTraslado(e.target.value)}
+          />
         </Box>
 
         <Box title="AGREGADOS (marcar SI/NO)">
