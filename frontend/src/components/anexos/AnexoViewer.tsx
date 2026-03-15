@@ -1,5 +1,5 @@
 // frontend/src/components/anexos/AnexoViewer.tsx
-// Visualización de anexos (01, 02, 03, 07, 08, 09, etc.) en paneles institucionales
+// Visualización de anexos (01, 02, 03, 07, 08, 09, 11, etc.) en paneles institucionales
 
 import React from "react";
 
@@ -40,6 +40,145 @@ function mbbrm(v: unknown) {
   const s = up(v);
   if (["MB", "B", "R", "M"].includes(s)) return s;
   return "—";
+}
+
+/* ╔══════════════════════════════════════╗
+   ║   Helpers ANEXO 11                   ║
+   ╚══════════════════════════════════════╝ */
+
+function buildAnexo11Timeline(datos: any) {
+  const items: Array<{
+    fecha?: string;
+    actor: string;
+    tipo: string;
+    texto: string;
+  }> = [];
+
+  const visitas = Array.isArray(datos?.visitasProgramadas)
+    ? datos.visitasProgramadas
+    : [];
+
+  const obsInspectorHist = Array.isArray(datos?.observacionesInspectorHistorial)
+    ? datos.observacionesInspectorHistorial
+    : [];
+
+  const obsAdminHist = Array.isArray(datos?.observacionesAdminGeneralHistorial)
+    ? datos.observacionesAdminGeneralHistorial
+    : [];
+
+  for (const o of obsInspectorHist) {
+    items.push({
+      fecha: o?.fecha,
+      actor: "INSPECTOR",
+      tipo: "OBSERVACIÓN",
+      texto: o?.texto || "Observación del inspector",
+    });
+  }
+
+  for (const v of visitas) {
+    items.push({
+      fecha: v?.creadoAt || v?.fechaRegistro || v?.fechaProgramada,
+      actor: "INSPECTOR",
+      tipo: "VISITA",
+      texto: `Visita programada para ${fmtDateTime(v?.fechaProgramada)} — ${safe(
+        v?.observacion
+      )}`,
+    });
+  }
+
+  for (const o of obsAdminHist) {
+    items.push({
+      fecha: o?.fecha,
+      actor: "ADMIN GENERAL",
+      tipo: "OBSERVACIÓN",
+      texto: o?.texto || "Observación administrativa",
+    });
+  }
+
+  if (datos?.decisionInspector) {
+    items.push({
+      fecha:
+        datos?.fechaDecisionInspector ||
+        datos?.fechaRegistroDecisionInspector ||
+        datos?.updatedAt,
+      actor: "INSPECTOR",
+      tipo: "DECISIÓN",
+      texto: `Decisión del inspector: ${safe(datos?.decisionInspector)}`,
+    });
+  }
+
+  if (datos?.prioridadInspector || datos?.prioridad) {
+    items.push({
+      fecha:
+        datos?.fechaPrioridadInspector ||
+        datos?.fechaRegistroPrioridadInspector ||
+        datos?.updatedAt,
+      actor: "INSPECTOR",
+      tipo: "PRIORIDAD",
+      texto: `Prioridad fijada: ${safe(
+        datos?.prioridadInspector || datos?.prioridad
+      )}`,
+    });
+  }
+
+  if (datos?.responsableTrabajo) {
+    items.push({
+      fecha:
+        datos?.fechaResponsableTrabajo ||
+        datos?.fechaRegistroResponsableTrabajo ||
+        datos?.updatedAt,
+      actor: "INSPECTOR",
+      tipo: "RESPONSABLE",
+      texto: `Responsable del trabajo: ${safe(datos?.responsableTrabajo)}`,
+    });
+  }
+
+  if (datos?.fechaProgramadaObra || datos?.descripcionTecnicaObra) {
+    items.push({
+      fecha: datos?.fechaProgramadaObra || datos?.updatedAt,
+      actor: "INSPECTOR",
+      tipo: "OBRA",
+      texto: `Programación de obra: ${
+        datos?.fechaProgramadaObra
+          ? fmtDateTime(datos?.fechaProgramadaObra)
+          : "—"
+      }${
+        datos?.descripcionTecnicaObra
+          ? ` — ${datos.descripcionTecnicaObra}`
+          : ""
+      }`,
+    });
+  }
+
+  if (datos?.trabajoFinalizadoInspector || datos?.fechaFinalizacionInspector) {
+    items.push({
+      fecha: datos?.fechaFinalizacionInspector || datos?.updatedAt,
+      actor: "INSPECTOR",
+      tipo: "FINALIZACIÓN",
+      texto: `Final de obra: ${
+        datos?.observacionFinalInspector || "Trabajo finalizado por inspector"
+      }`,
+    });
+  }
+
+  if (datos?.resolucionAdminGeneral || datos?.fechaCierreAdminGeneral) {
+    items.push({
+      fecha: datos?.fechaCierreAdminGeneral || datos?.updatedAt,
+      actor: "ADMIN GENERAL",
+      tipo: "CIERRE",
+      texto: `Resolución administrativa: ${safe(
+        datos?.resolucionAdminGeneral || "CERRADO"
+      )}`,
+    });
+  }
+
+  items.sort((a, b) => {
+    const ta = a.fecha ? new Date(a.fecha).getTime() : 0;
+    const tb = b.fecha ? new Date(b.fecha).getTime() : 0;
+    return ta - tb;
+  });
+
+  return items;
 }
 
 /* ╔══════════════════════════════════════╗
@@ -90,14 +229,11 @@ function ViewAnexo02({
   const nom = String(d01?.nombres || "").trim();
   const apeNom = safe(d?.apellidoNombres || `${ape} ${nom}`.trim());
 
-  // ✅ En ANEXO_02 el campo "M.R." es Matrícula (en ANEXO_01 viene como "mr")
   const matricula = safe(d?.mr || d01?.mr);
 
-  // Dirección / Departamento hoy no existen en modelo Vivienda; si vienen en datos legacy, se muestran.
   const direccion = safe(d?.direccion, "");
   const departamento = safe(d?.departamento, "");
 
-  // Código institucional de vivienda y barrio (si vivienda está resuelta)
   const casa = safe(
     vivienda?.codigo || d?.casa || d?.unidadHabitacional || d?.viviendaCodigo,
     ""
@@ -848,6 +984,249 @@ function ViewAnexo09({ datos }: { datos: any }) {
 }
 
 /* ╔══════════════════════════════════════╗
+   ║   ANEXO 11 – Pedido de trabajo       ║
+   ╚══════════════════════════════════════╝ */
+function ViewAnexo11({ datos }: { datos: any }) {
+  const vivienda =
+    datos?.viviendaLabel ||
+    datos?.unidadHabitacional ||
+    datos?.casa ||
+    datos?.viviendaCodigo ||
+    "—";
+
+  const barrio = datos?.viviendaBarrio || datos?.barrio || "—";
+
+  const permisionario =
+    datos?.permisionarioNombre ||
+    datos?.postulanteNombre ||
+    datos?.permisionario ||
+    "—";
+
+  const solicitud =
+    datos?.tipoSolicitud ||
+    datos?.solicitudDetalle ||
+    "—";
+
+  const detalle =
+    datos?.detallePedido ||
+    datos?.descripcionTrabajo ||
+    datos?.detalleTrabajo ||
+    datos?.descripcion ||
+    "—";
+
+  const prioridad = datos?.prioridadInspector || datos?.prioridad || "—";
+  const decision = datos?.decisionInspector || "—";
+  const responsable = datos?.responsableTrabajo || "—";
+  const trabajoFinalizado = datos?.trabajoFinalizadoInspector ? "SI" : "NO";
+  const fechaFinal = datos?.fechaFinalizacionInspector
+    ? fmtDateTime(datos.fechaFinalizacionInspector)
+    : "—";
+
+  const obsInspector = datos?.observacionesInspector || "—";
+  const obsAdmin =
+    datos?.observacionesAdminGeneral ||
+    datos?.resolucionAdminGeneral ||
+    "—";
+
+  const visitas = Array.isArray(datos?.visitasProgramadas)
+    ? datos.visitasProgramadas
+    : [];
+
+  const timeline = buildAnexo11Timeline(datos);
+
+  return (
+    <div>
+      <h4>ANEXO 11 – Pedido de trabajo</h4>
+
+      <section
+        style={{
+          marginTop: 8,
+          padding: 10,
+          borderRadius: 8,
+          border: "1px solid #ddd",
+          background: "#fafafa",
+        }}
+      >
+        <div><b>Vivienda / Espacio:</b> {safe(vivienda)}</div>
+        <div><b>Barrio:</b> {safe(barrio)}</div>
+        <div><b>Permisionario:</b> {safe(permisionario)}</div>
+        <div><b>Tipo de solicitud:</b> {safe(solicitud)}</div>
+        <div><b>Detalle:</b> {safe(detalle)}</div>
+      </section>
+
+      <section
+        style={{
+          marginTop: 14,
+          padding: 10,
+          borderRadius: 8,
+          border: "1px solid #ddd",
+          background: "#fafafa",
+        }}
+      >
+        <h5 style={{ marginTop: 0 }}>Intervención del inspector</h5>
+        <div><b>Prioridad:</b> {safe(prioridad)}</div>
+        <div><b>Decisión:</b> {safe(decision)}</div>
+        <div><b>Responsable del trabajo:</b> {safe(responsable)}</div>
+        <div><b>Trabajo finalizado:</b> {trabajoFinalizado}</div>
+        <div><b>Fecha finalización:</b> {fechaFinal}</div>
+      </section>
+
+      <section
+        style={{
+          marginTop: 14,
+          padding: 10,
+          borderRadius: 8,
+          border: "1px solid #ddd",
+          background: "#fafafa",
+        }}
+      >
+        <h5 style={{ marginTop: 0 }}>Observaciones del inspector</h5>
+        <div
+          style={{
+            marginTop: 4,
+            padding: 8,
+            border: "1px solid #ddd",
+            borderRadius: 6,
+            background: "#fff",
+            whiteSpace: "pre-wrap",
+          }}
+        >
+          {safe(obsInspector)}
+        </div>
+      </section>
+
+      <section
+        style={{
+          marginTop: 14,
+          padding: 10,
+          borderRadius: 8,
+          border: "1px solid #ddd",
+          background: "#fafafa",
+        }}
+      >
+        <h5 style={{ marginTop: 0 }}>Observaciones ADMIN GENERAL</h5>
+        <div
+          style={{
+            marginTop: 4,
+            padding: 8,
+            border: "1px solid #ddd",
+            borderRadius: 6,
+            background: "#fff",
+            whiteSpace: "pre-wrap",
+          }}
+        >
+          {safe(obsAdmin)}
+        </div>
+      </section>
+
+      <section
+        style={{
+          marginTop: 14,
+          padding: 10,
+          borderRadius: 8,
+          border: "1px solid #ddd",
+          background: "#fafafa",
+        }}
+      >
+        <h5 style={{ marginTop: 0 }}>Visitas programadas</h5>
+
+        {visitas.length === 0 ? (
+          <p>No hay visitas registradas.</p>
+        ) : (
+          <table
+            style={{
+              width: "100%",
+              marginTop: 6,
+              borderCollapse: "collapse",
+              fontSize: 12,
+            }}
+          >
+            <thead>
+              <tr>
+                <th
+                  style={{
+                    borderBottom: "1px solid #ccc",
+                    textAlign: "left",
+                    padding: 4,
+                  }}
+                >
+                  Fecha programada
+                </th>
+                <th
+                  style={{
+                    borderBottom: "1px solid #ccc",
+                    textAlign: "left",
+                    padding: 4,
+                  }}
+                >
+                  Observación
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {visitas.map((v: any, i: number) => (
+                <tr key={i}>
+                  <td style={{ borderBottom: "1px solid #eee", padding: 4 }}>
+                    {fmtDateTime(v.fechaProgramada)}
+                  </td>
+                  <td style={{ borderBottom: "1px solid #eee", padding: 4 }}>
+                    {safe(v.observacion)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      <section
+        style={{
+          marginTop: 14,
+          padding: 10,
+          borderRadius: 8,
+          border: "1px solid #ddd",
+          background: "#fafafa",
+        }}
+      >
+        <h5 style={{ marginTop: 0 }}>Historial cronológico del trámite</h5>
+
+        {timeline.length === 0 ? (
+          <p>No hay intervenciones registradas.</p>
+        ) : (
+          <div
+            style={{
+              marginTop: 6,
+              border: "1px solid #ddd",
+              borderRadius: 6,
+              background: "#fff",
+              padding: 8,
+            }}
+          >
+            {timeline.map((item, i) => (
+              <div
+                key={i}
+                style={{
+                  padding: "8px 0",
+                  borderBottom:
+                    i < timeline.length - 1 ? "1px dashed #ddd" : "none",
+                }}
+              >
+                <div style={{ fontSize: 12, marginBottom: 2 }}>
+                  <b>{fmtDateTime(item.fecha)}</b> — {item.actor} — {item.tipo}
+                </div>
+                <div style={{ fontSize: 13, whiteSpace: "pre-wrap" }}>
+                  {safe(item.texto)}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+/* ╔══════════════════════════════════════╗
    ║   DEFAULT – Vista genérica           ║
    ╚══════════════════════════════════════╝ */
 function ViewGeneric({ datos }: { datos: any }) {
@@ -892,6 +1271,7 @@ export default function AnexoViewer({
   if (c === "ANEXO_07") return <ViewAnexo07 datos={datos || {}} />;
   if (c === "ANEXO_08") return <ViewAnexo08 datos={datos || {}} />;
   if (c === "ANEXO_09") return <ViewAnexo09 datos={datos || {}} />;
+  if (c === "ANEXO_11") return <ViewAnexo11 datos={datos || {}} />;
 
   return <ViewGeneric datos={datos || {}} />;
 }

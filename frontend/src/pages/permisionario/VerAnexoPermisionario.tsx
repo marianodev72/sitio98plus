@@ -1,4 +1,5 @@
 //frontend/src/pages/permisionario/VerAnexoPermisionario.tsx
+import AnexoViewer from "../../components/anexos/AnexoViewer";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { http } from "../../api/http";
@@ -176,13 +177,29 @@ export default function VerAnexoPermisionario() {
         <h2>ANEXO 04 — Aviso de ausencia prolongada</h2>
 
         {errorMsg && (
-          <div style={{ marginTop: 8, marginBottom: 8, padding: 10, border: "1px solid #f44336", background: "#ffebee" }}>
+          <div
+            style={{
+              marginTop: 8,
+              marginBottom: 8,
+              padding: 10,
+              border: "1px solid #f44336",
+              background: "#ffebee",
+            }}
+          >
             {errorMsg}
           </div>
         )}
 
         {infoMsg && !errorMsg && (
-          <div style={{ marginTop: 8, marginBottom: 8, padding: 10, border: "1px solid #4caf50", background: "#e8f5e9" }}>
+          <div
+            style={{
+              marginTop: 8,
+              marginBottom: 8,
+              padding: 10,
+              border: "1px solid #4caf50",
+              background: "#e8f5e9",
+            }}
+          >
             {infoMsg}
           </div>
         )}
@@ -418,15 +435,15 @@ export default function VerAnexoPermisionario() {
   }
 
   // ─────────────────────────────
-  // ANEXO_11 — Vista actual
+  // ANEXO_11 — Vista completa para PERMISIONARIO
   // ─────────────────────────────
-
   if (codigo === "ANEXO_11") {
     const ambito = d.ambito || "VIVIENDA";
     const viviendaLabel =
       d.viviendaLabel || d.unidad || d.casa || d.viviendaCodigo || "—";
     const permisionarioNombre = d.permisionarioNombre || d.postulanteNombre || "—";
     const titulo = "ANEXO 11 – Formulario de Pedido de Trabajo";
+    const yaConforme = !!d?.conformidadPermisionario?.ok;
 
     return (
       <div style={{ padding: 24 }}>
@@ -498,12 +515,20 @@ export default function VerAnexoPermisionario() {
           </p>
         </section>
 
+        <div style={{ marginTop: 12 }}>
+          <AnexoViewer codigo={anexo.codigo} datos={d} />
+        </div>
+
         <div style={{ marginTop: 14, display: "flex", gap: 10, flexWrap: "wrap" }}>
           <button onClick={cargar} disabled={busy}>
             Recargar
           </button>
-          <button onClick={confirmarConformidadAnexo11} disabled={busy}>
-            {busy ? "Enviando…" : "Dar conformidad (ANEXO 11)"}
+          <button onClick={confirmarConformidadAnexo11} disabled={busy || yaConforme}>
+            {busy
+              ? "Enviando…"
+              : yaConforme
+              ? "Conformidad registrada"
+              : "Dar conformidad (ANEXO 11)"}
           </button>
         </div>
       </div>

@@ -167,23 +167,7 @@ export default function GestionesInspector() {
         return tb - ta;
       });
 
-      // DEBUG opcional
-      const countIds = (list: AnexoInspector[]) => {
-        const m = new Map<string, number>();
-        for (const x of list) m.set(x._id, (m.get(x._id) || 0) + 1);
-        const dup = Array.from(m.entries()).filter(([, n]) => n > 1);
-        return { total: list.length, dups: dup.slice(0, 10) };
-      };
-
-      console.log("list02", countIds(list02));
-      console.log("list03", countIds(list03));
-      console.log("list07", countIds(list07));
-      console.log("list08", countIds(list08));
-      console.log("list09", countIds(list09));
-      console.log("list11", countIds(list11));
-      console.log("merged size", mergedMap.size);
-
-      setItems(merged);
+            setItems(merged);
     } catch (e) {
       console.error("[Inspector] Error cargando gestiones", e);
       setError(
@@ -430,13 +414,7 @@ export default function GestionesInspector() {
               const est = up(a.estado);
               const isBusy = workingId === a._id;
 
-              // DEBUG TEMPORAL
-              if (cod === "ANEXO_02") {
-                console.log("ANEXO_02 COMPLETO:", a);
-                console.log("ANEXO_02 DATOS:", a?.datos);
-              }
-
-              const handleGestionar = () => {
+                            const handleGestionar = () => {
                 if (cod === "ANEXO_02" || cod === "ANEXO_11") {
                   navigate(`/app/permisionario/mi-barrio-inspector/gestiones/${a._id}`);
                 } else {

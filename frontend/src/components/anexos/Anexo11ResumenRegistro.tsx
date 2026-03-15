@@ -1,5 +1,4 @@
-//frontend/src/components/anexos/Anexo11ResumenRegistro.tsx
-import React from "react";
+//frontend/src/components/anexos/Anexo11ResumenRegistro.tsximport React from "react";
 
 type Usuario = {
   _id?: string;
@@ -45,6 +44,29 @@ function prettyId(v: unknown) {
   return s;
 }
 
+function prettyActor(v: unknown, fallback = "Interviniente") {
+  const s = String(v || "").trim();
+  if (!s) return fallback;
+
+  // Si ya viene algo legible, lo mostramos
+  if (!/^[0-9a-fA-F]{24}$/.test(s)) {
+    const value = s.trim();
+    const upper = value.toUpperCase();
+
+    if (upper === "ADMIN_GENERAL") return "ADMIN GENERAL";
+    if (upper === "ADMIN") return "ADMIN";
+    if (upper === "JEFE_DE_BARRIO") return "JEFE DE BARRIO";
+    if (upper === "INSPECTOR") return "Inspector";
+    if (upper === "PERMISIONARIO") return "Permisionario";
+    if (upper === "SISTEMA") return "Sistema";
+
+    return value;
+  }
+
+  // Si viene ObjectId puro, evitamos mostrarlo
+  return fallback;
+}
+
 type Props = {
   anexo: {
     _id: string;
@@ -61,7 +83,10 @@ type Props = {
   mostrarAdmin?: boolean;
 };
 
-export default function Anexo11ResumenRegistro({ anexo, mostrarAdmin = true }: Props) {
+export default function Anexo11ResumenRegistro({
+  anexo,
+  mostrarAdmin = true,
+}: Props) {
   const d = anexo.datos || {};
 
   const iniciadoPor = prettyUser(anexo.usuario);
@@ -97,7 +122,9 @@ export default function Anexo11ResumenRegistro({ anexo, mostrarAdmin = true }: P
     ? d.observacionesAdminGeneralHistorial
     : [];
 
-  const estados: HistEstado[] = Array.isArray(anexo.historialEstados) ? anexo.historialEstados : [];
+  const estados: HistEstado[] = Array.isArray(anexo.historialEstados)
+    ? anexo.historialEstados
+    : [];
 
   // Armamos un “timeline” unificado (sin perder lo original)
   // - Observaciones Inspector
@@ -111,7 +138,7 @@ export default function Anexo11ResumenRegistro({ anexo, mostrarAdmin = true }: P
       fecha: o.fecha,
       tipo: "OBS_INSPECTOR",
       texto: String(o.texto || "").trim(),
-      actor: o.usuario ? prettyId(o.usuario) : undefined,
+      actor: o.usuario ? prettyActor(o.usuario, "Inspector") : "Inspector",
     });
   }
 
@@ -120,7 +147,7 @@ export default function Anexo11ResumenRegistro({ anexo, mostrarAdmin = true }: P
       fecha: v.creadoAt || v.fechaRegistro || v.fechaProgramada,
       tipo: "VISITA",
       texto: `Visita: ${v.fechaProgramada ? fmtDate(v.fechaProgramada) : "—"} — ${safe(v.observacion)}`,
-      actor: v.creadoPor ? prettyId(v.creadoPor) : undefined,
+      actor: v.creadoPor ? prettyActor(v.creadoPor, "Inspector") : "Inspector",
     });
   }
 
@@ -130,7 +157,7 @@ export default function Anexo11ResumenRegistro({ anexo, mostrarAdmin = true }: P
         fecha: o.fecha,
         tipo: "OBS_ADMIN",
         texto: String(o.texto || "").trim(),
-        actor: o.usuario ? prettyId(o.usuario) : undefined,
+        actor: o.usuario ? prettyActor(o.usuario, "ADMIN GENERAL") : "ADMIN GENERAL",
       });
     }
   }
@@ -140,7 +167,7 @@ export default function Anexo11ResumenRegistro({ anexo, mostrarAdmin = true }: P
       fecha: h.fecha,
       tipo: "ESTADO",
       texto: String(h.observacion || `${h.estadoAnterior} → ${h.estadoNuevo}`).trim(),
-      actor: h.realizadoPor ? prettyId(h.realizadoPor) : undefined,
+      actor: h.realizadoPor ? prettyActor(h.realizadoPor, "Sistema") : "Sistema",
     });
   }
 

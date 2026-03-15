@@ -8,6 +8,7 @@ import Anexo04Vista from "../../../components/anexos/Anexo04Vista";
 import Anexo03InspectorForm, {
   type Anexo03Datos,
 } from "../../../components/anexos/Anexo03InspectorForm";
+import GestionarAnexo11Inspector from "./GestionarAnexo11Inspector";
 
 type Anexo = {
   _id: string;
@@ -18,6 +19,8 @@ type Anexo = {
   updatedAt?: string;
   datos?: any;
   derivadoDe?: string;
+  historialEstados?: any[];
+  usuario?: any;
 };
 
 function up(v: unknown) {
@@ -316,6 +319,17 @@ export default function GestionarAnexoInspector() {
           <button onClick={cargar}>Recargar</button>
         </div>
       </div>
+    );
+  }
+
+  // ✅ Nuevo soporte explícito para ANEXO_11
+  if (codigo === "ANEXO_11") {
+    return (
+      <GestionarAnexo11Inspector
+        anexo={anexo}
+        user={user}
+        onReload={cargar}
+      />
     );
   }
 

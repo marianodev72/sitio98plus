@@ -12,12 +12,24 @@ type Anexo = {
   createdAt?: string;
 };
 
+type ViviendaAutocarga = {
+  unidad: string;
+  dpto: string;
+  mb: string;
+  mz: string;
+  casa: string;
+};
+
 function up(v: unknown) {
   return String(v || "").toUpperCase().trim();
 }
 
 function safe(v: unknown) {
   return v === null || v === undefined || v === "" ? "-" : String(v);
+}
+
+function clean(v: unknown) {
+  return v === null || v === undefined ? "" : String(v).trim();
 }
 
 function fmtDate(v?: string) {
@@ -33,6 +45,38 @@ function safeFileNameDate() {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(
     d.getDate()
   )}_${pad(d.getHours())}-${pad(d.getMinutes())}`;
+}
+
+function buildNombreUsuario(user: any) {
+  return `${clean(user?.apellido)} ${clean(user?.nombre)}`.trim();
+}
+
+function getViviendaDesdeUser(user: any): ViviendaAutocarga {
+  const vivienda =
+    user?.vivienda ||
+    user?.viviendaAsignada ||
+    user?.viviendaActual ||
+    user?.unidadHabitacional ||
+    null;
+
+  return {
+    unidad: clean(
+      vivienda?.unidad ||
+        vivienda?.unidadHabitacional ||
+        user?.unidad ||
+        user?.unidadHabitacional
+    ),
+    dpto: clean(vivienda?.dpto || vivienda?.departamento || user?.dpto),
+    mb: clean(vivienda?.mb || user?.mb),
+    mz: clean(vivienda?.mz || user?.mz),
+    casa: clean(
+      vivienda?.codigo ||
+        vivienda?.casa ||
+        vivienda?.viviendaCodigo ||
+        user?.casa ||
+        user?.viviendaCodigo
+    ),
+  };
 }
 
 export default function MisAnexosPermisionario() {
@@ -58,6 +102,10 @@ export default function MisAnexosPermisionario() {
     "ANEXO_08",
     "ANEXO_11",
   ];
+
+  const nombreUsuario = useMemo(() => buildNombreUsuario(user), [user]);
+  const viviendaInicial = useMemo(() => getViviendaDesdeUser(user), [user]);
+
   const [codigo, setCodigo] = useState("TODOS");
 
   const [items, setItems] = useState<Anexo[]>([]);
@@ -69,40 +117,56 @@ export default function MisAnexosPermisionario() {
   const [mostrandoNuevo11, setMostrandoNuevo11] = useState(false);
   const [enviando11, setEnviando11] = useState(false);
 
-  // Campos institucionales básicos del ANEXO 11 (Permisionario / Promotor / Solicito)
-  const [unidad, setUnidad] = useState("");
-  const [dpto, setDpto] = useState("");
-  const [mb, setMb] = useState("");
-  const [mz, setMz] = useState("");
-  const [casa, setCasa] = useState("");
+  // Campos institucionales básicos del ANEXO 11
+  const [unidad, setUnidad] = useState(viviendaInicial.unidad);
+  const [dpto, setDpto] = useState(viviendaInicial.dpto);
+  const [mb, setMb] = useState(viviendaInicial.mb);
+  const [mz, setMz] = useState(viviendaInicial.mz);
+  const [casa, setCasa] = useState(viviendaInicial.casa);
 
-  const [permGrado, setPermGrado] = useState("");
-  const [permNombre, setPermNombre] = useState(
-    `${safe(user?.apellido)} ${safe(user?.nombre)}`
-      .replace(/^-\s*-$/, "")
-      .trim()
-  );
+  const [permGrado, setPermGrado] = useState(clean(user?.grado));
+  const [permNombre, setPermNombre] = useState(nombreUsuario);
 
   const [promotorTipo, setPromotorTipo] = useState<
     "PERMISIONARIO" | "INSPECTOR" | "JEFE_MILITAR" | "OTROS"
   >("PERMISIONARIO");
-  const [promotorGrado, setPromotorGrado] = useState("");
-  const [promotorNombre, setPromotorNombre] = useState(
-    `${safe(user?.apellido)} ${safe(user?.nombre)}`
-      .replace(/^-\s*-$/, "")
-      .trim()
-  );
+  const [promotorGrado, setPromotorGrado] = useState(clean(user?.grado));
+  const [promotorNombre, setPromotorNombre] = useState(nombreUsuario);
 
   const [solCambio, setSolCambio] = useState(false);
-  const [solReparacion, setSolReparacion] = useState(true); // caso típico
+  const [solReparacion, setSolReparacion] = useState(true);
   const [solVerificacion, setSolVerificacion] = useState(false);
   const [solProvision, setSolProvision] = useState(false);
 
   const [detalleDe, setDetalleDe] = useState("");
   const [fechaSolicitud, setFechaSolicitud] = useState(() => {
     const d = new Date();
-    return d.toISOString().slice(0, 10); // yyyy-mm-dd
+    return d.toISOString().slice(0, 10);
   });
+
+  useEffect(() => {
+    // Rehidrata si cambia user
+    setUnidad(viviendaInicial.unidad);
+    setDpto(viviendaInicial.dpto);
+    setMb(viviendaInicial.mb);
+    setMz(viviendaInicial.mz);
+    setCasa(viviendaInicial.casa);
+
+    setPermGrado(clean(user?.grado));
+    setPermNombre(nombreUsuario);
+
+    if (promotorTipo === "PERMISIONARIO") {
+      setPromotorGrado(clean(user?.grado));
+      setPromotorNombre(nombreUsuario);
+    }
+  }, [user, viviendaInicial, nombreUsuario, promotorTipo]);
+
+  useEffect(() => {
+    if (promotorTipo === "PERMISIONARIO") {
+      setPromotorGrado(clean(user?.grado));
+      setPromotorNombre(nombreUsuario);
+    }
+  }, [promotorTipo, user, nombreUsuario]);
 
   async function cargar() {
     setLoading(true);
@@ -146,16 +210,40 @@ export default function MisAnexosPermisionario() {
     }
   }
 
-  // ENVIAR ANEXO 11 (permisionario → inspector)
+  function resetFormulario11() {
+    setUnidad(viviendaInicial.unidad);
+    setDpto(viviendaInicial.dpto);
+    setMb(viviendaInicial.mb);
+    setMz(viviendaInicial.mz);
+    setCasa(viviendaInicial.casa);
+
+    setPermGrado(clean(user?.grado));
+    setPermNombre(nombreUsuario);
+
+    setPromotorTipo("PERMISIONARIO");
+    setPromotorGrado(clean(user?.grado));
+    setPromotorNombre(nombreUsuario);
+
+    setSolCambio(false);
+    setSolReparacion(true);
+    setSolVerificacion(false);
+    setSolProvision(false);
+
+    setDetalleDe("");
+
+    const d = new Date();
+    setFechaSolicitud(d.toISOString().slice(0, 10));
+  }
+
   async function enviarNuevoAnexo11() {
     if (!detalleDe.trim()) {
-      setErrorMsg("Completá el campo 'DE:' describiendo el pedido de trabajo.");
+      setErrorMsg("Completá el campo 'De:' describiendo el pedido de trabajo.");
       return;
     }
 
     if (!solCambio && !solReparacion && !solVerificacion && !solProvision) {
       setErrorMsg(
-        "Marcá al menos una opción en 'SOLICITO: CAMBIO / REPARACIÓN / VERIFICACIÓN / PROVISIÓN'."
+        "Marcá al menos una opción en 'Solicito: Cambio / Reparación / Verificación / Provisión'."
       );
       return;
     }
@@ -189,7 +277,7 @@ export default function MisAnexosPermisionario() {
         fechaSolicitud: fechaSolicitud || null,
       };
 
-      // compatibilidad: muchos reportes esperan un campo genérico
+      // compatibilidad
       datos.detallePedido = datos.solicitudDetalle;
 
       const res = await http.post("/formularios/ANEXO_11", { datos });
@@ -200,7 +288,7 @@ export default function MisAnexosPermisionario() {
           "ANEXO 11 creado y enviado al Inspector correctamente. Podrás seguir su estado en el listado."
         );
         setMostrandoNuevo11(false);
-        setDetalleDe("");
+        resetFormulario11();
         await cargar();
       } else {
         setErrorMsg(
@@ -252,46 +340,6 @@ export default function MisAnexosPermisionario() {
         </div>
       )}
 
-      
-{/* Bloque para iniciar ANEXO 04 (trámite personal) */}
-<section
-  style={{
-    marginBottom: 16,
-    padding: 10,
-    borderRadius: 8,
-    border: "1px solid #ddd",
-    background: "#f5f5f5",
-  }}
->
-  <div
-    style={{
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "center",
-      gap: 8,
-      flexWrap: "wrap",
-    }}
-  >
-    <h3 style={{ margin: 0 }}>
-      ANEXO 04 – Aviso de ausencia prolongada
-    </h3>
-
-    <button
-      type="button"
-      onClick={() => navigate("/app/permisionario/anexo-04/nuevo")}
-      style={{ fontWeight: 700 }}
-    >
-      Crear ANEXO 04
-    </button>
-  </div>
-
-  <p style={{ fontSize: 13, marginTop: 10 }}>
-    Este trámite es personal del Permisionario. Se inicia desde el panel base y se
-    remite a JEFE DE BARRIO (con copia institucional a INSPECTOR, ADMIN y ADMIN_GENERAL).
-  </p>
-</section>
-
-      {/* Bloque para iniciar ANEXO 11 (formulario institucional) */}
       <section
         style={{
           marginBottom: 16,
@@ -307,6 +355,44 @@ export default function MisAnexosPermisionario() {
             justifyContent: "space-between",
             alignItems: "center",
             gap: 8,
+            flexWrap: "wrap",
+          }}
+        >
+          <h3 style={{ margin: 0 }}>
+            ANEXO 04 – Aviso de ausencia prolongada
+          </h3>
+
+          <button
+            type="button"
+            onClick={() => navigate("/app/permisionario/anexo-04/nuevo")}
+            style={{ fontWeight: 700 }}
+          >
+            Crear ANEXO 04
+          </button>
+        </div>
+
+        <p style={{ fontSize: 13, marginTop: 10 }}>
+          Este trámite es personal del Permisionario. Se inicia desde el panel base y se
+          remite a JEFE DE BARRIO (con copia institucional a INSPECTOR, ADMIN y ADMIN_GENERAL).
+        </p>
+      </section>
+
+      <section
+        style={{
+          marginBottom: 16,
+          padding: 10,
+          borderRadius: 8,
+          border: "1px solid #ddd",
+          background: "#f5f5f5",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 8,
+            flexWrap: "wrap",
           }}
         >
           <h3 style={{ margin: 0 }}>
@@ -335,7 +421,19 @@ export default function MisAnexosPermisionario() {
               enviará al Inspector para su gestión y seguimiento.
             </p>
 
-            {/* UNIDAD / DPTO / MB / MZ / CASA */}
+            <div
+              style={{
+                marginBottom: 10,
+                padding: 8,
+                borderRadius: 6,
+                background: "#fffde7",
+                border: "1px solid #f0e0a0",
+                fontSize: 13,
+              }}
+            >
+              Los datos del permisionario y la vivienda se cargan automáticamente para evitar errores.
+            </div>
+
             <div
               style={{
                 display: "flex",
@@ -351,8 +449,8 @@ export default function MisAnexosPermisionario() {
                   <input
                     type="text"
                     value={unidad}
-                    onChange={(e) => setUnidad(e.target.value)}
-                    style={{ width: "100%" }}
+                    readOnly
+                    style={{ width: "100%", background: "#f3f3f3" }}
                   />
                 </label>
               </div>
@@ -363,8 +461,8 @@ export default function MisAnexosPermisionario() {
                   <input
                     type="text"
                     value={dpto}
-                    onChange={(e) => setDpto(e.target.value)}
-                    style={{ width: "100%" }}
+                    readOnly
+                    style={{ width: "100%", background: "#f3f3f3" }}
                   />
                 </label>
               </div>
@@ -375,8 +473,8 @@ export default function MisAnexosPermisionario() {
                   <input
                     type="text"
                     value={mb}
-                    onChange={(e) => setMb(e.target.value)}
-                    style={{ width: "100%" }}
+                    readOnly
+                    style={{ width: "100%", background: "#f3f3f3" }}
                   />
                 </label>
               </div>
@@ -387,8 +485,8 @@ export default function MisAnexosPermisionario() {
                   <input
                     type="text"
                     value={mz}
-                    onChange={(e) => setMz(e.target.value)}
-                    style={{ width: "100%" }}
+                    readOnly
+                    style={{ width: "100%", background: "#f3f3f3" }}
                   />
                 </label>
               </div>
@@ -399,14 +497,13 @@ export default function MisAnexosPermisionario() {
                   <input
                     type="text"
                     value={casa}
-                    onChange={(e) => setCasa(e.target.value)}
-                    style={{ width: "100%" }}
+                    readOnly
+                    style={{ width: "100%", background: "#f3f3f3" }}
                   />
                 </label>
               </div>
             </div>
 
-            {/* PERMISIONARIO */}
             <div style={{ marginBottom: 8 }}>
               <b>Permisionario</b>
               <div
@@ -424,8 +521,8 @@ export default function MisAnexosPermisionario() {
                     <input
                       type="text"
                       value={permGrado}
-                      onChange={(e) => setPermGrado(e.target.value)}
-                      style={{ width: "100%" }}
+                      readOnly
+                      style={{ width: "100%", background: "#f3f3f3" }}
                     />
                   </label>
                 </div>
@@ -436,15 +533,14 @@ export default function MisAnexosPermisionario() {
                     <input
                       type="text"
                       value={permNombre}
-                      onChange={(e) => setPermNombre(e.target.value)}
-                      style={{ width: "100%" }}
+                      readOnly
+                      style={{ width: "100%", background: "#f3f3f3" }}
                     />
                   </label>
                 </div>
               </div>
             </div>
 
-            {/* PROMOTOR */}
             <div style={{ marginBottom: 8 }}>
               <b>Promotor</b>
               <div style={{ marginTop: 4 }}>
@@ -506,7 +602,12 @@ export default function MisAnexosPermisionario() {
                       type="text"
                       value={promotorGrado}
                       onChange={(e) => setPromotorGrado(e.target.value)}
-                      style={{ width: "100%" }}
+                      readOnly={promotorTipo === "PERMISIONARIO"}
+                      style={{
+                        width: "100%",
+                        background:
+                          promotorTipo === "PERMISIONARIO" ? "#f3f3f3" : "#fff",
+                      }}
                     />
                   </label>
                 </div>
@@ -518,14 +619,18 @@ export default function MisAnexosPermisionario() {
                       type="text"
                       value={promotorNombre}
                       onChange={(e) => setPromotorNombre(e.target.value)}
-                      style={{ width: "100%" }}
+                      readOnly={promotorTipo === "PERMISIONARIO"}
+                      style={{
+                        width: "100%",
+                        background:
+                          promotorTipo === "PERMISIONARIO" ? "#f3f3f3" : "#fff",
+                      }}
                     />
                   </label>
                 </div>
               </div>
             </div>
 
-            {/* SOLICITO CAMBIO / REPARACIÓN / VERIFICACIÓN / PROVISIÓN */}
             <div style={{ marginBottom: 8 }}>
               <b>Solicito</b>
               <div style={{ marginTop: 4 }}>
@@ -564,7 +669,6 @@ export default function MisAnexosPermisionario() {
               </div>
             </div>
 
-            {/* DE: (detalle) */}
             <div style={{ marginBottom: 8 }}>
               <label>
                 <b>De:</b>
@@ -585,7 +689,6 @@ export default function MisAnexosPermisionario() {
               </label>
             </div>
 
-            {/* Fecha de solicitud */}
             <div style={{ marginBottom: 8 }}>
               <label>
                 <b>Fecha de solicitud:</b>
@@ -605,7 +708,9 @@ export default function MisAnexosPermisionario() {
                 disabled={enviando11}
                 style={{ fontWeight: 700 }}
               >
-                Enviar ANEXO 11 al Inspector
+                {enviando11
+                  ? "Enviando…"
+                  : "Enviar ANEXO 11 al Inspector"}
               </button>
             </div>
           </div>

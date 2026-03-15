@@ -1,4 +1,3 @@
-// backend/admin_general/GestionarAnexo.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { http } from "../../api/http";
@@ -80,8 +79,6 @@ export default function GestionarAnexo() {
   async function cargarViviendasElegiblesAsignacion() {
     setLoadingViviendas(true);
     try {
-      // ÚNICO endpoint permitido:
-      // GET /api/viviendas/elegibles-asignacion con credentials include
       const res = await http.get(`/viviendas/elegibles-asignacion`, {
         withCredentials: true,
       });
@@ -137,7 +134,6 @@ export default function GestionarAnexo() {
   const estado = useMemo(() => up(anexo?.estado), [anexo?.estado]);
   const datos = anexo?.datos || {};
 
-  // Cargar viviendas elegibles SOLO si estamos en ANEXO_01 (generación institucional)
   useEffect(() => {
     if (!anexo?._id) return;
 
@@ -150,7 +146,6 @@ export default function GestionarAnexo() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [anexo?._id, codigo]);
 
-  // Hidratar datos de ANEXO_01 derivado SOLO si estamos viendo ANEXO_02
   useEffect(() => {
     async function cargarAnexo01Derivado() {
       try {
@@ -216,12 +211,10 @@ export default function GestionarAnexo() {
 
   const esAnexo11 = codigo === "ANEXO_11";
 
-  // Historial de observaciones del inspector (ANEXO 11)
   const obsHistInspector: any[] = Array.isArray(datos.observacionesInspectorHistorial)
     ? datos.observacionesInspectorHistorial
     : [];
 
-  // Visitas programadas (ANEXO 11)
   const visitasProgramadas: any[] = Array.isArray(datos.visitasProgramadas)
     ? datos.visitasProgramadas
     : [];
@@ -231,86 +224,82 @@ export default function GestionarAnexo() {
   const prioridadInspector: string = datos.prioridadInspector || datos.prioridad || "";
   const trabajoFinalizadoInspector: boolean = !!datos.trabajoFinalizadoInspector;
 
-// ╔══════════════════════════════╗
-// ║   ¿Puede cerrar ADMIN aquí?  ║
-// ╚══════════════════════════════╝
-const esAnexoCerrableClasico = [
-  "ANEXO_02",
-  "ANEXO_03",
-  "ANEXO_07",
-  "ANEXO_08",
-  "ANEXO_09",
-].includes(codigo);
+  // ╔══════════════════════════════╗
+  // ║   ¿Puede cerrar ADMIN aquí?  ║
+  // ╚══════════════════════════════╝
+  const esAnexoCerrableClasico = [
+    "ANEXO_02",
+    "ANEXO_03",
+    "ANEXO_07",
+    "ANEXO_08",
+    "ANEXO_09",
+  ].includes(codigo);
 
-// ANEXO_02 solo se puede cerrar si está EN_REVISION
-// Los demás clásicos pueden cerrarse en EN_REVISION o ENVIADO
-const esEstadoCerrable =
-  (codigo === "ANEXO_02" && estado === "EN_REVISION") ||
-  (codigo !== "ANEXO_02" && ["EN_REVISION", "ENVIADO"].includes(estado));
+  const esEstadoCerrable =
+    (codigo === "ANEXO_02" && estado === "EN_REVISION") ||
+    (codigo !== "ANEXO_02" && ["EN_REVISION", "ENVIADO"].includes(estado));
 
-// Regla institucional:
-// - ANEXO_02: SOLO ADMIN_GENERAL
-// - Otros anexos clásicos: ADMIN_GENERAL o ADMIN
-const puedeCerrarAdminClasico =
-  esAnexoCerrableClasico &&
-  esEstadoCerrable &&
-  (codigo === "ANEXO_02" ? role === "ADMIN_GENERAL" : isAdmin);
+  const puedeCerrarAdminClasico =
+    esAnexoCerrableClasico &&
+    esEstadoCerrable &&
+    (codigo === "ANEXO_02" ? role === "ADMIN_GENERAL" : isAdmin);
 
-const puedeGestionarAdmin11 = isAdmin && esAnexo11 && esEstadoCerrable;
-const puedeGenerarAnexo02 = isAdmin && codigo === "ANEXO_01";
+  const puedeGestionarAdmin11 = isAdmin && esAnexo11 && esEstadoCerrable;
+  const puedeGenerarAnexo02 = isAdmin && codigo === "ANEXO_01";
 
-// ╔══════════════════════════════╗
-// ║   Cerrar trámite (02/03/07/08/09)
-// ╚══════════════════════════════╝
-async function cerrarTramiteAdminClasico() {
-  if (!anexo?._id) return;
+  // ╔══════════════════════════════╗
+  // ║   Cerrar trámite (02/03/07/08/09)
+  // ╚══════════════════════════════╝
+  async function cerrarTramiteAdminClasico() {
+    if (!anexo?._id) return;
 
-  const rutas: Record<string, string> = {
-    ANEXO_02: "conformidad-admin", // ← cierre institucional ANEXO_02
-    ANEXO_03: "cerrar-admin-03",
-    ANEXO_07: "cerrar-admin-07",
-    ANEXO_08: "cerrar-admin-08",
-    ANEXO_09: "cerrar-admin-09",
-  };
+    const rutas: Record<string, string> = {
+      ANEXO_02: "conformidad-admin",
+      ANEXO_03: "cerrar-admin-03",
+      ANEXO_07: "cerrar-admin-07",
+      ANEXO_08: "cerrar-admin-08",
+      ANEXO_09: "cerrar-admin-09",
+    };
 
-  const endpoint = rutas[codigo];
-  if (!endpoint) {
-    setError(`No existe ruta de cierre para ${codigo}`);
-    return;
-  }
-
-  setBusy(true);
-  setError(null);
-  setInfoMsg("");
-
-  try {
-    const payload =
-      codigo === "ANEXO_02"
-        ? { datos: {} }
-        : {
-            datos: {
-              observacionesAdminGeneral: textoAdmin || "",
-            },
-          };
-
-    const res = await http.post(`/formularios/${anexo._id}/${endpoint}`, payload);
-
-    const upd = res.data?.anexo || res.data?.formulario || null;
-    if (upd) {
-      setAnexo(upd);
+    const endpoint = rutas[codigo];
+    if (!endpoint) {
+      setError(`No existe ruta de cierre para ${codigo}`);
+      return;
     }
 
-    setInfoMsg("Trámite cerrado correctamente por ADMIN GENERAL.");
-  } catch (e: any) {
-    console.error("[ADMIN] Error cerrando trámite", e);
-    setError(
-      e?.response?.data?.message ||
-        "No se pudo cerrar el trámite. Contacte al administrador."
-    );
-  } finally {
-    setBusy(false);
+    setBusy(true);
+    setError(null);
+    setInfoMsg("");
+
+    try {
+      const payload =
+        codigo === "ANEXO_02"
+          ? { datos: {} }
+          : {
+              datos: {
+                observacionesAdminGeneral: textoAdmin || "",
+              },
+            };
+
+      const res = await http.post(`/formularios/${anexo._id}/${endpoint}`, payload);
+
+      const upd = res.data?.anexo || res.data?.formulario || null;
+      if (upd) {
+        setAnexo(upd);
+      }
+
+      setInfoMsg("Trámite cerrado correctamente por ADMIN GENERAL.");
+    } catch (e: any) {
+      console.error("[ADMIN] Error cerrando trámite", e);
+      setError(
+        e?.response?.data?.message ||
+          "No se pudo cerrar el trámite. Contacte al administrador."
+      );
+    } finally {
+      setBusy(false);
+    }
   }
-}
+
   // ╔══════════════════════════════╗
   // ║   Generar ANEXO_02 (desde 01)
   // ╚══════════════════════════════╝
@@ -329,7 +318,6 @@ async function cerrarTramiteAdminClasico() {
       return;
     }
 
-    // Validación ObjectId real (24 hex)
     if (!/^[a-f\d]{24}$/i.test(idTrim)) {
       setError("Debe ingresar un ObjectId válido de vivienda.");
       return;
@@ -340,7 +328,6 @@ async function cerrarTramiteAdminClasico() {
     setInfoMsg("");
 
     try {
-      // ✅ POST debe enviar SOLO { viviendaId }
       const res = await http.post(`/formularios/${anexo._id}/generar-anexo-02`, {
         viviendaId: idTrim,
       });
@@ -354,7 +341,6 @@ async function cerrarTramiteAdminClasico() {
 
       setError("No se ha podido procesar su solicitud.");
     } catch (e: any) {
-      // 409: conflicto de vivienda / ya existe otro derivado
       if (e?.response?.status === 409) {
         const existingId = e?.response?.data?.existingId;
         if (existingId) {
@@ -383,19 +369,12 @@ async function cerrarTramiteAdminClasico() {
     setInfoMsg("");
 
     try {
-      // 1) Guardamos observacionesAdminGeneral en datos
-      await http.patch(`/formularios/${anexo._id}/datos`, {
-        datos: {
-          observacionesAdminGeneral: textoAdmin || "",
-        },
+      const res = await http.post(`/formularios/${anexo._id}/gestion-admin-11`, {
+        accion: "DEVOLVER_A_INSPECTOR",
+        observacionesAdminGeneral: textoAdmin || "",
       });
 
-      // 2) Marcamos estado institucional como devuelto al inspector
-      const resEstado = await http.patch(`/formularios/${anexo._id}/estado-institucional`, {
-        estadoInstitucional: "DEVUELTO_A_INSPECTOR",
-      });
-
-      const upd = resEstado.data?.anexo || resEstado.data?.formulario || null;
+      const upd = res.data?.anexo || res.data?.formulario || null;
       if (upd) setAnexo(upd);
 
       setInfoMsg(
@@ -423,19 +402,12 @@ async function cerrarTramiteAdminClasico() {
     setInfoMsg("");
 
     try {
-      // 1) Guardamos observacionesAdminGeneral en datos
-      await http.patch(`/formularios/${anexo._id}/datos`, {
-        datos: {
-          observacionesAdminGeneral: textoAdmin || "",
-        },
+      const res = await http.post(`/formularios/${anexo._id}/gestion-admin-11`, {
+        accion: "CERRAR",
+        observacionesAdminGeneral: textoAdmin || "",
       });
 
-      // 2) Marcamos estado institucional como cerrado por ADMIN GENERAL
-      const resEstado = await http.patch(`/formularios/${anexo._id}/estado-institucional`, {
-        estadoInstitucional: "CERRADO_ADMIN_GENERAL",
-      });
-
-      const upd = resEstado.data?.anexo || resEstado.data?.formulario || null;
+      const upd = res.data?.anexo || res.data?.formulario || null;
       if (upd) setAnexo(upd);
 
       setInfoMsg("Trámite ANEXO_11 cerrado por ADMIN GENERAL.");
@@ -506,7 +478,6 @@ async function cerrarTramiteAdminClasico() {
           <b>Actualizado:</b> {fmtDate(anexo.updatedAt)}
         </div>
 
-        {/* Info según tipo de anexo clásico */}
         {codigo === "ANEXO_03" && (
           <div style={{ marginTop: 6, fontSize: 13 }}>
             <b>Conformidad Permisionario (03):</b>{" "}
@@ -540,7 +511,6 @@ async function cerrarTramiteAdminClasico() {
         <Anexo11ResumenRegistro anexo={anexo as any} mostrarAdmin={true} />
       )}
 
-      {/* VISOR INSTITUCIONAL */}
       <div style={{ marginTop: 16 }}>
         {codigo === "ANEXO_01" ? (
           <Anexo01Viewer datos={datos} />
@@ -554,7 +524,6 @@ async function cerrarTramiteAdminClasico() {
         )}
       </div>
 
-      {/* Resumen específico ANEXO_11 */}
       {esAnexo11 && (
         <div
           style={{
@@ -591,7 +560,6 @@ async function cerrarTramiteAdminClasico() {
             {confInspectorOk ? `SI — ${fmtDate(confInspector?.fecha as string)}` : "NO"}
           </p>
 
-          {/* Historial de observaciones del inspector */}
           <div
             style={{
               marginTop: 10,
@@ -614,7 +582,6 @@ async function cerrarTramiteAdminClasico() {
             )}
           </div>
 
-          {/* Visitas programadas */}
           <div
             style={{
               marginTop: 10,
@@ -713,7 +680,6 @@ async function cerrarTramiteAdminClasico() {
         </button>
       </div>
 
-      {/* Bloque de intervención ADMIN_GENERAL */}
       {(puedeCerrarAdminClasico || puedeGestionarAdmin11 || puedeGenerarAnexo02) && (
         <div
           style={{
@@ -746,9 +712,6 @@ async function cerrarTramiteAdminClasico() {
             disabled={busy}
           />
 
-          {/* ───────────────────────────── */}
-          {/* Generación ANEXO_02 desde ANEXO_01 */}
-          {/* ───────────────────────────── */}
           {codigo === "ANEXO_01" && (
             <div
               style={{
@@ -818,7 +781,6 @@ async function cerrarTramiteAdminClasico() {
             </div>
           )}
 
-          {/* Botones según tipo de anexo */}
           {esAnexo11 ? (
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <button onClick={devolverAnexo11AlInspector} disabled={busy}>

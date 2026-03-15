@@ -4,6 +4,7 @@ const mongoose = require("mongoose");
 const PDFDocument = require("pdfkit");
 const path = require("path");
 const fs = require("fs");
+const { aplicarCambiosAnexo11 } = require("../services/anexo11Service");
 
 const { FormTemplate } = require("../models/FormTemplate");
 const { FormSubmission, ESTADOS_FORM } = require("../models/FormSubmission");
@@ -2369,42 +2370,207 @@ function renderAnexo11Pdf(
   signers = {},
   historial = []
 ) {
-  const d = anexo.datos || {};
+  const d = anexo?.datos || {};
 
   const LEFT = 55;
   const WIDTH = 485;
 
-  const numero = d.numeroPedidoTrabajo || "";
+  const numero = d.numeroPedidoTrabajo || d.numero || "";
   const ambito = d.ambito || "";
   const viviendaLabel =
     d.viviendaLabel ||
+    d.unidadHabitacional ||
+    d.casa ||
+    d.viviendaCodigo ||
     (vivienda ? String(vivienda.codigo || vivienda.direccion || "") : "") ||
     (ambito === "ESPACIO_COMUN" ? "ESPACIO COMÚN" : "");
-  const permNombre = d.permisionarioNombre || "";
-  const prioridad = d.prioridad || "";
+
+  const barrio =
+    d.viviendaBarrio ||
+    d.barrio ||
+    (vivienda ? String(vivienda.barrio || "") : "") ||
+    "";
+
+  const permNombre =
+    d.permisionarioNombre ||
+    d.postulanteNombre ||
+    d.permisionario ||
+    "";
+
+  const prioridad = d.prioridadInspector || d.prioridad || "";
   const promotorNombre = d.promotorNombre || "";
-  const promotorRol = d.promotorRol || "";
+  const promotorRol = d.promotorRol || d.promotorTipo || "";
+
+  const solicitud =
+    d.tipoSolicitud ||
+    d.solicitudDetalle ||
+    "";
+
   const descripcion =
-    d.descripcionTrabajo || d.detalleTrabajo || d.descripcion || "";
+    d.detallePedido ||
+    d.descripcionTrabajo ||
+    d.detalleTrabajo ||
+    d.descripcion ||
+    d.solicitudDetalle ||
+    "";
+
+  const decisionInspector = d.decisionInspector || "";
+  const responsableTrabajo = d.responsableTrabajo || "";
+  const fechaProgramadaObra = d.fechaProgramadaObra || "";
+  const descripcionTecnicaObra = d.descripcionTecnicaObra || "";
+  const trabajoFinalizadoInspector = d.trabajoFinalizadoInspector ? "SI" : "NO";
+  const fechaFinalizacionInspector = d.fechaFinalizacionInspector || "";
+  const observacionFinalInspector = d.observacionFinalInspector || "";
+
   const obsInspector = d.observacionesInspector || "";
   const obsAdmin = d.observacionesAdminGeneral || d.resolucionAdmin || "";
+  const resolucionAdminGeneral = d.resolucionAdminGeneral || "";
+  const fechaCierreAdminGeneral = d.fechaCierreAdminGeneral || "";
+  const cerradoPorAdminGeneralNombre = d.cerradoPorAdminGeneralNombre || "";
 
-  const fechaDoc = anexo.createdAt || new Date();
+  const visitas = Array.isArray(d.visitasProgramadas)
+    ? d.visitasProgramadas
+    : [];
+
+  const obsInspectorHist = Array.isArray(d.observacionesInspectorHistorial)
+    ? d.observacionesInspectorHistorial
+    : [];
+
+  const obsAdminHist = Array.isArray(d.observacionesAdminGeneralHistorial)
+    ? d.observacionesAdminGeneralHistorial
+    : [];
+
+  const fechaDoc = anexo?.createdAt || new Date();
   const fechaDocTxt = fmtDate(fechaDoc);
 
   const signerPerm = signers.permisionario || {};
   const signerInsp = signers.inspector || {};
   const signerAdmin = signers.admin || {};
 
-  const permLineaExtra = signerPerm.fecha
-    ? `Conforme: ${fmtDateTime(signerPerm.fecha)}`
-    : "";
-  const inspLineaExtra = signerInsp.fecha
-    ? `Revisión: ${fmtDateTime(signerInsp.fecha)}`
-    : "";
-  const adminLineaExtra = signerAdmin.fecha
-    ? `Cierre: ${fmtDateTime(signerAdmin.fecha)}`
-    : "";
+  function safeText(v, fallback = "—") {
+    if (v === null || v === undefined) return fallback;
+    const s = String(v).trim();
+    return s || fallback;
+  }
+
+  function prettyActorName(v, fallback = "Interviniente") {
+    const s = String(v || "").trim();
+    if (!s) return fallback;
+
+    const upper = s.toUpperCase();
+    if (upper === "ADMIN_GENERAL") return "ADMIN GENERAL";
+    if (upper === "ADMIN") return "ADMIN";
+    if (upper === "JEFE_DE_BARRIO") return "JEFE DE BARRIO";
+    if (upper === "INSPECTOR") return "INSPECTOR";
+    if (upper === "PERMISIONARIO") return "PERMISIONARIO";
+    if (upper === "SISTEMA") return "Sistema";
+
+    if (/^[0-9a-fA-F]{24}$/.test(s)) return fallback;
+    return s;
+  }
+
+  function signerDisplayName(signer, fallback) {
+    return (
+      signer?.nombre ||
+      signer?.apellidoNombre ||
+      signer?.displayName ||
+      fallback
+    );
+  }
+
+  function signerDisplayRole(signer, fallback) {
+    return prettyActorName(signer?.rol || signer?.role, fallback);
+  }
+
+  function getLastFechaFromArray(arr) {
+    if (!Array.isArray(arr) || arr.length === 0) return "";
+    const sorted = [...arr].sort((a, b) => {
+      const ta = a?.fecha ? new Date(a.fecha).getTime() : 0;
+      const tb = b?.fecha ? new Date(b.fecha).getTime() : 0;
+      return tb - ta;
+    });
+    return sorted[0]?.fecha || "";
+  }
+
+  function getLastMeaningfulInspectorFecha() {
+    return (
+      signerInsp?.fecha ||
+      fechaFinalizacionInspector ||
+      getLastFechaFromArray(obsInspectorHist) ||
+      d?.conformidadInspector?.fecha ||
+      ""
+    );
+  }
+
+  function getLastMeaningfulInspectorDetalle() {
+    if (fechaFinalizacionInspector) {
+      return `Última intervención digital: ${fmtDateTime(fechaFinalizacionInspector)} — Final de obra registrada`;
+    }
+    const lastHistFecha = getLastFechaFromArray(obsInspectorHist);
+    if (lastHistFecha) {
+      return `Última intervención digital: ${fmtDateTime(lastHistFecha)}`;
+    }
+    if (d?.conformidadInspector?.fecha) {
+      return `Intervención digital registrada: ${fmtDateTime(d.conformidadInspector.fecha)}`;
+    }
+    return "Sin intervención digital registrada";
+  }
+
+  function getLastMeaningfulPermFecha() {
+    return signerPerm?.fecha || d?.conformidadPermisionario?.fecha || "";
+  }
+
+  function getLastMeaningfulPermDetalle() {
+    const fecha = getLastMeaningfulPermFecha();
+    return fecha
+      ? `Conformidad digital registrada: ${fmtDateTime(fecha)}`
+      : "Sin conformidad digital registrada";
+  }
+
+  function getLastMeaningfulAdminFecha() {
+    return (
+      signerAdmin?.fecha ||
+      fechaCierreAdminGeneral ||
+      d?.devueltoAInspector?.fecha ||
+      getLastFechaFromArray(obsAdminHist) ||
+      ""
+    );
+  }
+
+  function getLastMeaningfulAdminDetalle() {
+    if (fechaCierreAdminGeneral) {
+      return `Intervención digital registrada: ${fmtDateTime(fechaCierreAdminGeneral)} — Cierre administrativo`;
+    }
+    if (d?.devueltoAInspector?.fecha) {
+      return `Intervención digital registrada: ${fmtDateTime(d.devueltoAInspector.fecha)} — Devolución al inspector`;
+    }
+    const lastAdminFecha = getLastFechaFromArray(obsAdminHist);
+    if (lastAdminFecha) {
+      return `Intervención digital registrada: ${fmtDateTime(lastAdminFecha)}`;
+    }
+    return "Sin intervención digital registrada";
+  }
+
+  const permNombreAct = signerDisplayName(
+    signerPerm,
+    permNombre || "Permisionario no identificado"
+  );
+  const inspNombreAct = signerDisplayName(
+    signerInsp,
+    d.inspectorNombre || "Inspector de barrio"
+  );
+  const adminNombreAct = signerDisplayName(
+    signerAdmin,
+    cerradoPorAdminGeneralNombre || "Jefe órgano administrador"
+  );
+
+  const permRolAct = signerDisplayRole(signerPerm, "PERMISIONARIO");
+  const inspRolAct = signerDisplayRole(signerInsp, "INSPECTOR");
+  const adminRolAct = signerDisplayRole(signerAdmin, "ADMIN GENERAL");
+
+  const permLineaExtra = getLastMeaningfulPermDetalle();
+  const inspLineaExtra = getLastMeaningfulInspectorDetalle();
+  const adminLineaExtra = getLastMeaningfulAdminDetalle();
 
   function linea(label, valor) {
     doc
@@ -2412,6 +2578,70 @@ function renderAnexo11Pdf(
       .fontSize(10)
       .text(label + ": ", { continued: true });
     doc.font("Helvetica").fontSize(10).text(valor || "—");
+  }
+
+  function bloqueTexto(titulo, texto) {
+    doc.font("Helvetica-Bold").fontSize(11).text(titulo);
+    doc.moveDown(0.2);
+    doc
+      .font("Helvetica")
+      .fontSize(10)
+      .text(texto || "—", { width: WIDTH, align: "justify" });
+    doc.moveDown(0.6);
+  }
+
+  function ensureSpace(lines = 6) {
+    const needed = lines * 14;
+    if (doc.y + needed > doc.page.height - 70) {
+      doc.addPage();
+    }
+  }
+
+  function textoVisita(v) {
+    const fecha = v?.fechaProgramada ? fmtDateTime(v.fechaProgramada) : "—";
+    const obs = v?.observacion || "—";
+    return `${fecha} — ${obs}`;
+  }
+
+  function drawFirmaDigitalBlock(titulo, nombre, rol, detalle, x, y) {
+    const boxW = 155;
+    const boxH = 58;
+
+    doc
+      .roundedRect(x, y, boxW, boxH, 6)
+      .lineWidth(0.8)
+      .strokeColor("#999")
+      .stroke();
+
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(9)
+      .fillColor("black")
+      .text(titulo, x + 8, y + 8, {
+        width: boxW - 16,
+        align: "left",
+      });
+
+    doc
+      .font("Helvetica")
+      .fontSize(9)
+      .text(`Nombre: ${safeText(nombre)}`, x + 8, y + 22, {
+        width: boxW - 16,
+      });
+
+    doc
+      .font("Helvetica")
+      .fontSize(9)
+      .text(`Rol: ${safeText(rol)}`, x + 8, y + 34, {
+        width: boxW - 16,
+      });
+
+    doc
+      .font("Helvetica-Oblique")
+      .fontSize(8)
+      .text(safeText(detalle), x + 8, y + 46, {
+        width: boxW - 16,
+      });
   }
 
   // Encabezado institucional básico
@@ -2437,92 +2667,293 @@ function renderAnexo11Pdf(
   linea("Fecha", fechaDocTxt);
   linea("Ámbito", ambito || "VIVIENDA");
   linea("Vivienda / Espacio", viviendaLabel);
+  if (barrio) linea("Barrio", barrio);
   linea("Permisionario", permNombre || "—");
   linea("Promotor", promotorNombre || "—");
   linea("Rol del promotor", promotorRol || "—");
-  linea("Prioridad", prioridad || "MEDIA");
+  linea("Prioridad", prioridad || "—");
+  if (solicitud) linea("Solicitud", solicitud);
 
   doc.moveDown(0.6);
 
   // Detalle del pedido
-  doc.font("Helvetica-Bold").fontSize(11).text("Detalle del pedido:");
-  doc.moveDown(0.2);
-  doc
-    .font("Helvetica")
-    .fontSize(10)
-    .text(descripcion || "—", { width: WIDTH, align: "justify" });
+  bloqueTexto("Detalle del pedido:", descripcion || "—");
 
-  doc.moveDown(0.6);
-
-  // Observaciones del inspector
+  // Intervención del inspector
+  ensureSpace(8);
   doc.font("Helvetica-Bold").fontSize(11).text("Intervención del inspector:");
   doc.moveDown(0.2);
-  doc
-    .font("Helvetica")
-    .fontSize(10)
-    .text(obsInspector || "—", { width: WIDTH, align: "justify" });
+  linea("Decisión", decisionInspector || "—");
+  linea("Responsable del trabajo", responsableTrabajo || "—");
+  if (fechaProgramadaObra) {
+    linea("Fecha programada de obra", fmtDateTime(fechaProgramadaObra));
+  }
+  if (descripcionTecnicaObra) {
+    bloqueTexto("Descripción técnica de obra:", descripcionTecnicaObra);
+  } else {
+    doc.moveDown(0.4);
+  }
+  bloqueTexto("Observaciones del inspector:", obsInspector || "—");
 
-  doc.moveDown(0.6);
+  // Visitas programadas
+  ensureSpace(8);
+  doc.font("Helvetica-Bold").fontSize(11).text("Visitas programadas:");
+  doc.moveDown(0.3);
 
-  // Observaciones / resolución administrativa
+  if (visitas.length === 0) {
+    doc.font("Helvetica").fontSize(10).text("No hay visitas registradas.", LEFT);
+    doc.moveDown(0.6);
+  } else {
+    visitas.forEach((v, idx) => {
+      ensureSpace(3);
+      doc
+        .font("Helvetica")
+        .fontSize(10)
+        .text(`${idx + 1}. ${textoVisita(v)}`, LEFT, doc.y, {
+          width: WIDTH,
+          align: "left",
+        });
+      doc.moveDown(0.2);
+    });
+    doc.moveDown(0.4);
+  }
+
+  // Final de obra
+  ensureSpace(8);
+  doc.font("Helvetica-Bold").fontSize(11).text("Final de obra:");
+  doc.moveDown(0.2);
+  linea("Trabajo finalizado por inspector", trabajoFinalizadoInspector);
+  linea(
+    "Fecha de finalización",
+    fechaFinalizacionInspector ? fmtDateTime(fechaFinalizacionInspector) : "—"
+  );
+  bloqueTexto(
+    "Observación final del inspector:",
+    observacionFinalInspector || "—"
+  );
+
+  // Intervención administrativa
+  ensureSpace(8);
   doc
     .font("Helvetica-Bold")
     .fontSize(11)
     .text("Intervención del Jefe del órgano administrador:");
   doc.moveDown(0.2);
-  doc
-    .font("Helvetica")
-    .fontSize(10)
-    .text(obsAdmin || "—", { width: WIDTH, align: "justify" });
+  linea("Resolución ADMIN GENERAL", resolucionAdminGeneral || "—");
+  linea(
+    "Fecha de cierre",
+    fechaCierreAdminGeneral ? fmtDateTime(fechaCierreAdminGeneral) : "—"
+  );
+  linea(
+    "Cerrado por",
+    cerradoPorAdminGeneralNombre || adminNombreAct || "—"
+  );
+  bloqueTexto("Observaciones administrativas:", obsAdmin || "—");
 
-  doc.moveDown(1.0);
-
-  // Bloque de actuaciones (similar a ANEXO_07)
-  doc.font("Helvetica-Bold").fontSize(11).text("ACTUACIONES:");
+  // Actuaciones resumidas
+  ensureSpace(12);
+  doc.font("Helvetica-Bold").fontSize(11).text("ACTUACIONES / CONSTANCIA DIGITAL:");
   doc.moveDown(0.4);
 
-  const permNombreAct =
-    signerPerm.nombre || permNombre || "Permisionario no identificado";
-  const inspNombreAct =
-    signerInsp.nombre || d.inspectorNombre || "Inspector de barrio";
-  const adminNombreAct =
-    signerAdmin.nombre || "Jefe órgano administrador";
+  const yStartFirmas = doc.y;
 
-  doc
-    .font("Helvetica")
-    .fontSize(10)
-    .text(
-      `Permisionario: ${permNombreAct}${
-        permLineaExtra ? " — " + permLineaExtra : ""
-      }`,
-      LEFT
-    );
-  doc.moveDown(0.2);
-  doc
-    .font("Helvetica")
-    .fontSize(10)
-    .text(
-      `Inspector de barrio: ${inspNombreAct}${
-        inspLineaExtra ? " — " + inspLineaExtra : ""
-      }`,
-      LEFT
-    );
-  doc.moveDown(0.2);
-  doc
-    .font("Helvetica")
-    .fontSize(10)
-    .text(
-      `Jefe órgano administrador: ${adminNombreAct}${
-        adminLineaExtra ? " — " + adminLineaExtra : ""
-      }`,
-      LEFT
-    );
+  drawFirmaDigitalBlock(
+    "PERMISIONARIO",
+    permNombreAct,
+    permRolAct,
+    permLineaExtra,
+    LEFT,
+    yStartFirmas
+  );
 
-  doc.moveDown(0.8);
+  drawFirmaDigitalBlock(
+    "INSPECTOR DE BARRIO",
+    inspNombreAct,
+    inspRolAct,
+    inspLineaExtra,
+    LEFT + 165,
+    yStartFirmas
+  );
 
-  // Historial de intervenciones institucionales (como en ANEXO_07)
-  drawHistorialIntervenciones(doc, historial);
+  drawFirmaDigitalBlock(
+    "ADMIN GENERAL",
+    adminNombreAct,
+    adminRolAct,
+    adminLineaExtra,
+    LEFT + 330,
+    yStartFirmas
+  );
+
+  doc.y = yStartFirmas + 72;
+
+  // Historial específico ANEXO_11
+  ensureSpace(10);
+  doc
+    .font("Helvetica-Bold")
+    .fontSize(11)
+    .text("Intervenciones registradas del trámite:");
+  doc.moveDown(0.3);
+
+  const items = [];
+
+  // Observaciones inspector historial
+  for (const o of obsInspectorHist) {
+    items.push({
+      fecha: o?.fecha,
+      actor: `${inspRolAct} (${inspNombreAct})`,
+      tipo: "OBSERVACIÓN",
+      texto: o?.texto || "Observación del inspector",
+    });
+  }
+
+  // Visitas
+  for (const v of visitas) {
+    items.push({
+      fecha: v?.creadoAt || v?.fechaRegistro || v?.fechaProgramada,
+      actor: `${inspRolAct} (${inspNombreAct})`,
+      tipo: "VISITA PROGRAMADA",
+      texto: textoVisita(v),
+    });
+  }
+
+  // Observaciones admin historial
+  for (const o of obsAdminHist) {
+    items.push({
+      fecha: o?.fecha,
+      actor: `${adminRolAct} (${adminNombreAct})`,
+      tipo: "OBSERVACIÓN ADMINISTRATIVA",
+      texto: o?.texto || "Observación administrativa",
+    });
+  }
+
+  // Decisión inspector
+  if (decisionInspector) {
+    items.push({
+      fecha: anexo?.updatedAt || anexo?.createdAt,
+      actor: `${inspRolAct} (${inspNombreAct})`,
+      tipo: "DECISIÓN",
+      texto: decisionInspector,
+    });
+  }
+
+  // Responsable trabajo
+  if (responsableTrabajo) {
+    items.push({
+      fecha: anexo?.updatedAt || anexo?.createdAt,
+      actor: `${inspRolAct} (${inspNombreAct})`,
+      tipo: "RESPONSABLE DEL TRABAJO",
+      texto: responsableTrabajo,
+    });
+  }
+
+  // Final de obra
+  if (fechaFinalizacionInspector || observacionFinalInspector) {
+    items.push({
+      fecha: fechaFinalizacionInspector || anexo?.updatedAt || anexo?.createdAt,
+      actor: `${inspRolAct} (${inspNombreAct})`,
+      tipo: "FINAL DE OBRA",
+      texto: observacionFinalInspector || "Trabajo finalizado por inspector",
+    });
+  }
+
+  // Cierre admin
+  if (resolucionAdminGeneral || fechaCierreAdminGeneral) {
+    items.push({
+      fecha: fechaCierreAdminGeneral || anexo?.updatedAt || anexo?.createdAt,
+      actor: `${adminRolAct} (${adminNombreAct})`,
+      tipo: "CIERRE ADMIN GENERAL",
+      texto: resolucionAdminGeneral || "CERRADO",
+    });
+  }
+
+  // Conformidad permisionario
+  if (getLastMeaningfulPermFecha()) {
+    items.push({
+      fecha: getLastMeaningfulPermFecha(),
+      actor: `${permRolAct} (${permNombreAct})`,
+      tipo: "CONFORMIDAD",
+      texto: "Conformidad digital registrada",
+    });
+  }
+
+  items.sort((a, b) => {
+    const ta = a?.fecha ? new Date(a.fecha).getTime() : 0;
+    const tb = b?.fecha ? new Date(b.fecha).getTime() : 0;
+    return ta - tb;
+  });
+
+  if (items.length === 0) {
+    doc
+      .font("Helvetica")
+      .fontSize(10)
+      .text("No hay intervenciones específicas registradas.", LEFT);
+    doc.moveDown(0.6);
+  } else {
+    items.forEach((item, idx) => {
+      ensureSpace(4);
+      const fechaTxt = item.fecha ? fmtDateTime(item.fecha) : "—";
+
+      doc
+        .font("Helvetica")
+        .fontSize(10)
+        .text(
+          `${idx + 1}. ${fechaTxt} — ${safeText(item.actor)} — ${safeText(item.tipo)} — ${safeText(item.texto)}`,
+          LEFT,
+          doc.y,
+          {
+            width: WIDTH,
+            align: "left",
+          }
+        );
+      doc.moveDown(0.25);
+    });
+    doc.moveDown(0.6);
+  }
+
+  // Historial institucional general
+  if (Array.isArray(historial) && historial.length > 0) {
+    ensureSpace(8);
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(11)
+      .text("Registro institucional complementario:");
+    doc.moveDown(0.3);
+
+    historial.forEach((h, idx) => {
+      ensureSpace(3);
+      const fechaTxt = h?.fecha ? fmtDateTime(h.fecha) : "—";
+      const actorTxt = prettyActorName(
+        h?.actor || h?.realizadoPor || h?.usuario,
+        "Sistema"
+      );
+      const tipoTxt = safeText(h?.tipo || "REGISTRO");
+      const textoTxt = safeText(
+        h?.texto ||
+          h?.observacion ||
+          `${safeText(h?.estadoAnterior, "")} → ${safeText(h?.estadoNuevo, "")}`.trim() ||
+          "Sin detalle"
+      );
+
+      doc
+        .font("Helvetica")
+        .fontSize(10)
+        .text(
+          `${idx + 1}. ${fechaTxt} — ${actorTxt} — ${tipoTxt} — ${textoTxt}`,
+          LEFT,
+          doc.y,
+          {
+            width: WIDTH,
+            align: "left",
+          }
+        );
+      doc.moveDown(0.2);
+    });
+  }
+
+  doc.moveDown(0.5);
 }
+
+  // Historial de intervenciones institucionales general drawHistorialIntervenciones(doc, historial);
 
 // ✅ Reemplazá COMPLETA esta función en formularioController.js
 // - No imprime "Respaldo técnico (JSON)"
@@ -3057,36 +3488,9 @@ async function crearAnexo(req, res) {
     const user = req.user;
     let usuarioOwner = user?._id || null;
 
-    // 🔍 DEBUG — confirmar llegada del POST
-    console.log("[crearAnexo] HIT", {
-      codigo: req.params?.codigo,
-      method: req.method,
-      contentType: req.headers["content-type"],
-      user: {
-        id: user?._id,
-        role: user?.role,
-        permisos: user?.permisos,
-      },
-      bodyKeys: Object.keys(req.body || {}),
-      datosType: typeof (req.body?.datos ?? req.body),
-    });
+     let origen = null;
 
-    // ✅ Origen (se usa para hidratar en ANEXO_03 desde ANEXO_02)
-    let origen = null;
-
-    // ✅ Helper de diagnóstico (no cambia respuestas, solo log)
-    const deny = (motivo) => {
-      console.log("[ANEXO_03][DENY]", {
-        motivo,
-        userId: user?._id,
-        role: user?.role,
-        permisos: user?.permisos,
-        barrioAsignado: user?.barrioAsignado,
-        viviendaId: datos?.viviendaId,
-        derivadoDe: datos?.derivadoDe,
-      });
-      return genericDenied(res);
-    };
+    const deny = () => genericDenied(res);
 
     // ─────────────────────────────
     // Reglas institucionales JEFE DE BARRIO (permiso sobre PERMISIONARIO)
@@ -3833,15 +4237,12 @@ return res.status(201).json({ anexo: sub, origen });
     
 async function listarPorCodigo(req, res) {
   try {
-console.log("[listarPorCodigo] user.role:", req.user?.role);
-console.log("[listarPorCodigo] user.permisos:", req.user?.permisos);
-console.log("[listarPorCodigo] user.barrioAsignado:", req.user?.barrioAsignado);
-console.log("[listarPorCodigo] params.codigo:", req.params?.codigo);
     const user = req.user;
-const role = up(user?.role);
-if (!user || !user.role) return genericDenied(res);
+    const role = up(user?.role);
 
-const codigo = up(req.params.codigo);
+    if (!user || !user.role) return genericDenied(res);
+
+    const codigo = up(req.params.codigo);
 
 // ✅ ADMIN / ADMIN_GENERAL: ven todo
 const isAdmin = role === "ADMIN" || role === "ADMIN_GENERAL";
@@ -5298,82 +5699,59 @@ async function enviarAnexo03(req, res) {
   try {
     const user = req.user;
 
-    console.log("----- [enviarAnexo03] -----");
-    console.log("user._id:", user?._id);
-    console.log("user.role:", user?.role);
-    console.log("user.permisos:", user?.permisos);
-
     if (!user || !user.role) {
-      console.log("[enviarAnexo03] denied: no user or no user.role");
       return genericDenied(res);
     }
 
     const { id } = req.params;
-    console.log("anexoId:", id);
 
     if (!isObjectId(id)) {
-      console.log("[enviarAnexo03] denied: id no es ObjectId");
       return genericDenied(res);
     }
 
     const anexo = await FormSubmission.findById(id);
-    console.log("anexo found?", !!anexo);
-    console.log("anexo.codigo:", anexo?.codigo);
-    console.log("anexo.estado:", anexo?.estado);
-    console.log(
-      "anexo.intervinientes:",
-      Array.isArray(anexo?.intervinientes) ? anexo.intervinientes : anexo?.intervinientes
-    );
 
     if (!anexo) {
-      console.log("[enviarAnexo03] denied: anexo no existe");
       return genericDenied(res);
     }
 
     if (up(anexo.codigo) !== "ANEXO_03") {
-      console.log("[enviarAnexo03] denied: codigo no es ANEXO_03:", anexo.codigo);
       return genericDenied(res);
     }
 
-// Vincular postulante (dueño del ANEXO_02 origen) para que lo vea en /mios
-if (anexo.derivadoDe && isObjectId(String(anexo.derivadoDe))) {
-  const a02 = await FormSubmission.findById(anexo.derivadoDe)
-    .select("codigo usuario datos")
-    .lean();
+    // Vincular postulante (dueño del ANEXO_02 origen) para que lo vea en /mios
+    if (anexo.derivadoDe && isObjectId(String(anexo.derivadoDe))) {
+      const a02 = await FormSubmission.findById(anexo.derivadoDe)
+        .select("codigo usuario datos")
+        .lean();
 
-  if (a02 && up(a02.codigo) === "ANEXO_02") {
-    const postulanteId = a02.datos?.postulanteId || a02.usuario;
-    if (isObjectId(String(postulanteId))) {
-      anexo.intervinientes = Array.isArray(anexo.intervinientes)
-        ? anexo.intervinientes
-        : [];
-      addIntervinienteUnique(anexo.intervinientes, postulanteId, "PERMISIONARIO");
+      if (a02 && up(a02.codigo) === "ANEXO_02") {
+        const postulanteId = a02.datos?.postulanteId || a02.usuario;
+        if (isObjectId(String(postulanteId))) {
+          anexo.intervinientes = Array.isArray(anexo.intervinientes)
+            ? anexo.intervinientes
+            : [];
+          addIntervinienteUnique(anexo.intervinientes, postulanteId, "PERMISIONARIO");
+        }
+      }
     }
-  }
-}
-    // Inspector-like + interviniente
+
+        // Inspector-like + interviniente
     const okInspector = hasRolOrPermiso(user, ["INSPECTOR"]);
-    console.log("hasRolOrPermiso INSPECTOR:", okInspector);
 
     if (!okInspector) {
-      console.log("[enviarAnexo03] denied: no tiene permiso INSPECTOR");
       return genericDenied(res);
     }
 
     const okInterviniente = isInspectorInterviniente(user, anexo);
-    console.log("isInspectorInterviniente:", okInterviniente);
 
     if (!okInterviniente) {
-      console.log("[enviarAnexo03] denied: no es inspector interviniente");
       return genericDenied(res);
     }
 
     // aceptar {datos:{}} o {}
     let payload = req.body || {};
     let datos = payload?.datos ?? payload;
-
-    console.log("req.body keys:", payload && typeof payload === "object" ? Object.keys(payload) : typeof payload);
-    console.log("datos typeof:", typeof datos);
 
     if (typeof datos === "string") {
       try {
@@ -5390,18 +5768,14 @@ if (anexo.derivadoDe && isObjectId(String(anexo.derivadoDe))) {
 
     // pasar a ENVIADO (permitir idempotencia)
     const est = up(anexo.estado);
-    console.log("estado antes:", est);
 
     if (est === "BORRADOR") {
       await anexo.cambiarEstado("ENVIADO", user._id, "Enviar ANEXO_03");
-      console.log("cambiarEstado -> ENVIADO OK");
     } else if (est !== "ENVIADO") {
-      console.log("[enviarAnexo03] denied: estado invalido para enviar:", anexo.estado);
       return genericDenied(res);
     }
 
     await anexo.save();
-    console.log("[enviarAnexo03] OK");
     return res.json({ ok: true, anexo });
   } catch (e) {
     console.error("[enviarAnexo03] Error:", e);
@@ -5430,307 +5804,149 @@ async function updateDatosAnexo03(req, res) {
 
     // ─────────────────────────────
     // Reglas institucionales JEFE DE BARRIO (permiso sobre PERMISIONARIO)
-    // - El JEFE solo puede CREAR ANEXO_11 (espacios comunes).
-    // - Nunca puede crear ANEXO_04 (lo crea el permisionario).
+    // - El JEFE solo puede CREAR/OPERAR ANEXO_11 (espacios comunes).
+    // - Nunca puede crear ANEXO_04 por esta vía.
     const esJefe = isJefeLikeUser(user);
-    const esInspector = isInspectorLikeUser(user);
+    const esInspectorLike = isInspectorLikeUser(user);
 
     if (esJefe) {
       // Fail-closed: si no tiene barrio, no opera.
       if (!String(user?.barrioAsignado || "").trim()) return genericDenied(res);
-      if (codigo !== "ANEXO_11") return genericDenied(res);
     }
-
-
-    if (!isObjectId(id)) return genericDenied(res);
 
     const anexo = await FormSubmission.findById(id);
     if (!anexo) return genericDenied(res);
 
     const codigo = up(anexo.codigo);
     const estadoUp = up(anexo.estado || "");
+    const estadoInstitucionalUp = up(anexo.estadoInstitucional || "");
+
+    // Si es JEFE, solo puede operar ANEXO_11
+    if (esJefe && codigo !== "ANEXO_11") return genericDenied(res);
+
+    // Bloqueo específico: ANEXO_11 ya cerrado por ADMIN GENERAL
+    if (codigo === "ANEXO_11") {
+      const d = anexo.datos && typeof anexo.datos === "object" ? anexo.datos : {};
+
+      const cerradoPorAdmin =
+        estadoUp === "CERRADO" ||
+        estadoInstitucionalUp === "CERRADO_ADMIN_GENERAL" ||
+        up(d.resolucionAdminGeneral) === "CERRADO" ||
+        !!d.fechaCierreAdminGeneral ||
+        !!d.cerradoPorAdminGeneralNombre;
+
+      if (cerradoPorAdmin) {
+        return res.status(409).json({
+          message:
+            "El ANEXO_11 ya fue cerrado por ADMIN GENERAL y no admite modificaciones.",
+        });
+      }
+    }
 
     // ------------- ANEXO_03 (solo INSPECTOR-like, ENVIADO) -------------
-if (codigo === "ANEXO_03") {
-  // Puede ser role=INSPECTOR o permisionario con permiso INSPECTOR
-  if (!hasRolOrPermiso(user, ["INSPECTOR"])) return genericDenied(res);
+    if (codigo === "ANEXO_03") {
+      // Puede ser role=INSPECTOR o permisionario con permiso INSPECTOR
+      if (!hasRolOrPermiso(user, ["INSPECTOR"])) return genericDenied(res);
 
-  if (up(anexo.estado) !== "ENVIADO") return genericDenied(res);
-  if (!isInspectorInterviniente(anexo, user._id)) return genericDenied(res);
+      if (up(anexo.estado) !== "ENVIADO") return genericDenied(res);
+      if (!isInspectorInterviniente(anexo, user._id)) return genericDenied(res);
 
-  anexo.datos = sanitizeDatosAnexo03(anexo.datos || {}, datos);
-  await anexo.save();
+      anexo.datos = sanitizeDatosAnexo03(anexo.datos || {}, datos);
+      await anexo.save();
 
-  return res.json({ anexo: anexo.toObject() });
-}
-
+      return res.json({ anexo: anexo.toObject() });
+    }
 
     // ------------- ANEXO_07 (INSPECTOR envía a ADMIN_GENERAL) -------------
-if (codigo === "ANEXO_07") {
-  // Inspector de barrio puede tener role distinto pero permiso INSPECTOR
-  if (!hasRolOrPermiso(user, ["INSPECTOR"])) return genericDenied(res);
+    if (codigo === "ANEXO_07") {
+      // Inspector de barrio puede tener role distinto pero permiso INSPECTOR
+      if (!hasRolOrPermiso(user, ["INSPECTOR"])) return genericDenied(res);
 
-  if (up(anexo.estado) !== "ENVIADO") {
-    return res.json({ anexo: anexo.toObject() });
-  }
-
-  anexo.datos =
-    anexo.datos && typeof anexo.datos === "object" ? anexo.datos : {};
-
-  if (typeof datos.observacionesInspector === "string") {
-    anexo.datos.observacionesInspector =
-      datos.observacionesInspector.trim();
-  }
-
-  // Conformidad/actuación del inspector
-  anexo.datos.conformidadInspector = {
-    ok: true,
-    fecha: new Date(),
-    usuario: user._id,
-    observacion:
-      anexo.datos.observacionesInspector ||
-      "Revisión del inspector de barrio previa a envío a ADMIN_GENERAL.",
-  };
-
-  anexo.cambiarEstado(
-    "EN_REVISION",
-    user._id,
-    "ANEXO_07 enviado a ADMIN_GENERAL por inspector"
-  );
-
-  await anexo.save();
-  return res.json({ anexo: anexo.toObject() });
-}
-
-    // ------------- ANEXO_09 (solo INSPECTOR-like, ENVIADO) -------------
-if (codigo === "ANEXO_09") {
-  if (!hasRolOrPermiso(user, ["INSPECTOR"])) return genericDenied(res);
-
-  if (up(anexo.estado) !== "ENVIADO") {
-    // Si ya está en otra etapa, no editamos nada
-    return res.json({ anexo: anexo.toObject() });
-  }
-  if (!isInspectorInterviniente(anexo, user._id)) return genericDenied(res);
-
-  anexo.datos = sanitizeDatosAnexo09(anexo.datos || {}, datos);
-  await anexo.save();
-
-  return res.json({ anexo: anexo.toObject() });
-}
-
-
-        // ------------- ANEXO_11 (INSPECTOR / ADMIN_GENERAL / ADMIN / JEFE_DE_BARRIO) -------------
-if (codigo === "ANEXO_11") {
-  if (
-    !hasRolOrPermiso(user, ["INSPECTOR"]) && // incluye permisionario con permiso INSPECTOR
-    role !== "ADMIN_GENERAL" &&
-    role !== "ADMIN" &&
-    role !== "JEFE_DE_BARRIO"
-  ) {
-    return genericDenied(res);
-  }
-
-  // Solo permitimos modificaciones mientras está ENVIADO o EN_REVISION
-  if (!["ENVIADO", "EN_REVISION"].includes(estadoUp)) {
-    return res.json({ anexo: anexo.toObject() });
-  }
-
-  const d =
-    anexo.datos && typeof anexo.datos === "object" ? anexo.datos : {};
-
-  const esInspector =
-    hasRolOrPermiso(user, ["INSPECTOR"]) || role === "JEFE_DE_BARRIO";
-  const esAdmin =
-    role === "ADMIN_GENERAL" || role === "ADMIN";
-
-  // -------------------------------------------------
-  // CAMPOS QUE TOCA EL INSPECTOR
-  // -------------------------------------------------
-  if (esInspector) {
-    // Prioridad fijada por inspector (URGENTE / ALTA / MEDIA / BAJA)
-    let prioridadRaw = "";
-    if (typeof datos.prioridadInspector === "string") {
-      prioridadRaw = datos.prioridadInspector || "";
-    } else if (typeof datos.prioridad === "string") {
-      // compatibilidad con frontend que envía "prioridad"
-      prioridadRaw = datos.prioridad || "";
-    }
-
-    if (prioridadRaw) {
-      const p = up(prioridadRaw);
-      const allowed = ["URGENTE", "ALTA", "MEDIA", "BAJA"];
-      if (allowed.includes(p)) {
-        d.prioridadInspector = p;
-        d.prioridad = p; // sincronizamos con campo genérico
+      if (up(anexo.estado) !== "ENVIADO") {
+        return res.json({ anexo: anexo.toObject() });
       }
-    }
 
-    // Responsable del trabajo (INSTITUCION / PERMISIONARIO)
-    if (typeof datos.responsableTrabajo === "string") {
-      const rt = up(datos.responsableTrabajo || "");
-      if (rt === "INSTITUCION" || rt === "PERMISIONARIO") {
-        d.responsableTrabajo = rt;
-      } else if (datos.responsableTrabajo.trim()) {
-        // Por las dudas, guardamos literal si no coincide
-        d.responsableTrabajo = datos.responsableTrabajo.trim();
+      anexo.datos =
+        anexo.datos && typeof anexo.datos === "object" ? anexo.datos : {};
+
+      if (typeof datos.observacionesInspector === "string") {
+        anexo.datos.observacionesInspector =
+          datos.observacionesInspector.trim();
       }
-    }
 
-    // Decisión del Inspector (APROBADO / NO_APROBADO)
-    if (typeof datos.decisionInspector === "string") {
-      const dec = up(datos.decisionInspector || "");
-      if (dec === "APROBADO" || dec === "NO_APROBADO") {
-        d.decisionInspector = dec;
-      }
-    }
+      // Conformidad/actuación del inspector
+      anexo.datos.conformidadInspector = {
+        ok: true,
+        fecha: new Date(),
+        usuario: user._id,
+        observacion:
+          anexo.datos.observacionesInspector ||
+          "Revisión del inspector de barrio previa a envío a ADMIN_GENERAL.",
+      };
 
-    // Trabajo finalizado (inspector indica que ya se ejecutó / cerró la tarea)
-    if (typeof datos.trabajoFinalizadoInspector === "boolean") {
-      d.trabajoFinalizadoInspector = datos.trabajoFinalizadoInspector;
-    }
-
-    // ─────────────────────────────
-    // Historial de observaciones del inspector
-    // ─────────────────────────────
-    if (typeof datos.nuevaObservacionInspector === "string") {
-      const texto = datos.nuevaObservacionInspector.trim();
-      if (texto) {
-        const historial = Array.isArray(d.observacionesInspectorHistorial)
-          ? d.observacionesInspectorHistorial
-          : [];
-        historial.push({
-          texto,
-          fecha: new Date(),
-          usuario: user._id,
-        });
-        d.observacionesInspectorHistorial = historial;
-
-        // También actualizamos el campo "última observación"
-        d.observacionesInspector = texto;
-      }
-    } else if (typeof datos.observacionesInspector === "string") {
-      // Modo antiguo: un solo campo plano
-      d.observacionesInspector = datos.observacionesInspector.trim();
-    }
-
-    // Nueva visita programada (opcional)
-    if (datos.nuevaVisita && typeof datos.nuevaVisita === "object") {
-      const nv = datos.nuevaVisita;
-      const fechaVisita =
-        nv.fechaProgramada || nv.fecha || nv.fechaVisita || null;
-
-      const obsVisita =
-        typeof nv.observacion === "string"
-          ? nv.observacion.trim()
-          : typeof nv.observaciones === "string"
-          ? nv.observaciones.trim()
-          : typeof nv.observacionesInspector === "string"
-          ? nv.observacionesInspector.trim()
-          : "";
-
-      if (fechaVisita || obsVisita) {
-        const visitas = Array.isArray(d.visitasProgramadas)
-          ? d.visitasProgramadas
-          : [];
-        visitas.push({
-          fechaProgramada: fechaVisita,
-          observacion: obsVisita,
-          creadoPor: user._id,
-          creadoAt: new Date(),
-        });
-        d.visitasProgramadas = visitas;
-      }
-    }
-
-    // Sello de actuación del inspector
-    d.conformidadInspector = {
-      ok: true,
-      fecha: new Date(),
-      usuario: user._id,
-      observacion:
-        d.observacionesInspector ||
-        "Actuación del inspector sobre ANEXO_11 (prioridad / decisión / responsable / visitas).",
-    };
-
-    // Si estaba ENVIADO, lo ponemos EN_REVISION
-    if (estadoUp === "ENVIADO") {
       anexo.cambiarEstado(
         "EN_REVISION",
         user._id,
-        "Actuación del inspector sobre ANEXO_11 (prioridad / decisión / responsable / visitas)"
+        "ANEXO_07 enviado a ADMIN_GENERAL por inspector"
       );
+
+      await anexo.save();
+      return res.json({ anexo: anexo.toObject() });
     }
-  }
 
-  // -------------------------------------------------
-  // CAMPOS QUE TOCA ADMIN_GENERAL / ADMIN
-  // (sin pisar la conformidad del inspector)
-  // -------------------------------------------------
-  if (esAdmin) {
-    if (typeof datos.observacionesAdminGeneral === "string") {
-      d.observacionesAdminGeneral =
-        datos.observacionesAdminGeneral.trim();
+    // ------------- ANEXO_09 (solo INSPECTOR-like, ENVIADO) -------------
+    if (codigo === "ANEXO_09") {
+      if (!hasRolOrPermiso(user, ["INSPECTOR"])) return genericDenied(res);
+
+      if (up(anexo.estado) !== "ENVIADO") {
+        // Si ya está en otra etapa, no editamos nada
+        return res.json({ anexo: anexo.toObject() });
+      }
+      if (!isInspectorInterviniente(anexo, user._id)) return genericDenied(res);
+
+      anexo.datos = sanitizeDatosAnexo09(anexo.datos || {}, datos);
+      await anexo.save();
+
+      return res.json({ anexo: anexo.toObject() });
     }
-    // OJO: el cambio de estadoInstitucional se maneja
-    // en el endpoint PATCH /:id/estado-institucional (setEstadoInstitucional),
-    // no acá.
-  }
 
-  anexo.datos = d;
+                // ------------- ANEXO_11 (INSPECTOR / ADMIN_GENERAL / ADMIN / JEFE_DE_BARRIO / PERMISIONARIO) -------------
+    if (codigo === "ANEXO_11") {
+      const inspectorOpera =
+        hasRolOrPermiso(user, ["INSPECTOR"]) || role === "JEFE_DE_BARRIO";
+      const esAdmin = role === "ADMIN_GENERAL" || role === "ADMIN";
+      const esPermisionario = role === "PERMISIONARIO" && !inspectorOpera;
 
-  await anexo.save();
-  return res.json({ anexo: anexo.toObject() });
-}
+      if (!inspectorOpera && !esAdmin && !esPermisionario) {
+        return genericDenied(res);
+      }
 
+      // Solo permitimos modificaciones mientras está ENVIADO o EN_REVISION
+      // La conformidad del permisionario va por su endpoint específico
+      if (!["ENVIADO", "EN_REVISION"].includes(estadoUp)) {
+        return res.json({ anexo: anexo.toObject() });
+      }
 
+      aplicarCambiosAnexo11({
+        anexo,
+        datos,
+        actor: req.user,
+        flags: {
+          inspectorOpera,
+          adminOpera: esAdmin,
+          permisionarioOpera: esPermisionario,
+        },
+      });
+
+      await anexo.save();
+      return res.json({ anexo: anexo.toObject() });
+    }
 
     // Otros códigos no usan este endpoint
     return res.status(404).json({
       message: "Recurso no encontrado",
       path: `/api/formularios/${id}/datos`,
     });
-  } catch (e) {
-    console.error(e);
-    return genericDenied(res);
-  }
-}
-
-// ─────────────────────────────
-// ANEXO_03: conformidad PERMISIONARIO
-async function darConformidadPermisionario03(req, res) {
-  try {
-    const { id } = req.params;
-    const user = req.user;
-
-
-    if (!isObjectId(id)) return genericDenied(res);
-
-    const anexo = await FormSubmission.findById(id);
-    if (!anexo) return genericDenied(res);
-    if (up(anexo.codigo) !== "ANEXO_03") return genericDenied(res);
-
-    const permisionarioId =
-  anexo.datos?.postulanteId ||
-  anexo.usuario ||
-  (Array.isArray(anexo.intervinientes)
-    ? anexo.intervinientes.find((x) => String(x?.rol || "").toUpperCase() === "PERMISIONARIO")?.userId
-    : null);
-
-if (String(permisionarioId || "") !== String(user._id))
-  return genericDenied(res);
-    if (["EN_REVISION", "CERRADO"].includes(anexo.estado))
-      return res.json({ anexo });
-
-    anexo.datos = anexo.datos || {};
-    anexo.datos.conformidadPermisionario = {
-      ok: true,
-      fecha: new Date(),
-      usuario: user._id,
-    };
-    anexo.cambiarEstado("EN_REVISION", user._id, "Conformidad permisionario");
-    await anexo.save();
-
-    return res.json({ anexo });
   } catch (e) {
     console.error(e);
     return genericDenied(res);
@@ -5825,7 +6041,57 @@ async function cerrarAnexo03AdminGeneral(req, res) {
     return genericDenied(res);
   }
 }
+// ─────────────────────────────
+// ANEXO_03: conformidad PERMISIONARIO
+async function darConformidadPermisionario03(req, res) {
+  try {
+    const { id } = req.params;
+    const user = req.user;
 
+    if (!isObjectId(id)) return genericDenied(res);
+
+    const anexo = await FormSubmission.findById(id);
+    if (!anexo) return genericDenied(res);
+    if (up(anexo.codigo) !== "ANEXO_03") return genericDenied(res);
+
+    const permisionarioId =
+      anexo.datos?.postulanteId ||
+      anexo.usuario ||
+      (Array.isArray(anexo.intervinientes)
+        ? anexo.intervinientes.find(
+            (x) => String(x?.rol || "").toUpperCase() === "PERMISIONARIO"
+          )?.userId
+        : null);
+
+    if (String(permisionarioId || "") !== String(user._id)) {
+      return genericDenied(res);
+    }
+
+    if (["EN_REVISION", "CERRADO"].includes(up(anexo.estado))) {
+      return res.json({ anexo });
+    }
+
+    anexo.datos = anexo.datos || {};
+    anexo.datos.conformidadPermisionario = {
+      ok: true,
+      fecha: new Date(),
+      usuario: user._id,
+    };
+
+    anexo.cambiarEstado(
+      "EN_REVISION",
+      user._id,
+      "Conformidad permisionario"
+    );
+
+    await anexo.save();
+
+    return res.json({ anexo });
+  } catch (e) {
+    console.error(e);
+    return genericDenied(res);
+  }
+}
 // ─────────────────────────────
 // ANEXO_07: CIERRE ADMIN_GENERAL
 async function cerrarAnexo07AdminGeneral(req, res) {
@@ -6199,12 +6465,9 @@ async function gestionarAnexo11Admin(req, res) {
     if (!user) return genericDenied(res);
 
     const role = up(user.role || "");
-if (role !== "ADMIN_GENERAL") {
-  return genericDenied(res);
-}
-
-
-    if (!isObjectId(id)) return genericDenied(res);
+    if (role !== "ADMIN_GENERAL") {
+      return genericDenied(res);
+    }
 
     const anexo = await FormSubmission.findById(id);
     if (!anexo) return genericDenied(res);
@@ -6213,13 +6476,17 @@ if (role !== "ADMIN_GENERAL") {
     if (codigo !== "ANEXO_11") return genericDenied(res);
 
     const estadoUp = up(anexo.estado || "");
-    // Solo evitamos operar si está ANULADO; permitir cerrar aunque esté EN_REVISION
     if (estadoUp === "ANULADO") {
       return genericDenied(res);
     }
 
     let { accion, observacionesAdminGeneral } = req.body || {};
     accion = up(accion || "");
+
+    // Compatibilidad legacy
+    if (accion === "DEVOLVER") {
+      accion = "DEVOLVER_A_INSPECTOR";
+    }
 
     if (!["CERRAR", "DEVOLVER_A_INSPECTOR"].includes(accion)) {
       return badRequest(res);
@@ -6228,10 +6495,14 @@ if (role !== "ADMIN_GENERAL") {
     const d =
       anexo.datos && typeof anexo.datos === "object" ? anexo.datos : {};
 
-    // Guardamos / acumulamos observaciones del ADMIN_GENERAL
+    // ─────────────────────────────
+    // Observaciones ADMIN GENERAL
+    // ─────────────────────────────
     if (typeof observacionesAdminGeneral === "string") {
       const obsTrim = observacionesAdminGeneral.trim();
+
       if (obsTrim) {
+        // Campo plano "última / acumulada"
         if (
           typeof d.observacionesAdminGeneral === "string" &&
           d.observacionesAdminGeneral.trim()
@@ -6240,17 +6511,28 @@ if (role !== "ADMIN_GENERAL") {
         } else {
           d.observacionesAdminGeneral = obsTrim;
         }
+
+        // Historial estructurado
+        if (!Array.isArray(d.observacionesAdminGeneralHistorial)) {
+          d.observacionesAdminGeneralHistorial = [];
+        }
+
+        d.observacionesAdminGeneralHistorial.push({
+          fecha: new Date().toISOString(),
+          texto: obsTrim,
+          usuario: user._id,
+          accion,
+        });
       }
     }
 
-    // Opcional: leemos el sello del inspector y el finalizado
     const confInspector =
       d.conformidadInspector && typeof d.conformidadInspector === "object"
         ? d.conformidadInspector
         : null;
+
     const trabajoFinalizadoInspector = !!d.trabajoFinalizadoInspector;
 
-    // Si querés ser estricto y NO dejar cerrar sin actuación + finalizado, descomentá esto:
     /*
     if (accion === "CERRAR") {
       if (!confInspector || !confInspector.ok || !trabajoFinalizadoInspector) {
@@ -6263,30 +6545,36 @@ if (role !== "ADMIN_GENERAL") {
     */
 
     if (accion === "CERRAR") {
-      // Marcamos resolución de ADMIN_GENERAL
       d.resolucionAdminGeneral = "CERRADO";
-      d.fechaCierreAdminGeneral = new Date();
+      d.fechaCierreAdminGeneral = new Date().toISOString();
       d.cerradoPorAdminGeneral = user._id;
+      d.cerradoPorAdminGeneralNombre =
+        [user?.apellido, user?.nombre].filter(Boolean).join(" ").trim() ||
+        user?.email ||
+        "ADMIN GENERAL";
 
       anexo.datos = d;
+      if (typeof anexo.markModified === "function") {
+        anexo.markModified("datos");
+      }
 
-      // Estado del trámite: lo llevamos a CERRADO
       anexo.cambiarEstado(
         "CERRADO",
         user._id,
         "ANEXO_11 cerrado por ADMIN_GENERAL"
       );
     } else if (accion === "DEVOLVER_A_INSPECTOR") {
-      // Marcamos que fue devuelto al inspector
       d.devueltoAInspector = {
         ok: true,
-        fecha: new Date(),
+        fecha: new Date().toISOString(),
         usuario: user._id,
       };
 
       anexo.datos = d;
+      if (typeof anexo.markModified === "function") {
+        anexo.markModified("datos");
+      }
 
-      // Aseguramos que quede en EN_REVISION y registramos en historial
       anexo.cambiarEstado(
         "EN_REVISION",
         user._id,
