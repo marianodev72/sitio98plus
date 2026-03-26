@@ -104,10 +104,48 @@ async function listAuditEvents(req, res) {
     const { page, limit, skip } = buildPagination(req.query);
     const sort = buildSort(req.query);
 
-    const [total, items] = await Promise.all([
-      AuditLog.countDocuments(filter),
-      AuditLog.find(filter).select(CANONICAL_PROJECTION).sort(sort).skip(skip).limit(limit).lean(),
-    ]);
+    const [total, rawItems] = await Promise.all([
+  AuditLog.countDocuments(filter),
+  AuditLog.find(filter)
+    .select(CANONICAL_PROJECTION)
+    .sort(sort)
+    .skip(skip)
+    .limit(limit)
+    .lean(),
+]);
+
+// obtener ids únicos
+const userIds = [
+  ...new Set(
+    rawItems
+      .map((i) => (i.actorId ? String(i.actorId) : ""))
+      .filter(Boolean)
+  ),
+];
+
+// traer usuarios
+let usersMap = {};
+if (userIds.length) {
+  const users = await mongoose.model("User")
+    .find({ _id: { $in: userIds } })
+    .select("nombre apellido email")
+    .lean();
+
+  users.forEach((u) => {
+    usersMap[String(u._id)] =
+      `${u.apellido || ""} ${u.nombre || ""}`.trim() ||
+      u.email ||
+      "Usuario";
+  });
+}
+
+// mapear salida
+const items = rawItems.map((i) => ({
+  ...i,
+  actorNombre: i.actorId
+    ? usersMap[String(i.actorId)] || "Usuario"
+    : "Sistema",
+}));
 
     return res.json({
       page,

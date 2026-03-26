@@ -1,5 +1,3 @@
-// frontend/src/pages/permisionario/inspector/GestionarAnexoInspector.tsx
-
 // frontend/src/pages/permisionario/inspector/GestionesInspector.tsx
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -234,65 +232,63 @@ export default function GestionesInspector() {
     }
   }
 
-  // Crear ANEXO_08 desde ANEXO_03 (ruta especial en backend)
-  async function iniciarAnexo08Desde03(anexo03Id: string) {
-    setWorkingId(anexo03Id);
-    setError(null);
+  // Crear ANEXO_08 desde ANEXO_03
+async function iniciarAnexo08Desde03(anexo03Id: string) {
+  setWorkingId(anexo03Id);
+  setError(null);
 
-    try {
-      const res = await http.post(`/formularios/${anexo03Id}/anexo-08`, {});
-
-      const nuevoId =
-        res?.data?.anexo?._id || res?.data?.formulario?._id || res?.data?._id || null;
-
-      if (!nuevoId) {
-        setError(
-          "La página solicitada no está disponible. Por favor, contacte al administrador."
-        );
-        return;
-      }
-
-      navigate(`/app/permisionario/anexos/${nuevoId}`);
-    } catch (e) {
-      console.error("[Inspector] Error iniciando ANEXO_08", e);
+  try {
+    if (!anexo03Id || !/^[a-fA-F0-9]{24}$/.test(anexo03Id)) {
       setError(
         "La página solicitada no está disponible. Por favor, contacte al administrador."
       );
-    } finally {
-      setWorkingId(null);
+      return;
     }
-  }
 
-  // Crear ANEXO_09 desde ANEXO_08 (ruta especial en backend)
-  async function iniciarAnexo09Desde08(anexo08Id: string) {
-    setWorkingId(anexo08Id);
-    setError(null);
+    const res = await http.post(`/formularios/ANEXO_08`, {
+      datos: {
+        anexo03Id,
+        derivadoDe: anexo03Id,
+      },
+    });
 
-    try {
-      const res = await http.post(`/formularios/${anexo08Id}/anexo-09`, {});
+    const nuevoId =
+      res?.data?.anexo?._id ||
+      res?.data?.formulario?._id ||
+      res?.data?._id ||
+      null;
 
-      const nuevoId =
-        res?.data?.anexo?._id || res?.data?.formulario?._id || res?.data?._id || null;
-
-      if (!nuevoId) {
-        setError(
-          "La página solicitada no está disponible. Por favor, contacte al administrador."
-        );
-        return;
-      }
-
-      navigate(`/app/permisionario/mi-barrio-inspector/gestiones/${nuevoId}`);
-    } catch (e) {
-      console.error("[Inspector] Error iniciando ANEXO_09", e);
+    if (!nuevoId) {
       setError(
         "La página solicitada no está disponible. Por favor, contacte al administrador."
       );
-    } finally {
-      setWorkingId(null);
+      return;
     }
+
+    navigate(`/app/permisionario/mi-barrio-inspector/gestiones/${nuevoId}`);
+  } catch (e) {
+    console.error("[Inspector] Error iniciando ANEXO_08", e);
+    setError(
+      "La página solicitada no está disponible. Por favor, contacte al administrador."
+    );
+  } finally {
+    setWorkingId(null);
+  }
+}
+  
+function iniciarAnexo09Desde08(anexo08Id: string) {
+  if (!anexo08Id || !/^[a-fA-F0-9]{24}$/.test(anexo08Id)) {
+    setError(
+      "La página solicitada no está disponible. Por favor, contacte al administrador."
+    );
+    return;
   }
 
-  // Aplicamos filtro por código
+  navigate(
+    `/app/permisionario/mi-barrio-inspector/gestiones/crear-anexo-09-desde-08/${anexo08Id}`
+  );
+}
+// Aplicamos filtro por código
   const visibles =
     codigoFiltro === "TODOS"
       ? items

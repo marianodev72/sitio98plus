@@ -298,6 +298,13 @@ router.post(
   c.cerrarAnexo08AdminGeneral
 );
 
+router.post(
+  "/:id/anexo-08/datos",
+  requirePermiso("INSPECTOR"),
+  c.actualizarDatosAnexo08
+);
+
+
 // ─────────────────────────────
 // ANEXO_09
 

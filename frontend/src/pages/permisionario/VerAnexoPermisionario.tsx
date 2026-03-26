@@ -6,6 +6,7 @@ import { http } from "../../api/http";
 import { useAuth } from "../../auth/useAuth";
 import Anexo11ResumenRegistro from "../../components/anexos/Anexo11ResumenRegistro";
 import Anexo04Vista from "../../components/anexos/Anexo04Vista";
+import Anexo09Vista from "../../components/anexos/Anexo09Vista";
 
 type Anexo = {
   _id: string;
@@ -71,6 +72,52 @@ export default function VerAnexoPermisionario() {
     }
   }
 
+async function confirmarConformidadAnexo08() {
+  if (!anexo?._id) return;
+  if (up(anexo.codigo) !== "ANEXO_08") return;
+
+  setBusy(true);
+  setErrorMsg("");
+  setInfoMsg("");
+
+  try {
+    await http.post(`/formularios/${anexo._id}/conformidad-permisionario-08`, {});
+    setInfoMsg("Tu conformidad fue registrada correctamente.");
+    await cargar();
+  } catch (e: any) {
+    console.error("[ANEXO_08] Error registrando conformidad permisionario", e);
+    setErrorMsg(
+      e?.response?.data?.message ||
+        "No se pudo registrar tu conformidad. Intentalo más tarde o contactá al administrador."
+    );
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function confirmarConformidadAnexo09() {
+  if (!anexo?._id) return;
+  if (up(anexo.codigo) !== "ANEXO_09") return;
+
+  setBusy(true);
+  setErrorMsg("");
+  setInfoMsg("");
+
+  try {
+    await http.post(`/formularios/${anexo._id}/conformidad-permisionario-09`, {});
+    setInfoMsg("Tu conformidad fue registrada correctamente.");
+    await cargar();
+  } catch (e: any) {
+    console.error("[ANEXO_09] Error registrando conformidad permisionario", e);
+    setErrorMsg(
+      e?.response?.data?.message ||
+        "No se pudo registrar tu conformidad. Intentalo más tarde o contactá al administrador."
+    );
+  } finally {
+    setBusy(false);
+  }
+}
+
   async function confirmarConformidadAnexo11() {
     if (!anexo?._id) return;
     if (up(anexo.codigo) !== "ANEXO_11") return;
@@ -116,6 +163,34 @@ export default function VerAnexoPermisionario() {
       setBusy(false);
     }
   }
+
+async function descargarPdfAnexo() {
+  if (!anexo?._id) return;
+
+  try {
+    const res = await http.get(`/formularios/${anexo._id}/pdf`, {
+      responseType: "blob",
+    });
+
+    const blob = new Blob([res.data], { type: "application/pdf" });
+    const url = window.URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${anexo.codigo}_${anexo._id}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    window.URL.revokeObjectURL(url);
+  } catch (e: any) {
+    console.error("[PDF] Error descargando PDF", e);
+    setErrorMsg(
+      e?.response?.data?.message ||
+        "No se pudo descargar el PDF. Intentalo más tarde."
+    );
+  }
+}
 
   // Fail-closed UX. Backend valida igual.
   if (up(user?.role) !== "PERMISIONARIO") {
@@ -414,27 +489,471 @@ export default function VerAnexoPermisionario() {
     );
   }
 
-  // Si NO es ANEXO_11, esta pantalla NO lo debe renderizar como ANEXO_11
-  if (codigo !== "ANEXO_11") {
-    return (
-      <div style={{ padding: 24 }}>
-        <button
-          onClick={() => navigate("/app/permisionario/anexos")}
-          style={{ marginBottom: 16 }}
-          disabled={busy}
+// AQUI VISUALIZAMOS EL ANEXO 08
+if (codigo === "ANEXO_08") {
+  const viviendaLabel =
+    d.viviendaLabel ||
+    d.viviendaCodigo ||
+    d.unidadHabitacional ||
+    d.casa ||
+    "—";
+
+  const permisionarioNombre =
+    d.permisionarioNombre ||
+    d.postulanteNombre ||
+    d.apellidoNombres ||
+    "—";
+
+  const inspectorNombre = d.inspectorNombre || "—";
+  const yaConforme = !!d?.conformidadPermisionario?.ok;
+
+  const rep1 = d.representante1 || {};
+  const rep2 = d.representante2 || {};
+
+  return (
+    <div style={{ padding: 24 }}>
+      <button
+        onClick={() => navigate("/app/permisionario/anexos")}
+        style={{ marginBottom: 16 }}
+        disabled={busy}
+      >
+        Volver
+      </button>
+
+      <h2>ANEXO 08 — Acta de inspección previa</h2>
+
+      {errorMsg && (
+        <div
+          style={{
+            marginTop: 8,
+            marginBottom: 8,
+            padding: 10,
+            border: "1px solid #f44336",
+            background: "#ffebee",
+          }}
         >
-          Volver
+          {errorMsg}
+        </div>
+      )}
+
+      {infoMsg && !errorMsg && (
+        <div
+          style={{
+            marginTop: 8,
+            marginBottom: 8,
+            padding: 10,
+            border: "1px solid #4caf50",
+            background: "#e8f5e9",
+          }}
+        >
+          {infoMsg}
+        </div>
+      )}
+
+      <section
+        style={{
+          marginTop: 12,
+          marginBottom: 12,
+          padding: 12,
+          borderRadius: 8,
+          border: "1px solid #ddd",
+          background: "#fafafa",
+        }}
+      >
+        <p>
+          <b>Estado:</b> {estado}
+          {anexo.estadoInstitucional ? ` / ${anexo.estadoInstitucional}` : ""}
+        </p>
+        <p>
+          <b>Fecha de inicio:</b> {fechaInicio}
+        </p>
+        <p>
+          <b>Permisionario:</b> {permisionarioNombre}
+        </p>
+        <p>
+          <b>Unidad habitacional:</b> {viviendaLabel}
+        </p>
+        <p>
+          <b>Dirección:</b> {safe(d.direccion || d.direccionUnidad)}
+        </p>
+        <p>
+          <b>Localidad:</b> {safe(d.localidad)}
+        </p>
+        <p>
+          <b>Provincia:</b> {safe(d.provincia)}
+        </p>
+        <p>
+          <b>Inspector:</b> {inspectorNombre}
+        </p>
+        <p>
+          <b>Grado del permisionario:</b> {safe(d.gradoPermisionario)}
+        </p>
+        <p>
+          <b>Lugar de inspección:</b> {safe(d.lugarInspeccion)}
+        </p>
+        <p>
+          <b>Fecha de inspección:</b> {safe(d.fechaInspeccion)}
+        </p>
+        <p>
+          <b>Lugar de firma:</b> {safe(d.lugarFirma)}
+        </p>
+        <p>
+          <b>Fecha de firma:</b> {safe(d.fechaFirma)}
+        </p>
+        <p>
+          <b>Conformidad del permisionario:</b> {yaConforme ? "Registrada" : "Pendiente"}
+        </p>
+      </section>
+
+      <section
+        style={{
+          marginTop: 12,
+          marginBottom: 12,
+          padding: 12,
+          borderRadius: 8,
+          border: "1px solid #ddd",
+          background: "#fff",
+        }}
+      >
+        <h3 style={{ marginTop: 0 }}>Reparaciones a cargo de la Armada</h3>
+        {Array.isArray(d.reparacionesArmada) && d.reparacionesArmada.length ? (
+          <ul>
+            {d.reparacionesArmada.map((item: string, i: number) => (
+              <li key={`armada-${i}`}>{safe(item)}</li>
+            ))}
+          </ul>
+        ) : (
+          <p>—</p>
+        )}
+      </section>
+
+      <section
+        style={{
+          marginTop: 12,
+          marginBottom: 12,
+          padding: 12,
+          borderRadius: 8,
+          border: "1px solid #ddd",
+          background: "#fff",
+        }}
+      >
+        <h3 style={{ marginTop: 0 }}>Reparaciones a cargo del permisionario</h3>
+        {Array.isArray(d.reparacionesPermisionario) && d.reparacionesPermisionario.length ? (
+          <ul>
+            {d.reparacionesPermisionario.map((item: string, i: number) => (
+              <li key={`perm-${i}`}>{safe(item)}</li>
+            ))}
+          </ul>
+        ) : (
+          <p>—</p>
+        )}
+      </section>
+
+      <section
+        style={{
+          marginTop: 12,
+          marginBottom: 12,
+          padding: 12,
+          borderRadius: 8,
+          border: "1px solid #ddd",
+          background: "#fff",
+        }}
+      >
+        <h3 style={{ marginTop: 0 }}>Observaciones del inspector</h3>
+        <p>{safe(d.observacionesInspector)}</p>
+      </section>
+
+
+      <section
+        style={{
+          marginTop: 12,
+          marginBottom: 12,
+          padding: 12,
+          borderRadius: 8,
+          border: "1px solid #ddd",
+          background: "#fff",
+        }}
+      >
+        <h3 style={{ marginTop: 0 }}>Representante 1</h3>
+        <p><b>Apellido y nombres:</b> {safe(rep1.apellidoNombres)}</p>
+        <p><b>Grado:</b> {safe(rep1.grado)}</p>
+        <p><b>M.R.:</b> {safe(rep1.mr)}</p>
+        <p><b>Destino:</b> {safe(rep1.destino)}</p>
+        <p><b>Teléfono:</b> {safe(rep1.telefono)}</p>
+      </section>
+
+      <section
+        style={{
+          marginTop: 12,
+          marginBottom: 12,
+          padding: 12,
+          borderRadius: 8,
+          border: "1px solid #ddd",
+          background: "#fff",
+        }}
+      >
+        <h3 style={{ marginTop: 0 }}>Representante 2</h3>
+        <p><b>Apellido y nombres:</b> {safe(rep2.apellidoNombres)}</p>
+        <p><b>Grado:</b> {safe(rep2.grado)}</p>
+        <p><b>M.R.:</b> {safe(rep2.mr)}</p>
+        <p><b>Destino:</b> {safe(rep2.destino)}</p>
+        <p><b>Teléfono:</b> {safe(rep2.telefono)}</p>
+      </section>
+
+      <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <button onClick={cargar} disabled={busy}>
+          Recargar
         </button>
 
-        <h2>La página solicitada no está disponible.</h2>
-        <p>
-          Este anexo ({codigo}) no se visualiza en esta pantalla.
-        </p>
-      </div>
-    );
-  }
+        <button onClick={descargarPdfAnexo} disabled={busy}>
+          Descargar PDF
+        </button>
 
-  // ─────────────────────────────
+        <button onClick={confirmarConformidadAnexo08} disabled={busy || yaConforme}>
+          {busy
+            ? "Enviando…"
+            : yaConforme
+            ? "Conformidad registrada"
+            : "Dar conformidad (ANEXO 08)"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// aquí visualizamos ANEXO_09
+if (codigo === "ANEXO_09") {
+  const viviendaLabel =
+    d.viviendaLabel ||
+    d.viviendaCodigo ||
+    d.unidadHabitacional ||
+    d.casa ||
+    "—";
+
+  const permisionarioNombre =
+    d.permisionarioNombre ||
+    d.postulanteNombre ||
+    d.apellidoNombres ||
+    "—";
+
+  const inspectorNombre = d.inspectorNombre || "—";
+  const yaConforme = !!d?.conformidadPermisionario?.ok;
+
+  return (
+    <div style={{ padding: 24 }}>
+      <button
+        onClick={() => navigate("/app/permisionario/anexos")}
+        style={{ marginBottom: 16 }}
+        disabled={busy}
+      >
+        Volver
+      </button>
+
+      <h2>ANEXO 09 — Acta de entrega de vivienda fiscal</h2>
+
+      {errorMsg && (
+        <div
+          style={{
+            marginTop: 8,
+            marginBottom: 8,
+            padding: 10,
+            border: "1px solid #f44336",
+            background: "#ffebee",
+          }}
+        >
+          {errorMsg}
+        </div>
+      )}
+
+      {infoMsg && !errorMsg && (
+        <div
+          style={{
+            marginTop: 8,
+            marginBottom: 8,
+            padding: 10,
+            border: "1px solid #4caf50",
+            background: "#e8f5e9",
+          }}
+        >
+          {infoMsg}
+        </div>
+      )}
+
+      {/* Datos generales */}
+      <section
+        style={{
+          marginTop: 12,
+          marginBottom: 12,
+          padding: 12,
+          borderRadius: 8,
+          border: "1px solid #ddd",
+          background: "#fafafa",
+        }}
+      >
+        <p>
+          <b>Estado:</b> {estado}
+          {anexo.estadoInstitucional ? ` / ${anexo.estadoInstitucional}` : ""}
+        </p>
+        <p>
+          <b>Fecha de inicio:</b> {fechaInicio}
+        </p>
+        <p>
+          <b>Inspector:</b> {inspectorNombre}
+        </p>
+        <p>
+          <b>Permisionario:</b> {permisionarioNombre}
+        </p>
+        <p>
+          <b>Anexo origen:</b> {safe(d.derivadoDe)}
+        </p>
+      </section>
+
+      {/* Vivienda */}
+      <section
+        style={{
+          marginTop: 12,
+          marginBottom: 12,
+          padding: 12,
+          borderRadius: 8,
+          border: "1px solid #ddd",
+          background: "#fff",
+        }}
+      >
+        <h3 style={{ marginTop: 0 }}>Identificación de la vivienda</h3>
+
+        <p>
+          <b>Unidad habitacional:</b> {viviendaLabel}
+        </p>
+        <p>
+          <b>Dirección:</b> {safe(d.direccion || d.direccionUnidad)}
+        </p>
+        <p>
+          <b>Localidad:</b> {safe(d.localidad)}
+        </p>
+        <p>
+          <b>Provincia:</b> {safe(d.provincia)}
+        </p>
+        <p>
+          <b>Barrio:</b> {safe(d.barrio)}
+        </p>
+      </section>
+
+      {/* Acto de entrega */}
+      <section
+        style={{
+          marginTop: 12,
+          marginBottom: 12,
+          padding: 12,
+          borderRadius: 8,
+          border: "1px solid #ddd",
+          background: "#fafafa",
+        }}
+      >
+        <h3 style={{ marginTop: 0 }}>Acto de entrega</h3>
+
+        <p>
+          <b>Lugar de entrega:</b> {safe(d.lugarEntrega || d.lugarFirma)}
+        </p>
+        <p>
+          <b>Fecha de entrega:</b> {safe(d.fechaEntrega || d.fechaFirma)}
+        </p>
+        <p>
+          <b>Hora de entrega:</b> {safe(d.horaEntrega)}
+        </p>
+      </section>
+
+      {/* Estado / Observaciones */}
+      <section
+        style={{
+          marginTop: 12,
+          marginBottom: 12,
+          padding: 12,
+          borderRadius: 8,
+          border: "1px solid #ddd",
+          background: "#fff",
+        }}
+      >
+        <h3 style={{ marginTop: 0 }}>Estado de la vivienda / Observaciones</h3>
+
+        <p>
+          <b>Observaciones:</b>{" "}
+          {safe(d.observacionesEntrega || d.observacionesInspector || d.novedadesTexto)}
+        </p>
+        <p>
+          <b>Inventario / Detalle:</b> {safe(d.detalleInventario)}
+        </p>
+        <p>
+          <b>Servicios:</b> {safe(d.servicios)}
+        </p>
+        <p>
+          <b>Llaves entregadas:</b> {safe(d.llavesEntregadas)}
+        </p>
+      </section>
+
+      {/* Conformidad */}
+      <section
+        style={{
+          marginTop: 12,
+          marginBottom: 12,
+          padding: 12,
+          borderRadius: 8,
+          border: "1px solid #ddd",
+          background: "#fafafa",
+        }}
+      >
+        <h3 style={{ marginTop: 0 }}>Conformidad del permisionario</h3>
+
+        <p>
+          <b>Estado:</b> {yaConforme ? "Registrada" : "Pendiente"}
+        </p>
+        <p>
+          <b>Fecha:</b> {safe(d?.conformidadPermisionario?.fecha)}
+        </p>
+        <p>
+          <b>Observaciones:</b> {safe(d?.conformidadPermisionario?.observaciones)}
+        </p>
+      </section>
+
+      <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <button onClick={cargar} disabled={busy}>
+          Recargar
+        </button>
+
+<button onClick={confirmarConformidadAnexo09} disabled={busy || yaConforme}>
+  {busy
+    ? "Enviando…"
+    : yaConforme
+    ? "Conformidad registrada"
+    : "Dar conformidad (ANEXO 09)"}
+</button>
+
+        <button onClick={descargarPdfAnexo} disabled={busy}>
+          Descargar PDF
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Si NO es ANEXO_11, esta pantalla NO lo debe renderizar como ANEXO_11
+if (codigo !== "ANEXO_11") {
+  return (
+    <div style={{ padding: 24 }}>
+      <button
+        onClick={() => navigate("/app/permisionario/anexos")}
+        style={{ marginBottom: 16 }}
+        disabled={busy}
+      >
+        Volver
+      </button>
+
+      <h2>La página solicitada no está disponible.</h2>
+      <p>
+        Este anexo ({codigo}) no se visualiza en esta pantalla.
+      </p>
+    </div>
+  );
+}  // ─────────────────────────────
   // ANEXO_11 — Vista completa para PERMISIONARIO
   // ─────────────────────────────
   if (codigo === "ANEXO_11") {

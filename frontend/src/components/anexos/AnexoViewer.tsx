@@ -520,9 +520,11 @@ function ViewAnexo08({ datos }: { datos: any }) {
   const localidad = datos?.localidad || "—";
   const provincia = datos?.provincia || "—";
   const inspectorNombre = datos?.inspectorNombre || datos?.inspector || "—";
-  const lugar = datos?.lugar || localidad || "—";
+  const lugar = datos?.lugarInspeccion || datos?.lugarFirma || localidad || "—";
   const fechaInspeccionTxt = datos?.fechaInspeccion
     ? fmtDateTime(datos.fechaInspeccion)
+    : datos?.fechaFirma
+    ? fmtDateTime(datos.fechaFirma)
     : "—";
 
   const reparacionesArmada: string[] = Array.isArray(datos?.reparacionesArmada)
@@ -542,6 +544,12 @@ function ViewAnexo08({ datos }: { datos: any }) {
   const obsInspector = datos?.observacionesInspector || "";
   const obsPermisionario = datos?.observacionesPermisionario || "";
   const obsAdmin = datos?.observacionesAdminGeneral || "";
+
+  const rep1 = datos?.representante1 || {};
+  const rep2 = datos?.representante2 || {};
+
+  const confPerm = datos?.conformidadPermisionario || null;
+  const confAdmin = datos?.conformidadAdminGeneral || null;
 
   return (
     <div>
@@ -594,16 +602,13 @@ function ViewAnexo08({ datos }: { datos: any }) {
           background: "white",
         }}
       >
-        <b>1. Reparaciones / mantenimientos a cargo de la Armada</b>
+        <b>1. Reparaciones / mantenimientos a cargo de la Alcaldía</b>
         {reparacionesArmada.length === 0 ? (
           <p style={{ marginTop: 6 }}>No se registraron reparaciones.</p>
         ) : (
           <ol style={{ marginTop: 6, paddingLeft: 20 }}>
             {reparacionesArmada.map((texto, idx) => (
-              <li
-                key={idx}
-                style={{ marginBottom: 4, whiteSpace: "pre-wrap" }}
-              >
+              <li key={idx} style={{ marginBottom: 4, whiteSpace: "pre-wrap" }}>
                 {texto}
               </li>
             ))}
@@ -620,21 +625,48 @@ function ViewAnexo08({ datos }: { datos: any }) {
           background: "white",
         }}
       >
-        <b>2. Reparaciones / mantenimientos a cargo del permisionario</b>
+        <b>2. Reparaciones / mantenimientos a cargo del Permisionario</b>
         {reparacionesPermisionario.length === 0 ? (
           <p style={{ marginTop: 6 }}>No se registraron reparaciones.</p>
         ) : (
           <ol style={{ marginTop: 6, paddingLeft: 20 }}>
             {reparacionesPermisionario.map((texto, idx) => (
-              <li
-                key={idx}
-                style={{ marginBottom: 4, whiteSpace: "pre-wrap" }}
-              >
+              <li key={idx} style={{ marginBottom: 4, whiteSpace: "pre-wrap" }}>
                 {texto}
               </li>
             ))}
           </ol>
         )}
+      </section>
+
+      <section
+        style={{
+          marginTop: 14,
+          padding: 10,
+          borderRadius: 8,
+          border: "1px solid #ddd",
+          background: "#fafafa",
+        }}
+      >
+        <b>Representantes del permisionario</b>
+
+        <div style={{ marginTop: 8 }}>
+          <div style={{ fontWeight: 700 }}>Representante I</div>
+          <div>Apellido y nombres: {safe(rep1.apellidoNombres)}</div>
+          <div>Grado: {safe(rep1.grado)}</div>
+          <div>M.R.: {safe(rep1.mr)}</div>
+          <div>Destino: {safe(rep1.destino)}</div>
+          <div>Teléfono: {safe(rep1.telefono)}</div>
+        </div>
+
+        <div style={{ marginTop: 12 }}>
+          <div style={{ fontWeight: 700 }}>Representante II</div>
+          <div>Apellido y nombres: {safe(rep2.apellidoNombres)}</div>
+          <div>Grado: {safe(rep2.grado)}</div>
+          <div>M.R.: {safe(rep2.mr)}</div>
+          <div>Destino: {safe(rep2.destino)}</div>
+          <div>Teléfono: {safe(rep2.telefono)}</div>
+        </div>
       </section>
 
       {obsInspector && (
@@ -714,10 +746,35 @@ function ViewAnexo08({ datos }: { datos: any }) {
           </div>
         </section>
       )}
+
+      <section
+        style={{
+          marginTop: 14,
+          padding: 10,
+          borderRadius: 8,
+          border: "1px solid #ddd",
+          background: "#fafafa",
+        }}
+      >
+        <b>Constancias</b>
+        <div style={{ marginTop: 8 }}>
+          <div>
+            <b>Conformidad del permisionario:</b>{" "}
+            {confPerm?.ok ? `SI — ${fmtDateTime(confPerm?.fecha)}` : "NO"}
+          </div>
+          <div>
+            <b>Cierre ADMIN_GENERAL:</b>{" "}
+            {confAdmin?.ok ? `SI — ${fmtDateTime(confAdmin?.fecha)}` : "NO"}
+          </div>
+          <div>
+            <b>Lugar / Fecha de firma:</b> {safe(datos?.lugarFirma || lugar)} —{" "}
+            {datos?.fechaFirma ? fmtDateTime(datos.fechaFirma) : "—"}
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
-
 /* ╔══════════════════════════════════════╗
    ║   ANEXO 09 – Entrega de vivienda     ║
    ╚══════════════════════════════════════╝ */

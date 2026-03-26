@@ -11,6 +11,7 @@ type AuditItem = {
   targetId: string;
   createdAt: string;
   requestId?: string;
+  actorNombre?: string;
 };
 
 type AuditResponse = {
@@ -52,6 +53,56 @@ function safeLabelUser(u: UsuarioMini) {
   return base || email || u._id;
 }
 
+function traducirRol(v?: string) {
+  const map: Record<string, string> = {
+    ADMIN_GENERAL: "Administrador General",
+    ADMIN: "Administrador",
+    PERMISIONARIO: "Permisionario",
+    POSTULANTE: "Postulante",
+    INSPECTOR: "Inspector",
+    JEFE_DE_BARRIO: "Jefe de Barrio",
+    SISTEMA: "Sistema",
+  };
+
+  return map[String(v || "").trim()] || String(v || "—");
+}
+
+function traducirAccion(v?: string) {
+  const map: Record<string, string> = {
+    ADMIN_USERS_LIST: "Consulta de usuarios",
+    ADMIN_HOUSES_LIST: "Consulta de viviendas",
+    ADMIN_HOUSES_BARRIOS: "Consulta de barrios",
+    ADMIN_GESTIONES_LIST: "Consulta de gestiones",
+    FORM_CREATE: "Creación de formulario",
+    FORM_UPDATE: "Actualización de formulario",
+    FORM_CLOSE: "Cierre de formulario",
+    FORM_VIEW: "Consulta de formulario",
+    LOGIN_SUCCESS: "Inicio de sesión",
+    LOGOUT: "Cierre de sesión",
+  };
+
+  return map[String(v || "").trim()] || String(v || "—");
+}
+
+function traducirEntidad(v?: string) {
+  const map: Record<string, string> = {
+    User: "Usuario",
+    Vivienda: "Vivienda",
+    FormSubmission: "Formulario",
+    Formulario: "Formulario",
+    AuditLog: "Auditoría",
+  };
+
+  return map[String(v || "").trim()] || String(v || "—");
+}
+
+function formatReferencia(v?: string) {
+  const s = String(v || "").trim();
+  if (!s) return "—";
+  if (/^[0-9a-fA-F]{24}$/.test(s)) return `…${s.slice(-6)}`;
+  return s;
+}
+
 export default function AuditoriaInstitucionalPage() {
   const [loading, setLoading] = useState(false);
   const [loadingOptions, setLoadingOptions] = useState(false);
@@ -65,7 +116,7 @@ export default function AuditoriaInstitucionalPage() {
   const [targetId, setTargetId] = useState("");
   const [requestId, setRequestId] = useState("");
 
-  // ✅ calendario
+  // calendario
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
 
@@ -153,7 +204,6 @@ export default function AuditoriaInstitucionalPage() {
   }
 
   useEffect(() => {
-    // inicial
     fetchUsersMini();
     fetchOptions();
     fetchAudit();
@@ -161,7 +211,6 @@ export default function AuditoriaInstitucionalPage() {
   }, []);
 
   useEffect(() => {
-    // paginación
     fetchAudit();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, limit]);
@@ -209,7 +258,6 @@ export default function AuditoriaInstitucionalPage() {
   }
 
   function onExportPdf() {
-    // PDF con mismos filtros aplicados (solo canónicos desde backend)
     const sp = new URLSearchParams();
     Object.entries(appliedParams).forEach(([k, v]) => {
       if (v === undefined || v === null) return;
@@ -224,7 +272,6 @@ export default function AuditoriaInstitucionalPage() {
   const totalPages = Math.max(1, Math.ceil(total / Math.max(1, limit)));
 
   const actorIdOptions = useMemo(() => {
-    // prioriza actorIds que existen en options, pero si tenemos user list, mostramos label
     return options.actorIds.map((id) => {
       const u = usersById[id];
       return { id, label: u ? safeLabelUser(u) : id };
@@ -249,22 +296,20 @@ export default function AuditoriaInstitucionalPage() {
           gap: 12,
         }}
       >
-        {/* action */}
         <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={{ fontSize: 12 }}>action</span>
+          <span style={{ fontSize: 12 }}>Acción</span>
           <select value={action} onChange={(e) => setAction(e.target.value)} disabled={loadingOptions}>
             <option value="">(Todas)</option>
             {options.actions.map((a) => (
               <option key={a} value={a}>
-                {a}
+                {traducirAccion(a)}
               </option>
             ))}
           </select>
         </label>
 
-        {/* actorId */}
         <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={{ fontSize: 12 }}>actorId (usuario)</span>
+          <span style={{ fontSize: 12 }}>Usuario</span>
           <select value={actorId} onChange={(e) => setActorId(e.target.value)} disabled={loadingOptions}>
             <option value="">(Todos)</option>
             {actorIdOptions.map((o) => (
@@ -275,53 +320,47 @@ export default function AuditoriaInstitucionalPage() {
           </select>
         </label>
 
-        {/* actorRole */}
         <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={{ fontSize: 12 }}>actorRole</span>
+          <span style={{ fontSize: 12 }}>Rol</span>
           <select value={actorRole} onChange={(e) => setActorRole(e.target.value)} disabled={loadingOptions}>
             <option value="">(Todos)</option>
             {options.actorRoles.map((r) => (
               <option key={r} value={r}>
-                {r}
+                {traducirRol(r)}
               </option>
             ))}
           </select>
         </label>
 
-        {/* requestId */}
         <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={{ fontSize: 12 }}>requestId</span>
+          <span style={{ fontSize: 12 }}>ID de operación</span>
           <input value={requestId} onChange={(e) => setRequestId(e.target.value)} placeholder="x-request-id" />
         </label>
 
-        {/* targetType */}
         <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={{ fontSize: 12 }}>targetType</span>
+          <span style={{ fontSize: 12 }}>Entidad</span>
           <select value={targetType} onChange={(e) => setTargetType(e.target.value)} disabled={loadingOptions}>
-            <option value="">(Todos)</option>
+            <option value="">(Todas)</option>
             {options.targetTypes.map((t) => (
               <option key={t} value={t}>
-                {t}
+                {traducirEntidad(t)}
               </option>
             ))}
           </select>
         </label>
 
-        {/* targetId */}
         <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={{ fontSize: 12 }}>targetId</span>
+          <span style={{ fontSize: 12 }}>Referencia</span>
           <input value={targetId} onChange={(e) => setTargetId(e.target.value)} placeholder="LIST o ID" />
         </label>
 
-        {/* from */}
         <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={{ fontSize: 12 }}>Desde (createdAt)</span>
+          <span style={{ fontSize: 12 }}>Desde</span>
           <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
         </label>
 
-        {/* to */}
         <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={{ fontSize: 12 }}>Hasta (createdAt)</span>
+          <span style={{ fontSize: 12 }}>Hasta</span>
           <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
         </label>
 
@@ -340,13 +379,15 @@ export default function AuditoriaInstitucionalPage() {
             disabled={loading || !requestId.trim()}
             style={{ padding: "8px 10px" }}
           >
-            Correlacionar requestId
+            Correlacionar operación
           </button>
         </div>
       </div>
 
       {error ? (
-        <div style={{ padding: 12, border: "1px solid #f5c2c2", borderRadius: 8, marginBottom: 16 }}>{error}</div>
+        <div style={{ padding: 12, border: "1px solid #f5c2c2", borderRadius: 8, marginBottom: 16 }}>
+          {error}
+        </div>
       ) : null}
 
       {loading ? <div style={{ marginBottom: 12 }}>Cargando…</div> : null}
@@ -355,25 +396,33 @@ export default function AuditoriaInstitucionalPage() {
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ background: "#f7f7f7" }}>
-              <th style={{ textAlign: "left", padding: 10, fontSize: 12 }}>createdAt</th>
-              <th style={{ textAlign: "left", padding: 10, fontSize: 12 }}>actorId</th>
-              <th style={{ textAlign: "left", padding: 10, fontSize: 12 }}>actorRole</th>
-              <th style={{ textAlign: "left", padding: 10, fontSize: 12 }}>action</th>
-              <th style={{ textAlign: "left", padding: 10, fontSize: 12 }}>targetType</th>
-              <th style={{ textAlign: "left", padding: 10, fontSize: 12 }}>targetId</th>
-              <th style={{ textAlign: "left", padding: 10, fontSize: 12 }}>requestId</th>
+              <th style={{ textAlign: "left", padding: 10, fontSize: 12 }}>Fecha y hora</th>
+              <th style={{ textAlign: "left", padding: 10, fontSize: 12 }}>Usuario</th>
+              <th style={{ textAlign: "left", padding: 10, fontSize: 12 }}>Rol</th>
+              <th style={{ textAlign: "left", padding: 10, fontSize: 12 }}>Acción</th>
+              <th style={{ textAlign: "left", padding: 10, fontSize: 12 }}>Entidad</th>
+              <th style={{ textAlign: "left", padding: 10, fontSize: 12 }}>Referencia</th>
+              <th style={{ textAlign: "left", padding: 10, fontSize: 12 }}>ID de operación</th>
             </tr>
           </thead>
           <tbody>
             {(data?.items || []).map((it) => (
               <tr key={it._id} style={{ borderTop: "1px solid #eee" }}>
                 <td style={{ padding: 10, fontSize: 12 }}>{formatDateLocal(it.createdAt)}</td>
-                <td style={{ padding: 10, fontSize: 12 }}>{it.actorId || ""}</td>
-                <td style={{ padding: 10, fontSize: 12 }}>{it.actorRole || ""}</td>
-                <td style={{ padding: 10, fontSize: 12 }}>{it.action || ""}</td>
-                <td style={{ padding: 10, fontSize: 12 }}>{it.targetType || ""}</td>
-                <td style={{ padding: 10, fontSize: 12 }}>{it.targetId || ""}</td>
-                <td style={{ padding: 10, fontSize: 12 }}>{it.requestId || ""}</td>
+                <td style={{ padding: 10, fontSize: 12 }}>
+                  {it.actorNombre
+                    ? it.actorNombre
+                    : it.actorId
+                    ? usersById[it.actorId]
+                      ? safeLabelUser(usersById[it.actorId])
+                      : it.actorId
+                    : "Sistema"}
+                </td>
+                <td style={{ padding: 10, fontSize: 12 }}>{traducirRol(it.actorRole)}</td>
+                <td style={{ padding: 10, fontSize: 12 }}>{traducirAccion(it.action)}</td>
+                <td style={{ padding: 10, fontSize: 12 }}>{traducirEntidad(it.targetType)}</td>
+                <td style={{ padding: 10, fontSize: 12 }}>{formatReferencia(it.targetId)}</td>
+                <td style={{ padding: 10, fontSize: 12 }}>{it.requestId || "—"}</td>
               </tr>
             ))}
 

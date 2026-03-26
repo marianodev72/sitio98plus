@@ -9,6 +9,9 @@ import Anexo03InspectorForm, {
   type Anexo03Datos,
 } from "../../../components/anexos/Anexo03InspectorForm";
 import GestionarAnexo11Inspector from "./GestionarAnexo11Inspector";
+import Anexo08InspectorForm, {
+  type Anexo08Datos,
+} from "../../../components/anexos/Anexo08InspectorForm";
 
 type Anexo = {
   _id: string;
@@ -330,6 +333,131 @@ export default function GestionarAnexoInspector() {
         user={user}
         onReload={cargar}
       />
+    );
+  }
+
+// ✅ Nuevo soporte explícito para ANEXO_09
+
+if (codigo === "ANEXO_09") {
+  return (
+    <div style={{ padding: 24 }}>
+      <button
+        onClick={() => navigate("/app/permisionario/mi-barrio-inspector/gestiones")}
+        style={{ marginBottom: 12 }}
+      >
+        Volver
+      </button>
+
+      <h2>Gestión — ANEXO_09</h2>
+
+      <div style={{ marginTop: 12 }}>
+        <pre style={{ fontSize: 12 }}>
+          {JSON.stringify(anexo.datos, null, 2)}
+        </pre>
+      </div>
+    </div>
+  );
+}
+  // ✅ Nuevo soporte explícito para ANEXO_08
+  if (codigo === "ANEXO_08") {
+    const estado = up(anexo.estado);
+    const puedeEditar08 = estado === "BORRADOR" || estado === "ENVIADO";
+
+    return (
+      <div style={{ padding: 24 }}>
+        <button
+          onClick={() => navigate("/app/permisionario/mi-barrio-inspector")}
+          style={{ marginBottom: 12 }}
+          disabled={busy}
+        >
+          Volver
+        </button>
+
+        <h2>Gestión — ANEXO_08</h2>
+
+        {err && (
+          <div
+            style={{
+              marginTop: 10,
+              marginBottom: 12,
+              padding: 10,
+              border: "1px solid #f44336",
+              background: "#ffebee",
+            }}
+          >
+            {err}
+          </div>
+        )}
+
+        {infoMsg && !err && (
+          <div
+            style={{
+              marginTop: 10,
+              marginBottom: 12,
+              padding: 10,
+              border: "1px solid #4caf50",
+              background: "#e8f5e9",
+            }}
+          >
+            {infoMsg}
+          </div>
+        )}
+
+        <Anexo08InspectorForm
+          value={(anexo.datos || {}) as Anexo08Datos}
+          onChange={(next) =>
+            setAnexo((prev) => (prev ? { ...prev, datos: next } : prev))
+          }
+          readOnly={!puedeEditar08}
+          onEnviar={async (payload) => {
+  if (!anexo?._id) return;
+
+  setBusy(true);
+  setErr("");
+  setInfoMsg("");
+
+  try {
+    const res = await http.post(`/formularios/${anexo._id}/anexo-08/datos`, {
+  datos: payload,
+});
+
+    const updated =
+      res?.data?.anexo || res?.data?.formulario || res?.data || null;
+
+    if (updated && typeof updated === "object" && updated._id) {
+      setAnexo(updated as Anexo);
+    } else {
+      await cargar();
+    }
+
+    setInfoMsg("ANEXO_08 guardado correctamente.");
+  } catch (e: any) {
+    console.error("[ANEXO_08] Error guardando", e);
+    setErr(
+      e?.response?.data?.message ||
+        "No se pudo guardar el ANEXO_08. Por favor, contacte al administrador."
+    );
+  } finally {
+    setBusy(false);
+  }
+}}
+          enviando={busy}
+          enviarLabel="Guardar / enviar ANEXO_08"
+        />
+
+        <div
+          style={{
+            marginTop: 10,
+            display: "flex",
+            gap: 10,
+            flexWrap: "wrap",
+          }}
+        >
+          <button onClick={cargar} disabled={busy}>
+            Recargar
+          </button>
+        </div>
+      </div>
     );
   }
 

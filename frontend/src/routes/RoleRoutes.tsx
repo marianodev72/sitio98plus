@@ -217,7 +217,7 @@ export default function RoleRoutes() {
             <Route path="mensajeria" element={<MensajeriaInspector />} />
             <Route path="gestiones" element={<GestionesInspector />} />
             <Route
-              path="gestiones/crear-anexo-09-desde-08"
+              path="gestiones/crear-anexo-09-desde-08/:id"
               element={<CrearAnexo09Desde08 />}
             />
             <Route path="gestiones/:id" element={<GestionarAnexoInspector />} />

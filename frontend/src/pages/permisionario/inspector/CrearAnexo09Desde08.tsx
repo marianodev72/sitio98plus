@@ -179,7 +179,7 @@ export default function CrearAnexo09Desde08() {
           "Acta de entrega (ANEXO_09) creada y enviada correctamente al Permisionario."
         );
         setTimeout(() => {
-          navigate("/app/permisionario/mi-barrio/gestiones");
+          navigate("/app/permisionario/mi-barrio-inspector/gestiones");
         }, 1500);
       } else {
         setError(
@@ -203,7 +203,7 @@ export default function CrearAnexo09Desde08() {
       <div style={{ padding: 24 }}>
         <div style={{ marginBottom: 12, color: "crimson" }}>{error}</div>
         <button
-          onClick={() => navigate("/app/permisionario/mi-barrio/gestiones")}
+          onClick={() => navigate("/app/permisionario/mi-barrio-inspector/gestiones")}
         >
           Volver
         </button>

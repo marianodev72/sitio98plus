@@ -1,3 +1,4 @@
+// frontend/src/pages/admin_general/GestionarAnexo.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { http } from "../../api/http";
