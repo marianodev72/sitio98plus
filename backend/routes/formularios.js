@@ -25,6 +25,7 @@ function allowAdminOrInspectorForAnexo02(req, res, next) {
 
 const { authRequired, requireRole } = require("../middleware/auth");
 const { refreshUserPrivileges } = require("../middleware/refreshUserPrivileges");
+const { audit, attachAuditHelpers } = require("../middleware/audit");
 const c = require("../controllers/formularioController");
 
 const {
@@ -140,7 +141,7 @@ const upload = multer({
   fileFilter,
 });
 
-router.use(authRequired, refreshUserPrivileges);
+router.use(authRequired, refreshUserPrivileges, attachAuditHelpers);
 
 // ─────────────────────────────
 // Bandejas
@@ -206,6 +207,14 @@ router.patch(
 router.post(
   "/:id/conformidad-jefe-04",
   requirePermiso("JEFE_DE_BARRIO"),
+  (req, _res, next) => {
+    req.audit.addMeta({ actorEffectiveRole: "JEFE_DE_BARRIO" });
+    next();
+  },
+  audit("FORM_CONFORMIDAD_JEFE_BARRIO_04", {
+    targetType: "FORM",
+    metaAllowlist: ["params.id"],
+  }),
   c.darConformidadJefeBarrio04
 );
 
@@ -233,11 +242,22 @@ router.post("/:codigo", upload.any(), c.crearAnexo);
 // ─────────────────────────────
 // ANEXO_02
 
-router.post("/:id/conformidad", c.darConformidad);
+router.post(
+  "/:id/conformidad",
+  audit("FORM_CONFORMIDAD", {
+    targetType: "FORM",
+    metaAllowlist: ["params.id"],
+  }),
+  c.darConformidad
+);
 
 router.post(
   "/:id/conformidad-admin",
   requireRole("ADMIN_GENERAL"),
+  audit("FORM_CONFORMIDAD_ADMIN", {
+    targetType: "FORM",
+    metaAllowlist: ["params.id"],
+  }),
   c.darConformidadAdmin
 );
 
@@ -247,12 +267,10 @@ router.post(
 router.post(
   "/:id/conformidad-permisionario-03",
   requireRole("PERMISIONARIO"),
-  c.darConformidadPermisionario03
-);
-
-router.post(
-  "/:id/conformidad-permisionario-03",
-  requireRole("PERMISIONARIO"),
+  audit("FORM_CONFORMIDAD_PERMISIONARIO_03", {
+    targetType: "FORM",
+    metaAllowlist: ["params.id"],
+  }),
   c.darConformidadPermisionario03
 );
 
@@ -265,12 +283,24 @@ router.post(
 router.post(
   "/:id/enviar",
   requirePermiso("INSPECTOR"),
+  (req, _res, next) => {
+    req.audit.addMeta({ actorEffectiveRole: "INSPECTOR" });
+    next();
+  },
+  audit("FORM_ENVIO_INSPECTOR_03", {
+    targetType: "FORM",
+    metaAllowlist: ["params.id"],
+  }),
   c.enviarAnexo03
 );
 
 router.post(
   "/:id/cerrar-admin-03",
   requireRole("ADMIN_GENERAL"),
+  audit("FORM_CIERRE_ADMIN_03", {
+    targetType: "FORM",
+    metaAllowlist: ["params.id"],
+  }),
   c.cerrarAnexo03AdminGeneral
 );
 
@@ -280,6 +310,10 @@ router.post(
 router.post(
   "/:id/cerrar-admin-07",
   requireRole("ADMIN_GENERAL"),
+  audit("FORM_CIERRE_ADMIN_07", {
+    targetType: "FORM",
+    metaAllowlist: ["params.id"],
+  }),
   cerrarAnexo07AdminGeneral
 );
 
@@ -289,12 +323,20 @@ router.post(
 router.post(
   "/:id/conformidad-permisionario-08",
   requireRole("PERMISIONARIO"),
+  audit("FORM_CONFORMIDAD_PERMISIONARIO_08", {
+    targetType: "FORM",
+    metaAllowlist: ["params.id"],
+  }),
   c.darConformidadPermisionario08
 );
 
 router.post(
   "/:id/cerrar-admin-08",
   requireRole("ADMIN_GENERAL"),
+  audit("FORM_CIERRE_ADMIN_08", {
+    targetType: "FORM",
+    metaAllowlist: ["params.id"],
+  }),
   c.cerrarAnexo08AdminGeneral
 );
 
@@ -304,19 +346,26 @@ router.post(
   c.actualizarDatosAnexo08
 );
 
-
 // ─────────────────────────────
 // ANEXO_09
 
 router.post(
   "/:id/conformidad-permisionario-09",
   requireRole("PERMISIONARIO"),
+  audit("FORM_CONFORMIDAD_PERMISIONARIO_09", {
+    targetType: "FORM",
+    metaAllowlist: ["params.id"],
+  }),
   c.darConformidadPermisionario09
 );
 
 router.post(
   "/:id/cerrar-admin-09",
   requireRole("ADMIN_GENERAL"),
+  audit("FORM_CIERRE_ADMIN_09", {
+    targetType: "FORM",
+    metaAllowlist: ["params.id"],
+  }),
   c.cerrarAnexo09AdminGeneral
 );
 
@@ -326,12 +375,20 @@ router.post(
 router.post(
   "/:id/gestion-admin-11",
   requireRole("ADMIN_GENERAL", "ADMIN"),
+  audit("FORM_CIERRE_ADMIN_11", {
+    targetType: "FORM",
+    metaAllowlist: ["params.id"],
+  }),
   c.gestionarAnexo11Admin
 );
 
 router.post(
   "/:id/conformidad-permisionario-11",
   requireRole("PERMISIONARIO"),
+  audit("FORM_CONFORMIDAD_PERMISIONARIO_11", {
+    targetType: "FORM",
+    metaAllowlist: ["params.id"],
+  }),
   c.darConformidadPermisionario11
 );
 

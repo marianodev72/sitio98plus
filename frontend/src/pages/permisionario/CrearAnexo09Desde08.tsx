@@ -1,3 +1,4 @@
+// frontend/src/components/CrearAnexo09Desde08.tsx
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { http } from "../../../api/http";
@@ -14,13 +15,6 @@ type Anexo = {
   updatedAt?: string;
   datos?: any;
   vivienda?: string;
-};
-
-type Vivienda = {
-  _id: string;
-  codigo?: string; // ej: "AB-419"
-  barrio?: string;
-  direccion?: string;
 };
 
 function up(v: unknown) {
@@ -57,6 +51,7 @@ export default function CrearAnexo09Desde08() {
 
   async function cargar() {
     if (!id) return;
+
     setLoading(true);
     setError(null);
     setMsg(null);
@@ -86,58 +81,30 @@ export default function CrearAnexo09Desde08() {
           d.postulanteNombre.trim()) ||
         "";
 
-      let unidadHabitacionalFromForm =
+      const unidadHabitacionalFromForm =
         (typeof d.unidadHabitacional === "string" &&
           d.unidadHabitacional.trim()) ||
         "";
 
-      let direccionFromForm =
+      const direccionFromForm =
         (typeof d.direccionUnidad === "string" &&
           d.direccionUnidad.trim()) ||
         (typeof d.direccion === "string" && d.direccion.trim()) ||
         "";
 
-      let localidadFromForm =
+      const localidadFromForm =
         (typeof d.localidad === "string" && d.localidad.trim()) || "";
 
-      let provinciaFromForm =
+      const provinciaFromForm =
         (typeof d.provincia === "string" && d.provincia.trim()) || "";
-
-      const viviendaId: string | null =
-        (typeof d.viviendaId === "string" && d.viviendaId) ||
-        (typeof a.vivienda === "string" && a.vivienda) ||
-        null;
-
-      let unidadHabitacionalFromVivienda = "";
-      let direccionFromVivienda = "";
-      let localidadFromVivienda = "";
-
-      if (viviendaId) {
-        try {
-          const resViv = await http.get(`/viviendas/${viviendaId}`);
-          const viv: Vivienda =
-            (resViv.data &&
-              (resViv.data.vivienda || resViv.data)) || ({} as Vivienda);
-
-          if (viv?.codigo) unidadHabitacionalFromVivienda = viv.codigo;
-          if (viv?.direccion) direccionFromVivienda = viv.direccion;
-          if (viv?.barrio) localidadFromVivienda = String(viv.barrio);
-        } catch (e) {
-          console.error("[ANEXO_09] Error cargando vivienda asociada", e);
-        }
-      }
 
       setDatos((prev) => ({
         ...prev,
         permisionarioNombre: permisionarioFromForm || prev.permisionarioNombre,
         unidadHabitacional:
-          unidadHabitacionalFromForm ||
-          unidadHabitacionalFromVivienda ||
-          prev.unidadHabitacional,
-        direccion:
-          direccionFromForm || direccionFromVivienda || prev.direccion,
-        localidad:
-          localidadFromForm || localidadFromVivienda || prev.localidad,
+          unidadHabitacionalFromForm || prev.unidadHabitacional,
+        direccion: direccionFromForm || prev.direccion,
+        localidad: localidadFromForm || prev.localidad,
         provincia: provinciaFromForm || prev.provincia,
         inspectorNombre:
           (prev.inspectorNombre && prev.inspectorNombre.trim()) ||
@@ -196,9 +163,11 @@ export default function CrearAnexo09Desde08() {
     }
   }
 
-  if (loading) return <div style={{ padding: 24 }}>Cargando…</div>;
+  if (loading) {
+    return <div style={{ padding: 24 }}>Cargando…</div>;
+  }
 
-  if (error)
+  if (error) {
     return (
       <div style={{ padding: 24 }}>
         <div style={{ marginBottom: 12, color: "crimson" }}>{error}</div>
@@ -209,8 +178,9 @@ export default function CrearAnexo09Desde08() {
         </button>
       </div>
     );
+  }
 
-  if (!anexo08)
+  if (!anexo08) {
     return (
       <div style={{ padding: 24 }}>
         <p>No se encontraron datos del ANEXO_08.</p>
@@ -221,6 +191,7 @@ export default function CrearAnexo09Desde08() {
         </button>
       </div>
     );
+  }
 
   return (
     <div style={{ padding: 24 }}>
