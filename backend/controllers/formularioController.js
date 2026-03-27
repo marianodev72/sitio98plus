@@ -3690,31 +3690,6 @@ async function crearAnexo(req, res) {
     }
 
     // ───────── ANEXO_03 ─────────
-    if (codigo === "ANEXO_03") {
-      const inspectorLike = isInspectorLikeUser(user);
-      if (!inspectorLike) return deny("NO_INSPECTOR_LIKE");
-      if (!isObjectId(datos.viviendaId)) return badRequest(res);
-
-      const anexo02 = await FormSubmission.findOne({
-        codigo: "ANEXO_02",
-        estado: "CERRADO",
-        "datos.viviendaId": datos.viviendaId,
-      })
-        .sort({ createdAt: -1 })
-        .lean();
-
-      if (!anexo02) return deny("NO_ANEXO02_CERRADO_POR_VIVIENDA");
-
-      // ✅ Guardar origen para hidratación en frontend
-      origen = anexo02;
-
-      const v = await Vivienda.findById(datos.viviendaId).lean();
-      if (!v?.barrio) return deny("VIVIENDA_SIN_BARRIO");
-
-      const barrioInspector = String(user.barrioAsignado || "").trim();
-      if (!barrioInspector || barrioInspector !== String(v.barrio).trim())
-        return deny("BARRIO_MISMATCH");
-
 if (codigo === "ANEXO_03") {
   const inspectorLike = isInspectorLikeUser(user);
   if (!inspectorLike) return deny("NO_INSPECTOR_LIKE");
@@ -3740,37 +3715,51 @@ if (codigo === "ANEXO_03") {
   if (!barrioInspector || barrioInspector !== String(v.barrio).trim())
     return deny("BARRIO_MISMATCH");
 
-  // ✅ Derivación institucional
+  // ─────────────────────────────
+  // ✅ DERIVACIÓN + TITULARIDAD (FIX CRÍTICO)
   datos.derivadoDe = anexo02._id;
-  if (anexo02?.datos?.postulanteId) datos.postulanteId = anexo02.datos.postulanteId;
+
+  const postulanteId =
+    anexo02?.datos?.postulanteId || anexo02?.usuario || null;
+
+  if (postulanteId) {
+    datos.postulanteId = postulanteId;
+    usuarioOwner = postulanteId; // 🔥 clave: el dueño real es el permisionario
+  }
 
   // ─────────────────────────────
   // ✅ HIDRATACIÓN MÍNIMA (server-side, fail-closed)
-  const d2 = anexo02?.datos && typeof anexo02.datos === "object" ? anexo02.datos : {};
+  const d2 =
+    anexo02?.datos && typeof anexo02.datos === "object" ? anexo02.datos : {};
 
-  // Vivienda label/código (si existen en ANEXO_02)
   if (!datos.viviendaCodigo && typeof d2.viviendaCodigo === "string") {
     datos.viviendaCodigo = String(d2.viviendaCodigo).trim();
   }
+
   if (!datos.viviendaLabel && typeof d2.viviendaLabel === "string") {
     datos.viviendaLabel = String(d2.viviendaLabel).trim();
   }
 
-  // Resolver permisionario objetivo:
-  // 1) ocupacionActual.permisionario (si existe)
-  // 2) postulanteId proveniente del anexo02 (si existe)
+  // Resolver permisionario objetivo
   let permisionarioId = null;
+
   if (v?.ocupacionActual && isObjectId(v.ocupacionActual.permisionario)) {
     permisionarioId = v.ocupacionActual.permisionario;
-  } else if (isObjectId(datos.postulanteId)) {
-    permisionarioId = datos.postulanteId;
+  } else if (isObjectId(postulanteId)) {
+    permisionarioId = postulanteId;
   }
 
   if (permisionarioId) {
     if (!datos.permisionarioId) datos.permisionarioId = permisionarioId;
+
+    // 🔥 refuerzo de consistencia (clave para evitar 403)
     usuarioOwner = permisionarioId;
 
-    // Nombre (best-effort, sin fallar si no existe)
+    if (!datos.postulanteId) {
+      datos.postulanteId = permisionarioId;
+    }
+
+    // Nombre (best-effort)
     if (!datos.permisionarioNombre && User) {
       const uPerm = await User.findById(permisionarioId)
         .select("nombre apellido meta")
@@ -3783,12 +3772,13 @@ if (codigo === "ANEXO_03") {
 
         if (apeNom) datos.permisionarioNombre = apeNom;
 
-        // Opcional minimal (si tu formato lo usa): grado / mr desde meta
         const meta = uPerm.meta || {};
+
         if (!datos.gradoPermisionario) {
           const g = String(meta.grado || meta.rango || "").trim();
           if (g) datos.gradoPermisionario = g;
         }
+
         if (!datos.mrPermisionario) {
           const mr = String(meta.mrDestino || meta.mr || meta.destino || "").trim();
           if (mr) datos.mrPermisionario = mr;
@@ -3796,18 +3786,13 @@ if (codigo === "ANEXO_03") {
       }
     }
   }
+
   // ─────────────────────────────
 
-  if (!datos.inspectorNombre)
+  if (!datos.inspectorNombre) {
     datos.inspectorNombre = `${user.apellido || ""} ${user.nombre || ""}`.trim();
+  }
 }
-
-      datos.derivadoDe = anexo02._id;
-      if (anexo02?.datos?.postulanteId) datos.postulanteId = anexo02.datos.postulanteId;
-
-      if (!datos.inspectorNombre)
-        datos.inspectorNombre = `${user.apellido || ""} ${user.nombre || ""}`.trim();
-    }
 
     // ───────── ANEXO_07 ─────────
     if (codigo === "ANEXO_07") {
@@ -6220,7 +6205,7 @@ async function darConformidadPermisionario03(req, res) {
     if (!anexo) return genericDenied(res);
     if (up(anexo.codigo) !== "ANEXO_03") return genericDenied(res);
 
-    const permisionarioId =
+    let permisionarioId =
       anexo.datos?.postulanteId ||
       anexo.usuario ||
       (Array.isArray(anexo.intervinientes)
@@ -6229,7 +6214,37 @@ async function darConformidadPermisionario03(req, res) {
           )?.userId
         : null);
 
-    if (String(permisionarioId || "") !== String(user._id)) {
+    let permisionarioIdOrigen = null;
+
+    // Fallback conservador:
+    // si el ANEXO_03 no coincide con el usuario actual, intentar resolver
+    // el permisionario desde el ANEXO_02 origen.
+    const derivadoDe = anexo.derivadoDe || anexo.datos?.derivadoDe || null;
+
+    if (isObjectId(derivadoDe)) {
+      const a02 = await FormSubmission.findById(derivadoDe)
+        .select("codigo usuario datos intervinientes")
+        .lean();
+
+      if (a02 && up(a02.codigo) === "ANEXO_02") {
+        permisionarioIdOrigen =
+          a02?.datos?.postulanteId ||
+          a02?.usuario ||
+          (Array.isArray(a02.intervinientes)
+            ? a02.intervinientes.find(
+                (x) => String(x?.rol || "").toUpperCase() === "PERMISIONARIO"
+              )?.userId
+            : null);
+      }
+    }
+
+    const coincideDirecto =
+      String(permisionarioId || "") === String(user._id);
+
+    const coincideOrigen =
+      String(permisionarioIdOrigen || "") === String(user._id);
+
+    if (!coincideDirecto && !coincideOrigen) {
       return genericDenied(res);
     }
 
@@ -6238,6 +6253,31 @@ async function darConformidadPermisionario03(req, res) {
     }
 
     anexo.datos = anexo.datos || {};
+
+    // Persistir coherencia mínima si el origen resolvió correctamente
+    if (!coincideDirecto && coincideOrigen) {
+      anexo.datos.postulanteId = permisionarioIdOrigen;
+      if (!anexo.usuario) {
+        anexo.usuario = permisionarioIdOrigen;
+      }
+
+      if (!Array.isArray(anexo.intervinientes)) {
+        anexo.intervinientes = [];
+      }
+
+      const yaTienePermisionario = anexo.intervinientes.some(
+        (x) => String(x?.rol || "").toUpperCase() === "PERMISIONARIO"
+      );
+
+      if (!yaTienePermisionario) {
+        anexo.intervinientes.push({
+          rol: "PERMISIONARIO",
+          userId: permisionarioIdOrigen,
+          at: new Date(),
+        });
+      }
+    }
+
     anexo.datos.conformidadPermisionario = {
       ok: true,
       fecha: new Date(),
