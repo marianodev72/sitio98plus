@@ -99,15 +99,17 @@ function Card({
   return (
     <div
       style={{
-        border: "1px solid #e5e5e5",
-        borderRadius: 14,
-        padding: 16,
-        background: "#fff",
-      }}
+  border: "1px solid rgba(255,255,255,0.14)",
+  borderRadius: 14,
+  padding: 18,
+  background: "rgba(255,255,255,0.05)",
+  backdropFilter: "blur(6px)",
+  color: "#eaf0ff",
+}}
     >
-      <div style={{ fontSize: 15, fontWeight: 900 }}>{title}</div>
+      <div style={{ fontSize: 17, fontWeight: 900, color: "#ffffff" }}>{title}</div>
       {subtitle ? (
-        <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
+        <div style={{ marginTop: 6, fontSize: 13, opacity: 0.8, color: "rgba(255,255,255,0.82)" }}>
           {subtitle}
         </div>
       ) : null}
@@ -130,15 +132,17 @@ function KpiCard({
   return (
     <div
       style={{
-        border: "1px solid #e5e5e5",
-        borderRadius: 14,
-        padding: 16,
-        background: "#fff",
-        position: "relative",
-        overflow: "hidden",
-        width: "100%",
-        maxWidth: 320,
-      }}
+  border: "1px solid rgba(255,255,255,0.14)",
+  borderRadius: 14,
+  padding: 18,
+  background: "rgba(255,255,255,0.05)",
+  backdropFilter: "blur(6px)",
+  position: "relative",
+  overflow: "hidden",
+  width: "100%",
+  maxWidth: 320,
+  color: "#ffffff",
+}}
     >
       <div
         style={{
@@ -152,13 +156,13 @@ function KpiCard({
         }}
       />
       <div style={{ paddingLeft: 10, textAlign: "center" }}>
-        <div style={{ fontSize: 13, fontWeight: 900, opacity: 0.9 }}>
+        <div style={{ fontSize: 15, fontWeight: 900, opacity: 0.92 }}>
           {title}
         </div>
         <div
           style={{
             marginTop: 10,
-            fontSize: 36,
+            fontSize: 42,
             fontWeight: 900,
             letterSpacing: -0.4,
           }}
@@ -166,7 +170,7 @@ function KpiCard({
           {value}
         </div>
         {subtitle ? (
-          <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
+          <div style={{ marginTop: 8, fontSize: 13, opacity: 0.82 }}>
             {subtitle}
           </div>
         ) : null}
@@ -180,10 +184,11 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
     <div
       style={{
         marginTop: 22,
-        fontSize: 13,
-        fontWeight: 900,
-        letterSpacing: 0.6,
-        opacity: 0.65,
+        fontSize: 15,
+fontWeight: 900,
+letterSpacing: 0.8,
+opacity: 0.82,
+color: "rgba(255,255,255,0.86)",
       }}
     >
       {children}
@@ -441,7 +446,7 @@ function PieChart({
         ) : null}
       </svg>
 
-      <ul style={{ marginTop: 8 }}>
+      <ul style={{ marginTop: 12, paddingLeft: 18, color: "#eaf0ff", fontSize: 15, lineHeight: 1.6 }}>
         {(sorted || []).map((d, i) => {
           const v = Number(d.value || 0);
           const pct = total > 0 ? Math.round((v / total) * 100) : 0;
@@ -465,8 +470,34 @@ function PieChart({
       </ul>
 
       <div style={{ marginTop: 8 }}>
-        <button onClick={onDownloadSVG}>Descargar gráfico</button>{" "}
-        <button onClick={onDownloadCSV}>Descargar datos</button>
+        <button
+  onClick={onDownloadSVG}
+  style={{
+    padding: "10px 14px",
+    borderRadius: 10,
+    border: "1px solid rgba(255,255,255,0.16)",
+    background: "rgba(255,255,255,0.06)",
+    color: "#ffffff",
+    fontWeight: 800,
+    cursor: "pointer",
+  }}
+>
+  Descargar gráfico
+</button>{" "}
+<button
+  onClick={onDownloadCSV}
+  style={{
+    padding: "10px 14px",
+    borderRadius: 10,
+    border: "1px solid rgba(255,255,255,0.16)",
+    background: "rgba(255,255,255,0.06)",
+    color: "#ffffff",
+    fontWeight: 800,
+    cursor: "pointer",
+  }}
+>
+  Descargar datos
+</button>
       </div>
     </div>
   );
@@ -612,24 +643,292 @@ export default function AdminStats() {
     value: x.cantidad,
   }));
 
-  return (
-    <div style={{ padding: 24, background: "#f6f7f9", minHeight: "100vh" }}>
+const reportBaseName = `estadisticas_${safeFile(
+  barrio === "TODOS" ? "todos" : barrio
+)}_${year}`;
+
+const actionBtnStyle: React.CSSProperties = {
+  padding: "10px 14px",
+  borderRadius: 10,
+  border: "1px solid rgba(255,255,255,0.18)",
+  background: "rgba(255,255,255,0.08)",
+  color: "#ffffff",
+  fontWeight: 800,
+  cursor: "pointer",
+  minHeight: 44,
+  boxShadow: "0 4px 14px rgba(0,0,0,0.18)",
+};
+
+function onDownloadBoardCSV() {
+  const blocks = [
+    {
+      titulo: "VISION_EJECUTIVA",
+      rows: [
+        { label: "Viviendas Totales", value: vTotal },
+        { label: "Ocupadas", value: ocupadas },
+        { label: "Disponibles", value: disponibles },
+        { label: "Hacinamiento ROJO", value: rojo },
+        { label: "Pedidos de Trabajo (ANEXO_11)", value: a11Presentados || pedidosTotal },
+      ],
+    },
+    {
+      titulo: "FLUJO_ANEXO_01_A_ANEXO_02",
+      rows: [
+        { label: `ANEXO_01 Presentados (${dhYear})`, value: dhAnexo01 },
+        { label: `ANEXO_02 Generados (${dhYear})`, value: dhAnexo02 },
+        { label: "Brecha de Tramitación", value: dhBrecha },
+        { label: "Tasa de Derivación", value: `${dhCobertura}%` },
+      ],
+    },
+    {
+      titulo: "DERIVACION_DE_TRAMITES",
+      rows: dhCoberturaRows,
+    },
+    {
+      titulo: "ANEXO_11_DECISION_INSPECTOR",
+      rows: a11DecisionRows,
+    },
+    {
+      titulo: "ANEXO_11_ESTADO_EJECUCION",
+      rows: a11EjecucionRows,
+    },
+    {
+      titulo: "ANEXO_11_POR_BARRIO",
+      rows: a11PorBarrioRows,
+    },
+    {
+      titulo: "DISTRIBUCION_HABITANTES_POR_VIVIENDA",
+      rows: (charts?.[0]?.rows || []) as Array<{ label: string; value: number }>,
+    },
+    {
+      titulo: "HACINAMIENTO_POR_SEMAFORO",
+      rows: (charts?.[1]?.rows || []) as Array<{ label: string; value: number }>,
+    },
+    {
+      titulo: "VIVIENDAS_POR_DORMITORIOS",
+      rows: (charts?.[2]?.rows || []) as Array<{ label: string; value: number }>,
+    },
+    {
+      titulo: "VIVIENDAS_POR_ESTADO",
+      rows: (charts?.[3]?.rows || []) as Array<{ label: string; value: number }>,
+    },
+  ];
+
+  const csvRows: string[] = [];
+  csvRows.push(`"${ORG_HEADER.replaceAll('"', '""')}"`);
+  csvRows.push(`"${ORG_SUBHEADER.replaceAll('"', '""')}"`);
+  csvRows.push(`"${scopeLabel.replaceAll('"', '""')}"`);
+  csvRows.push(`"Emitido: ${emittedLabel.replaceAll('"', '""')}"`);
+  csvRows.push("");
+  csvRows.push(`"Seccion","Etiqueta","Valor"`);
+
+  blocks.forEach((block) => {
+    (block.rows || []).forEach((row) => {
+      csvRows.push(
+        `"${String(block.titulo || "").replaceAll('"', '""')}","${String(
+          row.label ?? ""
+        ).replaceAll('"', '""')}","${String(row.value ?? "").replaceAll('"', '""')}"`
+      );
+    });
+  });
+
+  download(
+    `${reportBaseName}.csv`,
+    csvRows.join("\n"),
+    "text/csv;charset=utf-8"
+  );
+}
+
+function onDownloadBoardPDF() {
+  const popup = window.open("", "_blank", "width=1100,height=900");
+  if (!popup) return;
+
+  const esc = (v: unknown) =>
+    String(v ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;");
+
+  const sectionList = [
+    {
+      title: "Visión Ejecutiva",
+      items: [
+        ["Viviendas Totales", vTotal],
+        ["Ocupadas", ocupadas],
+        ["Disponibles", disponibles],
+        ["Hacinamiento ROJO", rojo],
+        ["Pedidos de Trabajo (ANEXO_11)", a11Presentados || pedidosTotal],
+      ],
+    },
+    {
+      title: "Flujo ANEXO_01 → ANEXO_02",
+      items: [
+        [`ANEXO_01 Presentados (${dhYear})`, dhAnexo01],
+        [`ANEXO_02 Generados (${dhYear})`, dhAnexo02],
+        ["Brecha de Tramitación", dhBrecha],
+        ["Tasa de Derivación", `${dhCobertura}%`],
+      ],
+    },
+    {
+      title: "Distribuciones",
+      items: [
+        ...((charts?.[0]?.rows || []) as Array<{ label: string; value: number }>).map((x) => [
+          `Habitantes/Vivienda - ${x.label}`,
+          x.value,
+        ] as const),
+        ...((charts?.[1]?.rows || []) as Array<{ label: string; value: number }>).map((x) => [
+          `Hacinamiento - ${x.label}`,
+          x.value,
+        ] as const),
+        ...((charts?.[2]?.rows || []) as Array<{ label: string; value: number }>).map((x) => [
+          `Dormitorios - ${x.label}`,
+          x.value,
+        ] as const),
+        ...((charts?.[3]?.rows || []) as Array<{ label: string; value: number }>).map((x) => [
+          `Estado vivienda - ${x.label}`,
+          x.value,
+        ] as const),
+      ],
+    },
+    {
+      title: "ANEXO_11",
+      items: [
+        ...a11DecisionRows.map((x) => [`Decisión Inspector - ${x.label}`, x.value] as const),
+        ...a11EjecucionRows.map((x) => [`Estado Ejecución - ${x.label}`, x.value] as const),
+        ...a11PorBarrioRows.map((x) => [`Pedidos por Barrio - ${x.label}`, x.value] as const),
+      ],
+    },
+  ];
+
+  const html = `
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>${esc(ORG_HEADER)} - Reporte</title>
+    <style>
+      body {
+        font-family: Arial, Helvetica, sans-serif;
+        margin: 32px;
+        color: #111827;
+        background: #ffffff;
+      }
+      h1 {
+        margin: 0 0 8px 0;
+        font-size: 28px;
+      }
+      h2 {
+        margin: 0 0 18px 0;
+        font-size: 18px;
+        color: #374151;
+      }
+      h3 {
+        margin: 28px 0 10px 0;
+        font-size: 18px;
+        border-bottom: 1px solid #d1d5db;
+        padding-bottom: 6px;
+      }
+      .meta {
+        margin-bottom: 18px;
+        font-size: 14px;
+        color: #4b5563;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 18px;
+      }
+      th, td {
+        border: 1px solid #d1d5db;
+        padding: 8px 10px;
+        text-align: left;
+        font-size: 14px;
+      }
+      th {
+        background: #f3f4f6;
+      }
+      .note {
+        margin-top: 24px;
+        font-size: 12px;
+        color: #6b7280;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>${esc(ORG_HEADER)}</h1>
+    <h2>${esc(ORG_SUBHEADER)}</h2>
+    <div class="meta">${esc(scopeLabel)} · ${esc(emittedLabel)}</div>
+
+    ${sectionList
+      .map(
+        (section) => `
+          <h3>${esc(section.title)}</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Indicador</th>
+                <th>Valor</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${section.items
+                .map(
+                  ([k, v]) => `
+                    <tr>
+                      <td>${esc(k)}</td>
+                      <td>${esc(v)}</td>
+                    </tr>
+                  `
+                )
+                .join("")}
+            </tbody>
+          </table>
+        `
+      )
+      .join("")}
+
+    <div class="note">
+      Documento institucional de uso interno. Para guardarlo como PDF, use la opción “Guardar como PDF” del diálogo de impresión.
+    </div>
+  </body>
+</html>`;
+
+  popup.document.open();
+  popup.document.write(html);
+  popup.document.close();
+
+  popup.focus();
+  setTimeout(() => {
+    popup.print();
+  }, 300);
+}  return (
+    <div style={{
+  padding: 24,
+  background: "transparent",
+  minHeight: "100vh",
+  color: "#eaf0ff"
+}}>
       {/* HEADER */}
       <div
         style={{
-          border: "1px solid #e5e5e5",
-          borderRadius: 12,
-          padding: 18,
-          background: "#fff",
-        }}
+  border: "1px solid rgba(255,255,255,0.14)",
+  borderRadius: 12,
+  padding: 18,
+  background: "rgba(255,255,255,0.05)",
+  backdropFilter: "blur(6px)",
+}}
       >
-        <div style={{ fontSize: 22, fontWeight: 900 }}>{ORG_HEADER}</div>
+        <div style={{ fontSize: 28, fontWeight: 900, color: "#ffffff", lineHeight: 1.15 }}>
+  {ORG_HEADER}
+</div>
         <div
           style={{
             marginTop: 6,
-            fontSize: 14,
-            fontWeight: 700,
-            opacity: 0.85,
+            fontSize: 16,
+fontWeight: 700,
+opacity: 0.88,
+color: "rgba(255,255,255,0.86)",
+lineHeight: 1.45,
           }}
         >
           {ORG_SUBHEADER}
@@ -653,15 +952,20 @@ export default function AdminStats() {
               flexWrap: "wrap",
             }}
           >
-            <span style={{ fontWeight: 900 }}>Ámbito:</span>
+            <span style={{ fontWeight: 900, fontSize: 18, color: "#ffffff" }}>Ámbito:</span>
             <select
               value={barrio}
               onChange={(e) => setBarrio(e.target.value)}
               style={{
-                padding: "6px 10px",
-                borderRadius: 8,
-                border: "1px solid #ccc",
-              }}
+  padding: "10px 14px",
+  borderRadius: 10,
+  border: "1px solid rgba(255,255,255,0.20)",
+  background: "rgba(255,255,255,0.08)",
+  color: "#ffffff",
+  fontSize: 16,
+  fontWeight: 700,
+  minHeight: 44,
+}}
             >
               <option value="TODOS">Todos</option>
               {barrios.map((b) => (
@@ -671,15 +975,20 @@ export default function AdminStats() {
               ))}
             </select>
 
-            <span style={{ fontWeight: 900 }}>Año:</span>
+            <span style={{ fontWeight: 900, fontSize: 18, color: "#ffffff" }}>Año:</span>
             <select
               value={year}
               onChange={(e) => setYear(Number(e.target.value))}
               style={{
-                padding: "6px 10px",
-                borderRadius: 8,
-                border: "1px solid #ccc",
-              }}
+  padding: "10px 14px",
+  borderRadius: 10,
+  border: "1px solid rgba(255,255,255,0.20)",
+  background: "rgba(255,255,255,0.08)",
+  color: "#ffffff",
+  fontSize: 16,
+  fontWeight: 700,
+  minHeight: 44,
+}}
             >
               {availableYears.map((y) => (
                 <option key={y} value={y}>
@@ -688,33 +997,28 @@ export default function AdminStats() {
               ))}
             </select>
 
-            <span style={{ fontSize: 13, opacity: 0.8 }}>{emittedLabel}</span>
+            <span style={{ fontSize: 15, opacity: 0.82, color: "rgba(255,255,255,0.84)" }}>{emittedLabel}</span>
           </div>
 
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button
-              disabled
-              style={{
-                padding: "7px 10px",
-                borderRadius: 8,
-                border: "1px solid #ddd",
-                opacity: 0.6,
-              }}
-            >
-              Descargar informe (PDF)
-            </button>
-            <button
-              disabled
-              style={{
-                padding: "7px 10px",
-                borderRadius: 8,
-                border: "1px solid #ddd",
-                opacity: 0.6,
-              }}
-            >
-              Descargar tablero (CSV)
-            </button>
-          </div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+  <button
+    type="button"
+    onClick={onDownloadBoardPDF}
+    style={actionBtnStyle}
+    title="Abre una vista imprimible para guardar como PDF"
+  >
+    Descargar informe (PDF)
+  </button>
+
+  <button
+    type="button"
+    onClick={onDownloadBoardCSV}
+    style={actionBtnStyle}
+    title="Descarga el tablero consolidado en CSV"
+  >
+    Descargar tablero (CSV)
+  </button>
+</div>
         </div>
       </div>
 
@@ -761,13 +1065,14 @@ export default function AdminStats() {
       {/* FLUJO ANEXO_01 -> ANEXO_02 */}
       <div
         style={{
-          marginTop: 10,
-          border: "1px solid #dfe3e8",
-          borderRadius: 14,
-          padding: 18,
-          background: "#fff",
-          boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
-        }}
+  marginTop: 10,
+  border: "1px solid rgba(255,255,255,0.14)",
+  borderRadius: 14,
+  padding: 20,
+  background: "rgba(255,255,255,0.05)",
+  backdropFilter: "blur(6px)",
+  boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
+}}
       >
         <div style={{ fontSize: 18, fontWeight: 900 }}>
           Flujo ANEXO_01 → ANEXO_02
@@ -841,17 +1146,18 @@ export default function AdminStats() {
       {/* ANEXO_11 */}
       <div
         style={{
-          marginTop: 10,
-          border: "1px solid #e5e5e5",
-          borderRadius: 12,
-          padding: 16,
-          background: "#fff",
-        }}
+  marginTop: 10,
+  border: "1px solid rgba(255,255,255,0.14)",
+  borderRadius: 14,
+  padding: 20,
+  background: "rgba(255,255,255,0.05)",
+  backdropFilter: "blur(6px)",
+}}
       >
-        <div style={{ fontSize: 18, fontWeight: 900 }}>
+        <div style={{ fontSize: 22, fontWeight: 900, color: "#ffffff" }}>
           Pedidos de Trabajo (ANEXO_11)
         </div>
-        <div style={{ marginTop: 6, fontSize: 13, opacity: 0.8 }}>
+        <div style={{ marginTop: 8, fontSize: 15, opacity: 0.84, color: "rgba(255,255,255,0.84)", lineHeight: 1.45 }}>
           Seguimiento institucional del circuito de pedidos de trabajo.
         </div>
 

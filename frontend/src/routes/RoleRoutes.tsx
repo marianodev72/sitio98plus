@@ -25,6 +25,8 @@ import ServiciosAdminGeneral from "../pages/admin_general/ServiciosAdmin";
 import MantenimientosAdminGeneral from "../pages/admin_general/MantenimientosAdminGeneral";
 import EstadisticasAdminGeneral from "../pages/admin_general/Estadisticas";
 import AuditoriaInstitucionalPage from "../pages/admin_general/AuditoriaInstitucionalPage";
+import LiquidacionesAdminConsulta from "../components/LiquidacionesAdminConsulta";
+import LiquidacionesAdminResumen from "../components/LiquidacionesAdminResumen";
 
 /* Admin */
 import AdminDashboard from "../pages/admin/AdminDashboard";
@@ -244,6 +246,8 @@ export default function RoleRoutes() {
           <Route path="servicios" element={<ServiciosAdminGeneral />} />
           <Route path="mantenimientos" element={<MantenimientosAdminGeneral />} />
           <Route path="auditoria" element={<AuditoriaInstitucionalPage />} />
+          <Route path="liquidaciones-consulta" element={<LiquidacionesAdminConsulta />} />
+          <Route path="liquidaciones-resumen" element={<LiquidacionesAdminResumen />} />
         </Route>
 
         {/* ADMIN */}

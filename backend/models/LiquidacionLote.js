@@ -10,6 +10,11 @@ const ESTADOS = ["BORRADOR", "CONFIRMADO", "REEMPLAZADO"];
 const pendienteSchema = new Schema(
   {
     mr: { type: String, trim: true },
+    apellidoNombre: { type: String, trim: true },
+    vivienda: { type: String, trim: true },
+    grado: { type: String, trim: true },
+    cod457: { type: Number, default: 0 },
+    cod411: { type: Number, default: 0 },
     motivo: { type: String, trim: true },
     fila: { type: Number },
   },

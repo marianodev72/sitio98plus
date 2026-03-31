@@ -13,9 +13,11 @@ const {
   getHistorialMio,
   getAdmin,
   getPendientes,
+  getAdminResumen,
+  getAdminResumenPDF,
 } = require("../controllers/liquidacionController");
 
-const { authRequired } = require("../middleware/auth");
+const { authRequired, requireRole } = require("../middleware/auth");
 
 const router = express.Router();
 
@@ -50,16 +52,19 @@ const upload = multer({
 // ADMIN_GENERAL: preview + confirmar por tipo
 // Se monta en server.js como: /api/liquidaciones
 router.post("/:periodo/:tipo/preview", upload.single("file"), previewCarga);
-router.post("/confirmar", express.json(), confirmarCarga);
+router.post("/:periodo/:tipo/confirmar", confirmarCarga);
 
 // ADMIN_GENERAL: cargas particulares (manual)
 router.post("/particulares", express.json(), cargarParticular);
+router.post("/particulares", authRequired, requireRole("ADMIN_GENERAL"), express.json(), cargarParticular);
 
 // ADMIN_GENERAL: ver pendientes del período (quién no recibió)
 router.get("/pendientes", getPendientes);
 
 // ADMIN/ADMIN_GENERAL: lectura global
 router.get("/admin", getAdmin);
+router.get("/admin-resumen", getAdminResumen);
+router.get("/admin-resumen-pdf", getAdminResumenPDF);
 
 // PERMISIONARIO / ALOJADO: mis liquidaciones
 // IMPORTANTE: quedan bajo /api/liquidaciones/... (consistente con el mount)

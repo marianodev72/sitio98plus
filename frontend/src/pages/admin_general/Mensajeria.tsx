@@ -440,18 +440,20 @@ setOpenMsg(msg);
   }, []);
 
   const btnStyle = (active: boolean): React.CSSProperties => ({
-    padding: "8px 12px",
+    padding: "10px 14px",
     border: "1px solid #ccc",
     background: active ? "#eee" : "#fff",
     cursor: "pointer",
   });
 
   const boxStyle: React.CSSProperties = {
-    border: "1px solid #ddd",
-    padding: 12,
-    borderRadius: 6,
-    background: "#fff",
-  };
+  border: "1px solid rgba(255,255,255,0.14)",
+  padding: 16,
+  borderRadius: 12,
+  background: "rgba(255,255,255,0.05)",
+  backdropFilter: "blur(6px)",
+  color: "#eaf0ff",
+};
 
   return (
     <>
@@ -487,7 +489,7 @@ setOpenMsg(msg);
           {!loading && entrada.length === 0 ? <p>No hay mensajes.</p> : null}
 
           {!loading && entrada.length > 0 ? (
-            <table border={1} cellPadding={6} cellSpacing={0} style={{ width: "100%" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }} cellPadding={6} cellSpacing={0} style={{ width: "100%" }}>
               <thead>
                 <tr>
                   <th>Fecha</th>

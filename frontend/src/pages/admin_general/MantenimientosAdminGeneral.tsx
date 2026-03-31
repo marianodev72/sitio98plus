@@ -26,7 +26,9 @@ function badgeStyle(value: string) {
     fontWeight: 800,
     fontSize: 12,
     border: "1px solid #e5e5e5",
+    color: "#111827", // 👈 FIX: color de texto visible
   } as const;
+
   if (v === "SI") return { ...base, background: "#e9ffe9" };
   if (v === "NO") return { ...base, background: "#ffe9e9" };
   return { ...base, background: "#f4f4f4" };
@@ -125,7 +127,9 @@ export default function MantenimientosAdminGeneral() {
     <div style={{ padding: 24 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <div>
-          <h2>Mantenimientos — Admin General</h2>
+          <h2 style={{ fontSize: 22, fontWeight: 900 }}>
+  Mantenimientos — Admin General
+</h2>
           <p style={{ opacity: 0.85 }}>Vista global con filtros y acciones administrativas.</p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
@@ -135,7 +139,14 @@ export default function MantenimientosAdminGeneral() {
         </div>
       </div>
 
-      <div style={{ marginTop: 12, background: "white", border: "1px solid #e5e5e5", borderRadius: 10, padding: 14 }}>
+      <div style={{
+  marginTop: 12,
+  background: "rgba(255,255,255,0.05)",
+  border: "1px solid rgba(255,255,255,0.14)",
+  borderRadius: 12,
+  padding: 16,
+  backdropFilter: "blur(6px)"
+}}>
         <b>Filtros</b>
         <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
           <input placeholder="Barrio" value={barrio} onChange={(e) => setBarrio(e.target.value)} />
@@ -183,10 +194,16 @@ export default function MantenimientosAdminGeneral() {
         </div>
       ) : null}
 
-      <div style={{ marginTop: 12, background: "white", border: "1px solid #e5e5e5", borderRadius: 10, overflowX: "auto" }}>
+      <div style={{
+  marginTop: 12,
+  background: "rgba(255,255,255,0.04)",
+  border: "1px solid rgba(255,255,255,0.12)",
+  borderRadius: 12,
+  overflowX: "auto"
+}}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
-            <tr style={{ background: "#f6f6f6" }}>
+            <tr style={{ background: "rgba(255,255,255,0.06)" }}>
               <th style={{ textAlign: "left", padding: 10 }}>Vivienda</th>
               <th style={{ textAlign: "left", padding: 10 }}>Permisionario</th>
               <th style={{ textAlign: "left", padding: 10 }}>Tipo</th>
