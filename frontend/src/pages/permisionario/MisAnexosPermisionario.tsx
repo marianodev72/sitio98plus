@@ -1,8 +1,25 @@
-//frontend/src/pages/permisionario/MisAnexosPermisionario.tsx
+// frontend/src/pages/permisionario/MisAnexosPermisionario.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { http } from "../../api/http";
 import { useAuth } from "../../auth/useAuth";
+import {
+  buttonRowStyle,
+  cardStyle,
+  heroStyle,
+  infoGridStyle,
+  metaStyle,
+  noteStyle,
+  pageStyle,
+  primaryButtonStyle,
+  secondaryButtonStyle,
+  sectionTitleStyle,
+  shellStyle,
+  softCardStyle,
+  subtitleStyle,
+  successButtonStyle,
+  titleStyle,
+} from "./uiStyles";
 
 type Anexo = {
   _id: string;
@@ -100,6 +117,7 @@ export default function MisAnexosPermisionario() {
     "ANEXO_04",
     "ANEXO_07",
     "ANEXO_08",
+    "ANEXO_09",
     "ANEXO_11",
   ];
 
@@ -112,12 +130,11 @@ export default function MisAnexosPermisionario() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [infoMsg, setInfoMsg] = useState("");
+  const [openCodigoMenu, setOpenCodigoMenu] = useState(false);
 
-  // UI para iniciar ANEXO 11 con formulario institucional
   const [mostrandoNuevo11, setMostrandoNuevo11] = useState(false);
   const [enviando11, setEnviando11] = useState(false);
 
-  // Campos institucionales básicos del ANEXO 11
   const [unidad, setUnidad] = useState(viviendaInicial.unidad);
   const [dpto, setDpto] = useState(viviendaInicial.dpto);
   const [mb, setMb] = useState(viviendaInicial.mb);
@@ -145,7 +162,6 @@ export default function MisAnexosPermisionario() {
   });
 
   useEffect(() => {
-    // Rehidrata si cambia user
     setUnidad(viviendaInicial.unidad);
     setDpto(viviendaInicial.dpto);
     setMb(viviendaInicial.mb);
@@ -277,7 +293,6 @@ export default function MisAnexosPermisionario() {
         fechaSolicitud: fechaSolicitud || null,
       };
 
-      // compatibilidad
       datos.detallePedido = datos.solicitudDetalle;
 
       const res = await http.post("/formularios/ANEXO_11", { datos });
@@ -310,17 +325,64 @@ export default function MisAnexosPermisionario() {
     cargar();
   }, []);
 
-  return (
-    <div>
-      <h2>Mis anexos</h2>
+  const fieldLabelStyle = {
+    display: "block",
+    fontSize: 12,
+    fontWeight: 700,
+    color: "rgba(255,255,255,0.75)",
+    marginBottom: 6,
+  };
+
+  const inputStyle = {
+    width: "100%",
+    padding: "10px 12px",
+    borderRadius: 10,
+    border: "1px solid rgba(255,255,255,0.14)",
+    background: "rgba(255,255,255,0.05)",
+    color: "#ffffff",
+    boxSizing: "border-box" as const,
+  };
+
+  const readOnlyInputStyle = {
+    ...inputStyle,
+    background: "rgba(255,255,255,0.035)",
+    color: "rgba(255,255,255,0.88)",
+  };
+
+  const selectStyle = {
+    padding: "10px 12px",
+    borderRadius: 10,
+    border: "1px solid rgba(255,255,255,0.14)",
+    background: "rgba(255,255,255,0.05)",
+    color: "#ffffff",
+  };
+
+  const alertBaseStyle = {
+    marginBottom: 14,
+    padding: 12,
+    borderRadius: 12,
+    fontSize: 14,
+  };
+
+  // frontend/src/pages/permisionario/MisAnexosPermisionario.tsx
+return (
+  <div style={pageStyle}>
+    <div style={shellStyle}>
+      <div style={heroStyle}>
+        <h2 style={titleStyle}>Mis anexos</h2>
+        <p style={{ ...subtitleStyle, maxWidth: 800 }}>
+          Consultá tus anexos, filtrá por código, descargá PDFs y gestioná los formularios
+          habilitados dentro del circuito institucional.
+        </p>
+      </div>
 
       {errorMsg && (
         <div
           style={{
-            marginBottom: 12,
-            padding: 10,
-            border: "1px solid #f44336",
-            background: "#ffebee",
+            ...alertBaseStyle,
+            border: "1px solid rgba(244,67,54,0.6)",
+            background: "rgba(244,67,54,0.12)",
+            color: "#ffe5e5",
           }}
         >
           {errorMsg}
@@ -330,444 +392,505 @@ export default function MisAnexosPermisionario() {
       {infoMsg && !errorMsg && (
         <div
           style={{
-            marginBottom: 12,
-            padding: 10,
-            border: "1px solid #4caf50",
-            background: "#e8f5e9",
+            ...alertBaseStyle,
+            border: "1px solid rgba(76,175,80,0.55)",
+            background: "rgba(76,175,80,0.12)",
+            color: "#e8ffe8",
           }}
         >
           {infoMsg}
         </div>
       )}
 
-      <section
-        style={{
-          marginBottom: 16,
-          padding: 10,
-          borderRadius: 8,
-          border: "1px solid #ddd",
-          background: "#f5f5f5",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 8,
-            flexWrap: "wrap",
-          }}
-        >
-          <h3 style={{ margin: 0 }}>
-            ANEXO 04 – Aviso de ausencia prolongada
-          </h3>
-
-          <button
-            type="button"
-            onClick={() => navigate("/app/permisionario/anexo-04/nuevo")}
-            style={{ fontWeight: 700 }}
-          >
-            Crear ANEXO 04
-          </button>
-        </div>
-
-        <p style={{ fontSize: 13, marginTop: 10 }}>
-          Este trámite es personal del Permisionario. Se inicia desde el panel base y se
-          remite a JEFE DE BARRIO (con copia institucional a INSPECTOR, ADMIN y ADMIN_GENERAL).
-        </p>
-      </section>
-
-      <section
-        style={{
-          marginBottom: 16,
-          padding: 10,
-          borderRadius: 8,
-          border: "1px solid #ddd",
-          background: "#f5f5f5",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 8,
-            flexWrap: "wrap",
-          }}
-        >
-          <h3 style={{ margin: 0 }}>
-            ANEXO 11 – Formulario de Pedido de Trabajo
-          </h3>
-          <button
-            type="button"
-            onClick={() => setMostrandoNuevo11((v) => !v)}
-          >
-            {mostrandoNuevo11
-              ? "Cerrar formulario"
-              : "Iniciar ANEXO 11 – Pedido de Trabajo"}
-          </button>
-        </div>
-
-        {mostrandoNuevo11 && (
+      <div style={{ display: "grid", gap: 16 }}>
+        <section style={cardStyle}>
           <div
             style={{
-              marginTop: 12,
-              paddingTop: 10,
-              borderTop: "1px solid #ccc",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 12,
+              flexWrap: "wrap",
             }}
           >
-            <p style={{ fontSize: 13 }}>
-              Completá los datos del formulario institucional. Este pedido se
-              enviará al Inspector para su gestión y seguimiento.
-            </p>
+            <h3 style={{ ...sectionTitleStyle, margin: 0 }}>
+              ANEXO 04 – Aviso de ausencia prolongada
+            </h3>
 
+            <button
+              type="button"
+              onClick={() => navigate("/app/permisionario/anexo-04/nuevo")}
+              style={successButtonStyle}
+            >
+              Crear ANEXO 04
+            </button>
+          </div>
+
+          <p style={{ ...noteStyle, marginTop: 12 }}>
+            Este trámite es personal del Permisionario. Se inicia desde el panel base y se remite
+            a JEFE DE BARRIO, con copia institucional según el circuito definido.
+          </p>
+        </section>
+
+        <section style={cardStyle}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 12,
+              flexWrap: "wrap",
+            }}
+          >
+            <h3 style={{ ...sectionTitleStyle, margin: 0 }}>
+              ANEXO 11 – Formulario de Pedido de Trabajo
+            </h3>
+
+            <button
+              type="button"
+              onClick={() => setMostrandoNuevo11((v) => !v)}
+              style={primaryButtonStyle}
+            >
+              {mostrandoNuevo11
+                ? "Cerrar formulario"
+                : "Iniciar ANEXO 11 – Pedido de Trabajo"}
+            </button>
+          </div>
+
+          {mostrandoNuevo11 && (
             <div
               style={{
-                marginBottom: 10,
-                padding: 8,
-                borderRadius: 6,
-                background: "#fffde7",
-                border: "1px solid #f0e0a0",
-                fontSize: 13,
+                marginTop: 16,
+                paddingTop: 16,
+                borderTop: "1px solid rgba(255,255,255,0.12)",
               }}
             >
-              Los datos del permisionario y la vivienda se cargan automáticamente para evitar errores.
+              <p style={{ ...subtitleStyle, marginTop: 0, maxWidth: "100%" }}>
+                Completá los datos del formulario institucional. Este pedido se enviará al
+                Inspector para su gestión y seguimiento.
+              </p>
+
+              <div
+                style={{
+                  ...softCardStyle,
+                  background: "rgba(255,235,59,0.10)",
+                  border: "1px solid rgba(255,235,59,0.24)",
+                  color: "#fff6c7",
+                  marginBottom: 16,
+                }}
+              >
+                Los datos del permisionario y la vivienda se cargan automáticamente para evitar
+                errores.
+              </div>
+
+              <div style={infoGridStyle}>
+                <div style={softCardStyle}>
+                  <label style={fieldLabelStyle}>
+                    Unidad
+                    <input type="text" value={unidad} readOnly style={readOnlyInputStyle} />
+                  </label>
+                </div>
+
+                <div style={softCardStyle}>
+                  <label style={fieldLabelStyle}>
+                    Dpto.
+                    <input type="text" value={dpto} readOnly style={readOnlyInputStyle} />
+                  </label>
+                </div>
+
+                <div style={softCardStyle}>
+                  <label style={fieldLabelStyle}>
+                    MB
+                    <input type="text" value={mb} readOnly style={readOnlyInputStyle} />
+                  </label>
+                </div>
+
+                <div style={softCardStyle}>
+                  <label style={fieldLabelStyle}>
+                    MZ
+                    <input type="text" value={mz} readOnly style={readOnlyInputStyle} />
+                  </label>
+                </div>
+
+                <div style={softCardStyle}>
+                  <label style={fieldLabelStyle}>
+                    Casa
+                    <input type="text" value={casa} readOnly style={readOnlyInputStyle} />
+                  </label>
+                </div>
+              </div>
+
+              <div style={{ marginTop: 18 }}>
+                <h4 style={{ ...sectionTitleStyle, fontSize: 16, marginBottom: 10 }}>
+                  Permisionario
+                </h4>
+
+                <div style={infoGridStyle}>
+                  <div style={softCardStyle}>
+                    <label style={fieldLabelStyle}>
+                      Grado
+                      <input type="text" value={permGrado} readOnly style={readOnlyInputStyle} />
+                    </label>
+                  </div>
+
+                  <div style={softCardStyle}>
+                    <label style={fieldLabelStyle}>
+                      Apellido y nombre
+                      <input type="text" value={permNombre} readOnly style={readOnlyInputStyle} />
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ marginTop: 18 }}>
+                <h4 style={{ ...sectionTitleStyle, fontSize: 16, marginBottom: 10 }}>
+                  Promotor
+                </h4>
+
+                <div style={softCardStyle}>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: 12,
+                      marginBottom: 14,
+                      color: "#ffffff",
+                    }}
+                  >
+                    <label>
+                      <input
+                        type="radio"
+                        name="promotorTipo"
+                        value="PERMISIONARIO"
+                        checked={promotorTipo === "PERMISIONARIO"}
+                        onChange={() => setPromotorTipo("PERMISIONARIO")}
+                      />{" "}
+                      Permisionario
+                    </label>
+
+                    <label>
+                      <input
+                        type="radio"
+                        name="promotorTipo"
+                        value="INSPECTOR"
+                        checked={promotorTipo === "INSPECTOR"}
+                        onChange={() => setPromotorTipo("INSPECTOR")}
+                      />{" "}
+                      Inspector
+                    </label>
+
+                    <label>
+                      <input
+                        type="radio"
+                        name="promotorTipo"
+                        value="JEFE_MILITAR"
+                        checked={promotorTipo === "JEFE_MILITAR"}
+                        onChange={() => setPromotorTipo("JEFE_MILITAR")}
+                      />{" "}
+                      Jefe militar
+                    </label>
+
+                    <label>
+                      <input
+                        type="radio"
+                        name="promotorTipo"
+                        value="OTROS"
+                        checked={promotorTipo === "OTROS"}
+                        onChange={() => setPromotorTipo("OTROS")}
+                      />{" "}
+                      Otros
+                    </label>
+                  </div>
+
+                  <div style={infoGridStyle}>
+                    <div>
+                      <label style={fieldLabelStyle}>
+                        Grado
+                        <input
+                          type="text"
+                          value={promotorGrado}
+                          onChange={(e) => setPromotorGrado(e.target.value)}
+                          readOnly={promotorTipo === "PERMISIONARIO"}
+                          style={
+                            promotorTipo === "PERMISIONARIO"
+                              ? readOnlyInputStyle
+                              : inputStyle
+                          }
+                        />
+                      </label>
+                    </div>
+
+                    <div>
+                      <label style={fieldLabelStyle}>
+                        Apellido y nombre
+                        <input
+                          type="text"
+                          value={promotorNombre}
+                          onChange={(e) => setPromotorNombre(e.target.value)}
+                          readOnly={promotorTipo === "PERMISIONARIO"}
+                          style={
+                            promotorTipo === "PERMISIONARIO"
+                              ? readOnlyInputStyle
+                              : inputStyle
+                          }
+                        />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ marginTop: 18 }}>
+                <h4 style={{ ...sectionTitleStyle, fontSize: 16, marginBottom: 10 }}>
+                  Solicito
+                </h4>
+
+                <div style={softCardStyle}>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: 12,
+                      color: "#ffffff",
+                    }}
+                  >
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={solCambio}
+                        onChange={(e) => setSolCambio(e.target.checked)}
+                      />{" "}
+                      Cambio
+                    </label>
+
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={solReparacion}
+                        onChange={(e) => setSolReparacion(e.target.checked)}
+                      />{" "}
+                      Reparación
+                    </label>
+
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={solVerificacion}
+                        onChange={(e) => setSolVerificacion(e.target.checked)}
+                      />{" "}
+                      Verificación
+                    </label>
+
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={solProvision}
+                        onChange={(e) => setSolProvision(e.target.checked)}
+                      />{" "}
+                      Provisión
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ marginTop: 18 }}>
+                <label style={fieldLabelStyle}>
+                  De:
+                  <textarea
+                    rows={4}
+                    style={{
+                      ...inputStyle,
+                      resize: "vertical",
+                      minHeight: 110,
+                      fontFamily: "inherit",
+                    }}
+                    value={detalleDe}
+                    onChange={(e) => setDetalleDe(e.target.value)}
+                    placeholder="Ejemplo: rotura de mesada de cocina, pérdida de agua en cañería, filtración en techo, etc."
+                  />
+                </label>
+              </div>
+
+              <div style={{ marginTop: 18, maxWidth: 260 }}>
+                <label style={fieldLabelStyle}>
+                  Fecha de solicitud
+                  <input
+                    type="date"
+                    value={fechaSolicitud}
+                    onChange={(e) => setFechaSolicitud(e.target.value)}
+                    style={inputStyle}
+                  />
+                </label>
+              </div>
+
+              <div style={buttonRowStyle}>
+                <button
+                  type="button"
+                  onClick={enviarNuevoAnexo11}
+                  disabled={enviando11}
+                  style={successButtonStyle}
+                >
+                  {enviando11 ? "Enviando…" : "Enviar ANEXO 11 al Inspector"}
+                </button>
+              </div>
             </div>
+          )}
+        </section>
+
+        <section style={cardStyle}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 12,
+              flexWrap: "wrap",
+              marginBottom: 14,
+            }}
+          >
+            <h3 style={{ ...sectionTitleStyle, margin: 0 }}>Listado de anexos</h3>
 
             <div
               style={{
                 display: "flex",
+                alignItems: "center",
+                gap: 12,
                 flexWrap: "wrap",
-                gap: 8,
-                marginBottom: 8,
               }}
             >
-              <div style={{ flex: "1 1 140px" }}>
-                <label>
-                  <b>Unidad:</b>
-                  <br />
-                  <input
-                    type="text"
-                    value={unidad}
-                    readOnly
-                    style={{ width: "100%", background: "#f3f3f3" }}
-                  />
-                </label>
-              </div>
-              <div style={{ flex: "1 1 120px" }}>
-                <label>
-                  <b>Dpto.:</b>
-                  <br />
-                  <input
-                    type="text"
-                    value={dpto}
-                    readOnly
-                    style={{ width: "100%", background: "#f3f3f3" }}
-                  />
-                </label>
-              </div>
-              <div style={{ flex: "0 0 90px" }}>
-                <label>
-                  <b>MB:</b>
-                  <br />
-                  <input
-                    type="text"
-                    value={mb}
-                    readOnly
-                    style={{ width: "100%", background: "#f3f3f3" }}
-                  />
-                </label>
-              </div>
-              <div style={{ flex: "0 0 90px" }}>
-                <label>
-                  <b>MZ:</b>
-                  <br />
-                  <input
-                    type="text"
-                    value={mz}
-                    readOnly
-                    style={{ width: "100%", background: "#f3f3f3" }}
-                  />
-                </label>
-              </div>
-              <div style={{ flex: "0 0 120px" }}>
-                <label>
-                  <b>Casa:</b>
-                  <br />
-                  <input
-                    type="text"
-                    value={casa}
-                    readOnly
-                    style={{ width: "100%", background: "#f3f3f3" }}
-                  />
-                </label>
-              </div>
-            </div>
-
-            <div style={{ marginBottom: 8 }}>
-              <b>Permisionario</b>
               <div
                 style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: 8,
-                  marginTop: 4,
+                  position: "relative",
+                  display: "inline-block",
                 }}
               >
-                <div style={{ flex: "0 0 160px" }}>
-                  <label>
-                    Grado:
-                    <br />
-                    <input
-                      type="text"
-                      value={permGrado}
-                      readOnly
-                      style={{ width: "100%", background: "#f3f3f3" }}
-                    />
-                  </label>
-                </div>
-                <div style={{ flex: "1 1 260px" }}>
-                  <label>
-                    Apellido y nombre:
-                    <br />
-                    <input
-                      type="text"
-                      value={permNombre}
-                      readOnly
-                      style={{ width: "100%", background: "#f3f3f3" }}
-                    />
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            <div style={{ marginBottom: 8 }}>
-              <b>Promotor</b>
-              <div style={{ marginTop: 4 }}>
-                <label style={{ marginRight: 8 }}>
-                  <input
-                    type="radio"
-                    name="promotorTipo"
-                    value="PERMISIONARIO"
-                    checked={promotorTipo === "PERMISIONARIO"}
-                    onChange={() => setPromotorTipo("PERMISIONARIO")}
-                  />{" "}
-                  Permisionario
-                </label>
-                <label style={{ marginRight: 8 }}>
-                  <input
-                    type="radio"
-                    name="promotorTipo"
-                    value="INSPECTOR"
-                    checked={promotorTipo === "INSPECTOR"}
-                    onChange={() => setPromotorTipo("INSPECTOR")}
-                  />{" "}
-                  Inspector
-                </label>
-                <label style={{ marginRight: 8 }}>
-                  <input
-                    type="radio"
-                    name="promotorTipo"
-                    value="JEFE_MILITAR"
-                    checked={promotorTipo === "JEFE_MILITAR"}
-                    onChange={() => setPromotorTipo("JEFE_MILITAR")}
-                  />{" "}
-                  Jefe militar
-                </label>
-                <label>
-                  <input
-                    type="radio"
-                    name="promotorTipo"
-                    value="OTROS"
-                    checked={promotorTipo === "OTROS"}
-                    onChange={() => setPromotorTipo("OTROS")}
-                  />{" "}
-                  Otros
-                </label>
-              </div>
-
-              <div
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: 8,
-                  marginTop: 4,
-                }}
-              >
-                <div style={{ flex: "0 0 160px" }}>
-                  <label>
-                    Grado:
-                    <br />
-                    <input
-                      type="text"
-                      value={promotorGrado}
-                      onChange={(e) => setPromotorGrado(e.target.value)}
-                      readOnly={promotorTipo === "PERMISIONARIO"}
-                      style={{
-                        width: "100%",
-                        background:
-                          promotorTipo === "PERMISIONARIO" ? "#f3f3f3" : "#fff",
-                      }}
-                    />
-                  </label>
-                </div>
-                <div style={{ flex: "1 1 260px" }}>
-                  <label>
-                    Apellido y nombre:
-                    <br />
-                    <input
-                      type="text"
-                      value={promotorNombre}
-                      onChange={(e) => setPromotorNombre(e.target.value)}
-                      readOnly={promotorTipo === "PERMISIONARIO"}
-                      style={{
-                        width: "100%",
-                        background:
-                          promotorTipo === "PERMISIONARIO" ? "#f3f3f3" : "#fff",
-                      }}
-                    />
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            <div style={{ marginBottom: 8 }}>
-              <b>Solicito</b>
-              <div style={{ marginTop: 4 }}>
-                <label style={{ marginRight: 8 }}>
-                  <input
-                    type="checkbox"
-                    checked={solCambio}
-                    onChange={(e) => setSolCambio(e.target.checked)}
-                  />{" "}
-                  Cambio
-                </label>
-                <label style={{ marginRight: 8 }}>
-                  <input
-                    type="checkbox"
-                    checked={solReparacion}
-                    onChange={(e) => setSolReparacion(e.target.checked)}
-                  />{" "}
-                  Reparación
-                </label>
-                <label style={{ marginRight: 8 }}>
-                  <input
-                    type="checkbox"
-                    checked={solVerificacion}
-                    onChange={(e) => setSolVerificacion(e.target.checked)}
-                  />{" "}
-                  Verificación
-                </label>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={solProvision}
-                    onChange={(e) => setSolProvision(e.target.checked)}
-                  />{" "}
-                  Provisión
-                </label>
-              </div>
-            </div>
-
-            <div style={{ marginBottom: 8 }}>
-              <label>
-                <b>De:</b>
-                <br />
-                <textarea
-                  rows={3}
+                <button
+                  type="button"
+                  onClick={() => setOpenCodigoMenu((v) => !v)}
                   style={{
-                    width: "100%",
-                    resize: "vertical",
-                    padding: 6,
-                    borderRadius: 6,
-                    border: "1px solid #ccc",
+                    padding: "10px 14px",
+                    borderRadius: 10,
+                    border: "1px solid rgba(255,255,255,0.14)",
+                    background: "rgba(255,255,255,0.05)",
+                    color: "#ffffff",
+                    minWidth: 160,
+                    textAlign: "left",
+                    cursor: "pointer",
+                    fontWeight: 600,
                   }}
-                  value={detalleDe}
-                  onChange={(e) => setDetalleDe(e.target.value)}
-                  placeholder="Ejemplo: rotura de mesada de cocina, pérdida de agua en cañería, filtración en techo, etc."
-                />
-              </label>
-            </div>
+                >
+                  <span>{codigo}</span>
+                  <span style={{ float: "right", opacity: 0.7 }}>▾</span>
+                </button>
 
-            <div style={{ marginBottom: 8 }}>
-              <label>
-                <b>Fecha de solicitud:</b>
-                <br />
-                <input
-                  type="date"
-                  value={fechaSolicitud}
-                  onChange={(e) => setFechaSolicitud(e.target.value)}
-                />
-              </label>
-            </div>
+                {openCodigoMenu && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "calc(100% + 6px)",
+                      left: 0,
+                      minWidth: 180,
+                      background: "#1e293b",
+                      border: "1px solid rgba(255,255,255,0.14)",
+                      borderRadius: 12,
+                      boxShadow: "0 14px 30px rgba(0,0,0,0.35)",
+                      overflow: "hidden",
+                      zIndex: 20,
+                    }}
+                  >
+                    {CODIGOS.map((c) => {
+                      const active = c === codigo;
 
-            <div style={{ marginTop: 10 }}>
-              <button
-                type="button"
-                onClick={enviarNuevoAnexo11}
-                disabled={enviando11}
-                style={{ fontWeight: 700 }}
-              >
-                {enviando11
-                  ? "Enviando…"
-                  : "Enviar ANEXO 11 al Inspector"}
-              </button>
+                      return (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => {
+                            setCodigo(c);
+                            setOpenCodigoMenu(false);
+                          }}
+                          style={{
+                            display: "block",
+                            width: "100%",
+                            padding: "10px 12px",
+                            border: "none",
+                            borderBottom: "1px solid rgba(255,255,255,0.06)",
+                            background: active ? "rgba(37,99,235,0.22)" : "#1e293b",
+                            color: "#ffffff",
+                            textAlign: "left",
+                            cursor: "pointer",
+                            fontWeight: active ? 700 : 500,
+                          }}
+                        >
+                          {c}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <span style={{ color: "rgba(255,255,255,0.78)" }}>
+                Resultados: <b>{visibles.length}</b>
+              </span>
             </div>
           </div>
-        )}
-      </section>
 
-      <section style={{ marginBottom: 12 }}>
-        <select value={codigo} onChange={(e) => setCodigo(e.target.value)}>
-          {CODIGOS.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-        <span style={{ marginLeft: 12 }}>Resultados: {visibles.length}</span>
-      </section>
-
-      {loading ? (
-        <p>Cargando…</p>
-      ) : visibles.length === 0 ? (
-        <p>No hay anexos.</p>
-      ) : (
-        <table border={1} cellPadding={6} width="100%">
-          <thead>
-            <tr>
-              <th>Código</th>
-              <th>Estado</th>
-              <th>Fecha</th>
-              <th>Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {visibles.map((a) => (
-              <tr key={a._id}>
-                <td>{a.codigo}</td>
-                <td>
-                  {safe(a.estado)}
-                  {a.estadoInstitucional ? ` / ${a.estadoInstitucional}` : ""}
-                </td>
-                <td>{fmtDate(a.createdAt)}</td>
-                <td>
-                  <button
-                    onClick={() =>
-                      navigate(`/app/permisionario/anexos/${a._id}`)
-                    }
+          {loading ? (
+            <div style={softCardStyle}>
+              <p style={{ margin: 0, color: "#ffffff" }}>Cargando…</p>
+            </div>
+          ) : visibles.length === 0 ? (
+            <div style={softCardStyle}>
+              <p style={{ margin: 0, color: "#ffffff" }}>No hay anexos.</p>
+            </div>
+          ) : (
+            <div style={{ display: "grid", gap: 12 }}>
+              {visibles.map((a) => (
+                <div key={a._id} style={softCardStyle}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 12,
+                      flexWrap: "wrap",
+                      alignItems: "flex-start",
+                    }}
                   >
-                    Ver
-                  </button>{" "}
-                  <button onClick={() => descargarPdf(a._id, a.codigo)}>
-                    PDF
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+                    <div>
+                      <div style={{ fontSize: 17, fontWeight: 800, color: "#ffffff" }}>
+                        {a.codigo}
+                      </div>
+                      <div style={metaStyle}>
+                        Estado: {safe(a.estado)}
+                        {a.estadoInstitucional ? ` / ${a.estadoInstitucional}` : ""}
+                      </div>
+                      <div style={metaStyle}>Fecha: {fmtDate(a.createdAt)}</div>
+                    </div>
+
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <button
+                        style={primaryButtonStyle}
+                        onClick={() => navigate(`/app/permisionario/anexos/${a._id}`)}
+                      >
+                        Ver
+                      </button>
+
+                      <button
+                        style={secondaryButtonStyle}
+                        onClick={() => descargarPdf(a._id, a.codigo)}
+                      >
+                        PDF
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
     </div>
-  );
+  </div>
+);
 }

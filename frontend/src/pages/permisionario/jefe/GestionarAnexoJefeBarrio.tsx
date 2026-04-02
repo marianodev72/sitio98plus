@@ -1,5 +1,4 @@
-// frontend/src/pages/permisionario/jefe/GestionarAnexoJefeBarrio.tsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { http } from "../../../api/http";
 import { useAuth } from "../../../auth/useAuth";
@@ -46,6 +45,68 @@ export default function GestionarAnexoJefeBarrio() {
     return roleBase === "PERMISIONARIO" && permisos.map(up).includes("JEFE_DE_BARRIO");
   }, [user]);
 
+  const pageStyle: CSSProperties = {
+    padding: 24,
+    color: "#E5E7EB",
+    width: "100%",
+    maxWidth: "100%",
+    boxSizing: "border-box",
+  };
+
+  const cardStyle: CSSProperties = {
+    marginTop: 12,
+    padding: 16,
+    borderRadius: 12,
+    border: "1px solid rgba(255,255,255,0.14)",
+    background: "rgba(255,255,255,0.05)",
+    boxSizing: "border-box",
+  };
+
+  const buttonStyle: CSSProperties = {
+    padding: "10px 14px",
+    borderRadius: 8,
+    border: "1px solid rgba(255,255,255,0.12)",
+    background: "rgba(255,255,255,0.06)",
+    color: "#ffffff",
+    cursor: "pointer",
+    fontWeight: 700,
+  };
+
+  const primaryButtonStyle: CSSProperties = {
+    ...buttonStyle,
+    background: "rgba(59,130,246,0.20)",
+    fontWeight: 800,
+  };
+
+  const controlStyle: CSSProperties = {
+    width: "100%",
+    padding: "10px 12px",
+    borderRadius: 10,
+    border: "1px solid rgba(255,255,255,0.14)",
+    background: "rgba(255,255,255,0.04)",
+    color: "#ffffff",
+    fontSize: 14,
+    boxSizing: "border-box",
+  };
+
+  const errorStyle: CSSProperties = {
+    marginTop: 10,
+    padding: 10,
+    borderRadius: 8,
+    border: "1px solid rgba(239,68,68,0.35)",
+    background: "rgba(127,29,29,0.18)",
+    color: "#FCA5A5",
+  };
+
+  const okStyle: CSSProperties = {
+    marginTop: 10,
+    padding: 10,
+    borderRadius: 8,
+    border: "1px solid rgba(34,197,94,0.35)",
+    background: "rgba(22,163,74,0.18)",
+    color: "#86EFAC",
+  };
+
   useEffect(() => {
     if (!id) return;
     cargar();
@@ -83,7 +144,6 @@ export default function GestionarAnexoJefeBarrio() {
     setErr("");
     setMsg("");
     try {
-      // Backend acepta observacionesJefeBarrio y también observaciones (compat).
       await http.patch(`/formularios/${anexo._id}/anexo-04/observaciones`, {
         observacionesJefeBarrio: observaciones,
       });
@@ -103,7 +163,6 @@ export default function GestionarAnexoJefeBarrio() {
     setErr("");
     setMsg("");
     try {
-      // Observaciones son opcionales; backend valida territorial y acceso.
       await http.post(`/formularios/${anexo._id}/conformidad-jefe-04`, {
         observacionesJefeBarrio: observaciones,
       });
@@ -117,7 +176,6 @@ export default function GestionarAnexoJefeBarrio() {
     }
   }
 
-  // Fail-closed UX (backend siempre valida igual)
   if (!user || !isJefe) {
     return (
       <div style={{ padding: 24 }}>
@@ -129,7 +187,7 @@ export default function GestionarAnexoJefeBarrio() {
 
   if (loading) {
     return (
-      <div style={{ padding: 24 }}>
+      <div style={{ padding: 24, color: "#CBD5E1" }}>
         <p>Cargando…</p>
       </div>
     );
@@ -137,69 +195,73 @@ export default function GestionarAnexoJefeBarrio() {
 
   if (!anexo) {
     return (
-      <div style={{ padding: 24 }}>
-        <button onClick={() => navigate("/app/permisionario/mi-barrio-jefe")}>Volver</button>
-        {err && <div style={{ marginTop: 12, color: "#b71c1c" }}>{err}</div>}
+      <div style={pageStyle}>
+        <button onClick={() => navigate("/app/permisionario/mi-barrio-jefe")} style={buttonStyle}>
+          Volver
+        </button>
+        {err && <div style={errorStyle}>{err}</div>}
       </div>
     );
   }
 
   const codigo = up(anexo.codigo);
 
-  // Esta pantalla es para gestionar ANEXO_04 en el subpanel del JEFE.
   if (codigo !== "ANEXO_04") {
     return (
-      <div style={{ padding: 24 }}>
-        <button onClick={() => navigate("/app/permisionario/mi-barrio-jefe")}>Volver</button>
-        <div style={{ marginTop: 12, color: "#b71c1c" }}>
-          La página solicitada no está disponible.
-        </div>
+      <div style={pageStyle}>
+        <button onClick={() => navigate("/app/permisionario/mi-barrio-jefe")} style={buttonStyle}>
+          Volver
+        </button>
+        <div style={errorStyle}>La página solicitada no está disponible.</div>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: 24 }}>
-      <button onClick={() => navigate("/app/permisionario/mi-barrio-jefe")} disabled={busy}>
+    <div style={pageStyle}>
+      <button
+        onClick={() => navigate("/app/permisionario/mi-barrio-jefe")}
+        disabled={busy}
+        style={buttonStyle}
+      >
         Volver
       </button>
 
-      <h2 style={{ marginTop: 14 }}>Gestión — ANEXO_04</h2>
+      <h2 style={{ marginTop: 14, marginBottom: 12, color: "#F8FAFC" }}>
+        Gestión — ANEXO_04
+      </h2>
 
-      {err && (
-        <div style={{ marginTop: 10, padding: 10, border: "1px solid #f44336", background: "#ffebee" }}>
-          {err}
-        </div>
-      )}
-      {msg && !err && (
-        <div style={{ marginTop: 10, padding: 10, border: "1px solid #4caf50", background: "#e8f5e9" }}>
-          {msg}
-        </div>
-      )}
+      {err && <div style={errorStyle}>{err}</div>}
+      {msg && !err && <div style={okStyle}>{msg}</div>}
 
       <div style={{ marginTop: 14 }}>
         <Anexo04Vista datos={anexo.datos} />
       </div>
 
-      {/* Observaciones + conformidad (solo JEFE) */}
-      <div style={{ border: "1px solid #ddd", borderRadius: 10, padding: 12, marginTop: 12, background: "#fff" }}>
-        <h4 style={{ marginTop: 0 }}>Observaciones (JEFE DE BARRIO)</h4>
+      <div style={cardStyle}>
+        <h4 style={{ marginTop: 0, marginBottom: 10, color: "#F8FAFC" }}>
+          Observaciones (JEFE DE BARRIO)
+        </h4>
+
         <textarea
           value={observaciones}
           onChange={(e) => setObservaciones(e.target.value)}
           rows={5}
-          style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #ccc" }}
+          style={controlStyle}
           placeholder="(Opcional) Observaciones del Jefe de Barrio…"
           disabled={busy}
         />
+
         <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button onClick={guardarObservaciones} disabled={busy}>
+          <button onClick={guardarObservaciones} disabled={busy} style={buttonStyle}>
             {busy ? "Guardando…" : "Guardar observaciones"}
           </button>
-          <button onClick={darConformidad} disabled={busy}>
+
+          <button onClick={darConformidad} disabled={busy} style={primaryButtonStyle}>
             {busy ? "Enviando…" : "Dar conformidad"}
           </button>
-          <button onClick={cargar} disabled={busy}>
+
+          <button onClick={cargar} disabled={busy} style={buttonStyle}>
             Recargar
           </button>
         </div>

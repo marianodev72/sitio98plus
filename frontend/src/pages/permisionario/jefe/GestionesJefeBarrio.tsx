@@ -100,64 +100,219 @@ export default function GestionesJefeBarrio() {
     );
   }
 
+const selectStyle: React.CSSProperties = {
+  padding: "8px 10px",
+  borderRadius: 8,
+  border: "1px solid rgba(255,255,255,0.12)",
+  backgroundColor: "rgba(255,255,255,0.04)",
+  color: "#ffffff",
+  appearance: "none",
+  WebkitAppearance: "none",
+  MozAppearance: "none",
+};
+
+const optionStyle: React.CSSProperties = {
+  backgroundColor: "#1f2937",
+  color: "#ffffff",
+};
+
+const thStyle: React.CSSProperties = {
+  borderBottom: "1px solid rgba(255,255,255,0.12)",
+  textAlign: "left",
+  padding: 8,
+  color: "#9ca3af",
+};
+
+const tdStyle: React.CSSProperties = {
+  borderBottom: "1px solid rgba(255,255,255,0.06)",
+  padding: 8,
+  color: "#ffffff",
+};
   return (
-    <div>
-      <h2 style={{ marginTop: 0 }}>Gestiones — Jefe de Barrio</h2>
+  <div>
+    <h2 style={{ marginTop: 0, color: "#ffffff" }}>
+      Gestiones — Jefe de Barrio
+    </h2>
 
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
-        <button onClick={cargar} disabled={loading}>Recargar</button>
-        <button onClick={() => navigate("/app/permisionario/mi-barrio-jefe")}>Volver</button>
+    <div
+      style={{
+        display: "flex",
+        gap: 8,
+        flexWrap: "wrap",
+        alignItems: "center",
+        marginBottom: 12,
+      }}
+    >
+      {/* BOTONES IZQUIERDA */}
+      <button
+        onClick={cargar}
+        disabled={loading}
+        style={{
+          padding: "8px 12px",
+          borderRadius: 8,
+          border: "1px solid rgba(255,255,255,0.12)",
+          background: "rgba(255,255,255,0.06)",
+          color: "#ffffff",
+          cursor: "pointer",
+        }}
+      >
+        Recargar
+      </button>
 
-        <div style={{ marginLeft: "auto" }}>
-          <label style={{ fontSize: 13, marginRight: 6 }}>Filtrar:</label>
-          <select value={filtro} onChange={(e) => setFiltro(e.target.value as any)}>
-            <option value="TODOS">Todos</option>
-            <option value="ANEXO_04">ANEXO_04</option>
-            <option value="ANEXO_11">ANEXO_11 (míos)</option>
-          </select>
-        </div>
+      <button
+        onClick={() =>
+          navigate("/app/permisionario/mi-barrio-jefe")
+        }
+        style={{
+          padding: "8px 12px",
+          borderRadius: 8,
+          border: "1px solid rgba(255,255,255,0.12)",
+          background: "rgba(255,255,255,0.06)",
+          color: "#ffffff",
+          cursor: "pointer",
+        }}
+      >
+        Volver
+      </button>
 
-        <button
-          onClick={() => navigate("/app/permisionario/mi-barrio-jefe/crear-anexo-11")}
-          style={{ fontWeight: 800 }}
+      {/* FILTRO */}
+      <div style={{ marginLeft: "auto" }}>
+        <label
+          style={{
+            fontSize: 13,
+            marginRight: 6,
+            color: "#9ca3af",
+          }}
         >
-          + Nuevo ANEXO 11
-        </button>
+          Filtrar:
+        </label>
+
+        <select
+          value={filtro}
+          onChange={(e) =>
+            setFiltro(e.target.value as any)
+          }
+          style={selectStyle}
+        >
+          <option value="TODOS" style={optionStyle}>
+            Todos
+          </option>
+          <option value="ANEXO_04" style={optionStyle}>
+            ANEXO_04
+          </option>
+          <option value="ANEXO_11" style={optionStyle}>
+            ANEXO_11 (míos)
+          </option>
+        </select>
       </div>
 
-      {error ? <div style={{ padding: 10, border: "1px solid #f44336", background: "#ffebee" }}>{error}</div> : null}
-      {loading ? <div>Cargando…</div> : null}
-
-      {!loading && !error && visibles.length === 0 ? <p>No se encontraron gestiones.</p> : null}
-
-      {!loading && !error && visibles.length > 0 ? (
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-          <thead>
-            <tr>
-              <th style={{ borderBottom: "1px solid #ccc", textAlign: "left", padding: 6 }}>Código</th>
-              <th style={{ borderBottom: "1px solid #ccc", textAlign: "left", padding: 6 }}>Estado</th>
-              <th style={{ borderBottom: "1px solid #ccc", textAlign: "left", padding: 6 }}>Unidad</th>
-              <th style={{ borderBottom: "1px solid #ccc", textAlign: "left", padding: 6 }}>Creado</th>
-              <th style={{ borderBottom: "1px solid #ccc", padding: 6 }}>Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {visibles.map((a) => (
-              <tr key={a._id}>
-                <td style={{ borderBottom: "1px solid #eee", padding: 6 }}>{safe(a.codigo)}</td>
-                <td style={{ borderBottom: "1px solid #eee", padding: 6 }}>{safe(a.estado)}</td>
-                <td style={{ borderBottom: "1px solid #eee", padding: 6 }}>{unidadLabel(a)}</td>
-                <td style={{ borderBottom: "1px solid #eee", padding: 6 }}>{fmtDate(a.createdAt)}</td>
-                <td style={{ borderBottom: "1px solid #eee", padding: 6, textAlign: "center" }}>
-                  <button onClick={() => navigate(`/app/permisionario/mi-barrio-jefe/gestiones/${a._id}`)}>
-                    Ver / Gestionar
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      ) : null}
+      {/* BOTÓN PRINCIPAL */}
+      <button
+        onClick={() =>
+          navigate(
+            "/app/permisionario/mi-barrio-jefe/crear-anexo-11"
+          )
+        }
+        style={{
+          padding: "8px 14px",
+          borderRadius: 8,
+          border: "1px solid rgba(255,255,255,0.12)",
+          background: "rgba(59,130,246,0.2)",
+          color: "#ffffff",
+          fontWeight: 800,
+          cursor: "pointer",
+        }}
+      >
+        + Nuevo ANEXO 11
+      </button>
     </div>
-  );
+
+    {/* ERROR */}
+    {error ? (
+      <div
+        style={{
+          padding: 10,
+          border: "1px solid rgba(239,68,68,0.4)",
+          background: "rgba(239,68,68,0.1)",
+          color: "#fca5a5",
+          borderRadius: 8,
+        }}
+      >
+        {error}
+      </div>
+    ) : null}
+
+    {/* LOADING */}
+    {loading ? (
+      <div style={{ color: "#9ca3af" }}>Cargando…</div>
+    ) : null}
+
+    {/* VACÍO */}
+    {!loading && !error && visibles.length === 0 ? (
+      <p style={{ color: "#9ca3af" }}>
+        No se encontraron gestiones.
+      </p>
+    ) : null}
+
+    {/* TABLA */}
+    {!loading && !error && visibles.length > 0 ? (
+      <table
+        style={{
+          width: "100%",
+          borderCollapse: "collapse",
+          fontSize: 13,
+          background: "rgba(255,255,255,0.02)",
+          borderRadius: 8,
+          overflow: "hidden",
+        }}
+      >
+        <thead>
+          <tr>
+            <th style={thStyle}>Código</th>
+            <th style={thStyle}>Estado</th>
+            <th style={thStyle}>Unidad</th>
+            <th style={thStyle}>Creado</th>
+            <th style={thStyle}>Acciones</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {visibles.map((a) => (
+            <tr key={a._id}>
+              <td style={tdStyle}>{safe(a.codigo)}</td>
+              <td style={tdStyle}>{safe(a.estado)}</td>
+              <td style={tdStyle}>{unidadLabel(a)}</td>
+              <td style={tdStyle}>{fmtDate(a.createdAt)}</td>
+
+              <td
+                style={{
+                  ...tdStyle,
+                  textAlign: "center",
+                }}
+              >
+                <button
+                  onClick={() =>
+                    navigate(
+                      `/app/permisionario/mi-barrio-jefe/gestiones/${a._id}`
+                    )
+                  }
+                  style={{
+                    padding: "6px 10px",
+                    borderRadius: 6,
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    background: "rgba(255,255,255,0.06)",
+                    color: "#ffffff",
+                    cursor: "pointer",
+                  }}
+                >
+                  Ver / Gestionar
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    ) : null}
+  </div>
+);
 }

@@ -186,24 +186,60 @@ function buildAnexo11Timeline(datos: any) {
    ╚══════════════════════════════════════╝ */
 function ViewAnexo01({ datos }: { datos: any }) {
   const motivo = safe(datos?.motivo);
+
+  const styles = {
+    section: {
+      marginTop: 8,
+      padding: 16,
+      borderRadius: 16,
+      border: "1px solid rgba(255,255,255,0.1)",
+      background: "rgba(255,255,255,0.06)",
+      boxShadow: "0 10px 30px rgba(0,0,0,0.18)",
+    } as React.CSSProperties,
+
+    sectionTitle: {
+      margin: 0,
+      marginBottom: 12,
+      fontSize: 16,
+      fontWeight: 700,
+      color: "rgba(255,255,255,0.96)",
+      letterSpacing: "-0.01em",
+    } as React.CSSProperties,
+
+    label: {
+      fontSize: 11,
+      fontWeight: 700,
+      textTransform: "uppercase" as const,
+      letterSpacing: "0.08em",
+      color: "rgba(255,255,255,0.58)",
+      marginBottom: 6,
+      display: "block",
+    } as React.CSSProperties,
+
+    textBox: {
+      marginTop: 6,
+      padding: 12,
+      borderRadius: 12,
+      border: "1px solid rgba(255,255,255,0.1)",
+      background: "rgba(255,255,255,0.04)",
+      whiteSpace: "pre-wrap" as const,
+      color: "rgba(255,255,255,0.92)",
+      lineHeight: 1.5,
+      fontSize: 14,
+    } as React.CSSProperties,
+  };
+
   return (
     <div>
-      <h4>ANEXO 01 – Postulación a vivienda fiscal</h4>
-      <div style={{ marginTop: 8 }}>
-        <b>Motivo / observación inicial:</b>
-        <div
-          style={{
-            marginTop: 4,
-            padding: 8,
-            border: "1px solid #ddd",
-            borderRadius: 6,
-            background: "#fafafa",
-            whiteSpace: "pre-wrap",
-          }}
-        >
-          {motivo}
-        </div>
-      </div>
+      <h4 style={{ marginTop: 0, marginBottom: 12, color: "#fff" }}>
+        ANEXO 01 – Postulación a vivienda fiscal
+      </h4>
+
+      <section style={styles.section}>
+        <h5 style={styles.sectionTitle}>Motivo / observación inicial</h5>
+        <span style={styles.label}>Detalle registrado</span>
+        <div style={styles.textBox}>{motivo}</div>
+      </section>
     </div>
   );
 }
@@ -243,78 +279,146 @@ function ViewAnexo02({
   const fechaAsignacion = safe(d?.fechaAsignacion);
   const fechaEntrega = safe(d?.fechaEntrega);
 
+  const styles = {
+    section: {
+      marginTop: 14,
+      padding: 16,
+      borderRadius: 16,
+      border: "1px solid rgba(255,255,255,0.1)",
+      background: "rgba(255,255,255,0.06)",
+      boxShadow: "0 10px 30px rgba(0,0,0,0.18)",
+    } as React.CSSProperties,
+
+    sectionTitle: {
+      margin: 0,
+      marginBottom: 12,
+      fontSize: 16,
+      fontWeight: 700,
+      color: "rgba(255,255,255,0.96)",
+      letterSpacing: "-0.01em",
+    } as React.CSSProperties,
+
+    infoGrid: {
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+      gap: 12,
+    } as React.CSSProperties,
+
+    field: {
+      display: "flex",
+      flexDirection: "column" as const,
+      gap: 4,
+    } as React.CSSProperties,
+
+    label: {
+      fontSize: 11,
+      fontWeight: 700,
+      textTransform: "uppercase" as const,
+      letterSpacing: "0.08em",
+      color: "rgba(255,255,255,0.58)",
+    } as React.CSSProperties,
+
+    value: {
+      fontSize: 14,
+      fontWeight: 600,
+      lineHeight: 1.45,
+      color: "rgba(255,255,255,0.94)",
+      wordBreak: "break-word" as const,
+    } as React.CSSProperties,
+
+    textBox: {
+      marginTop: 6,
+      padding: 12,
+      borderRadius: 12,
+      border: "1px solid rgba(255,255,255,0.1)",
+      background: "rgba(255,255,255,0.04)",
+      whiteSpace: "pre-wrap" as const,
+      color: "rgba(255,255,255,0.92)",
+      lineHeight: 1.5,
+      fontSize: 14,
+    } as React.CSSProperties,
+  };
+
   return (
     <div>
-      <h4>ANEXO 02 – Asignación de vivienda fiscal</h4>
+      <h4 style={{ marginTop: 0, marginBottom: 12, color: "#fff" }}>
+        ANEXO 02 – Asignación de vivienda fiscal
+      </h4>
 
-      <div style={{ marginTop: 8 }}>
-        <b>Postulante / Permisionario:</b>
-        <div style={{ marginTop: 4 }}>
-          <div>
-            <b>Grado:</b> {grado}
+      <section style={{ ...styles.section, marginTop: 8 }}>
+        <h5 style={styles.sectionTitle}>Postulante / Permisionario</h5>
+
+        <div style={styles.infoGrid}>
+          <div style={styles.field}>
+            <span style={styles.label}>Grado</span>
+            <span style={styles.value}>{grado}</span>
           </div>
-          <div>
-            <b>Apellido y nombres:</b> {apeNom}
+
+          <div style={styles.field}>
+            <span style={styles.label}>Apellido y nombres</span>
+            <span style={styles.value}>{apeNom}</span>
           </div>
-          <div>
-            <b>M.R. (Matrícula):</b> {matricula}
+
+          <div style={styles.field}>
+            <span style={styles.label}>M.R. (Matrícula)</span>
+            <span style={styles.value}>{matricula}</span>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div style={{ marginTop: 12 }}>
-        <b>Unidad habitacional:</b>
-        <div style={{ marginTop: 4 }}>
-          <div>
-            <b>Dirección:</b> {direccion || "—"}
+      <section style={styles.section}>
+        <h5 style={styles.sectionTitle}>Unidad habitacional</h5>
+
+        <div style={styles.infoGrid}>
+          <div style={styles.field}>
+            <span style={styles.label}>Dirección</span>
+            <span style={styles.value}>{direccion || "—"}</span>
           </div>
-          <div>
-            <b>Casa / Unidad:</b> {casa}
+
+          <div style={styles.field}>
+            <span style={styles.label}>Casa / Unidad</span>
+            <span style={styles.value}>{casa}</span>
           </div>
+
           {departamento && (
-            <div>
-              <b>Departamento:</b> {departamento}
+            <div style={styles.field}>
+              <span style={styles.label}>Departamento</span>
+              <span style={styles.value}>{departamento}</span>
             </div>
           )}
-          <div>
-            <b>Localidad:</b> {localidad}
-          </div>
-        </div>
-      </div>
 
-      <div style={{ marginTop: 12 }}>
-        <b>Fechas:</b>
-        <div style={{ marginTop: 4 }}>
-          <div>
-            <b>Fecha de asignación:</b> {fechaAsignacion}
-          </div>
-          <div>
-            <b>Fecha de entrega:</b> {fechaEntrega}
+          <div style={styles.field}>
+            <span style={styles.label}>Localidad</span>
+            <span style={styles.value}>{localidad}</span>
           </div>
         </div>
-      </div>
+      </section>
+
+      <section style={styles.section}>
+        <h5 style={styles.sectionTitle}>Fechas</h5>
+
+        <div style={styles.infoGrid}>
+          <div style={styles.field}>
+            <span style={styles.label}>Fecha de asignación</span>
+            <span style={styles.value}>{fechaAsignacion}</span>
+          </div>
+
+          <div style={styles.field}>
+            <span style={styles.label}>Fecha de entrega</span>
+            <span style={styles.value}>{fechaEntrega}</span>
+          </div>
+        </div>
+      </section>
 
       {d?.observaciones && (
-        <div style={{ marginTop: 12 }}>
-          <b>Observaciones internas:</b>
-          <div
-            style={{
-              marginTop: 4,
-              padding: 8,
-              border: "1px solid #ddd",
-              borderRadius: 6,
-              background: "#fafafa",
-              whiteSpace: "pre-wrap",
-            }}
-          >
-            {d.observaciones}
-          </div>
-        </div>
+        <section style={styles.section}>
+          <h5 style={styles.sectionTitle}>Observaciones internas</h5>
+          <div style={styles.textBox}>{d.observaciones}</div>
+        </section>
       )}
     </div>
   );
 }
-
 /* ╔══════════════════════════════════════╗
    ║   ANEXO 03 – Recepción               ║
    ╚══════════════════════════════════════╝ */
@@ -334,51 +438,111 @@ function ViewAnexo03({ datos }: { datos: any }) {
 
   const novedadesTexto = datos?.novedadesTexto || datos?.novedades || "";
 
+  const styles = {
+    section: {
+      marginTop: 14,
+      padding: 16,
+      borderRadius: 16,
+      border: "1px solid rgba(255,255,255,0.1)",
+      background: "rgba(255,255,255,0.06)",
+      boxShadow: "0 10px 30px rgba(0,0,0,0.18)",
+    } as React.CSSProperties,
+
+    sectionTitle: {
+      margin: 0,
+      marginBottom: 12,
+      fontSize: 16,
+      fontWeight: 700,
+      color: "rgba(255,255,255,0.96)",
+      letterSpacing: "-0.01em",
+    } as React.CSSProperties,
+
+    infoGrid: {
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+      gap: 12,
+    } as React.CSSProperties,
+
+    field: {
+      display: "flex",
+      flexDirection: "column" as const,
+      gap: 4,
+    } as React.CSSProperties,
+
+    label: {
+      fontSize: 11,
+      fontWeight: 700,
+      textTransform: "uppercase" as const,
+      letterSpacing: "0.08em",
+      color: "rgba(255,255,255,0.58)",
+    } as React.CSSProperties,
+
+    value: {
+      fontSize: 14,
+      fontWeight: 600,
+      lineHeight: 1.45,
+      color: "rgba(255,255,255,0.94)",
+      wordBreak: "break-word" as const,
+    } as React.CSSProperties,
+
+    textBox: {
+      marginTop: 6,
+      padding: 12,
+      borderRadius: 12,
+      border: "1px solid rgba(255,255,255,0.1)",
+      background: "rgba(255,255,255,0.04)",
+      whiteSpace: "pre-wrap" as const,
+      color: "rgba(255,255,255,0.92)",
+      lineHeight: 1.5,
+      fontSize: 14,
+    } as React.CSSProperties,
+  };
+
   return (
     <div>
-      <h4>ANEXO 03 – Recepción de vivienda fiscal</h4>
+      <h4 style={{ marginTop: 0, marginBottom: 12, color: "#fff" }}>
+        ANEXO 03 – Recepción de vivienda fiscal
+      </h4>
 
-      <div style={{ marginTop: 8 }}>
-        <b>Permisionario:</b> {safe(permNombre)}
-      </div>
-      <div style={{ marginTop: 4 }}>
-        <b>Inspector:</b> {safe(inspector)}
-      </div>
+      <section style={{ ...styles.section, marginTop: 8 }}>
+        <div style={styles.infoGrid}>
+          <div style={styles.field}>
+            <span style={styles.label}>Permisionario</span>
+            <span style={styles.value}>{safe(permNombre)}</span>
+          </div>
 
-      <div style={{ marginTop: 8 }}>
-        <b>Vivienda / Unidad:</b>
-        <div style={{ marginTop: 4 }}>
-          <div>
-            <b>Unidad habitacional:</b> {safe(unidad)}
+          <div style={styles.field}>
+            <span style={styles.label}>Inspector</span>
+            <span style={styles.value}>{safe(inspector)}</span>
           </div>
-          <div>
-            <b>Dirección:</b> {safe(direccion)}
+
+          <div style={styles.field}>
+            <span style={styles.label}>Unidad habitacional</span>
+            <span style={styles.value}>{safe(unidad)}</span>
           </div>
-          <div>
-            <b>Localidad:</b> {safe(localidad)}
+
+          <div style={styles.field}>
+            <span style={styles.label}>Dirección</span>
+            <span style={styles.value}>{safe(direccion)}</span>
           </div>
-          <div>
-            <b>Provincia:</b> {safe(provincia)}
+
+          <div style={styles.field}>
+            <span style={styles.label}>Localidad</span>
+            <span style={styles.value}>{safe(localidad)}</span>
+          </div>
+
+          <div style={styles.field}>
+            <span style={styles.label}>Provincia</span>
+            <span style={styles.value}>{safe(provincia)}</span>
           </div>
         </div>
-      </div>
+      </section>
 
       {novedadesTexto ? (
-        <div style={{ marginTop: 12 }}>
-          <b>Novedades:</b>
-          <div
-            style={{
-              marginTop: 4,
-              padding: 8,
-              border: "1px solid #ddd",
-              borderRadius: 6,
-              background: "#fafafa",
-              whiteSpace: "pre-wrap",
-            }}
-          >
-            {novedadesTexto}
-          </div>
-        </div>
+        <section style={styles.section}>
+          <h5 style={styles.sectionTitle}>Novedades</h5>
+          <div style={styles.textBox}>{novedadesTexto}</div>
+        </section>
       ) : null}
     </div>
   );
@@ -424,68 +588,142 @@ function ViewAnexo07({ datos }: { datos: any }) {
     ? [datos.novedades]
     : [];
 
+  const styles = {
+    section: {
+      marginTop: 14,
+      padding: 16,
+      borderRadius: 16,
+      border: "1px solid rgba(255,255,255,0.1)",
+      background: "rgba(255,255,255,0.06)",
+      boxShadow: "0 10px 30px rgba(0,0,0,0.18)",
+    } as React.CSSProperties,
+
+    sectionTitle: {
+      margin: 0,
+      marginBottom: 12,
+      fontSize: 16,
+      fontWeight: 700,
+      color: "rgba(255,255,255,0.96)",
+      letterSpacing: "-0.01em",
+    } as React.CSSProperties,
+
+    infoGrid: {
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+      gap: 12,
+    } as React.CSSProperties,
+
+    field: {
+      display: "flex",
+      flexDirection: "column" as const,
+      gap: 4,
+    } as React.CSSProperties,
+
+    label: {
+      fontSize: 11,
+      fontWeight: 700,
+      textTransform: "uppercase" as const,
+      letterSpacing: "0.08em",
+      color: "rgba(255,255,255,0.58)",
+    } as React.CSSProperties,
+
+    value: {
+      fontSize: 14,
+      fontWeight: 600,
+      lineHeight: 1.45,
+      color: "rgba(255,255,255,0.94)",
+      wordBreak: "break-word" as const,
+    } as React.CSSProperties,
+
+    textBox: {
+      marginTop: 6,
+      padding: 12,
+      borderRadius: 12,
+      border: "1px solid rgba(255,255,255,0.1)",
+      background: "rgba(255,255,255,0.04)",
+      whiteSpace: "pre-wrap" as const,
+      color: "rgba(255,255,255,0.92)",
+      lineHeight: 1.5,
+      fontSize: 14,
+    } as React.CSSProperties,
+
+    list: {
+      margin: "8px 0 0 0",
+      paddingLeft: 18,
+      color: "rgba(255,255,255,0.9)",
+    } as React.CSSProperties,
+
+    listItem: {
+      marginBottom: 8,
+      whiteSpace: "pre-wrap" as const,
+      lineHeight: 1.5,
+    } as React.CSSProperties,
+
+    empty: {
+      color: "rgba(255,255,255,0.68)",
+      fontSize: 13,
+    } as React.CSSProperties,
+  };
+
   return (
     <div>
-      <h4>ANEXO 07 – Ampliación de novedades de vivienda fiscal</h4>
+      <h4 style={{ marginTop: 0, marginBottom: 12, color: "#fff" }}>
+        ANEXO 07 – Ampliación de novedades de vivienda fiscal
+      </h4>
 
-      <section
-        style={{
-          marginTop: 8,
-          padding: 10,
-          borderRadius: 8,
-          border: "1px solid #ddd",
-          background: "#fafafa",
-        }}
-      >
-        <div>
-          <b>Permisionario:</b> {safe(permisionarioNombre)}
-        </div>
-        <div>
-          <b>Unidad habitacional:</b> {safe(unidadHabitacional)}
-        </div>
-        <div>
-          <b>Dirección:</b> {safe(direccion)}
-        </div>
-        <div>
-          <b>Localidad:</b> {safe(localidad)}
-        </div>
-        <div>
-          <b>Provincia:</b> {safe(provincia)}
-        </div>
-        <div>
-          <b>Inspector de barrio:</b> {safe(inspectorNombre)}
-        </div>
-        <div style={{ marginTop: 6 }}>
-          <b>Lugar:</b> {safe(lugar)}
-        </div>
-        <div>
-          <b>Fecha y conformidad:</b> {leyendaConformidad}
+      <section style={{ ...styles.section, marginTop: 8 }}>
+        <div style={styles.infoGrid}>
+          <div style={styles.field}>
+            <span style={styles.label}>Permisionario</span>
+            <span style={styles.value}>{safe(permisionarioNombre)}</span>
+          </div>
+
+          <div style={styles.field}>
+            <span style={styles.label}>Unidad habitacional</span>
+            <span style={styles.value}>{safe(unidadHabitacional)}</span>
+          </div>
+
+          <div style={styles.field}>
+            <span style={styles.label}>Dirección</span>
+            <span style={styles.value}>{safe(direccion)}</span>
+          </div>
+
+          <div style={styles.field}>
+            <span style={styles.label}>Localidad</span>
+            <span style={styles.value}>{safe(localidad)}</span>
+          </div>
+
+          <div style={styles.field}>
+            <span style={styles.label}>Provincia</span>
+            <span style={styles.value}>{safe(provincia)}</span>
+          </div>
+
+          <div style={styles.field}>
+            <span style={styles.label}>Inspector de barrio</span>
+            <span style={styles.value}>{safe(inspectorNombre)}</span>
+          </div>
+
+          <div style={styles.field}>
+            <span style={styles.label}>Lugar</span>
+            <span style={styles.value}>{safe(lugar)}</span>
+          </div>
+
+          <div style={{ ...styles.field, gridColumn: "1 / -1" }}>
+            <span style={styles.label}>Fecha y conformidad</span>
+            <span style={styles.value}>{leyendaConformidad}</span>
+          </div>
         </div>
       </section>
 
-      <section
-        style={{
-          marginTop: 14,
-          padding: 10,
-          borderRadius: 8,
-          border: "1px solid #ddd",
-          background: "white",
-        }}
-      >
-        <b>Novedades / ampliaciones</b>
+      <section style={styles.section}>
+        <h5 style={styles.sectionTitle}>Novedades / ampliaciones</h5>
 
         {novedades.length === 0 ? (
-          <p style={{ marginTop: 6 }}>No hay novedades registradas.</p>
+          <div style={styles.empty}>No hay novedades registradas.</div>
         ) : (
-          <ol style={{ marginTop: 6, paddingLeft: 20 }}>
+          <ol style={styles.list}>
             {novedades.map((texto, idx) => (
-              <li
-                key={idx}
-                style={{
-                  marginBottom: 4,
-                  whiteSpace: "pre-wrap",
-                }}
-              >
+              <li key={idx} style={styles.listItem}>
                 {texto}
               </li>
             ))}
@@ -551,64 +789,159 @@ function ViewAnexo08({ datos }: { datos: any }) {
   const confPerm = datos?.conformidadPermisionario || null;
   const confAdmin = datos?.conformidadAdminGeneral || null;
 
+  const styles = {
+    section: {
+      marginTop: 14,
+      padding: 16,
+      borderRadius: 16,
+      border: "1px solid rgba(255,255,255,0.1)",
+      background: "rgba(255,255,255,0.06)",
+      boxShadow: "0 10px 30px rgba(0,0,0,0.18)",
+    } as React.CSSProperties,
+
+    sectionTitle: {
+      margin: 0,
+      marginBottom: 12,
+      fontSize: 16,
+      fontWeight: 700,
+      color: "rgba(255,255,255,0.96)",
+      letterSpacing: "-0.01em",
+    } as React.CSSProperties,
+
+    infoGrid: {
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+      gap: 12,
+    } as React.CSSProperties,
+
+    twoCols: {
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+      gap: 14,
+    } as React.CSSProperties,
+
+    field: {
+      display: "flex",
+      flexDirection: "column" as const,
+      gap: 4,
+    } as React.CSSProperties,
+
+    label: {
+      fontSize: 11,
+      fontWeight: 700,
+      textTransform: "uppercase" as const,
+      letterSpacing: "0.08em",
+      color: "rgba(255,255,255,0.58)",
+    } as React.CSSProperties,
+
+    value: {
+      fontSize: 14,
+      fontWeight: 600,
+      lineHeight: 1.45,
+      color: "rgba(255,255,255,0.94)",
+      wordBreak: "break-word" as const,
+    } as React.CSSProperties,
+
+    subCard: {
+      padding: 14,
+      borderRadius: 14,
+      border: "1px solid rgba(255,255,255,0.08)",
+      background: "rgba(255,255,255,0.04)",
+    } as React.CSSProperties,
+
+    list: {
+      margin: "8px 0 0 0",
+      paddingLeft: 18,
+      color: "rgba(255,255,255,0.9)",
+    } as React.CSSProperties,
+
+    listItem: {
+      marginBottom: 6,
+      whiteSpace: "pre-wrap" as const,
+      lineHeight: 1.5,
+    } as React.CSSProperties,
+
+    textBox: {
+      marginTop: 6,
+      padding: 12,
+      borderRadius: 12,
+      border: "1px solid rgba(255,255,255,0.1)",
+      background: "rgba(255,255,255,0.04)",
+      whiteSpace: "pre-wrap" as const,
+      color: "rgba(255,255,255,0.92)",
+      lineHeight: 1.5,
+      fontSize: 14,
+    } as React.CSSProperties,
+  };
+
   return (
     <div>
-      <h4>ANEXO 08 – Acta de inspección previa</h4>
+      <h4 style={{ marginTop: 0, marginBottom: 12, color: "#fff" }}>
+        ANEXO 08 – Acta de inspección previa
+      </h4>
 
-      <section
-        style={{
-          marginTop: 8,
-          padding: 10,
-          borderRadius: 8,
-          border: "1px solid #ddd",
-          background: "#fafafa",
-        }}
-      >
-        <div>
-          <b>Permisionario:</b> {safe(permisionarioNombre)}
-        </div>
-        <div>
-          <b>Grado:</b> {gradoPermisionario}
-        </div>
-        <div>
-          <b>Inspector:</b> {safe(inspectorNombre)}
-        </div>
-        <div style={{ marginTop: 6 }}>
-          <b>Unidad habitacional:</b> {safe(unidadHabitacional)}
-        </div>
-        <div>
-          <b>Dirección:</b> {safe(direccion)}
-        </div>
-        <div>
-          <b>Localidad:</b> {safe(localidad)}
-        </div>
-        <div>
-          <b>Provincia:</b> {safe(provincia)}
-        </div>
-        <div style={{ marginTop: 6 }}>
-          <b>Lugar:</b> {safe(lugar)}
-        </div>
-        <div>
-          <b>Fecha de inspección:</b> {fechaInspeccionTxt}
+      <section style={{ ...styles.section, marginTop: 8 }}>
+        <div style={styles.infoGrid}>
+          <div style={styles.field}>
+            <span style={styles.label}>Permisionario</span>
+            <span style={styles.value}>{safe(permisionarioNombre)}</span>
+          </div>
+
+          <div style={styles.field}>
+            <span style={styles.label}>Grado</span>
+            <span style={styles.value}>{gradoPermisionario}</span>
+          </div>
+
+          <div style={styles.field}>
+            <span style={styles.label}>Inspector</span>
+            <span style={styles.value}>{safe(inspectorNombre)}</span>
+          </div>
+
+          <div style={styles.field}>
+            <span style={styles.label}>Unidad habitacional</span>
+            <span style={styles.value}>{safe(unidadHabitacional)}</span>
+          </div>
+
+          <div style={styles.field}>
+            <span style={styles.label}>Dirección</span>
+            <span style={styles.value}>{safe(direccion)}</span>
+          </div>
+
+          <div style={styles.field}>
+            <span style={styles.label}>Localidad</span>
+            <span style={styles.value}>{safe(localidad)}</span>
+          </div>
+
+          <div style={styles.field}>
+            <span style={styles.label}>Provincia</span>
+            <span style={styles.value}>{safe(provincia)}</span>
+          </div>
+
+          <div style={styles.field}>
+            <span style={styles.label}>Lugar</span>
+            <span style={styles.value}>{safe(lugar)}</span>
+          </div>
+
+          <div style={styles.field}>
+            <span style={styles.label}>Fecha de inspección</span>
+            <span style={styles.value}>{fechaInspeccionTxt}</span>
+          </div>
         </div>
       </section>
 
-      <section
-        style={{
-          marginTop: 14,
-          padding: 10,
-          borderRadius: 8,
-          border: "1px solid #ddd",
-          background: "white",
-        }}
-      >
-        <b>1. Reparaciones / mantenimientos a cargo de la Alcaldía</b>
+      <section style={styles.section}>
+        <h5 style={styles.sectionTitle}>
+          1. Reparaciones / mantenimientos a cargo de la Alcaldía
+        </h5>
+
         {reparacionesArmada.length === 0 ? (
-          <p style={{ marginTop: 6 }}>No se registraron reparaciones.</p>
+          <div style={{ color: "rgba(255,255,255,0.68)", fontSize: 13 }}>
+            No se registraron reparaciones.
+          </div>
         ) : (
-          <ol style={{ marginTop: 6, paddingLeft: 20 }}>
+          <ol style={styles.list}>
             {reparacionesArmada.map((texto, idx) => (
-              <li key={idx} style={{ marginBottom: 4, whiteSpace: "pre-wrap" }}>
+              <li key={idx} style={styles.listItem}>
                 {texto}
               </li>
             ))}
@@ -616,22 +949,19 @@ function ViewAnexo08({ datos }: { datos: any }) {
         )}
       </section>
 
-      <section
-        style={{
-          marginTop: 14,
-          padding: 10,
-          borderRadius: 8,
-          border: "1px solid #ddd",
-          background: "white",
-        }}
-      >
-        <b>2. Reparaciones / mantenimientos a cargo del Permisionario</b>
+      <section style={styles.section}>
+        <h5 style={styles.sectionTitle}>
+          2. Reparaciones / mantenimientos a cargo del Permisionario
+        </h5>
+
         {reparacionesPermisionario.length === 0 ? (
-          <p style={{ marginTop: 6 }}>No se registraron reparaciones.</p>
+          <div style={{ color: "rgba(255,255,255,0.68)", fontSize: 13 }}>
+            No se registraron reparaciones.
+          </div>
         ) : (
-          <ol style={{ marginTop: 6, paddingLeft: 20 }}>
+          <ol style={styles.list}>
             {reparacionesPermisionario.map((texto, idx) => (
-              <li key={idx} style={{ marginBottom: 4, whiteSpace: "pre-wrap" }}>
+              <li key={idx} style={styles.listItem}>
                 {texto}
               </li>
             ))}
@@ -639,136 +969,131 @@ function ViewAnexo08({ datos }: { datos: any }) {
         )}
       </section>
 
-      <section
-        style={{
-          marginTop: 14,
-          padding: 10,
-          borderRadius: 8,
-          border: "1px solid #ddd",
-          background: "#fafafa",
-        }}
-      >
-        <b>Representantes del permisionario</b>
+      <section style={styles.section}>
+        <h5 style={styles.sectionTitle}>Representantes del permisionario</h5>
 
-        <div style={{ marginTop: 8 }}>
-          <div style={{ fontWeight: 700 }}>Representante I</div>
-          <div>Apellido y nombres: {safe(rep1.apellidoNombres)}</div>
-          <div>Grado: {safe(rep1.grado)}</div>
-          <div>M.R.: {safe(rep1.mr)}</div>
-          <div>Destino: {safe(rep1.destino)}</div>
-          <div>Teléfono: {safe(rep1.telefono)}</div>
-        </div>
+        <div style={styles.twoCols}>
+          <div style={styles.subCard}>
+            <div
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                color: "rgba(255,255,255,0.58)",
+                marginBottom: 10,
+              }}
+            >
+              Representante I
+            </div>
 
-        <div style={{ marginTop: 12 }}>
-          <div style={{ fontWeight: 700 }}>Representante II</div>
-          <div>Apellido y nombres: {safe(rep2.apellidoNombres)}</div>
-          <div>Grado: {safe(rep2.grado)}</div>
-          <div>M.R.: {safe(rep2.mr)}</div>
-          <div>Destino: {safe(rep2.destino)}</div>
-          <div>Teléfono: {safe(rep2.telefono)}</div>
+            <div style={styles.field}>
+              <span style={styles.label}>Apellido y nombres</span>
+              <span style={styles.value}>{safe(rep1.apellidoNombres)}</span>
+            </div>
+            <div style={styles.field}>
+              <span style={styles.label}>Grado</span>
+              <span style={styles.value}>{safe(rep1.grado)}</span>
+            </div>
+            <div style={styles.field}>
+              <span style={styles.label}>M.R.</span>
+              <span style={styles.value}>{safe(rep1.mr)}</span>
+            </div>
+            <div style={styles.field}>
+              <span style={styles.label}>Destino</span>
+              <span style={styles.value}>{safe(rep1.destino)}</span>
+            </div>
+            <div style={styles.field}>
+              <span style={styles.label}>Teléfono</span>
+              <span style={styles.value}>{safe(rep1.telefono)}</span>
+            </div>
+          </div>
+
+          <div style={styles.subCard}>
+            <div
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                color: "rgba(255,255,255,0.58)",
+                marginBottom: 10,
+              }}
+            >
+              Representante II
+            </div>
+
+            <div style={styles.field}>
+              <span style={styles.label}>Apellido y nombres</span>
+              <span style={styles.value}>{safe(rep2.apellidoNombres)}</span>
+            </div>
+            <div style={styles.field}>
+              <span style={styles.label}>Grado</span>
+              <span style={styles.value}>{safe(rep2.grado)}</span>
+            </div>
+            <div style={styles.field}>
+              <span style={styles.label}>M.R.</span>
+              <span style={styles.value}>{safe(rep2.mr)}</span>
+            </div>
+            <div style={styles.field}>
+              <span style={styles.label}>Destino</span>
+              <span style={styles.value}>{safe(rep2.destino)}</span>
+            </div>
+            <div style={styles.field}>
+              <span style={styles.label}>Teléfono</span>
+              <span style={styles.value}>{safe(rep2.telefono)}</span>
+            </div>
+          </div>
         </div>
       </section>
 
       {obsInspector && (
-        <section
-          style={{
-            marginTop: 14,
-            padding: 10,
-            borderRadius: 8,
-            border: "1px solid #ddd",
-            background: "#fafafa",
-          }}
-        >
-          <b>Observaciones del inspector</b>
-          <div
-            style={{
-              marginTop: 6,
-              padding: 8,
-              border: "1px solid #ddd",
-              borderRadius: 6,
-              background: "#fff",
-              whiteSpace: "pre-wrap",
-            }}
-          >
-            {obsInspector}
-          </div>
+        <section style={styles.section}>
+          <h5 style={styles.sectionTitle}>Observaciones del inspector</h5>
+          <div style={styles.textBox}>{obsInspector}</div>
         </section>
       )}
 
       {obsPermisionario && (
-        <section
-          style={{
-            marginTop: 14,
-            padding: 10,
-            borderRadius: 8,
-            border: "1px solid #ddd",
-            background: "#fafafa",
-          }}
-        >
-          <b>Observaciones del permisionario</b>
-          <div
-            style={{
-              marginTop: 6,
-              padding: 8,
-              border: "1px solid #ddd",
-              borderRadius: 6,
-              background: "#fff",
-              whiteSpace: "pre-wrap",
-            }}
-          >
-            {obsPermisionario}
-          </div>
+        <section style={styles.section}>
+          <h5 style={styles.sectionTitle}>Observaciones del permisionario</h5>
+          <div style={styles.textBox}>{obsPermisionario}</div>
         </section>
       )}
 
       {obsAdmin && (
-        <section
-          style={{
-            marginTop: 14,
-            padding: 10,
-            borderRadius: 8,
-            border: "1px solid #ddd",
-            background: "#fafafa",
-          }}
-        >
-          <b>Observaciones / fundamentos ADMIN_GENERAL</b>
-          <div
-            style={{
-              marginTop: 6,
-              padding: 8,
-              border: "1px solid #ddd",
-              borderRadius: 6,
-              background: "#fff",
-              whiteSpace: "pre-wrap",
-            }}
-          >
-            {obsAdmin}
-          </div>
+        <section style={styles.section}>
+          <h5 style={styles.sectionTitle}>
+            Observaciones / fundamentos ADMIN_GENERAL
+          </h5>
+          <div style={styles.textBox}>{obsAdmin}</div>
         </section>
       )}
 
-      <section
-        style={{
-          marginTop: 14,
-          padding: 10,
-          borderRadius: 8,
-          border: "1px solid #ddd",
-          background: "#fafafa",
-        }}
-      >
-        <b>Constancias</b>
-        <div style={{ marginTop: 8 }}>
-          <div>
-            <b>Conformidad del permisionario:</b>{" "}
-            {confPerm?.ok ? `SI — ${fmtDateTime(confPerm?.fecha)}` : "NO"}
+      <section style={styles.section}>
+        <h5 style={styles.sectionTitle}>Constancias</h5>
+
+        <div style={styles.infoGrid}>
+          <div style={styles.field}>
+            <span style={styles.label}>Conformidad del permisionario</span>
+            <span style={styles.value}>
+              {confPerm?.ok ? `SI — ${fmtDateTime(confPerm?.fecha)}` : "NO"}
+            </span>
           </div>
-          <div>
-            <b>Cierre ADMIN_GENERAL:</b>{" "}
-            {confAdmin?.ok ? `SI — ${fmtDateTime(confAdmin?.fecha)}` : "NO"}
+
+          <div style={styles.field}>
+            <span style={styles.label}>Cierre ADMIN_GENERAL</span>
+            <span style={styles.value}>
+              {confAdmin?.ok ? `SI — ${fmtDateTime(confAdmin?.fecha)}` : "NO"}
+            </span>
           </div>
-          <div>
-            <b>Lugar / Fecha de firma:</b> {safe(datos?.lugarFirma || lugar)} —{" "}
-            {datos?.fechaFirma ? fmtDateTime(datos.fechaFirma) : "—"}
+
+          <div style={styles.field}>
+            <span style={styles.label}>Lugar / Fecha de firma</span>
+            <span style={styles.value}>
+              {safe(datos?.lugarFirma || lugar)} —{" "}
+              {datos?.fechaFirma ? fmtDateTime(datos.fechaFirma) : "—"}
+            </span>
           </div>
         </div>
       </section>
@@ -802,238 +1127,328 @@ function ViewAnexo09({ datos }: { datos: any }) {
   const est = datos?.estadoSistemas || {};
   const novedades = datos?.novedadesTexto || datos?.novedades || "";
 
+  const materialRows = [
+    ["Llaves puertas de entrada al edificio", yn(material.llavesEdificio)],
+    ["Llaves puertas de entrada a la vivienda", yn(material.llavesVivienda)],
+    ["Llaves de baulera", yn(material.llavesBaulera)],
+    ["Llave acceso a terraza", yn(material.llaveTerraza)],
+    ["Llave acceso a cochera", yn(material.llaveCochera)],
+    ["Muebles / enseres según inventario", yn(material.inventarioMuebles)],
+    ["Línea telefónica funcionando", yn(material.lineaTelefonica)],
+  ];
+
+  const docRows = [
+    ["Reglamento de Viviendas Fiscales de la Armada", yn(docu.reglamentoViviendas)],
+    ["Guía telefónica", yn(docu.guiaTelefonica)],
+    ["Reglamento de copropiedad", yn(docu.reglamentoCopropiedad)],
+  ];
+
+  const estadoRows = [
+    ["Agua", est.agua],
+    ["Cloacas", est.cloacas],
+    ["Electricidad", est.electricidad],
+    ["Gas", est.gas],
+    ["Pluviales", est.pluviales],
+    ["Teléfono", est.telefono],
+    ["Aberturas", est.aberturas],
+    ["Albañilería", est.albanileria],
+    ["Alfombras", est.alfombras],
+    ["Antena TV", est.antenaTv],
+    ["Calefactor / Estufa", est.calefactorEstufa],
+    ["Calefón / Termotanque", est.calefonTermotanque],
+    ["Carpintería", est.carpinteria],
+    ["Cerrajería", est.cerrajeria],
+    ["Cocina", est.cocina],
+    ["Desinfección", est.desinfeccion],
+    ["Herrajes", est.herrajes],
+    ["Limpieza", est.limpieza],
+    ["Lustrado", est.lustrado],
+    ["Parques y jardines", est.parquesJardines],
+    ["Pintura", est.pintura],
+    ["Pisos", est.pisos],
+    ["Portero eléctrico", est.porteroElectrico],
+    ["Sanitarios", est.sanitarios],
+    ["Vidrios", est.vidrios],
+    ["Estado general", est.estadoGeneral],
+  ];
+
+  const styles = {
+    section: {
+      marginTop: 14,
+      padding: 16,
+      borderRadius: 16,
+      border: "1px solid rgba(255,255,255,0.1)",
+      background: "rgba(255,255,255,0.06)",
+      boxShadow: "0 10px 30px rgba(0,0,0,0.18)",
+    } as React.CSSProperties,
+
+    sectionTitle: {
+      margin: 0,
+      marginBottom: 12,
+      fontSize: 16,
+      fontWeight: 700,
+      color: "rgba(255,255,255,0.96)",
+      letterSpacing: "-0.01em",
+    } as React.CSSProperties,
+
+    infoGrid: {
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+      gap: 12,
+    } as React.CSSProperties,
+
+    field: {
+      display: "flex",
+      flexDirection: "column" as const,
+      gap: 4,
+    } as React.CSSProperties,
+
+    label: {
+      fontSize: 11,
+      fontWeight: 700,
+      textTransform: "uppercase" as const,
+      letterSpacing: "0.08em",
+      color: "rgba(255,255,255,0.58)",
+    } as React.CSSProperties,
+
+    value: {
+      fontSize: 14,
+      fontWeight: 600,
+      lineHeight: 1.45,
+      color: "rgba(255,255,255,0.94)",
+      wordBreak: "break-word" as const,
+    } as React.CSSProperties,
+
+    tableWrap: {
+      border: "1px solid rgba(255,255,255,0.08)",
+      borderRadius: 14,
+      overflow: "hidden" as const,
+      background: "rgba(255,255,255,0.04)",
+    } as React.CSSProperties,
+
+    table: {
+      width: "100%",
+      borderCollapse: "collapse" as const,
+      fontSize: 13,
+      color: "rgba(255,255,255,0.92)",
+    } as React.CSSProperties,
+
+    th: {
+      textAlign: "left" as const,
+      padding: "10px 12px",
+      borderBottom: "1px solid rgba(255,255,255,0.1)",
+      color: "rgba(255,255,255,0.62)",
+      fontSize: 11,
+      textTransform: "uppercase" as const,
+      letterSpacing: "0.08em",
+      background: "rgba(255,255,255,0.03)",
+    } as React.CSSProperties,
+
+    td: {
+      padding: "10px 12px",
+      borderBottom: "1px solid rgba(255,255,255,0.08)",
+      verticalAlign: "top" as const,
+    } as React.CSSProperties,
+
+    valueTd: {
+      padding: "10px 12px",
+      borderBottom: "1px solid rgba(255,255,255,0.08)",
+      verticalAlign: "top" as const,
+      textAlign: "right" as const,
+      fontWeight: 700,
+      color: "rgba(255,255,255,0.96)",
+      whiteSpace: "nowrap" as const,
+    } as React.CSSProperties,
+
+    metricGrid: {
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+      gap: 12,
+    } as React.CSSProperties,
+
+    metricCard: {
+      padding: 12,
+      borderRadius: 14,
+      border: "1px solid rgba(255,255,255,0.08)",
+      background: "rgba(255,255,255,0.04)",
+    } as React.CSSProperties,
+
+    estadoGrid: {
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+      gap: 10,
+    } as React.CSSProperties,
+
+    estadoItem: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      gap: 10,
+      padding: "10px 12px",
+      borderRadius: 12,
+      border: "1px solid rgba(255,255,255,0.08)",
+      background: "rgba(255,255,255,0.04)",
+      color: "rgba(255,255,255,0.9)",
+      fontSize: 13,
+    } as React.CSSProperties,
+
+    badge: {
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      minWidth: 38,
+      padding: "4px 8px",
+      borderRadius: 999,
+      border: "1px solid rgba(255,255,255,0.1)",
+      background: "rgba(255,255,255,0.06)",
+      color: "rgba(255,255,255,0.96)",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: "0.04em",
+    } as React.CSSProperties,
+
+    textBox: {
+      marginTop: 6,
+      padding: 12,
+      borderRadius: 12,
+      border: "1px solid rgba(255,255,255,0.1)",
+      background: "rgba(255,255,255,0.04)",
+      whiteSpace: "pre-wrap" as const,
+      color: "rgba(255,255,255,0.92)",
+      lineHeight: 1.5,
+      fontSize: 14,
+    } as React.CSSProperties,
+  };
+
   return (
     <div>
-      <h4>ANEXO 09 – Acta de entrega de vivienda fiscal</h4>
+      <h4 style={{ marginTop: 0, marginBottom: 12, color: "#fff" }}>
+        ANEXO 09 – Acta de entrega de vivienda fiscal
+      </h4>
 
-      <section
-        style={{
-          marginTop: 8,
-          padding: 10,
-          borderRadius: 8,
-          border: "1px solid #ddd",
-          background: "#fafafa",
-        }}
-      >
-        <div>
-          <b>Permisionario saliente:</b> {safe(permisionario)}
-        </div>
-        <div>
-          <b>Inspector:</b> {safe(inspector)}
-        </div>
-        <div style={{ marginTop: 6 }}>
-          <b>Unidad habitacional:</b> {safe(unidad)}
-        </div>
-        <div>
-          <b>Dirección:</b> {safe(direccion)}
-        </div>
-        <div>
-          <b>Localidad:</b> {safe(localidad)}
-        </div>
-        <div>
-          <b>Provincia:</b> {safe(provincia)}
+      <section style={{ ...styles.section, marginTop: 8 }}>
+        <div style={styles.infoGrid}>
+          <div style={styles.field}>
+            <span style={styles.label}>Permisionario saliente</span>
+            <span style={styles.value}>{safe(permisionario)}</span>
+          </div>
+
+          <div style={styles.field}>
+            <span style={styles.label}>Inspector</span>
+            <span style={styles.value}>{safe(inspector)}</span>
+          </div>
+
+          <div style={styles.field}>
+            <span style={styles.label}>Unidad habitacional</span>
+            <span style={styles.value}>{safe(unidad)}</span>
+          </div>
+
+          <div style={styles.field}>
+            <span style={styles.label}>Dirección</span>
+            <span style={styles.value}>{safe(direccion)}</span>
+          </div>
+
+          <div style={styles.field}>
+            <span style={styles.label}>Localidad</span>
+            <span style={styles.value}>{safe(localidad)}</span>
+          </div>
+
+          <div style={styles.field}>
+            <span style={styles.label}>Provincia</span>
+            <span style={styles.value}>{safe(provincia)}</span>
+          </div>
         </div>
       </section>
 
-      <section
-        style={{
-          marginTop: 14,
-          padding: 10,
-          borderRadius: 8,
-          border: "1px solid #ddd",
-          background: "white",
-        }}
-      >
-        <b>1. Material</b>
-        <table
-          style={{
-            width: "100%",
-            marginTop: 6,
-            borderCollapse: "collapse",
-            fontSize: 12,
-          }}
-        >
-          <tbody>
-            <tr>
-              <td>Llaves puertas de entrada al edificio</td>
-              <td style={{ textAlign: "right" }}>
-                {yn(material.llavesEdificio)}
-              </td>
-            </tr>
-            <tr>
-              <td>Llaves puertas de entrada a la vivienda</td>
-              <td style={{ textAlign: "right" }}>
-                {yn(material.llavesVivienda)}
-              </td>
-            </tr>
-            <tr>
-              <td>Llaves de baulera</td>
-              <td style={{ textAlign: "right" }}>
-                {yn(material.llavesBaulera)}
-              </td>
-            </tr>
-            <tr>
-              <td>Llave acceso a terraza</td>
-              <td style={{ textAlign: "right" }}>
-                {yn(material.llaveTerraza)}
-              </td>
-            </tr>
-            <tr>
-              <td>Llave acceso a cochera</td>
-              <td style={{ textAlign: "right" }}>
-                {yn(material.llaveCochera)}
-              </td>
-            </tr>
-            <tr>
-              <td>Muebles / enseres según inventario</td>
-              <td style={{ textAlign: "right" }}>
-                {yn(material.inventarioMuebles)}
-              </td>
-            </tr>
-            <tr>
-              <td>Línea telefónica funcionando</td>
-              <td style={{ textAlign: "right" }}>
-                {yn(material.lineaTelefonica)}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </section>
+      <section style={styles.section}>
+        <h5 style={styles.sectionTitle}>1. Material</h5>
 
-      <section
-        style={{
-          marginTop: 14,
-          padding: 10,
-          borderRadius: 8,
-          border: "1px solid #ddd",
-          background: "white",
-        }}
-      >
-        <b>2. Documentación</b>
-        <table
-          style={{
-            width: "100%",
-            marginTop: 6,
-            borderCollapse: "collapse",
-            fontSize: 12,
-          }}
-        >
-          <tbody>
-            <tr>
-              <td>Reglamento de Viviendas Fiscales de la Armada</td>
-              <td style={{ textAlign: "right" }}>
-                {yn(docu.reglamentoViviendas)}
-              </td>
-            </tr>
-            <tr>
-              <td>Guía telefónica</td>
-              <td style={{ textAlign: "right" }}>{yn(docu.guiaTelefonica)}</td>
-            </tr>
-            <tr>
-              <td>Reglamento de copropiedad</td>
-              <td style={{ textAlign: "right" }}>
-                {yn(docu.reglamentoCopropiedad)}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </section>
-
-      <section
-        style={{
-          marginTop: 14,
-          padding: 10,
-          borderRadius: 8,
-          border: "1px solid #ddd",
-          background: "white",
-        }}
-      >
-        <b>3. Lecturas de medidores</b>
-        <div style={{ marginTop: 6, fontSize: 12 }}>
-          <div>GAS: {safe(med.gas_m3, "___")} m³</div>
-          <div>AGUA: {safe(med.agua_m3, "___")} m³</div>
-          <div>LUZ: {safe(med.luz_kws, "___")} Kws</div>
-          <div>TELÉFONO: {safe(med.telefono_pulsos, "___")} pulsos</div>
+        <div style={styles.tableWrap}>
+          <table style={styles.table}>
+            <thead>
+              <tr>
+                <th style={styles.th}>Ítem</th>
+                <th style={{ ...styles.th, textAlign: "right" }}>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {materialRows.map(([label, value], idx) => (
+                <tr key={idx}>
+                  <td style={styles.td}>{label}</td>
+                  <td style={styles.valueTd}>{value}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </section>
 
-      <section
-        style={{
-          marginTop: 14,
-          padding: 10,
-          borderRadius: 8,
-          border: "1px solid #ddd",
-          background: "white",
-        }}
-      >
-        <b>Estado de sistemas y elementos</b>
-        <div
-          style={{
-            marginTop: 6,
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: 6,
-            fontSize: 12,
-          }}
-        >
-          {[
-            ["Agua", est.agua],
-            ["Cloacas", est.cloacas],
-            ["Electricidad", est.electricidad],
-            ["Gas", est.gas],
-            ["Pluviales", est.pluviales],
-            ["Teléfono", est.telefono],
-            ["Aberturas", est.aberturas],
-            ["Albañilería", est.albanileria],
-            ["Alfombras", est.alfombras],
-            ["Antena TV", est.antenaTv],
-            ["Calefactor / Estufa", est.calefactorEstufa],
-            ["Calefón / Termotanque", est.calefonTermotanque],
-            ["Carpintería", est.carpinteria],
-            ["Cerrajería", est.cerrajeria],
-            ["Cocina", est.cocina],
-            ["Desinfección", est.desinfeccion],
-            ["Herrajes", est.herrajes],
-            ["Limpieza", est.limpieza],
-            ["Lustrado", est.lustrado],
-            ["Parques y jardines", est.parquesJardines],
-            ["Pintura", est.pintura],
-            ["Pisos", est.pisos],
-            ["Portero eléctrico", est.porteroElectrico],
-            ["Sanitarios", est.sanitarios],
-            ["Vidrios", est.vidrios],
-            ["Estado general", est.estadoGeneral],
-          ].map(([label, value]) => (
-            <div key={label as string}>
-              <span>{label}:</span> <b>{mbbrm(value)}</b>
+      <section style={styles.section}>
+        <h5 style={styles.sectionTitle}>2. Documentación</h5>
+
+        <div style={styles.tableWrap}>
+          <table style={styles.table}>
+            <thead>
+              <tr>
+                <th style={styles.th}>Documento</th>
+                <th style={{ ...styles.th, textAlign: "right" }}>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {docRows.map(([label, value], idx) => (
+                <tr key={idx}>
+                  <td style={styles.td}>{label}</td>
+                  <td style={styles.valueTd}>{value}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section style={styles.section}>
+        <h5 style={styles.sectionTitle}>3. Lecturas de medidores</h5>
+
+        <div style={styles.metricGrid}>
+          <div style={styles.metricCard}>
+            <div style={styles.label}>Gas</div>
+            <div style={styles.value}>{safe(med.gas_m3, "___")} m³</div>
+          </div>
+
+          <div style={styles.metricCard}>
+            <div style={styles.label}>Agua</div>
+            <div style={styles.value}>{safe(med.agua_m3, "___")} m³</div>
+          </div>
+
+          <div style={styles.metricCard}>
+            <div style={styles.label}>Luz</div>
+            <div style={styles.value}>{safe(med.luz_kws, "___")} Kws</div>
+          </div>
+
+          <div style={styles.metricCard}>
+            <div style={styles.label}>Teléfono</div>
+            <div style={styles.value}>{safe(med.telefono_pulsos, "___")} pulsos</div>
+          </div>
+        </div>
+      </section>
+
+      <section style={styles.section}>
+        <h5 style={styles.sectionTitle}>Estado de sistemas y elementos</h5>
+
+        <div style={styles.estadoGrid}>
+          {estadoRows.map(([label, value]) => (
+            <div key={label as string} style={styles.estadoItem}>
+              <span>{label}</span>
+              <span style={styles.badge}>{mbbrm(value)}</span>
             </div>
           ))}
         </div>
       </section>
 
       {novedades && (
-        <section
-          style={{
-            marginTop: 14,
-            padding: 10,
-            borderRadius: 8,
-            border: "1px solid #ddd",
-            background: "#fafafa",
-          }}
-        >
-          <b>Novedades / observaciones</b>
-          <div
-            style={{
-              marginTop: 6,
-              padding: 8,
-              borderRadius: 6,
-              border: "1px solid #ddd",
-              background: "#fff",
-              whiteSpace: "pre-wrap",
-            }}
-          >
-            {novedades}
-          </div>
+        <section style={styles.section}>
+          <h5 style={styles.sectionTitle}>Novedades / observaciones</h5>
+          <div style={styles.textBox}>{novedades}</div>
         </section>
       )}
     </div>
@@ -1091,187 +1506,274 @@ function ViewAnexo11({ datos }: { datos: any }) {
 
   const timeline = buildAnexo11Timeline(datos);
 
+  const styles = {
+    section: {
+      marginTop: 14,
+      padding: 16,
+      borderRadius: 16,
+      border: "1px solid rgba(255,255,255,0.1)",
+      background: "rgba(255,255,255,0.06)",
+      boxShadow: "0 10px 30px rgba(0,0,0,0.18)",
+    } as React.CSSProperties,
+
+    sectionTitle: {
+      marginTop: 0,
+      marginBottom: 12,
+      fontSize: 16,
+      fontWeight: 700,
+      color: "rgba(255,255,255,0.96)",
+      letterSpacing: "-0.01em",
+    } as React.CSSProperties,
+
+    infoGrid: {
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+      gap: 12,
+    } as React.CSSProperties,
+
+    field: {
+      display: "flex",
+      flexDirection: "column" as const,
+      gap: 4,
+    } as React.CSSProperties,
+
+    label: {
+      fontSize: 11,
+      fontWeight: 700,
+      textTransform: "uppercase" as const,
+      letterSpacing: "0.08em",
+      color: "rgba(255,255,255,0.58)",
+    } as React.CSSProperties,
+
+    value: {
+      fontSize: 15,
+      fontWeight: 600,
+      lineHeight: 1.45,
+      color: "rgba(255,255,255,0.94)",
+      wordBreak: "break-word" as const,
+    } as React.CSSProperties,
+
+    textBox: {
+      marginTop: 6,
+      padding: 12,
+      borderRadius: 12,
+      border: "1px solid rgba(255,255,255,0.1)",
+      background: "rgba(255,255,255,0.04)",
+      whiteSpace: "pre-wrap" as const,
+      color: "rgba(255,255,255,0.92)",
+      lineHeight: 1.5,
+      fontSize: 14,
+    } as React.CSSProperties,
+
+    tableWrap: {
+      border: "1px solid rgba(255,255,255,0.08)",
+      borderRadius: 14,
+      overflow: "hidden" as const,
+      background: "rgba(255,255,255,0.04)",
+    } as React.CSSProperties,
+
+    table: {
+      width: "100%",
+      borderCollapse: "collapse" as const,
+      fontSize: 13,
+      color: "rgba(255,255,255,0.9)",
+    } as React.CSSProperties,
+
+    th: {
+      textAlign: "left" as const,
+      padding: "10px 12px",
+      borderBottom: "1px solid rgba(255,255,255,0.1)",
+      color: "rgba(255,255,255,0.62)",
+      fontSize: 11,
+      textTransform: "uppercase" as const,
+      letterSpacing: "0.08em",
+      background: "rgba(255,255,255,0.03)",
+    } as React.CSSProperties,
+
+    td: {
+      padding: "10px 12px",
+      borderBottom: "1px solid rgba(255,255,255,0.08)",
+      verticalAlign: "top" as const,
+    } as React.CSSProperties,
+
+    timelineWrap: {
+      border: "1px solid rgba(255,255,255,0.08)",
+      background: "rgba(255,255,255,0.04)",
+      borderRadius: 14,
+      padding: 12,
+      maxHeight: 320,
+      overflow: "auto" as const,
+    } as React.CSSProperties,
+
+    timelineItem: {
+      padding: "10px 0",
+      borderBottom: "1px dashed rgba(255,255,255,0.1)",
+    } as React.CSSProperties,
+
+    badgeRow: {
+      display: "flex",
+      flexWrap: "wrap" as const,
+      gap: 8,
+      alignItems: "center",
+      marginBottom: 6,
+    } as React.CSSProperties,
+
+    badge: {
+      display: "inline-flex",
+      alignItems: "center",
+      padding: "4px 8px",
+      borderRadius: 999,
+      border: "1px solid rgba(255,255,255,0.1)",
+      background: "rgba(255,255,255,0.06)",
+      color: "rgba(255,255,255,0.86)",
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: "0.04em",
+    } as React.CSSProperties,
+
+    empty: {
+      color: "rgba(255,255,255,0.68)",
+      fontSize: 13,
+    } as React.CSSProperties,
+  };
+
   return (
     <div>
-      <h4>ANEXO 11 – Pedido de trabajo</h4>
+      <h4 style={{ marginTop: 0, marginBottom: 12, color: "#fff" }}>
+        ANEXO 11 – Pedido de trabajo
+      </h4>
 
-      <section
-        style={{
-          marginTop: 8,
-          padding: 10,
-          borderRadius: 8,
-          border: "1px solid #ddd",
-          background: "#fafafa",
-        }}
-      >
-        <div><b>Vivienda / Espacio:</b> {safe(vivienda)}</div>
-        <div><b>Barrio:</b> {safe(barrio)}</div>
-        <div><b>Permisionario:</b> {safe(permisionario)}</div>
-        <div><b>Tipo de solicitud:</b> {safe(solicitud)}</div>
-        <div><b>Detalle:</b> {safe(detalle)}</div>
-      </section>
+      <section style={{ ...styles.section, marginTop: 8 }}>
+        <div style={styles.infoGrid}>
+          <div style={styles.field}>
+            <span style={styles.label}>Vivienda / espacio</span>
+            <span style={styles.value}>{safe(vivienda)}</span>
+          </div>
 
-      <section
-        style={{
-          marginTop: 14,
-          padding: 10,
-          borderRadius: 8,
-          border: "1px solid #ddd",
-          background: "#fafafa",
-        }}
-      >
-        <h5 style={{ marginTop: 0 }}>Intervención del inspector</h5>
-        <div><b>Prioridad:</b> {safe(prioridad)}</div>
-        <div><b>Decisión:</b> {safe(decision)}</div>
-        <div><b>Responsable del trabajo:</b> {safe(responsable)}</div>
-        <div><b>Trabajo finalizado:</b> {trabajoFinalizado}</div>
-        <div><b>Fecha finalización:</b> {fechaFinal}</div>
-      </section>
+          <div style={styles.field}>
+            <span style={styles.label}>Barrio</span>
+            <span style={styles.value}>{safe(barrio)}</span>
+          </div>
 
-      <section
-        style={{
-          marginTop: 14,
-          padding: 10,
-          borderRadius: 8,
-          border: "1px solid #ddd",
-          background: "#fafafa",
-        }}
-      >
-        <h5 style={{ marginTop: 0 }}>Observaciones del inspector</h5>
-        <div
-          style={{
-            marginTop: 4,
-            padding: 8,
-            border: "1px solid #ddd",
-            borderRadius: 6,
-            background: "#fff",
-            whiteSpace: "pre-wrap",
-          }}
-        >
-          {safe(obsInspector)}
+          <div style={styles.field}>
+            <span style={styles.label}>Permisionario</span>
+            <span style={styles.value}>{safe(permisionario)}</span>
+          </div>
+
+          <div style={styles.field}>
+            <span style={styles.label}>Tipo de solicitud</span>
+            <span style={styles.value}>{safe(solicitud)}</span>
+          </div>
+
+          <div style={{ ...styles.field, gridColumn: "1 / -1" }}>
+            <span style={styles.label}>Detalle</span>
+            <span style={styles.value}>{safe(detalle)}</span>
+          </div>
         </div>
       </section>
 
-      <section
-        style={{
-          marginTop: 14,
-          padding: 10,
-          borderRadius: 8,
-          border: "1px solid #ddd",
-          background: "#fafafa",
-        }}
-      >
-        <h5 style={{ marginTop: 0 }}>Observaciones ADMIN GENERAL</h5>
-        <div
-          style={{
-            marginTop: 4,
-            padding: 8,
-            border: "1px solid #ddd",
-            borderRadius: 6,
-            background: "#fff",
-            whiteSpace: "pre-wrap",
-          }}
-        >
-          {safe(obsAdmin)}
+      <section style={styles.section}>
+        <h5 style={styles.sectionTitle}>Intervención del inspector</h5>
+
+        <div style={styles.infoGrid}>
+          <div style={styles.field}>
+            <span style={styles.label}>Prioridad</span>
+            <span style={styles.value}>{safe(prioridad)}</span>
+          </div>
+
+          <div style={styles.field}>
+            <span style={styles.label}>Decisión</span>
+            <span style={styles.value}>{safe(decision)}</span>
+          </div>
+
+          <div style={styles.field}>
+            <span style={styles.label}>Responsable del trabajo</span>
+            <span style={styles.value}>{safe(responsable)}</span>
+          </div>
+
+          <div style={styles.field}>
+            <span style={styles.label}>Trabajo finalizado</span>
+            <span style={styles.value}>{trabajoFinalizado}</span>
+          </div>
+
+          <div style={styles.field}>
+            <span style={styles.label}>Fecha finalización</span>
+            <span style={styles.value}>{fechaFinal}</span>
+          </div>
         </div>
       </section>
 
-      <section
-        style={{
-          marginTop: 14,
-          padding: 10,
-          borderRadius: 8,
-          border: "1px solid #ddd",
-          background: "#fafafa",
-        }}
-      >
-        <h5 style={{ marginTop: 0 }}>Visitas programadas</h5>
+      <section style={styles.section}>
+        <h5 style={styles.sectionTitle}>Observaciones del inspector</h5>
+        <div style={styles.textBox}>{safe(obsInspector)}</div>
+      </section>
+
+      <section style={styles.section}>
+        <h5 style={styles.sectionTitle}>Observaciones ADMIN GENERAL</h5>
+        <div style={styles.textBox}>{safe(obsAdmin)}</div>
+      </section>
+
+      <section style={styles.section}>
+        <h5 style={styles.sectionTitle}>Visitas programadas</h5>
 
         {visitas.length === 0 ? (
-          <p>No hay visitas registradas.</p>
+          <div style={styles.empty}>No hay visitas registradas.</div>
         ) : (
-          <table
-            style={{
-              width: "100%",
-              marginTop: 6,
-              borderCollapse: "collapse",
-              fontSize: 12,
-            }}
-          >
-            <thead>
-              <tr>
-                <th
-                  style={{
-                    borderBottom: "1px solid #ccc",
-                    textAlign: "left",
-                    padding: 4,
-                  }}
-                >
-                  Fecha programada
-                </th>
-                <th
-                  style={{
-                    borderBottom: "1px solid #ccc",
-                    textAlign: "left",
-                    padding: 4,
-                  }}
-                >
-                  Observación
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {visitas.map((v: any, i: number) => (
-                <tr key={i}>
-                  <td style={{ borderBottom: "1px solid #eee", padding: 4 }}>
-                    {fmtDateTime(v.fechaProgramada)}
-                  </td>
-                  <td style={{ borderBottom: "1px solid #eee", padding: 4 }}>
-                    {safe(v.observacion)}
-                  </td>
+          <div style={styles.tableWrap}>
+            <table style={styles.table}>
+              <thead>
+                <tr>
+                  <th style={styles.th}>Fecha programada</th>
+                  <th style={styles.th}>Observación</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {visitas.map((v: any, i: number) => (
+                  <tr key={i}>
+                    <td style={styles.td}>{fmtDateTime(v.fechaProgramada)}</td>
+                    <td style={styles.td}>{safe(v.observacion)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
 
-      <section
-        style={{
-          marginTop: 14,
-          padding: 10,
-          borderRadius: 8,
-          border: "1px solid #ddd",
-          background: "#fafafa",
-        }}
-      >
-        <h5 style={{ marginTop: 0 }}>Historial cronológico del trámite</h5>
+      <section style={styles.section}>
+        <h5 style={styles.sectionTitle}>Historial / timeline</h5>
 
         {timeline.length === 0 ? (
-          <p>No hay intervenciones registradas.</p>
+          <div style={styles.empty}>No hay movimientos registrados.</div>
         ) : (
-          <div
-            style={{
-              marginTop: 6,
-              border: "1px solid #ddd",
-              borderRadius: 6,
-              background: "#fff",
-              padding: 8,
-            }}
-          >
-            {timeline.map((item, i) => (
+          <div style={styles.timelineWrap}>
+            {timeline.map((item, idx) => (
               <div
-                key={i}
+                key={idx}
                 style={{
-                  padding: "8px 0",
+                  ...styles.timelineItem,
                   borderBottom:
-                    i < timeline.length - 1 ? "1px dashed #ddd" : "none",
+                    idx === timeline.length - 1
+                      ? "none"
+                      : "1px dashed rgba(255,255,255,0.1)",
                 }}
               >
-                <div style={{ fontSize: 12, marginBottom: 2 }}>
-                  <b>{fmtDateTime(item.fecha)}</b> — {item.actor} — {item.tipo}
+                <div style={styles.badgeRow}>
+                  <span style={styles.badge}>
+                    {item.fecha ? fmtDateTime(item.fecha) : "—"}
+                  </span>
+                  <span style={styles.badge}>{safe(item.tipo)}</span>
+                  <span style={styles.badge}>{safe(item.actor)}</span>
                 </div>
-                <div style={{ fontSize: 13, whiteSpace: "pre-wrap" }}>
+
+                <div
+                  style={{
+                    color: "rgba(255,255,255,0.9)",
+                    whiteSpace: "pre-wrap",
+                    fontSize: 13,
+                    lineHeight: 1.5,
+                  }}
+                >
                   {safe(item.texto)}
                 </div>
               </div>
@@ -1282,7 +1784,6 @@ function ViewAnexo11({ datos }: { datos: any }) {
     </div>
   );
 }
-
 /* ╔══════════════════════════════════════╗
    ║   DEFAULT – Vista genérica           ║
    ╚══════════════════════════════════════╝ */

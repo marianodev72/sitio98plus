@@ -2,6 +2,14 @@
 
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
+import {
+  pageStyle,
+  shellStyle,
+  secondaryButtonStyle,
+  titleStyle,
+  subtitleStyle,
+  cardStyle,
+} from "../pages/permisionario/uiStyles";
 
 function linkStyle({ isActive }: { isActive: boolean }) {
   return {
@@ -11,12 +19,12 @@ function linkStyle({ isActive }: { isActive: boolean }) {
     fontWeight: 800,
     fontSize: 14,
     lineHeight: 1.2,
-    color: isActive ? "#ffffff" : "rgba(255,255,255,0.86)",
+    color: "#ffffff",
     background: isActive
-      ? "linear-gradient(180deg, rgba(56,189,248,0.30), rgba(56,189,248,0.14))"
+      ? "rgba(255,255,255,0.10)"
       : "rgba(255,255,255,0.05)",
     border: isActive
-      ? "1px solid rgba(56,189,248,0.42)"
+      ? "1px solid rgba(255,255,255,0.18)"
       : "1px solid rgba(255,255,255,0.14)",
     boxShadow: isActive ? "0 8px 20px rgba(0,0,0,0.24)" : "none",
     backdropFilter: "blur(4px)",
@@ -27,15 +35,6 @@ function linkStyle({ isActive }: { isActive: boolean }) {
     minHeight: 44,
   } as const;
 }
-
-const actionButtonStyle = {
-  padding: "11px 15px",
-  borderRadius: 12,
-  fontWeight: 800,
-  fontSize: 14,
-  cursor: "pointer",
-  minHeight: 44,
-} as const;
 
 export default function AdminGeneralLayout() {
   const navigate = useNavigate();
@@ -50,13 +49,7 @@ export default function AdminGeneralLayout() {
   }
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: "#0b1220",
-        color: "#eaf0ff",
-      }}
-    >
+    <div style={pageStyle}>
       <header
         style={{
           position: "sticky",
@@ -67,13 +60,7 @@ export default function AdminGeneralLayout() {
           boxShadow: "0 10px 28px rgba(0,0,0,0.28)",
         }}
       >
-        <div
-          style={{
-            maxWidth: 1440,
-            margin: "0 auto",
-            padding: "18px 20px 16px",
-          }}
-        >
+        <div style={{ ...shellStyle, maxWidth: 1440, padding: "18px 20px 16px" }}>
           <div
             style={{
               display: "flex",
@@ -96,29 +83,12 @@ export default function AdminGeneralLayout() {
                 Base Naval Ushuaia – Alcaldía ZN98
               </div>
 
-              <h1
-                style={{
-                  margin: "8px 0 0",
-                  fontSize: 28,
-                  fontWeight: 950,
-                  lineHeight: 1.1,
-                  color: "#ffffff",
-                  textShadow: "0 2px 14px rgba(0,0,0,0.42)",
-                }}
-              >
+              <h1 style={{ ...titleStyle, marginTop: 8, fontSize: 28 }}>
                 Panel Admin General
               </h1>
 
-              <div
-                style={{
-                  marginTop: 8,
-                  fontSize: 14,
-                  lineHeight: 1.45,
-                  color: "rgba(255,255,255,0.82)",
-                }}
-              >
-                {user?.apellido} {user?.nombre} —{" "}
-                <b>{String(user?.role || "")}</b>
+              <div style={{ ...subtitleStyle, marginTop: 8 }}>
+                {user?.apellido} {user?.nombre} — <b>{String(user?.role || "")}</b>
               </div>
             </div>
 
@@ -132,12 +102,7 @@ export default function AdminGeneralLayout() {
             >
               <button
                 onClick={() => navigate(-1)}
-                style={{
-                  ...actionButtonStyle,
-                  border: "1px solid rgba(255,255,255,0.18)",
-                  background: "rgba(255,255,255,0.06)",
-                  color: "#ffffff",
-                }}
+                style={secondaryButtonStyle}
               >
                 Volver
               </button>
@@ -145,10 +110,9 @@ export default function AdminGeneralLayout() {
               <button
                 onClick={handleLogout}
                 style={{
-                  ...actionButtonStyle,
-                  border: "1px solid rgba(239,68,68,0.38)",
+                  ...secondaryButtonStyle,
+                  border: "1px solid rgba(239,68,68,0.30)",
                   background: "rgba(239,68,68,0.12)",
-                  color: "#ffffff",
                 }}
               >
                 Cerrar sesión
@@ -201,14 +165,10 @@ export default function AdminGeneralLayout() {
         </div>
       </header>
 
-      <main
-        style={{
-          maxWidth: 1440,
-          margin: "0 auto",
-          padding: "24px 20px 32px",
-        }}
-      >
-        <Outlet />
+      <main style={{ ...shellStyle, maxWidth: 1440, padding: "24px 20px 32px" }}>
+        <div style={cardStyle}>
+          <Outlet />
+        </div>
       </main>
     </div>
   );

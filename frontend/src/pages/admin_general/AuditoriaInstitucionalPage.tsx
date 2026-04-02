@@ -1,6 +1,18 @@
 // frontend/src/pages/admin_general/AuditoriaInstitucionalPage.tsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { http } from "../../api/http";
+import {
+  buttonRowStyle,
+  cardStyle,
+  heroStyle,
+  pageStyle,
+  primaryButtonStyle,
+  secondaryButtonStyle,
+  shellStyle,
+  softCardStyle,
+  subtitleStyle,
+  titleStyle,
+} from "../permisionario/uiStyles";
 
 type AuditItem = {
   _id: string;
@@ -108,7 +120,6 @@ export default function AuditoriaInstitucionalPage() {
   const [loadingOptions, setLoadingOptions] = useState(false);
   const [error, setError] = useState<string>("");
 
-  // filtros
   const [action, setAction] = useState("");
   const [actorId, setActorId] = useState("");
   const [actorRole, setActorRole] = useState("");
@@ -116,11 +127,9 @@ export default function AuditoriaInstitucionalPage() {
   const [targetId, setTargetId] = useState("");
   const [requestId, setRequestId] = useState("");
 
-  // calendario
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
 
-  // paginación
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(50);
 
@@ -132,7 +141,6 @@ export default function AuditoriaInstitucionalPage() {
     actorIds: [],
   });
 
-  // usuarios (para label de actorId)
   const [usersById, setUsersById] = useState<Record<string, UsuarioMini>>({});
 
   const appliedParams = useMemo(
@@ -183,7 +191,6 @@ export default function AuditoriaInstitucionalPage() {
 
   async function fetchUsersMini() {
     try {
-      // Reutiliza endpoint existente del panel ADMIN_GENERAL
       const res = await http.get("/users/admin-list", {
         params: {
           sortBy: "apellido",
@@ -278,186 +285,285 @@ export default function AuditoriaInstitucionalPage() {
     });
   }, [options.actorIds, usersById]);
 
+  const controlStyle: CSSProperties = {
+  width: "100%",
+  minWidth: 0,
+  padding: "10px 12px",
+  borderRadius: 10,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(255,255,255,0.04)",
+  color: "#ffffff",
+  fontSize: 14,
+  minHeight: 42,
+  boxSizing: "border-box",
+};
+
+const selectStyle: CSSProperties = {
+  ...controlStyle,
+  appearance: "none",
+  WebkitAppearance: "none",
+  MozAppearance: "none",
+  backgroundColor: "rgba(255,255,255,0.04)",
+  color: "#ffffff",
+};
+
+const optionStyle: CSSProperties = {
+  backgroundColor: "#1f2937",
+  color: "#ffffff",
+};
+
+  const thStyle: CSSProperties = {
+    textAlign: "left",
+    padding: 10,
+    fontSize: 12,
+    color: "rgba(255,255,255,0.70)",
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    borderBottom: "1px solid rgba(255,255,255,0.12)",
+    background: "rgba(255,255,255,0.04)",
+    whiteSpace: "nowrap",
+  };
+
+  const tdStyle: CSSProperties = {
+    padding: 10,
+    fontSize: 12,
+    color: "#ffffff",
+    borderTop: "1px solid rgba(255,255,255,0.08)",
+    verticalAlign: "top",
+  };
+
+  const smallLabelStyle: CSSProperties = {
+    fontSize: 11,
+    textTransform: "uppercase",
+    letterSpacing: "0.12em",
+    color: "rgba(255,255,255,0.62)",
+    marginBottom: 6,
+  };
+
   return (
-    <div style={{ padding: 16 }}>
-      <h2 style={{ marginBottom: 8 }}>Auditoría Institucional</h2>
-      <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 16 }}>
-        Acceso exclusivo ADMIN_GENERAL — Solo lectura — Exportación institucional
-      </div>
+    <div style={pageStyle}>
+      <div style={shellStyle}>
+        <div style={heroStyle}>
+          <h2 style={titleStyle}>Auditoría Institucional</h2>
+          <p style={subtitleStyle}>
+            Acceso exclusivo ADMIN_GENERAL — Solo lectura — Exportación institucional
+          </p>
+        </div>
 
-      <div
-        style={{
-          border: "1px solid #ddd",
-          borderRadius: 8,
-          padding: 12,
-          marginBottom: 16,
-          display: "grid",
-          gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-          gap: 12,
-        }}
-      >
-        <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={{ fontSize: 12 }}>Acción</span>
-          <select value={action} onChange={(e) => setAction(e.target.value)} disabled={loadingOptions}>
-            <option value="">(Todas)</option>
-            {options.actions.map((a) => (
-              <option key={a} value={a}>
-                {traducirAccion(a)}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={{ fontSize: 12 }}>Usuario</span>
-          <select value={actorId} onChange={(e) => setActorId(e.target.value)} disabled={loadingOptions}>
-            <option value="">(Todos)</option>
-            {actorIdOptions.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={{ fontSize: 12 }}>Rol</span>
-          <select value={actorRole} onChange={(e) => setActorRole(e.target.value)} disabled={loadingOptions}>
-            <option value="">(Todos)</option>
-            {options.actorRoles.map((r) => (
-              <option key={r} value={r}>
-                {traducirRol(r)}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={{ fontSize: 12 }}>ID de operación</span>
-          <input value={requestId} onChange={(e) => setRequestId(e.target.value)} placeholder="x-request-id" />
-        </label>
-
-        <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={{ fontSize: 12 }}>Entidad</span>
-          <select value={targetType} onChange={(e) => setTargetType(e.target.value)} disabled={loadingOptions}>
-            <option value="">(Todas)</option>
-            {options.targetTypes.map((t) => (
-              <option key={t} value={t}>
-                {traducirEntidad(t)}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={{ fontSize: 12 }}>Referencia</span>
-          <input value={targetId} onChange={(e) => setTargetId(e.target.value)} placeholder="LIST o ID" />
-        </label>
-
-        <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={{ fontSize: 12 }}>Desde</span>
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-        </label>
-
-        <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={{ fontSize: 12 }}>Hasta</span>
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-        </label>
-
-        <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
-          <button onClick={onApplyFilters} disabled={loading} style={{ padding: "8px 10px" }}>
-            Aplicar
-          </button>
-          <button onClick={onClearFilters} disabled={loading} style={{ padding: "8px 10px" }}>
-            Limpiar
-          </button>
-          <button onClick={onExportPdf} disabled={loading} style={{ padding: "8px 10px" }}>
-            Exportar PDF
-          </button>
-          <button
-            onClick={onCorrelateByRequestId}
-            disabled={loading || !requestId.trim()}
-            style={{ padding: "8px 10px" }}
+        <div style={cardStyle}>
+          <div
+            style={{
+              ...softCardStyle,
+              marginBottom: 16,
+              display: "grid",
+              gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+              gap: 12,
+            }}
           >
-            Correlacionar operación
-          </button>
-        </div>
-      </div>
+            <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <span style={smallLabelStyle}>Acción</span>
+              <select value={action} onChange={(e) => setAction(e.target.value)} disabled={loadingOptions} style={selectStyle}>
+  <option value="" style={optionStyle}>
+    (Todas)
+  </option>
+  {options.actions.map((a) => (
+    <option key={a} value={a} style={optionStyle}>
+      {traducirAccion(a)}
+    </option>
+  ))}
+</select>
+            </label>
 
-      {error ? (
-        <div style={{ padding: 12, border: "1px solid #f5c2c2", borderRadius: 8, marginBottom: 16 }}>
-          {error}
-        </div>
-      ) : null}
+            <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <span style={smallLabelStyle}>Usuario</span>
+              <select value={actorId} onChange={(e) => setActorId(e.target.value)} disabled={loadingOptions} style={selectStyle}>
+  <option value="" style={optionStyle}>
+    (Todos)
+  </option>
+  {actorIdOptions.map((o) => (
+    <option key={o.id} value={o.id} style={optionStyle}>
+      {o.label}
+    </option>
+  ))}
+</select>
+            </label>
 
-      {loading ? <div style={{ marginBottom: 12 }}>Cargando…</div> : null}
+            <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <span style={smallLabelStyle}>Rol</span>
+              <select value={actorRole} onChange={(e) => setActorRole(e.target.value)} disabled={loadingOptions} style={selectStyle}>
+  <option value="" style={optionStyle}>
+    (Todos)
+  </option>
+  {options.actorRoles.map((r) => (
+    <option key={r} value={r} style={optionStyle}>
+      {traducirRol(r)}
+    </option>
+  ))}
+</select>
+            </label>
 
-      <div style={{ border: "1px solid #ddd", borderRadius: 8, overflow: "hidden" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ background: "#f7f7f7" }}>
-              <th style={{ textAlign: "left", padding: 10, fontSize: 12 }}>Fecha y hora</th>
-              <th style={{ textAlign: "left", padding: 10, fontSize: 12 }}>Usuario</th>
-              <th style={{ textAlign: "left", padding: 10, fontSize: 12 }}>Rol</th>
-              <th style={{ textAlign: "left", padding: 10, fontSize: 12 }}>Acción</th>
-              <th style={{ textAlign: "left", padding: 10, fontSize: 12 }}>Entidad</th>
-              <th style={{ textAlign: "left", padding: 10, fontSize: 12 }}>Referencia</th>
-              <th style={{ textAlign: "left", padding: 10, fontSize: 12 }}>ID de operación</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(data?.items || []).map((it) => (
-              <tr key={it._id} style={{ borderTop: "1px solid #eee" }}>
-                <td style={{ padding: 10, fontSize: 12 }}>{formatDateLocal(it.createdAt)}</td>
-                <td style={{ padding: 10, fontSize: 12 }}>
-                  {it.actorNombre
-                    ? it.actorNombre
-                    : it.actorId
-                    ? usersById[it.actorId]
-                      ? safeLabelUser(usersById[it.actorId])
-                      : it.actorId
-                    : "Sistema"}
-                </td>
-                <td style={{ padding: 10, fontSize: 12 }}>{traducirRol(it.actorRole)}</td>
-                <td style={{ padding: 10, fontSize: 12 }}>{traducirAccion(it.action)}</td>
-                <td style={{ padding: 10, fontSize: 12 }}>{traducirEntidad(it.targetType)}</td>
-                <td style={{ padding: 10, fontSize: 12 }}>{formatReferencia(it.targetId)}</td>
-                <td style={{ padding: 10, fontSize: 12 }}>{it.requestId || "—"}</td>
-              </tr>
-            ))}
+            <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <span style={smallLabelStyle}>ID de operación</span>
+              <input value={requestId} onChange={(e) => setRequestId(e.target.value)} placeholder="x-request-id" style={controlStyle} />
+            </label>
 
-            {!loading && (data?.items?.length || 0) === 0 ? (
-              <tr>
-                <td colSpan={7} style={{ padding: 12, fontSize: 12, opacity: 0.8 }}>
-                  Sin resultados
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </div>
+            <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <span style={smallLabelStyle}>Entidad</span>
+              <select value={targetType} onChange={(e) => setTargetType(e.target.value)} disabled={loadingOptions} style={selectStyle}>
+  <option value="" style={optionStyle}>
+    (Todas)
+  </option>
+  {options.targetTypes.map((t) => (
+    <option key={t} value={t} style={optionStyle}>
+      {traducirEntidad(t)}
+    </option>
+  ))}
+</select>
+            </label>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12 }}>
-        <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={loading || page <= 1}>
-          Anterior
-        </button>
+            <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <span style={smallLabelStyle}>Referencia</span>
+              <input value={targetId} onChange={(e) => setTargetId(e.target.value)} placeholder="LIST o ID" style={controlStyle} />
+            </label>
 
-        <div style={{ fontSize: 12 }}>
-          Página {page} / {totalPages} — Total: {total}
-        </div>
+            <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <span style={smallLabelStyle}>Desde</span>
+              <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={controlStyle} />
+            </label>
 
-        <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={loading || page >= totalPages}>
-          Siguiente
-        </button>
+            <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <span style={smallLabelStyle}>Hasta</span>
+              <input type="date" value={to} onChange={(e) => setTo(e.target.value)} style={controlStyle} />
+            </label>
 
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 12 }}>Límite</span>
-          <select value={limit} onChange={(e) => setLimit(Number(e.target.value))} disabled={loading}>
-            <option value={25}>25</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-            <option value={200}>200</option>
-          </select>
+            <div style={{ gridColumn: "1 / -1", ...buttonRowStyle, marginTop: 4 }}>
+              <button onClick={onApplyFilters} disabled={loading} style={primaryButtonStyle}>
+                Aplicar
+              </button>
+              <button onClick={onClearFilters} disabled={loading} style={secondaryButtonStyle}>
+                Limpiar
+              </button>
+              <button onClick={onExportPdf} disabled={loading} style={secondaryButtonStyle}>
+                Exportar PDF
+              </button>
+              <button
+                onClick={onCorrelateByRequestId}
+                disabled={loading || !requestId.trim()}
+                style={secondaryButtonStyle}
+              >
+                Correlacionar operación
+              </button>
+            </div>
+          </div>
+
+          {error ? (
+            <div
+              style={{
+                ...softCardStyle,
+                padding: 12,
+                border: "1px solid rgba(239,68,68,0.30)",
+                background: "rgba(127,29,29,0.18)",
+                color: "#fecaca",
+                marginBottom: 16,
+              }}
+            >
+              {error}
+            </div>
+          ) : null}
+
+          {loading ? (
+            <div style={{ ...softCardStyle, marginBottom: 12, color: "rgba(255,255,255,0.78)" }}>
+              Cargando…
+            </div>
+          ) : null}
+
+          <div
+            style={{
+              border: "1px solid rgba(255,255,255,0.12)",
+              borderRadius: 12,
+              overflow: "hidden",
+              background: "rgba(255,255,255,0.04)",
+            }}
+          >
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  <th style={thStyle}>Fecha y hora</th>
+                  <th style={thStyle}>Usuario</th>
+                  <th style={thStyle}>Rol</th>
+                  <th style={thStyle}>Acción</th>
+                  <th style={thStyle}>Entidad</th>
+                  <th style={thStyle}>Referencia</th>
+                  <th style={thStyle}>ID de operación</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(data?.items || []).map((it) => (
+                  <tr key={it._id}>
+                    <td style={tdStyle}>{formatDateLocal(it.createdAt)}</td>
+                    <td style={tdStyle}>
+                      {it.actorNombre
+                        ? it.actorNombre
+                        : it.actorId
+                        ? usersById[it.actorId]
+                          ? safeLabelUser(usersById[it.actorId])
+                          : it.actorId
+                        : "Sistema"}
+                    </td>
+                    <td style={tdStyle}>{traducirRol(it.actorRole)}</td>
+                    <td style={tdStyle}>{traducirAccion(it.action)}</td>
+                    <td style={tdStyle}>{traducirEntidad(it.targetType)}</td>
+                    <td style={tdStyle}>{formatReferencia(it.targetId)}</td>
+                    <td style={tdStyle}>{it.requestId || "—"}</td>
+                  </tr>
+                ))}
+
+                {!loading && (data?.items?.length || 0) === 0 ? (
+                  <tr>
+                    <td colSpan={7} style={{ ...tdStyle, opacity: 0.8 }}>
+                      Sin resultados
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12 }}>
+            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={loading || page <= 1} style={secondaryButtonStyle}>
+              Anterior
+            </button>
+
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.82)" }}>
+              Página {page} / {totalPages} — Total: {total}
+            </div>
+
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={loading || page >= totalPages}
+              style={secondaryButtonStyle}
+            >
+              Siguiente
+            </button>
+
+            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 12, color: "rgba(255,255,255,0.78)" }}>Límite</span>
+              <select value={limit} onChange={(e) => setLimit(Number(e.target.value))} disabled={loading} style={selectStyle}>
+  <option value={25} style={optionStyle}>
+    25
+  </option>
+  <option value={50} style={optionStyle}>
+    50
+  </option>
+  <option value={100} style={optionStyle}>
+    100
+  </option>
+  <option value={200} style={optionStyle}>
+    200
+  </option>
+</select>
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -3,6 +3,26 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { http } from "../../api/http";
 import { useAuth } from "../../auth/useAuth";
+import {
+  badgeStyle,
+  buttonRowStyle,
+  cardStyle,
+  heroStyle,
+  infoRowStyle,
+  metaStyle,
+  moduleButtonStyle,
+  modulesGridStyle,
+  noteStyle,
+  pageStyle,
+  primaryButtonStyle,
+  sectionTitleStyle,
+  shellStyle,
+  softCardStyle,
+  statusHeaderStyle,
+  subtitleStyle,
+  successButtonStyle,
+  titleStyle,
+} from "./uiStyles";
 
 type Anexo = {
   _id: string;
@@ -51,11 +71,9 @@ export default function PermisionarioDashboard() {
   async function cargarResumen() {
     setLoading(true);
     try {
-      // ✅ Traer TODO lo visible para el usuario, sin filtrar por código.
-      // El backend ya resuelve visibilidad por creador/intervinientes/retrocompat.
       const res = await http.get("/formularios/mios");
       const list = Array.isArray(res.data?.anexos) ? res.data.anexos : [];
-      setUltimaGestion(list[0] || null); // ya viene ordenado DESC por createdAt
+      setUltimaGestion(list[0] || null);
     } catch {
       setUltimaGestion(null);
     } finally {
@@ -68,73 +86,134 @@ export default function PermisionarioDashboard() {
   }, []);
 
   return (
-    <div style={{ padding: 8 }}>
-      <h1 style={{ marginTop: 0 }}>{tituloRol}</h1>
+    <div style={pageStyle}>
+      <div style={shellStyle}>
+        <div style={heroStyle}>
+          <h1 style={titleStyle}>{tituloRol}</h1>
+          <p style={subtitleStyle}>
+            Panel principal para acceder a módulos, consultar la última gestión visible y revisar
+            información general del usuario.
+          </p>
+        </div>
 
-      <div style={{ padding: 12, border: "1px solid #ddd", background: "white", borderRadius: 10 }}>
-        <div style={{ marginBottom: 8 }}>
-          Usuario: {safe(user?.nombre)} {safe(user?.apellido)} — <b>{role}</b>
-          {esInspector ? (
+        <div style={cardStyle}>
+          <div style={infoRowStyle}>
             <span>
-              {" "}
-              — <b>INSPECTOR</b>
+              Usuario: <b>{safe(user?.nombre)} {safe(user?.apellido)}</b>
             </span>
-          ) : null}
-        </div>
-
-        <h3 style={{ margin: "10px 0 8px 0" }}>Alertas / Última gestión</h3>
-
-        {loading ? (
-          <p>Cargando…</p>
-        ) : !ultimaGestion ? (
-          <p>Sin gestiones recientes.</p>
-        ) : (
-          <div style={{ border: "1px solid #eee", borderRadius: 10, padding: 12 }}>
-            <div>
-              <b>{safe(ultimaGestion.codigo)}</b>{" "}
-              <span style={{ opacity: 0.8 }}>
-                ({safe(ultimaGestion.estado)}
-                {ultimaGestion.estadoInstitucional ? ` / ${safe(ultimaGestion.estadoInstitucional)}` : ""})
+            <span>
+              Rol: <b>{role}</b>
+            </span>
+            {esInspector ? (
+              <span>
+                Cargo adicional: <b>INSPECTOR</b>
               </span>
-            </div>
-            <div style={{ fontSize: 12, opacity: 0.8 }}>
-              Creado: {fmtDate(ultimaGestion.createdAt)} — Actualizado: {fmtDate(ultimaGestion.updatedAt)}
-            </div>
-
-            <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button onClick={() => navigate("/app/permisionario/anexos")}>Ir a Mis Anexos</button>
-
-              {esInspector ? (
-                <button
-                  onClick={() => navigate("/app/permisionario/mi-barrio-inspector")}
-                  style={{ fontWeight: 800 }}
-                >
-                  Ir a MI BARRIO - INSPECTOR
-                </button>
-              ) : null}
-            </div>
+            ) : null}
           </div>
-        )}
 
-        <h3 style={{ margin: "14px 0 8px 0" }}>Módulos</h3>
+          <h3 style={sectionTitleStyle}>Alertas / Última gestión</h3>
 
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button onClick={() => navigate("/app/permisionario/anexos")}>Mis anexos</button>
+          {loading ? (
+            <div style={softCardStyle}>
+              <p style={{ margin: 0, color: "rgba(255,255,255,0.78)" }}>Cargando…</p>
+            </div>
+          ) : !ultimaGestion ? (
+            <div style={softCardStyle}>
+              <p style={{ margin: 0, color: "rgba(255,255,255,0.78)" }}>
+                Sin gestiones recientes.
+              </p>
+            </div>
+          ) : (
+            <div style={softCardStyle}>
+              <div style={statusHeaderStyle}>
+                <b style={{ fontSize: 16, color: "#ffffff" }}>{safe(ultimaGestion.codigo)}</b>
+                <span style={badgeStyle}>{safe(ultimaGestion.estado)}</span>
+                {ultimaGestion.estadoInstitucional ? (
+                  <span style={badgeStyle}>{safe(ultimaGestion.estadoInstitucional)}</span>
+                ) : null}
+              </div>
 
-          {/* ✅ NUEVO MÓDULO (no menciona ANEXO_01) */}
-          <button onClick={() => navigate("/app/permisionario/mis-datos")}>
-            Mis datos declarados
-          </button>
+              <div style={metaStyle}>
+                Creado: {fmtDate(ultimaGestion.createdAt)} — Actualizado:{" "}
+                {fmtDate(ultimaGestion.updatedAt)}
+              </div>
 
-          <button onClick={() => navigate("/app/permisionario/comunicaciones")}>Mis comunicaciones</button>
-          <button onClick={() => navigate("/app/permisionario/servicios")}>Mis servicios</button>
-          <button onClick={() => navigate("/app/permisionario/liquidaciones")}>Mis liquidaciones</button>
-          <button onClick={() => navigate("/app/permisionario/novedades")}>Novedades</button>
-        </div>
+              <div style={buttonRowStyle}>
+                <button
+                  style={primaryButtonStyle}
+                  onClick={() => navigate("/app/permisionario/anexos")}
+                >
+                  Ir a Mis Anexos
+                </button>
 
-        <div style={{ marginTop: 12, fontSize: 12, opacity: 0.7 }}>
-          Nota: La información de “Mis datos declarados” puede actualizarse cuando exista un cambio.
-          Toda actualización queda registrada con fecha y hora.
+                {esInspector ? (
+                  <button
+                    style={successButtonStyle}
+                    onClick={() => navigate("/app/permisionario/mi-barrio-inspector")}
+                  >
+                    Ir a MI BARRIO - INSPECTOR
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          )}
+
+          <h3 style={{ ...sectionTitleStyle, marginTop: 22 }}>Módulos</h3>
+
+          <div style={modulesGridStyle}>
+            <button
+              style={moduleButtonStyle}
+              onClick={() => navigate("/app/permisionario/anexos")}
+            >
+              Mis anexos
+            </button>
+
+            <button
+              style={moduleButtonStyle}
+              onClick={() => navigate("/app/permisionario/mis-datos")}
+            >
+              Mis datos declarados
+            </button>
+
+            <button
+              style={moduleButtonStyle}
+              onClick={() => navigate("/app/permisionario/comunicaciones")}
+            >
+              Mis comunicaciones
+            </button>
+
+            <button
+              style={moduleButtonStyle}
+              onClick={() => navigate("/app/permisionario/servicios")}
+            >
+              Mis servicios
+            </button>
+
+            <button
+              style={moduleButtonStyle}
+              onClick={() => navigate("/app/permisionario/liquidaciones")}
+            >
+              Mis liquidaciones
+            </button>
+            <button
+              style={moduleButtonStyle}
+              onClick={() => navigate("/app/permisionario/mis-mantenimientos")}
+            >
+              Mis Mantenimientos
+            </button>
+
+            <button
+              style={moduleButtonStyle}
+              onClick={() => navigate("/app/permisionario/novedades")}
+            >
+              Novedades
+            </button>
+          </div>
+
+          <div style={noteStyle}>
+            Nota: La información de “Mis datos declarados” puede actualizarse cuando exista un
+            cambio. Toda actualización queda registrada con fecha y hora.
+          </div>
         </div>
       </div>
     </div>

@@ -7,6 +7,15 @@ import {
   matchPath,
 } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
+import {
+  cardStyle,
+  pageStyle,
+  sectionTitleStyle,
+  shellStyle,
+  softCardStyle,
+  subtitleStyle,
+  titleStyle,
+} from "../pages/permisionario/uiStyles";
 
 function up(v: unknown) {
   return String(v || "").toUpperCase().trim();
@@ -52,17 +61,30 @@ export default function InspectorLayout(props: InspectorLayoutProps) {
   // Fail-closed (no cambia)
   if (!esInspector && !esJefe) {
     return (
-      <div style={{ padding: 24 }}>
-        La página solicitada no está disponible. Por favor, contacte al
-        administrador.
+      <div style={pageStyle}>
+        <div style={shellStyle}>
+          <div style={cardStyle}>
+            <h2 style={sectionTitleStyle}>La página solicitada no está disponible.</h2>
+            <p style={{ margin: 0, color: "rgba(255,255,255,0.78)", lineHeight: 1.6 }}>
+              Por favor, contacte al administrador.
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
+
   if (esInspector && esJefe) {
     return (
-      <div style={{ padding: 24 }}>
-        La página solicitada no está disponible. Por favor, contacte al
-        administrador.
+      <div style={pageStyle}>
+        <div style={shellStyle}>
+          <div style={cardStyle}>
+            <h2 style={sectionTitleStyle}>La página solicitada no está disponible.</h2>
+            <p style={{ margin: 0, color: "rgba(255,255,255,0.78)", lineHeight: 1.6 }}>
+              Por favor, contacte al administrador.
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
@@ -119,96 +141,76 @@ export default function InspectorLayout(props: InspectorLayoutProps) {
     return `${root}/${seg}`;
   };
 
+  const navItemStyle = ({ isActive }: { isActive: boolean }) => ({
+    textDecoration: "none",
+    fontWeight: 700,
+    borderRadius: 10,
+    padding: "10px 12px",
+    border: isActive
+      ? "1px solid rgba(255,255,255,0.18)"
+      : "1px solid transparent",
+    background: isActive ? "rgba(255,255,255,0.08)" : "transparent",
+    color: "#ffffff",
+    transition: "all 0.2s ease",
+  });
+
   return (
-    <div style={{ display: "flex", minHeight: "100%" }}>
-      <aside
-        style={{
-          width: 240,
-          borderRight: "1px solid #ddd",
-          padding: 16,
-          background: "#f9f9f9",
-        }}
-      >
-        <h3 style={{ marginTop: 0 }}>{titulo}</h3>
+    <div style={{ ...pageStyle, minHeight: "100vh" }}>
+      <div style={{ ...shellStyle, maxWidth: 1280 }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "280px minmax(0, 1fr)",
+            gap: 18,
+            alignItems: "start",
+          }}
+        >
+          <aside style={cardStyle}>
+            <div style={{ marginBottom: 16 }}>
+              <h1 style={{ ...titleStyle, fontSize: 24 }}>{titulo}</h1>
+              <p style={subtitleStyle}>
+                Acceso territorial a módulos operativos del barrio.
+              </p>
+            </div>
 
-        <nav style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <NavLink
-            to={root}
-            style={({ isActive }) => ({
-              textDecoration: "none",
-              fontWeight: isActive ? "bold" : "normal",
-              color: isActive ? "#000" : "#333",
-            })}
-            end
-          >
-            Inicio
-          </NavLink>
+            <div style={softCardStyle}>
+              <nav style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <NavLink to={root} style={navItemStyle} end>
+                  Inicio
+                </NavLink>
 
-          <NavLink
-            to={link("viviendas")}
-            style={({ isActive }) => ({
-              textDecoration: "none",
-              fontWeight: isActive ? "bold" : "normal",
-              color: isActive ? "#000" : "#333",
-            })}
-          >
-            Viviendas
-          </NavLink>
+                <NavLink to={link("viviendas")} style={navItemStyle}>
+                  Viviendas
+                </NavLink>
 
-          <NavLink
-            to={link("mensajeria")}
-            style={({ isActive }) => ({
-              textDecoration: "none",
-              fontWeight: isActive ? "bold" : "normal",
-              color: isActive ? "#000" : "#333",
-            })}
-          >
-            Mensajería
-          </NavLink>
+                <NavLink to={link("mensajeria")} style={navItemStyle}>
+                  Mensajería
+                </NavLink>
 
-          <NavLink
-            to={link("gestiones")}
-            style={({ isActive }) => ({
-              textDecoration: "none",
-              fontWeight: isActive ? "bold" : "normal",
-              color: isActive ? "#000" : "#333",
-            })}
-          >
-            Gestiones
-          </NavLink>
+                <NavLink to={link("gestiones")} style={navItemStyle}>
+                  Gestiones
+                </NavLink>
 
-          {/* ✅ SOLO INSPECTOR: MANTENIMIENTOS */}
-          {esInspector ? (
-            <NavLink
-              to={link("mantenimientos")}
-              style={({ isActive }) => ({
-                textDecoration: "none",
-                fontWeight: isActive ? "bold" : "normal",
-                color: isActive ? "#000" : "#333",
-              })}
-            >
-              Mantenimientos
-            </NavLink>
-          ) : null}
+                {esInspector ? (
+                  <NavLink to={link("mantenimientos")} style={navItemStyle}>
+                    Mantenimientos
+                  </NavLink>
+                ) : null}
 
-          {esJefe ? (
-            <NavLink
-              to={link("usuarios")}
-              style={({ isActive }) => ({
-                textDecoration: "none",
-                fontWeight: isActive ? "bold" : "normal",
-                color: isActive ? "#000" : "#333",
-              })}
-            >
-              Usuarios
-            </NavLink>
-          ) : null}
-        </nav>
-      </aside>
+                {esJefe ? (
+                  <NavLink to={link("usuarios")} style={navItemStyle}>
+                    Usuarios
+                  </NavLink>
+                ) : null}
+              </nav>
+            </div>
+          </aside>
 
-      <main style={{ flex: 1, padding: 24 }}>
-        <Outlet />
-      </main>
+          <main style={{ minWidth: 0 }}>
+            <Outlet />
+          </main>
+        </div>
+      </div>
     </div>
   );
 }

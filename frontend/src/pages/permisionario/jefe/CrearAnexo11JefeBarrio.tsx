@@ -1,5 +1,5 @@
 // frontend/src/pages/permisionario/jefe/CrearAnexo11JefeBarrio.tsx
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
 import { http } from "../../../api/http";
 import { useAuth } from "../../../auth/useAuth";
@@ -24,6 +24,73 @@ export default function CrearAnexo11JefeBarrio() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [ok, setOk] = useState("");
+
+  const pageStyle: CSSProperties = {
+    width: "100%",
+    maxWidth: 900,
+    color: "#E5E7EB",
+    boxSizing: "border-box",
+  };
+
+  const cardStyle: CSSProperties = {
+    border: "1px solid rgba(255,255,255,0.14)",
+    background: "rgba(255,255,255,0.05)",
+    padding: 16,
+    borderRadius: 12,
+    boxSizing: "border-box",
+  };
+
+  const labelStyle: CSSProperties = {
+    display: "block",
+    fontWeight: 700,
+    color: "#F8FAFC",
+    marginBottom: 6,
+  };
+
+  const controlStyle: CSSProperties = {
+    width: "100%",
+    padding: "10px 12px",
+    borderRadius: 10,
+    border: "1px solid rgba(255,255,255,0.14)",
+    background: "rgba(255,255,255,0.04)",
+    color: "#ffffff",
+    fontSize: 14,
+    boxSizing: "border-box",
+  };
+
+  const neutralButtonStyle: CSSProperties = {
+    padding: "10px 14px",
+    borderRadius: 8,
+    border: "1px solid rgba(255,255,255,0.12)",
+    background: "rgba(255,255,255,0.06)",
+    color: "#ffffff",
+    cursor: "pointer",
+    fontWeight: 700,
+  };
+
+  const primaryButtonStyle: CSSProperties = {
+    ...neutralButtonStyle,
+    background: "rgba(59,130,246,0.20)",
+    fontWeight: 800,
+  };
+
+  const errorStyle: CSSProperties = {
+    marginBottom: 12,
+    padding: 10,
+    borderRadius: 8,
+    border: "1px solid rgba(239,68,68,0.35)",
+    background: "rgba(127,29,29,0.18)",
+    color: "#FCA5A5",
+  };
+
+  const okStyle: CSSProperties = {
+    marginBottom: 12,
+    padding: 10,
+    borderRadius: 8,
+    border: "1px solid rgba(34,197,94,0.35)",
+    background: "rgba(22,163,74,0.18)",
+    color: "#86EFAC",
+  };
 
   if (!esJefe) {
     return (
@@ -68,40 +135,46 @@ export default function CrearAnexo11JefeBarrio() {
   }
 
   return (
-    <div style={{ maxWidth: 900 }}>
-      <h2 style={{ marginTop: 0 }}>Nuevo ANEXO 11 — Espacio común</h2>
+    <div style={pageStyle}>
+      <h2 style={{ marginTop: 0, marginBottom: 12, color: "#F8FAFC" }}>
+        Nuevo ANEXO 11 — Espacio común
+      </h2>
 
-      {error ? <div style={{ marginBottom: 12, color: "crimson" }}>{error}</div> : null}
-      {ok ? <div style={{ marginBottom: 12, color: "green" }}>{ok}</div> : null}
+      {error ? <div style={errorStyle}>{error}</div> : null}
+      {ok ? <div style={okStyle}>{ok}</div> : null}
 
-      <div style={{ border: "1px solid #ddd", background: "white", padding: 12, borderRadius: 8 }}>
-        <div style={{ marginBottom: 10 }}>
-          <label style={{ display: "block", fontWeight: 700 }}>Ubicación del espacio común</label>
+      <div style={cardStyle}>
+        <div style={{ marginBottom: 14 }}>
+          <label style={labelStyle}>Ubicación del espacio común</label>
           <input
             value={ubicacion}
             onChange={(e) => setUbicacion(e.target.value)}
-            style={{ width: "100%", padding: 8 }}
+            style={controlStyle}
             disabled={busy}
             placeholder="Ej: Plaza / SUM / pasillo / bomba de agua…"
           />
         </div>
 
-        <div style={{ marginBottom: 10 }}>
-          <label style={{ display: "block", fontWeight: 700 }}>Detalle del pedido</label>
+        <div style={{ marginBottom: 14 }}>
+          <label style={labelStyle}>Detalle del pedido</label>
           <textarea
             value={detalle}
             onChange={(e) => setDetalle(e.target.value)}
             rows={5}
-            style={{ width: "100%", padding: 8 }}
+            style={controlStyle}
             disabled={busy}
           />
         </div>
 
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button onClick={() => navigate("/app/permisionario/mi-barrio-jefe")} disabled={busy}>
+          <button
+            onClick={() => navigate("/app/permisionario/mi-barrio-jefe")}
+            disabled={busy}
+            style={neutralButtonStyle}
+          >
             Cancelar
           </button>
-          <button onClick={crear} disabled={busy} style={{ fontWeight: 800 }}>
+          <button onClick={crear} disabled={busy} style={primaryButtonStyle}>
             {busy ? "Creando…" : "Crear ANEXO 11"}
           </button>
         </div>

@@ -2,6 +2,18 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../../auth/useAuth";
+import {
+  cardStyle,
+  heroStyle,
+  moduleButtonStyle,
+  modulesGridStyle,
+  pageStyle,
+  sectionTitleStyle,
+  shellStyle,
+  softCardStyle,
+  subtitleStyle,
+  titleStyle,
+} from "../uiStyles";
 
 function up(v: unknown) {
   return String(v || "").toUpperCase().trim();
@@ -31,9 +43,22 @@ export default function InspectorDashboard() {
   // Fail-closed: sin permiso o sin incumbencia territorial
   if (!esInspector || !barrio) {
     return (
-      <div style={{ padding: 32 }}>
-        <h2>La página solicitada no está disponible.</h2>
-        <p>Por favor, contacte al administrador.</p>
+      <div style={pageStyle}>
+        <div style={shellStyle}>
+          <div style={heroStyle}>
+            <h1 style={titleStyle}>Panel del Inspector</h1>
+            <p style={subtitleStyle}>
+              Acceso restringido al panel de gestión territorial.
+            </p>
+          </div>
+
+          <div style={cardStyle}>
+            <h3 style={sectionTitleStyle}>La página solicitada no está disponible.</h3>
+            <p style={{ margin: 0, color: "rgba(255,255,255,0.78)", lineHeight: 1.6 }}>
+              Por favor, contacte al administrador.
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
@@ -41,35 +66,71 @@ export default function InspectorDashboard() {
   const base = "/app/permisionario/mi-barrio-inspector";
 
   return (
-    <div style={{ padding: 8 }}>
-      <h1 style={{ marginTop: 0 }}>Panel del Inspector</h1>
-
-      <div
-        style={{
-          padding: 12,
-          border: "1px solid #ddd",
-          background: "white",
-          borderRadius: 10,
-        }}
-      >
-        <div style={{ marginBottom: 8 }}>
-          <b>Inspector:</b> {safe(user?.apellido)} {safe(user?.nombre)}
+    <div style={pageStyle}>
+      <div style={shellStyle}>
+        <div style={heroStyle}>
+          <h1 style={titleStyle}>Panel del Inspector</h1>
+          <p style={subtitleStyle}>
+            Desde este panel podrá gestionar las viviendas, anexos y comunicaciones
+            correspondientes a su barrio.
+          </p>
         </div>
 
-        <div style={{ marginBottom: 12 }}>
-          <b>Barrio asignado:</b> {barrio}
-        </div>
+        <div style={cardStyle}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+              gap: 12,
+              marginBottom: 18,
+            }}
+          >
+            <div style={softCardStyle}>
+              <div
+                style={{
+                  fontSize: 11,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.12em",
+                  color: "rgba(255,255,255,0.6)",
+                  marginBottom: 6,
+                }}
+              >
+                Inspector
+              </div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: "#ffffff" }}>
+                {safe(user?.apellido)} {safe(user?.nombre)}
+              </div>
+            </div>
 
-        <p style={{ marginTop: 0, opacity: 0.9 }}>
-          Desde este panel podrá gestionar las viviendas, anexos y comunicaciones correspondientes a su barrio.
-        </p>
+            <div style={softCardStyle}>
+              <div
+                style={{
+                  fontSize: 11,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.12em",
+                  color: "rgba(255,255,255,0.6)",
+                  marginBottom: 6,
+                }}
+              >
+                Barrio asignado
+              </div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: "#ffffff" }}>{barrio}</div>
+            </div>
+          </div>
 
-        <h3 style={{ margin: "14px 0 8px 0" }}>Módulos</h3>
+          <h3 style={sectionTitleStyle}>Módulos</h3>
 
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button onClick={() => navigate(`${base}/viviendas`)}>Viviendas</button>
-          <button onClick={() => navigate(`${base}/gestiones`)}>Gestiones</button>
-          <button onClick={() => navigate(`${base}/mensajeria`)}>Mensajería</button>
+          <div style={modulesGridStyle}>
+            <button type="button" style={moduleButtonStyle} onClick={() => navigate(`${base}/viviendas`)}>
+              Viviendas
+            </button>
+            <button type="button" style={moduleButtonStyle} onClick={() => navigate(`${base}/gestiones`)}>
+              Gestiones
+            </button>
+            <button type="button" style={moduleButtonStyle} onClick={() => navigate(`${base}/mensajeria`)}>
+              Mensajería
+            </button>
+          </div>
         </div>
       </div>
     </div>

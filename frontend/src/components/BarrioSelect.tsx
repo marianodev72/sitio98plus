@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+// frontend/src/components/BarrioSelect.tsx
+import { useEffect, useState, type CSSProperties } from "react";
 import { http } from "../api/http";
 
 type Props = {
@@ -35,12 +36,25 @@ export default function BarrioSelect({
     cargar();
   }, []);
 
+  const selectStyle: CSSProperties = {
+    width: "100%",
+    minWidth: 0,
+    padding: "10px 12px",
+    borderRadius: 10,
+    border: "1px solid rgba(255,255,255,0.14)",
+    background: "rgba(255,255,255,0.04)",
+    color: "#ffffff",
+    fontSize: 14,
+    minHeight: 42,
+    boxSizing: "border-box",
+  };
+
   return (
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
       disabled={disabled || loading}
-      style={{ width: "100%" }}
+      style={selectStyle}
     >
       <option value="">{loading ? "Cargando barrios…" : placeholder}</option>
       {barrios.map((b) => (

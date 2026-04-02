@@ -1,5 +1,5 @@
 // frontend/src/pages/permisionario/inspector/MantenimientosInspector.tsx
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../../auth/useAuth";
 import http from "../../../api/http";
@@ -64,9 +64,21 @@ export default function MantenimientosInspector() {
 
   if (!canSeeInspector(user)) {
     return (
-      <div style={{ padding: 24 }}>
-        <h2>La página solicitada no está disponible.</h2>
-        <p>Por favor, contacte al administrador.</p>
+      <div style={{ padding: 24, background: "#0b1220", minHeight: "100vh", color: "#eaf0ff" }}>
+        <div
+          style={{
+            border: "1px solid rgba(255,255,255,0.14)",
+            borderRadius: 12,
+            padding: 16,
+            background: "rgba(255,255,255,0.05)",
+            backdropFilter: "blur(6px)",
+          }}
+        >
+          <h2 style={{ marginTop: 0, color: "#ffffff" }}>La página solicitada no está disponible.</h2>
+          <p style={{ marginBottom: 0, color: "rgba(255,255,255,0.78)" }}>
+            Por favor, contacte al administrador.
+          </p>
+        </div>
       </div>
     );
   }
@@ -88,39 +100,130 @@ export default function MantenimientosInspector() {
     }
   }
 
+  const pageStyle: CSSProperties = {
+    padding: 24,
+    background: "#0b1220",
+    minHeight: "100vh",
+    color: "#eaf0ff",
+  };
+
+  const cardStyle: CSSProperties = {
+    border: "1px solid rgba(255,255,255,0.14)",
+    borderRadius: 12,
+    padding: 16,
+    background: "rgba(255,255,255,0.05)",
+    backdropFilter: "blur(6px)",
+  };
+
+  const buttonStyle: CSSProperties = {
+    padding: "10px 14px",
+    borderRadius: 10,
+    border: "1px solid rgba(255,255,255,0.14)",
+    background: "rgba(255,255,255,0.05)",
+    color: "#ffffff",
+    fontWeight: 700,
+    cursor: "pointer",
+  };
+
+  const successButtonStyle: CSSProperties = {
+    ...buttonStyle,
+    border: "1px solid rgba(34,197,94,0.35)",
+    background: "rgba(22,163,74,0.18)",
+  };
+
+  const dangerButtonStyle: CSSProperties = {
+    ...buttonStyle,
+    border: "1px solid rgba(239,68,68,0.35)",
+    background: "rgba(127,29,29,0.18)",
+  };
+
+  const tableWrapStyle: CSSProperties = {
+    marginTop: 16,
+    overflowX: "auto",
+    border: "1px solid rgba(255,255,255,0.12)",
+    borderRadius: 12,
+    background: "rgba(255,255,255,0.04)",
+  };
+
+  const tableStyle: CSSProperties = {
+    width: "100%",
+    borderCollapse: "collapse",
+    background: "transparent",
+  };
+
+  const thStyle: CSSProperties = {
+    textAlign: "left",
+    borderBottom: "1px solid rgba(255,255,255,0.12)",
+    padding: 10,
+    fontSize: 12,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    color: "rgba(255,255,255,0.70)",
+    background: "rgba(255,255,255,0.04)",
+    whiteSpace: "nowrap",
+  };
+
+  const tdStyle: CSSProperties = {
+    borderBottom: "1px solid rgba(255,255,255,0.08)",
+    padding: 10,
+    color: "#ffffff",
+    verticalAlign: "top",
+  };
+
+  const linkStyle: CSSProperties = {
+    color: "#93c5fd",
+    textDecoration: "none",
+    fontWeight: 600,
+  };
+
   return (
-    <div style={{ padding: 24 }}>
-      <h2>Mantenimientos</h2>
+    <div style={pageStyle}>
+      <h2 style={{ marginTop: 0, marginBottom: 10, color: "#ffffff" }}>Mantenimientos</h2>
 
-      <p style={{ opacity: 0.85 }}>
-        Listado de mantenimientos informados por permisionarios de su barrio. Todas las acciones quedan registradas.
-      </p>
+      <div style={cardStyle}>
+        <p style={{ margin: 0, color: "rgba(255,255,255,0.82)" }}>
+          Listado de mantenimientos informados por permisionarios de su barrio. Todas las
+          acciones quedan registradas.
+        </p>
 
-      <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
-        <button onClick={() => nav(-1)}>Volver</button>
-        <button onClick={load}>Refrescar</button>
+        <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <button onClick={() => nav(-1)} style={buttonStyle}>
+            Volver
+          </button>
+          <button onClick={load} style={buttonStyle}>
+            Refrescar
+          </button>
+        </div>
       </div>
 
       {uiError ? (
-        <div style={{ marginTop: 16, padding: 12, border: "1px solid #ddd", borderRadius: 8 }}>
+        <div
+          style={{
+            ...cardStyle,
+            marginTop: 16,
+            border: "1px solid rgba(239,68,68,0.30)",
+            background: "rgba(127,29,29,0.18)",
+            color: "#fecaca",
+          }}
+        >
           {uiError}
         </div>
       ) : null}
 
-      <div style={{ marginTop: 16, overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", background: "white" }}>
+      <div style={tableWrapStyle}>
+        <table style={tableStyle}>
           <thead>
             <tr>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #eee", padding: 10 }}>Vivienda</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #eee", padding: 10 }}>Permisionario</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #eee", padding: 10 }}>Tipo</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #eee", padding: 10 }}>Fecha</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #eee", padding: 10 }}>Adjuntos</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #eee", padding: 10 }}>Constancia</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #eee", padding: 10 }}>Aprobar</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #eee", padding: 10 }}>Desaprobar</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #eee", padding: 10 }}>Estado Inspector</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #eee", padding: 10 }}>Estado Admin</th>
+              <th style={thStyle}>Vivienda</th>
+              <th style={thStyle}>Permisionario</th>
+              <th style={thStyle}>Tipo</th>
+              <th style={thStyle}>Fecha</th>
+              <th style={thStyle}>Adjuntos</th>
+              <th style={thStyle}>Constancia</th>
+              <th style={thStyle}>Aprobar</th>
+              <th style={thStyle}>Desaprobar</th>
+              <th style={thStyle}>Estado Inspector</th>
+              <th style={thStyle}>Estado Admin</th>
             </tr>
           </thead>
 
@@ -132,21 +235,31 @@ export default function MantenimientosInspector() {
 
               return (
                 <tr key={it._id}>
-                  <td style={{ borderBottom: "1px solid #f2f2f2", padding: 10 }}>{it.viviendaDisplay || "-"}</td>
-                  <td style={{ borderBottom: "1px solid #f2f2f2", padding: 10 }}>{it.permisionarioDisplay || "-"}</td>
-                  <td style={{ borderBottom: "1px solid #f2f2f2", padding: 10 }}>{it.tipoMantenimiento || "-"}</td>
-                  <td style={{ borderBottom: "1px solid #f2f2f2", padding: 10 }}>{fmtDate(it.submittedAt || it.createdAt)}</td>
+                  <td style={tdStyle}>{it.viviendaDisplay || "-"}</td>
+                  <td style={tdStyle}>{it.permisionarioDisplay || "-"}</td>
+                  <td style={tdStyle}>{it.tipoMantenimiento || "-"}</td>
+                  <td style={tdStyle}>{fmtDate(it.submittedAt || it.createdAt)}</td>
 
-                  <td style={{ borderBottom: "1px solid #f2f2f2", padding: 10 }}>
+                  <td style={tdStyle}>
                     {(it.archivos || []).length ? (
                       <ul style={{ margin: 0, paddingLeft: 16 }}>
                         {(it.archivos || []).map((a: any) => (
-                          <li key={a.fileId}>
-                            <a href={urlAdjuntoPreview(it._id, a.fileId)} target="_blank" rel="noreferrer">
+                          <li key={a.fileId} style={{ marginBottom: 4 }}>
+                            <a
+                              href={urlAdjuntoPreview(it._id, a.fileId)}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={linkStyle}
+                            >
                               Preview
                             </a>
                             {" · "}
-                            <a href={urlAdjuntoDownload(it._id, a.fileId)} target="_blank" rel="noreferrer">
+                            <a
+                              href={urlAdjuntoDownload(it._id, a.fileId)}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={linkStyle}
+                            >
                               Descargar
                             </a>
                           </li>
@@ -157,33 +270,46 @@ export default function MantenimientosInspector() {
                     )}
                   </td>
 
-                  <td style={{ borderBottom: "1px solid #f2f2f2", padding: 10 }}>
-                    <a href={urlConstancia(it._id)} target="_blank" rel="noreferrer">
+                  <td style={tdStyle}>
+                    <a
+                      href={urlConstancia(it._id)}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={linkStyle}
+                    >
                       Descargar
                     </a>
                   </td>
 
-                  <td style={{ borderBottom: "1px solid #f2f2f2", padding: 10 }}>
-                    <button onClick={() => setDecision(it._id, "SI")} disabled={disabled || it.isClosed}>
+                  <td style={tdStyle}>
+                    <button
+                      onClick={() => setDecision(it._id, "SI")}
+                      disabled={disabled || it.isClosed}
+                      style={successButtonStyle}
+                    >
                       Aprobar
                     </button>
                   </td>
 
-                  <td style={{ borderBottom: "1px solid #f2f2f2", padding: 10 }}>
-                    <button onClick={() => setDecision(it._id, "NO")} disabled={disabled || it.isClosed}>
+                  <td style={tdStyle}>
+                    <button
+                      onClick={() => setDecision(it._id, "NO")}
+                      disabled={disabled || it.isClosed}
+                      style={dangerButtonStyle}
+                    >
                       Desaprobar
                     </button>
                   </td>
 
-                  <td style={{ borderBottom: "1px solid #f2f2f2", padding: 10 }}>{estadoInspector}</td>
-                  <td style={{ borderBottom: "1px solid #f2f2f2", padding: 10 }}>{estadoAdmin}</td>
+                  <td style={tdStyle}>{estadoInspector}</td>
+                  <td style={tdStyle}>{estadoAdmin}</td>
                 </tr>
               );
             })}
 
             {!items.length ? (
               <tr>
-                <td colSpan={10} style={{ padding: 12, opacity: 0.8 }}>
+                <td colSpan={10} style={{ ...tdStyle, opacity: 0.85 }}>
                   Sin mantenimientos en su barrio.
                 </td>
               </tr>

@@ -1,4 +1,4 @@
-// frontend/src/pages/permisionario/jefe/JefeBarrioDashboard.tsx
+// frontend/src/pages/permisionario/jefe/MiBarrioJefe.tsx
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../../auth/useAuth";
 import type { CSSProperties } from "react";
@@ -8,11 +8,11 @@ function up(v: unknown) {
 }
 
 function hasPermiso(user: any, permiso: string) {
-  const list = Array.isArray((user as any)?.permisos) ? (user as any).permisos : [];
+  const list = Array.isArray(user?.permisos) ? user.permisos : [];
   return list.map(up).includes(up(permiso));
 }
 
-export default function JefeBarrioDashboard() {
+export default function MiBarrioJefe() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -66,7 +66,8 @@ export default function JefeBarrioDashboard() {
   if (!esJefe) {
     return (
       <div style={{ padding: 24 }}>
-        La página solicitada no está disponible. Por favor, contacte al administrador.
+        <h2>La página solicitada no está disponible.</h2>
+        <p>Por favor, contacte al administrador.</p>
       </div>
     );
   }
@@ -74,11 +75,11 @@ export default function JefeBarrioDashboard() {
   return (
     <div style={pageStyle}>
       <h2 style={{ marginTop: 0, marginBottom: 12, color: "#F8FAFC" }}>
-        Panel — Jefe de Barrio
+        MI BARRIO (JEFE DE BARRIO)
       </h2>
 
       <div style={{ marginBottom: 16, color: "#CBD5E1" }}>
-        Barrio asignado: <b style={{ color: "#F8FAFC" }}>{String((user as any)?.barrioAsignado || "—")}</b>
+        Barrio asignado: <b style={{ color: "#F8FAFC" }}>{String(user?.barrioAsignado || "—")}</b>
       </div>
 
       <div
@@ -91,7 +92,7 @@ export default function JefeBarrioDashboard() {
         <div style={cardStyle}>
           <h3 style={titleStyle}>Gestiones</h3>
           <p style={textStyle}>
-            Solo: <b>ANEXO_04</b> y <b>mis ANEXO_11</b>.
+            ANEXO_04 y ANEXO_11 del barrio.
           </p>
           <button
             onClick={() => navigate("/app/permisionario/mi-barrio-jefe/gestiones")}
@@ -104,7 +105,7 @@ export default function JefeBarrioDashboard() {
         <div style={cardStyle}>
           <h3 style={titleStyle}>Crear ANEXO 11</h3>
           <p style={textStyle}>
-            Reparación / mantenimiento / provisión para <b>espacio común</b>.
+            Reparación / mantenimiento / provisión para espacios comunes.
           </p>
           <button
             onClick={() => navigate("/app/permisionario/mi-barrio-jefe/crear-anexo-11")}
@@ -117,7 +118,7 @@ export default function JefeBarrioDashboard() {
         <div style={cardStyle}>
           <h3 style={titleStyle}>Mensajes</h3>
           <p style={textStyle}>
-            Canal institucional (filtrado por backend).
+            Canal institucional del barrio.
           </p>
           <button
             onClick={() => navigate("/app/permisionario/mi-barrio-jefe/mensajeria")}

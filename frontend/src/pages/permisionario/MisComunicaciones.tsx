@@ -2,6 +2,16 @@
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
 import Mensajeria from "../admin_general/Mensajeria";
+import {
+  cardStyle,
+  heroStyle,
+  noteStyle,
+  pageStyle,
+  primaryButtonStyle,
+  shellStyle,
+  subtitleStyle,
+  titleStyle,
+} from "./uiStyles";
 
 function up(v: unknown) {
   return String(v || "").toUpperCase().trim();
@@ -21,26 +31,39 @@ export default function MisComunicaciones() {
     );
   }
 
-  // ⚠️ Barrio puede no estar materializado en algunos permisionarios.
-  // Seguridad: NO se habilita selección libre de barrio.
-  // Funcionalidad: Mensajería debe seguir operativa al menos con ADMIN/ADMIN_GENERAL;
-  // si existe barrio, el backend habilitará autoridades de su barrio.
   const barrio = String(user?.barrioAsignado || "").trim();
 
   return (
-    <div style={{ padding: 24 }}>
-      <h2>Mis comunicaciones</h2>
+    <div style={pageStyle}>
+      <div style={shellStyle}>
+        <div style={heroStyle}>
+          <h2 style={titleStyle}>Mis comunicaciones</h2>
 
-      <p style={{ opacity: 0.85 }}>
-        Este módulo permite enviar y recibir mensajes institucionales.
-      </p>
+          <p style={{ ...subtitleStyle, maxWidth: 760 }}>
+            Este módulo permite enviar y recibir mensajes institucionales dentro del circuito
+            autorizado del sistema.
+          </p>
+        </div>
 
-      <div style={{ marginTop: 16 }}>
-        <Mensajeria lockedBarrio={barrio || undefined} hideBarrioSelect />
-      </div>
+        <div style={cardStyle}>
+          <div style={{ marginTop: 4 }}>
+            <Mensajeria lockedBarrio={barrio || undefined} hideBarrioSelect />
+          </div>
 
-      <div style={{ marginTop: 16 }}>
-        <button onClick={() => navigate("/app/permisionario")}>Volver</button>
+          <div style={noteStyle}>
+            La selección de barrio permanece restringida para mantener el circuito institucional
+            definido para el usuario.
+          </div>
+
+          <div style={{ marginTop: 18 }}>
+            <button
+              style={primaryButtonStyle}
+              onClick={() => navigate("/app/permisionario")}
+            >
+              Volver
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

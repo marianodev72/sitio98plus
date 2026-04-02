@@ -1,8 +1,21 @@
 // frontend/src/pages/admin_general/Gestiones.tsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
 import { http } from "../../api/http";
 import { useAuth } from "../../auth/useAuth";
+import {
+  buttonRowStyle,
+  cardStyle,
+  heroStyle,
+  pageStyle,
+  primaryButtonStyle,
+  secondaryButtonStyle,
+  sectionTitleStyle,
+  shellStyle,
+  softCardStyle,
+  subtitleStyle,
+  titleStyle,
+} from "../permisionario/uiStyles";
 
 type Anexo = {
   _id: string;
@@ -67,7 +80,6 @@ function safeFileNameDate() {
   )}-${pad(d.getMinutes())}`;
 }
 
-/** Etiqueta amigable de vivienda / unidad */
 function viviendaLabel(a: Anexo): string {
   const d = a?.datos || {};
 
@@ -80,14 +92,12 @@ function viviendaLabel(a: Anexo): string {
 
   if (label) return label;
 
-  // Último fallback: si viene ObjectId, no mostrarlo entero
   const vid = typeof d.viviendaId === "string" ? d.viviendaId.trim() : "";
   if (/^[0-9a-fA-F]{24}$/.test(vid)) return `…${vid.slice(-6)}`;
 
   return "—";
 }
 
-/** Etiqueta amigable de persona (postulante / permisionario / titular) */
 function personaLabel(a: Anexo): string {
   const d = a.datos || {};
 
@@ -104,7 +114,6 @@ function personaLabel(a: Anexo): string {
     return d.titularNombre.trim();
   }
 
-  // 👇 Fallback para ANEXO_01: usamos los datos del usuario creador
   const ape = a.usuario?.apellido ? String(a.usuario.apellido).trim() : "";
   const nom = a.usuario?.nombre ? String(a.usuario.nombre).trim() : "";
   const full = `${ape} ${nom}`.trim();
@@ -196,122 +205,193 @@ export default function Gestiones() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [codigo, esAdmin]);
 
+  const thStyle: CSSProperties = {
+    textAlign: "left",
+    padding: "12px 10px",
+    fontSize: 12,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    color: "rgba(255,255,255,0.70)",
+    borderBottom: "1px solid rgba(255,255,255,0.12)",
+    background: "rgba(255,255,255,0.04)",
+    whiteSpace: "nowrap",
+  };
+
+  const tdStyle: CSSProperties = {
+    padding: "12px 10px",
+    borderBottom: "1px solid rgba(255,255,255,0.08)",
+    color: "#ffffff",
+    verticalAlign: "middle",
+  };
+
+  const controlStyle: CSSProperties = {
+  padding: "10px 12px",
+  borderRadius: 10,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(255,255,255,0.04)",
+  color: "#ffffff",
+  fontSize: 14,
+  minHeight: 42,
+  boxSizing: "border-box",
+};
+
+const selectStyle: CSSProperties = {
+  ...controlStyle,
+  appearance: "none",
+  WebkitAppearance: "none",
+  MozAppearance: "none",
+  backgroundColor: "rgba(255,255,255,0.04)",
+  color: "#ffffff",
+};
+
+const optionStyle: CSSProperties = {
+  backgroundColor: "#1f2937",
+  color: "#ffffff",
+};
+
   return (
-    <>
-      <h1>Gestiones</h1>
-
-      {/* Paneles */}
-      <section style={{ display: "flex", gap: 12, marginBottom: 12 }}>
-        <button
-          onClick={() => setPanel("PERMISIONARIOS")}
-          style={{ background: panel === "PERMISIONARIOS" ? "#eee" : "white" }}
-        >
-          Permisionarios
-        </button>
-        <button
-          onClick={() => setPanel("ALOJADOS")}
-          style={{ background: panel === "ALOJADOS" ? "#eee" : "white" }}
-        >
-          Alojados
-        </button>
-      </section>
-
-      {errorMsg ? (
-        <div
-          style={{
-            marginBottom: 12,
-            padding: 10,
-            border: "1px solid #ccc",
-            background: "#f7f7f7",
-          }}
-        >
-          {errorMsg}
+    <div style={pageStyle}>
+      <div style={shellStyle}>
+        <div style={heroStyle}>
+          <h1 style={titleStyle}>Gestiones</h1>
+          <p style={subtitleStyle}>
+            Consulta y administración de anexos por panel, código y acciones institucionales.
+          </p>
         </div>
-      ) : null}
 
-      {/* Selector */}
-      <section
-        style={{ marginBottom: 12, padding: 12, border: "1px solid #ddd" }}
-      >
-        <select
-          value={codigo}
-          onChange={(e) => setCodigo(e.target.value)}
-          disabled={loading}
-        >
-          {anexosDisponibles.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-        <button onClick={cargarLista} disabled={loading}>
-          {loading ? "Cargando…" : "Actualizar"}
-        </button>
-        <span style={{ marginLeft: 12 }}>Resultados: {items.length}</span>
-      </section>
+        <div style={cardStyle}>
+          <section style={{ ...softCardStyle, marginBottom: 12 }}>
+            <div style={buttonRowStyle}>
+              <button
+                onClick={() => setPanel("PERMISIONARIOS")}
+                style={
+                  panel === "PERMISIONARIOS" ? primaryButtonStyle : secondaryButtonStyle
+                }
+              >
+                Permisionarios
+              </button>
+              <button
+                onClick={() => setPanel("ALOJADOS")}
+                style={panel === "ALOJADOS" ? primaryButtonStyle : secondaryButtonStyle}
+              >
+                Alojados
+              </button>
+            </div>
+          </section>
 
-      {/* Listado */}
-      <section style={{ border: "1px solid #ddd", padding: 12 }}>
-        {loading ? (
-          <p>Cargando anexos…</p>
-        ) : items.length === 0 ? (
-          <p>No hay anexos.</p>
-        ) : (
-          <table
-            border={1}
-            cellPadding={6}
-            cellSpacing={0}
-            style={{ width: "100%" }}
-          >
-            <thead>
-              <tr>
-                <th>Código</th>
-                <th>Estado</th>
-                <th>Vivienda / Unidad</th>
-                <th>Postulante / Permisionario</th>
-                <th>Fecha</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((an) => {
-                const busy = busyId === an._id;
+          {errorMsg ? (
+            <div
+              style={{
+                ...softCardStyle,
+                marginBottom: 12,
+                border: "1px solid rgba(239,68,68,0.30)",
+                background: "rgba(127,29,29,0.18)",
+                color: "#fecaca",
+              }}
+            >
+              {errorMsg}
+            </div>
+          ) : null}
 
-                return (
-                  <tr key={an._id}>
-                    <td>{safe(an.codigo)}</td>
-                    <td>
-                      {safe(an.estado)}
-                      {an.estadoInstitucional
-                        ? ` / ${safe(an.estadoInstitucional)}`
-                        : ""}
-                    </td>
-                    <td>{viviendaLabel(an)}</td>
-                    <td>{personaLabel(an)}</td>
-                    <td>{fmtDate(an.updatedAt || an.createdAt)}</td>
-                    <td style={{ whiteSpace: "nowrap" }}>
-                      <button
-                        disabled={busy}
-                        onClick={() =>
-                          navigate(`/app/admin-general/gestiones/${an._id}`)
-                        }
-                      >
-                        Gestionar
-                      </button>{" "}
-                      <button
-                        disabled={busy}
-                        onClick={() => descargarPdf(an._id, up(an.codigo))}
-                      >
-                        PDF
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </section>
-    </>
+          <section style={{ ...softCardStyle, marginBottom: 12 }}>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+              <select
+  value={codigo}
+  onChange={(e) => setCodigo(e.target.value)}
+  disabled={loading}
+  style={selectStyle}
+>
+  {anexosDisponibles.map((c) => (
+    <option key={c} value={c} style={optionStyle}>
+      {c}
+    </option>
+  ))}
+</select>
+
+              <button onClick={cargarLista} disabled={loading} style={primaryButtonStyle}>
+                {loading ? "Cargando…" : "Actualizar"}
+              </button>
+
+              <span style={{ color: "rgba(255,255,255,0.72)" }}>
+                Resultados: {items.length}
+              </span>
+            </div>
+          </section>
+
+          <section>
+            <h3 style={sectionTitleStyle}>Listado</h3>
+
+            {loading ? (
+              <div style={softCardStyle}>Cargando anexos…</div>
+            ) : items.length === 0 ? (
+              <div style={softCardStyle}>No hay anexos.</div>
+            ) : (
+              <div
+                style={{
+                  overflowX: "auto",
+                  border: "1px solid rgba(255,255,255,0.12)",
+                  borderRadius: 12,
+                  background: "rgba(255,255,255,0.04)",
+                }}
+              >
+                <table
+                  border={0}
+                  cellPadding={6}
+                  cellSpacing={0}
+                  style={{ width: "100%", borderCollapse: "collapse", minWidth: 980 }}
+                >
+                  <thead>
+                    <tr>
+                      <th style={thStyle}>Código</th>
+                      <th style={thStyle}>Estado</th>
+                      <th style={thStyle}>Vivienda / Unidad</th>
+                      <th style={thStyle}>Postulante / Permisionario</th>
+                      <th style={thStyle}>Fecha</th>
+                      <th style={thStyle}>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((an) => {
+                      const busy = busyId === an._id;
+
+                      return (
+                        <tr key={an._id}>
+                          <td style={tdStyle}>{safe(an.codigo)}</td>
+                          <td style={tdStyle}>
+                            {safe(an.estado)}
+                            {an.estadoInstitucional ? ` / ${safe(an.estadoInstitucional)}` : ""}
+                          </td>
+                          <td style={tdStyle}>{viviendaLabel(an)}</td>
+                          <td style={tdStyle}>{personaLabel(an)}</td>
+                          <td style={tdStyle}>{fmtDate(an.updatedAt || an.createdAt)}</td>
+                          <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
+                            <div style={{ ...buttonRowStyle, marginTop: 0 }}>
+                              <button
+                                disabled={busy}
+                                onClick={() => navigate(`/app/admin-general/gestiones/${an._id}`)}
+                                style={primaryButtonStyle}
+                              >
+                                Gestionar
+                              </button>
+                              <button
+                                disabled={busy}
+                                onClick={() => descargarPdf(an._id, up(an.codigo))}
+                                style={secondaryButtonStyle}
+                              >
+                                PDF
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        </div>
+      </div>
+    </div>
   );
 }

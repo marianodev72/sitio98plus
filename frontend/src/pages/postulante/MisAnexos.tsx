@@ -1,5 +1,5 @@
 // frontend/src/pages/postulante/MisAnexos.tsx
-import { useEffect, useMemo, useState } from "react";
+import { CSSProperties, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { http } from "../../api/http";
 import { useAuth } from "../../auth/useAuth";
@@ -10,6 +10,69 @@ type Anexo = {
   estado: string;
   estadoInstitucional?: string | null;
   createdAt?: string;
+};
+
+const pageStyle: CSSProperties = {
+  padding: 24,
+  color: "#F8FAFC",
+};
+
+const cardStyle: CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(255,255,255,0.05)",
+  borderRadius: 12,
+  padding: 16,
+};
+
+const deniedStyle: CSSProperties = {
+  padding: 32,
+  color: "#F8FAFC",
+};
+
+const selectStyle: CSSProperties = {
+  padding: "8px 10px",
+  borderRadius: 8,
+  border: "1px solid rgba(255,255,255,0.12)",
+  backgroundColor: "rgba(255,255,255,0.04)",
+  color: "#ffffff",
+  appearance: "none",
+  WebkitAppearance: "none",
+  MozAppearance: "none",
+};
+
+const optionStyle: CSSProperties = {
+  backgroundColor: "#1f2937",
+  color: "#ffffff",
+};
+
+const neutralButtonStyle: CSSProperties = {
+  background: "rgba(255,255,255,0.06)",
+  border: "1px solid rgba(255,255,255,0.12)",
+  color: "#ffffff",
+  borderRadius: 10,
+  padding: "10px 14px",
+  fontWeight: 700,
+  cursor: "pointer",
+};
+
+const tableStyle: CSSProperties = {
+  width: "100%",
+  borderCollapse: "collapse",
+  background: "rgba(255,255,255,0.02)",
+};
+
+const headerCellStyle: CSSProperties = {
+  color: "#9CA3AF",
+  borderBottom: "1px solid rgba(255,255,255,0.12)",
+  padding: 10,
+  textAlign: "left",
+};
+
+const cellStyle: CSSProperties = {
+  borderBottom: "1px solid rgba(255,255,255,0.06)",
+  padding: 10,
+  color: "#F8FAFC",
+  verticalAlign: "top",
 };
 
 function up(v: unknown) {
@@ -103,94 +166,113 @@ export default function MisAnexos() {
   // Permitimos POSTULANTE y PERMISIONARIO (en espera) para que pueda consultar ANEXO_02 cerrado.
   if (role !== "POSTULANTE" && role !== "PERMISIONARIO") {
     return (
-      <div style={{ padding: 32 }}>
-        <h2>La página solicitada no está disponible.</h2>
-        <p>Por favor, contacte al administrador.</p>
+      <div style={deniedStyle}>
+        <h2 style={{ marginTop: 0, color: "#F8FAFC" }}>
+          La página solicitada no está disponible.
+        </h2>
+        <p style={{ color: "#CBD5E1" }}>Por favor, contacte al administrador.</p>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: 24 }}>
-      <h2>Mis anexos</h2>
+    <div style={pageStyle}>
+      <h2 style={{ marginTop: 0, color: "#F8FAFC" }}>Mis anexos</h2>
 
       {errorMsg ? (
         <div
           style={{
+            ...cardStyle,
             marginBottom: 12,
-            padding: 10,
-            border: "1px solid #ccc",
-            background: "#f7f7f7",
+            background: "rgba(127,29,29,0.18)",
+            border: "1px solid rgba(239,68,68,0.35)",
+            color: "#FCA5A5",
           }}
         >
           {errorMsg}
         </div>
       ) : null}
 
-      <section style={{ marginBottom: 12, padding: 12, border: "1px solid #ddd" }}>
+      <section
+        style={{
+          ...cardStyle,
+          marginBottom: 12,
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          flexWrap: "wrap",
+        }}
+      >
         <select
           value={codigo}
           onChange={(e) => setCodigo(e.target.value)}
           disabled={loading}
+          style={selectStyle}
         >
           {CODIGOS.map((c) => (
-            <option key={c} value={c}>
+            <option key={c} value={c} style={optionStyle}>
               {c}
             </option>
           ))}
         </select>
 
-        <button type="button" onClick={cargar} disabled={loading} style={{ marginLeft: 8 }}>
+        <button type="button" onClick={cargar} disabled={loading} style={neutralButtonStyle}>
           {loading ? "Cargando…" : "Actualizar"}
         </button>
 
-        <span style={{ marginLeft: 12 }}>Resultados: {items.length}</span>
+        <span style={{ color: "#CBD5E1" }}>Resultados: {items.length}</span>
       </section>
 
-      <section style={{ border: "1px solid #ddd", padding: 12 }}>
+      <section style={cardStyle}>
         {loading ? (
-          <p>Cargando anexos…</p>
+          <p style={{ margin: 0, color: "#CBD5E1" }}>Cargando anexos…</p>
         ) : items.length === 0 ? (
-          <p>No hay anexos.</p>
+          <p style={{ margin: 0, color: "#CBD5E1" }}>No hay anexos.</p>
         ) : (
-          <table border={1} cellPadding={6} cellSpacing={0} style={{ width: "100%" }}>
-            <thead>
-              <tr>
-                <th>Código</th>
-                <th>Estado</th>
-                <th>Fecha</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((an) => (
-                <tr key={an._id}>
-                  <td>{safe(an.codigo)}</td>
-                  <td>
-                    {safe(an.estado)}
-                    {an.estadoInstitucional ? ` / ${safe(an.estadoInstitucional)}` : ""}
-                  </td>
-                  <td>{fmtDate(an.createdAt)}</td>
-                  <td style={{ whiteSpace: "nowrap" }}>
-                    {/* ✅ RUTA CORRECTA SEGÚN RoleRoutes:
-                        /app/postulante/mis-anexos/:id */}
-                    <button
-                      type="button"
-                      onClick={() => navigate(`/app/postulante/mis-anexos/${an._id}`)}
-                    >
-                      Ver
-                    </button>{" "}
-                    <button
-                      type="button"
-                      onClick={() => descargarPdf(an._id, up(an.codigo))}
-                    >
-                      PDF
-                    </button>
-                  </td>
+          <div style={{ overflowX: "auto" }}>
+            <table style={tableStyle}>
+              <thead>
+                <tr>
+                  <th style={headerCellStyle}>Código</th>
+                  <th style={headerCellStyle}>Estado</th>
+                  <th style={headerCellStyle}>Fecha</th>
+                  <th style={headerCellStyle}>Acciones</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {items.map((an) => (
+                  <tr key={an._id}>
+                    <td style={cellStyle}>{safe(an.codigo)}</td>
+                    <td style={cellStyle}>
+                      {safe(an.estado)}
+                      {an.estadoInstitucional ? ` / ${safe(an.estadoInstitucional)}` : ""}
+                    </td>
+                    <td style={cellStyle}>{fmtDate(an.createdAt)}</td>
+                    <td style={{ ...cellStyle, whiteSpace: "nowrap" }}>
+                      {/* ✅ RUTA CORRECTA SEGÚN RoleRoutes:
+                          /app/postulante/mis-anexos/:id */}
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        <button
+                          type="button"
+                          style={neutralButtonStyle}
+                          onClick={() => navigate(`/app/postulante/mis-anexos/${an._id}`)}
+                        >
+                          Ver
+                        </button>
+                        <button
+                          type="button"
+                          style={neutralButtonStyle}
+                          onClick={() => descargarPdf(an._id, up(an.codigo))}
+                        >
+                          PDF
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
     </div>

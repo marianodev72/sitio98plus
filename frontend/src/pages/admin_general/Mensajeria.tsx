@@ -1,6 +1,15 @@
 // frontend/src/pages/admin_general/Mensajeria.tsx
-import { useEffect, useMemo, useState } from "react";
+// frontend/src/pages/admin_general/Mensajeria.tsx
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { http } from "../../api/http";
+import {
+  cardStyle,
+  heroStyle,
+  pageStyle,
+  shellStyle,
+  subtitleStyle,
+  titleStyle,
+} from "../permisionario/uiStyles";
 
 type Usuario = {
   _id: string;
@@ -14,7 +23,7 @@ type Usuario = {
   barrioAsignado?: string;
   activo?: boolean;
   archivado?: boolean;
-  viviendaLabel?: string; // AB-702 (solo si ocupa por ANEXO_03)
+  viviendaLabel?: string;
 };
 
 type MensajeAdjunto = {
@@ -22,13 +31,13 @@ type MensajeAdjunto = {
   nombre?: string;
   mimetype?: string;
   size?: number;
-  path?: string; // legacy path público (no usar)
+  path?: string;
 };
 
 type Mensaje = {
   _id: string;
-  remitente: string; // ObjectId string
-  destinatarios: string[]; // ObjectId[]
+  remitente: string | { _id?: string };
+  destinatarios: string[];
   asunto?: string;
   cuerpo?: string;
   adjuntos?: MensajeAdjunto[];
@@ -41,8 +50,8 @@ type Mensaje = {
 type Tab = "entrada" | "enviados" | "nuevo";
 
 type MensajeriaProps = {
-  lockedBarrio?: string;      // si existe, se fuerza el barrio
-  hideBarrioSelect?: boolean; // oculta selector de barrio
+  lockedBarrio?: string;
+  hideBarrioSelect?: boolean;
 };
 
 function safe(v: unknown) {
@@ -102,12 +111,242 @@ function resumenMensaje(m?: Mensaje) {
   const asunto = (m?.asunto || "").trim();
   const cuerpo = (m?.cuerpo || "").trim();
   const base = asunto || cuerpo || "(sin contenido)";
-  return base.length > 70 ? base.slice(0, 70) + "…" : base;
+  return base.length > 70 ? `${base.slice(0, 70)}…` : base;
 }
 
-function up(v: unknown) {
-  return String(v || "").toUpperCase().trim();
-}
+const styles = {
+  pageTitle: {
+    marginTop: 0,
+    marginBottom: 14,
+    color: "#ffffff",
+    fontSize: 28,
+    fontWeight: 800,
+    letterSpacing: "-0.03em",
+  } as CSSProperties,
+
+  tabsRow: {
+    display: "flex",
+    gap: 8,
+    marginBottom: 14,
+    flexWrap: "wrap" as const,
+  } as CSSProperties,
+
+  tabButton: (active: boolean): CSSProperties => ({
+    padding: "10px 14px",
+    border: "1px solid rgba(255,255,255,0.12)",
+    background: active ? "rgba(59,130,246,0.22)" : "rgba(255,255,255,0.05)",
+    color: "#ffffff",
+    borderRadius: 12,
+    cursor: "pointer",
+    fontWeight: 700,
+  }),
+
+  box: {
+    border: "1px solid rgba(255,255,255,0.14)",
+    padding: 16,
+    borderRadius: 16,
+    background: "rgba(255,255,255,0.05)",
+    backdropFilter: "blur(6px)",
+    color: "#eaf0ff",
+    boxShadow: "0 12px 30px rgba(0,0,0,0.18)",
+  } as CSSProperties,
+
+  sectionTitle: {
+    marginTop: 0,
+    marginBottom: 12,
+    color: "#ffffff",
+    fontSize: 18,
+    fontWeight: 800,
+    letterSpacing: "-0.02em",
+  } as CSSProperties,
+
+  error: {
+    marginBottom: 12,
+    padding: "12px 14px",
+    border: "1px solid rgba(244,67,54,0.55)",
+    background: "rgba(244,67,54,0.12)",
+    color: "#ffe5e5",
+    borderRadius: 12,
+  } as CSSProperties,
+
+  subtleText: {
+    margin: 0,
+    color: "rgba(255,255,255,0.78)",
+  } as CSSProperties,
+
+  input: {
+    width: "100%",
+    minWidth: 0,
+    padding: "10px 12px",
+    borderRadius: 12,
+    border: "1px solid rgba(255,255,255,0.12)",
+    background: "rgba(255,255,255,0.04)",
+    color: "#ffffff",
+    outline: "none",
+    boxSizing: "border-box",
+  } as CSSProperties,
+
+  textarea: {
+    width: "100%",
+    minWidth: 0,
+    padding: "10px 12px",
+    borderRadius: 12,
+    border: "1px solid rgba(255,255,255,0.12)",
+    background: "rgba(255,255,255,0.04)",
+    color: "#ffffff",
+    outline: "none",
+    resize: "vertical" as const,
+    boxSizing: "border-box",
+  } as CSSProperties,
+
+  select: {
+  padding: "10px 12px",
+  borderRadius: 12,
+  border: "1px solid rgba(255,255,255,0.12)",
+  background: "rgba(255,255,255,0.04)",
+  backgroundColor: "rgba(255,255,255,0.04)",
+  color: "#ffffff",
+  outline: "none",
+  appearance: "none",
+  WebkitAppearance: "none",
+  MozAppearance: "none",
+} as CSSProperties,
+
+option: {
+  backgroundColor: "#1f2937",
+  color: "#ffffff",
+} as CSSProperties,
+
+  actionButton: {
+    padding: "10px 14px",
+    borderRadius: 12,
+    border: "1px solid rgba(255,255,255,0.12)",
+    background: "rgba(255,255,255,0.05)",
+    color: "#ffffff",
+    cursor: "pointer",
+    fontWeight: 700,
+  } as CSSProperties,
+
+  primaryButton: {
+    padding: "10px 14px",
+    borderRadius: 12,
+    border: "1px solid rgba(59,130,246,0.9)",
+    background: "linear-gradient(180deg, rgba(59,130,246,0.95), rgba(37,99,235,0.95))",
+    color: "#ffffff",
+    cursor: "pointer",
+    fontWeight: 700,
+    boxShadow: "0 10px 20px rgba(37,99,235,0.28)",
+  } as CSSProperties,
+
+  mutedButton: {
+    padding: "10px 14px",
+    borderRadius: 12,
+    border: "1px solid rgba(255,255,255,0.12)",
+    background: "rgba(255,255,255,0.05)",
+    color: "#ffffff",
+    cursor: "pointer",
+    fontWeight: 700,
+  } as CSSProperties,
+
+  dashedBox: {
+    padding: 12,
+    border: "1px dashed rgba(255,255,255,0.2)",
+    background: "rgba(255,255,255,0.03)",
+    borderRadius: 12,
+  } as CSSProperties,
+
+  fileInputHidden: {
+  position: "absolute",
+  width: 1,
+  height: 1,
+  padding: 0,
+  margin: -1,
+  overflow: "hidden",
+  clip: "rect(0, 0, 0, 0)",
+  whiteSpace: "nowrap",
+  border: 0,
+} as CSSProperties,
+
+fileButton: {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "10px 14px",
+  borderRadius: 12,
+  border: "1px solid rgba(255,255,255,0.12)",
+  background: "rgba(255,255,255,0.05)",
+  color: "#ffffff",
+  cursor: "pointer",
+  fontWeight: 700,
+  boxSizing: "border-box",
+} as CSSProperties,
+
+  tableWrap: {
+    border: "1px solid rgba(255,255,255,0.1)",
+    borderRadius: 14,
+    overflow: "auto" as const,
+    background: "rgba(255,255,255,0.03)",
+  } as CSSProperties,
+
+  table: {
+    width: "100%",
+    borderCollapse: "collapse" as const,
+  } as CSSProperties,
+
+  th: {
+    textAlign: "left" as const,
+    padding: 10,
+    borderBottom: "1px solid rgba(255,255,255,0.1)",
+    color: "rgba(255,255,255,0.62)",
+    fontSize: 11,
+    fontWeight: 700,
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.08em",
+    background: "rgba(255,255,255,0.03)",
+  } as CSSProperties,
+
+  td: {
+    padding: 10,
+    borderBottom: "1px solid rgba(255,255,255,0.08)",
+    color: "#eaf0ff",
+    verticalAlign: "top" as const,
+  } as CSSProperties,
+
+  modalBackdrop: {
+    position: "fixed" as const,
+    inset: 0,
+    background: "rgba(0,0,0,0.55)",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 16,
+    zIndex: 50,
+  } as CSSProperties,
+
+  modal: {
+    width: "min(920px, 95vw)",
+    maxHeight: "85vh",
+    overflow: "auto" as const,
+    background: "linear-gradient(180deg, rgba(15,23,42,0.98), rgba(11,18,32,0.98))",
+    borderRadius: 16,
+    border: "1px solid rgba(255,255,255,0.12)",
+    padding: 16,
+    color: "#eaf0ff",
+    boxShadow: "0 20px 48px rgba(0,0,0,0.32)",
+  } as CSSProperties,
+
+  metaLine: {
+    marginBottom: 6,
+    color: "rgba(255,255,255,0.82)",
+  } as CSSProperties,
+
+  divider: {
+    border: "none",
+    height: 1,
+    background: "rgba(255,255,255,0.1)",
+    margin: "14px 0",
+  } as CSSProperties,
+};
 
 export default function Mensajeria(props: MensajeriaProps = {}) {
   const [tab, setTab] = useState<Tab>("entrada");
@@ -125,32 +364,27 @@ export default function Mensajeria(props: MensajeriaProps = {}) {
     return m;
   }, [usuarios]);
 
-  // Modal ver mensaje
   const [openMsgId, setOpenMsgId] = useState<string | null>(null);
   const [openMsg, setOpenMsg] = useState<Mensaje | null>(null);
   const [openLoading, setOpenLoading] = useState(false);
 
-  // Nuevo mensaje
   const [paraIds, setParaIds] = useState<string[]>([]);
   const [asunto, setAsunto] = useState("");
   const [cuerpo, setCuerpo] = useState("");
   const [buscaUsuario, setBuscaUsuario] = useState("");
   const [filtroRole, setFiltroRole] = useState("");
-  const [filtroBarrio, setFiltroBarrio] = useState(props.lockedBarrio ? String(props.lockedBarrio) : "");
+  const [filtroBarrio, setFiltroBarrio] = useState(
+    props.lockedBarrio ? String(props.lockedBarrio) : ""
+  );
   const [files, setFiles] = useState<File[]>([]);
   const [replyToId, setReplyToId] = useState<string | null>(null);
 
-  // ✅ límite: 200 para todos, excepto ADMIN/ADMIN_GENERAL: 1000
   const limiteVisible = useMemo(() => {
-    // Si NO hay lockedBarrio significa que estamos en el panel ADMIN_GENERAL (no subpanel inspector/jefe).
-    // En subpaneles se pasa lockedBarrio.
     const adminLike = !props.lockedBarrio;
     return adminLike ? 1000 : 200;
   }, [props.lockedBarrio]);
 
   const rolesDisponibles = useMemo(() => {
-    // ✅ Incluimos PERMISIONARIO (solicitado)
-    // Recordatorio: INSPECTOR y JEFE_DE_BARRIO NO son roles base, son permisos dentro de PERMISIONARIO.
     return ["ADMIN_GENERAL", "ADMIN", "INSPECTOR", "JEFE_DE_BARRIO", "PERMISIONARIO"];
   }, []);
 
@@ -172,17 +406,22 @@ export default function Mensajeria(props: MensajeriaProps = {}) {
         if (u.activo === false) return false;
         if (u.archivado === true) return false;
 
-        // 🔒 Si hay barrio bloqueado, se fuerza en frontend (UX). Seguridad real está en backend.
         if (locked) {
           const k = claveRolFiltro(u);
-          // ✅ Admins/globales no se restringen por barrio (requerimiento PERMISIONARIO)
-          if (k !== "ADMIN" && k !== "ADMIN_GENERAL" && String(u.barrioAsignado || "") !== locked) return false;
+          if (
+            k !== "ADMIN" &&
+            k !== "ADMIN_GENERAL" &&
+            String(u.barrioAsignado || "") !== locked
+          ) {
+            return false;
+          }
         }
 
         if (filtroRole && claveRolFiltro(u) !== filtroRole) return false;
 
-        // solo aplica filtroBarrio si NO está locked
-        if (!locked && filtroBarrio && String(u.barrioAsignado || "") !== filtroBarrio) return false;
+        if (!locked && filtroBarrio && String(u.barrioAsignado || "") !== filtroBarrio) {
+          return false;
+        }
 
         if (!q) return true;
 
@@ -213,7 +452,6 @@ export default function Mensajeria(props: MensajeriaProps = {}) {
     return usuariosFiltrados.slice(0, limiteVisible);
   }, [usuariosFiltrados, limiteVisible]);
 
-  // ✅ estado del checkbox "seleccionar todos"
   const todosVisiblesSeleccionados = useMemo(() => {
     if (!usuariosVisibles.length) return false;
     return usuariosVisibles.every((u) => paraIds.includes(String(u._id)));
@@ -250,10 +488,8 @@ export default function Mensajeria(props: MensajeriaProps = {}) {
       const allSelected = ids.every((id) => set.has(id));
 
       if (allSelected) {
-        // si ya estaban todos visibles, deseleccionamos solo los visibles
         ids.forEach((id) => set.delete(id));
       } else {
-        // si faltaba alguno, seleccionamos todos los visibles
         ids.forEach((id) => set.add(id));
       }
       return Array.from(set);
@@ -272,16 +508,15 @@ export default function Mensajeria(props: MensajeriaProps = {}) {
   }
 
   async function cargarUsuarios() {
-  try {
-    // ✅ agenda institucional unificada (sirve para admins y permisionarios)
-    const res = await http.get("/mensajes/agenda");
-    const lista = Array.isArray(res.data) ? res.data : res.data?.usuarios;
-    setUsuarios(Array.isArray(lista) ? lista : []);
-  } catch (err) {
-    console.error("[Mensajeria] Error cargando agenda", err);
-    setUsuarios([]);
+    try {
+      const res = await http.get("/mensajes/agenda");
+      const lista = Array.isArray(res.data) ? res.data : res.data?.usuarios;
+      setUsuarios(Array.isArray(lista) ? lista : []);
+    } catch (err) {
+      console.error("[Mensajeria] Error cargando agenda", err);
+      setUsuarios([]);
+    }
   }
-}
 
   async function cargarBandejas() {
     setLoading(true);
@@ -292,8 +527,8 @@ export default function Mensajeria(props: MensajeriaProps = {}) {
         http.get("/mensajes/enviados"),
       ]);
 
-      setEntrada(Array.isArray(inboxRes.data) ? inboxRes.data : (inboxRes.data?.mensajes || []));
-setEnviados(Array.isArray(sentRes.data) ? sentRes.data : (sentRes.data?.mensajes || []));
+      setEntrada(Array.isArray(inboxRes.data) ? inboxRes.data : inboxRes.data?.mensajes || []);
+      setEnviados(Array.isArray(sentRes.data) ? sentRes.data : sentRes.data?.mensajes || []);
     } catch (err) {
       console.error("[Mensajeria] Error cargando bandejas", err);
       setEntrada([]);
@@ -313,13 +548,12 @@ setEnviados(Array.isArray(sentRes.data) ? sentRes.data : (sentRes.data?.mensajes
     try {
       const res = await http.get(`/mensajes/${id}`);
 
-const msg = res.data?.mensaje;
-if (!msg || !msg._id) {
-  throw new Error("Payload de mensaje inválido");
-}
+      const msg = res.data?.mensaje;
+      if (!msg || !msg._id) {
+        throw new Error("Payload de mensaje inválido");
+      }
 
-setOpenMsg(msg);
-
+      setOpenMsg(msg);
 
       if (desde === "entrada") {
         try {
@@ -345,21 +579,22 @@ setOpenMsg(msg);
   }
 
   function responderAlMensaje(msg: Mensaje) {
-  if (!msg || !msg._id) return;
+    if (!msg || !msg._id) return;
 
-    // ✅ Respuesta: preselecciona remitente como destinatario y enlaza hilo
-    const remitenteId = typeof (msg as any)?.remitente === "object"
-      ? String((msg as any)?.remitente?._id || "")
-      : String((msg as any)?.remitente || "");
+    const remitenteId =
+      typeof (msg as any)?.remitente === "object"
+        ? String((msg as any)?.remitente?._id || "")
+        : String((msg as any)?.remitente || "");
 
     if (remitenteId) setParaIds([remitenteId]);
     else setParaIds([]);
 
     const asuntoBase = String((msg as any)?.asunto || "").trim();
-    const nuevoAsunto = asuntoBase.toUpperCase().startsWith("RE:") ? asuntoBase : `RE: ${asuntoBase}`;
+    const nuevoAsunto = asuntoBase.toUpperCase().startsWith("RE:")
+      ? asuntoBase
+      : `RE: ${asuntoBase}`;
     setAsunto(nuevoAsunto);
 
-    // Enlace de hilo en backend
     setReplyToId(String((msg as any)?._id));
 
     const quoted = [
@@ -439,396 +674,447 @@ setOpenMsg(msg);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const btnStyle = (active: boolean): React.CSSProperties => ({
-    padding: "10px 14px",
-    border: "1px solid #ccc",
-    background: active ? "#eee" : "#fff",
-    cursor: "pointer",
-  });
-
-  const boxStyle: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,0.14)",
-  padding: 16,
-  borderRadius: 12,
-  background: "rgba(255,255,255,0.05)",
-  backdropFilter: "blur(6px)",
-  color: "#eaf0ff",
-};
-
   return (
-    <>
-      <h1>Mensajería</h1>
-
-      <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-        <button style={btnStyle(tab === "entrada")} onClick={() => setTab("entrada")} disabled={loading}>
-          Entrada
-        </button>
-        <button style={btnStyle(tab === "enviados")} onClick={() => setTab("enviados")} disabled={loading}>
-          Enviados
-        </button>
-        <button style={btnStyle(tab === "nuevo")} onClick={() => setTab("nuevo")} disabled={loading}>
-          Nuevo
-        </button>
-        <button style={btnStyle(false)} onClick={cargarBandejas} disabled={loading}>
-          Actualizar
-        </button>
-      </div>
-
-      {errorMsg ? (
-        <div style={{ marginBottom: 12, padding: "10px 12px", border: "1px solid #ccc", background: "#f7f7f7" }}>
-          {errorMsg}
+    <div style={pageStyle}>
+      <div style={shellStyle}>
+        <div style={heroStyle}>
+          <h1 style={titleStyle}>Mensajería</h1>
+          <p style={subtitleStyle}>
+            Bandeja de entrada, enviados y composición de mensajes institucionales.
+          </p>
         </div>
-      ) : null}
 
-      {/* ENTRADA */}
-      {tab === "entrada" ? (
-        <section style={boxStyle}>
-          <h2 style={{ marginTop: 0 }}>Bandeja de entrada</h2>
-
-          {loading ? <p>Cargando…</p> : null}
-          {!loading && entrada.length === 0 ? <p>No hay mensajes.</p> : null}
-
-          {!loading && entrada.length > 0 ? (
-            <table style={{ width: "100%", borderCollapse: "collapse" }} cellPadding={6} cellSpacing={0} style={{ width: "100%" }}>
-              <thead>
-                <tr>
-                  <th>Fecha</th>
-                  <th>Asunto / resumen</th>
-                  <th>Remitente</th>
-                  <th>Acción</th>
-                </tr>
-              </thead>
-              <tbody>
-                {entrada.map((m) => (
-                  <tr key={m._id}>
-                    <td style={{ whiteSpace: "nowrap" }}>{formatFecha(m.creadoEn)}</td>
-                    <td>{resumenMensaje(m)}</td>
-                    <td>{nombreUsuario(usuariosById.get(idUsuario(m.remitente)))}</td>
-                    <td>
-                      <button onClick={() => abrirMensaje(m._id, "entrada")} disabled={loading || openLoading}>
-                        Ver
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : null}
-        </section>
-      ) : null}
-
-      {/* ENVIADOS */}
-      {tab === "enviados" ? (
-        <section style={boxStyle}>
-          <h2 style={{ marginTop: 0 }}>Enviados</h2>
-
-          {loading ? <p>Cargando…</p> : null}
-          {!loading && enviados.length === 0 ? <p>No hay mensajes enviados.</p> : null}
-
-          {!loading && enviados.length > 0 ? (
-            <table border={1} cellPadding={6} cellSpacing={0} style={{ width: "100%" }}>
-              <thead>
-                <tr>
-                  <th>Fecha</th>
-                  <th>Asunto / resumen</th>
-                  <th>Destinatarios</th>
-                  <th>Acción</th>
-                </tr>
-              </thead>
-              <tbody>
-                {enviados.map((m) => (
-                  <tr key={m._id}>
-                    <td style={{ whiteSpace: "nowrap" }}>{formatFecha(m.creadoEn)}</td>
-                    <td>{resumenMensaje(m)}</td>
-                    <td style={{ textAlign: "center" }}>
-                      {Array.isArray(m.destinatarios) ? m.destinatarios.length : 0}
-                    </td>
-                    <td>
-                      <button onClick={() => abrirMensaje(m._id, "enviados")} disabled={loading || openLoading}>
-                        Ver
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : null}
-        </section>
-      ) : null}
-
-      {/* NUEVO */}
-      {tab === "nuevo" ? (
-        <section style={boxStyle}>
-          <h2 style={{ marginTop: 0 }}>Nuevo mensaje</h2>
-
-          <div style={{ display: "grid", gap: 10, maxWidth: 950 }}>
-            <input
-              placeholder="Asunto"
-              value={asunto}
-              onChange={(e) => setAsunto(e.target.value)}
-              style={{ width: "100%", maxWidth: 800 }}
+        <div style={cardStyle}>
+          <div style={styles.tabsRow}>
+            <button
+              style={styles.tabButton(tab === "entrada")}
+              onClick={() => setTab("entrada")}
               disabled={loading}
-            />
-
-            <textarea
-              placeholder="Cuerpo del mensaje"
-              value={cuerpo}
-              onChange={(e) => setCuerpo(e.target.value)}
-              rows={6}
-              style={{ width: "100%", maxWidth: 900 }}
+            >
+              Entrada
+            </button>
+            <button
+              style={styles.tabButton(tab === "enviados")}
+              onClick={() => setTab("enviados")}
               disabled={loading}
-            />
+            >
+              Enviados
+            </button>
+            <button
+              style={styles.tabButton(tab === "nuevo")}
+              onClick={() => setTab("nuevo")}
+              disabled={loading}
+            >
+              Nuevo
+            </button>
+            <button
+              style={styles.tabButton(false)}
+              onClick={cargarBandejas}
+              disabled={loading}
+            >
+              Actualizar
+            </button>
+          </div>
 
-            <div style={{ padding: 10, border: "1px dashed #ccc", background: "#fafafa" }}>
-              <strong>Adjuntos (PDF / JPG / PNG)</strong>
-              <div style={{ marginTop: 8, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+          {errorMsg ? <div style={styles.error}>{errorMsg}</div> : null}
+
+          {tab === "entrada" ? (
+            <section style={styles.box}>
+              <h2 style={styles.sectionTitle}>Bandeja de entrada</h2>
+
+              {loading ? <p style={styles.subtleText}>Cargando…</p> : null}
+              {!loading && entrada.length === 0 ? <p style={styles.subtleText}>No hay mensajes.</p> : null}
+
+              {!loading && entrada.length > 0 ? (
+                <div style={styles.tableWrap}>
+                  <table style={styles.table}>
+                    <thead>
+                      <tr>
+                        <th style={styles.th}>Fecha</th>
+                        <th style={styles.th}>Asunto / resumen</th>
+                        <th style={styles.th}>Remitente</th>
+                        <th style={styles.th}>Acción</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {entrada.map((m) => (
+                        <tr key={m._id}>
+                          <td style={{ ...styles.td, whiteSpace: "nowrap" }}>{formatFecha(m.creadoEn)}</td>
+                          <td style={styles.td}>{resumenMensaje(m)}</td>
+                          <td style={styles.td}>
+                            {nombreUsuario(usuariosById.get(idUsuario(m.remitente)))}
+                          </td>
+                          <td style={styles.td}>
+                            <button
+                              onClick={() => abrirMensaje(m._id, "entrada")}
+                              disabled={loading || openLoading}
+                              style={styles.actionButton}
+                            >
+                              Ver
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+
+          {tab === "enviados" ? (
+            <section style={styles.box}>
+              <h2 style={styles.sectionTitle}>Enviados</h2>
+
+              {loading ? <p style={styles.subtleText}>Cargando…</p> : null}
+              {!loading && enviados.length === 0 ? (
+                <p style={styles.subtleText}>No hay mensajes enviados.</p>
+              ) : null}
+
+              {!loading && enviados.length > 0 ? (
+                <div style={styles.tableWrap}>
+                  <table style={styles.table}>
+                    <thead>
+                      <tr>
+                        <th style={styles.th}>Fecha</th>
+                        <th style={styles.th}>Asunto / resumen</th>
+                        <th style={styles.th}>Destinatarios</th>
+                        <th style={styles.th}>Acción</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {enviados.map((m) => (
+                        <tr key={m._id}>
+                          <td style={{ ...styles.td, whiteSpace: "nowrap" }}>{formatFecha(m.creadoEn)}</td>
+                          <td style={styles.td}>{resumenMensaje(m)}</td>
+                          <td style={{ ...styles.td, textAlign: "center" }}>
+                            {Array.isArray(m.destinatarios) ? m.destinatarios.length : 0}
+                          </td>
+                          <td style={styles.td}>
+                            <button
+                              onClick={() => abrirMensaje(m._id, "enviados")}
+                              disabled={loading || openLoading}
+                              style={styles.actionButton}
+                            >
+                              Ver
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+
+          {tab === "nuevo" ? (
+            <section style={styles.box}>
+              <h2 style={styles.sectionTitle}>Nuevo mensaje</h2>
+
+              <div style={{ display: "grid", gap: 10, maxWidth: 950 }}>
                 <input
-                  type="file"
-                  multiple
-                  accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
-                  onChange={(e) => setFiles(Array.from(e.target.files || []))}
+                  placeholder="Asunto"
+                  value={asunto}
+                  onChange={(e) => setAsunto(e.target.value)}
+                  style={styles.input}
                   disabled={loading}
                 />
-                <button onClick={() => setFiles([])} disabled={loading}>
-                  Limpiar adjuntos
-                </button>
-              </div>
-              <div style={{ marginTop: 8, fontSize: 12 }}>
-                Adjuntos seleccionados: <strong>{files.length}</strong>
-              </div>
-            </div>
 
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-              <input
-                placeholder="Buscar destinatario (nombre/email/dni/matrícula)"
-                value={buscaUsuario}
-                onChange={(e) => setBuscaUsuario(e.target.value)}
-                style={{ flex: 1, minWidth: 260 }}
-                disabled={loading}
-              />
+                <textarea
+                  placeholder="Cuerpo del mensaje"
+                  value={cuerpo}
+                  onChange={(e) => setCuerpo(e.target.value)}
+                  rows={6}
+                  style={styles.textarea}
+                  disabled={loading}
+                />
 
-              <select value={filtroRole} onChange={(e) => setFiltroRole(e.target.value)} disabled={loading}>
-                <option value="">Todos los roles</option>
-                {rolesDisponibles.map((r) => (
-                  <option key={r} value={r}>
-                    {r === "ADMIN_GENERAL"
-                      ? "ADMIN_GENERAL"
-                      : r === "ADMIN"
-                      ? "ADMIN"
-                      : r === "INSPECTOR"
-                      ? "INSPECTOR DE BARRIO"
-                      : r === "JEFE_DE_BARRIO"
-                      ? "JEFE DE BARRIO"
-                      : r === "PERMISIONARIO"
-                      ? "PERMISIONARIO"
-                      : r}
-                  </option>
-                ))}
-              </select>
-
-              {/* ✅ barrio: si está locked se oculta o se deshabilita */}
-              {!props.hideBarrioSelect ? (
-                <select
-                  value={props.lockedBarrio ? String(props.lockedBarrio) : filtroBarrio}
-                  onChange={(e) => {
-                    if (!props.lockedBarrio) setFiltroBarrio(e.target.value);
-                  }}
-                  disabled={loading || !!props.lockedBarrio}
-                >
-                  <option value="">
-                    {props.lockedBarrio ? String(props.lockedBarrio) : "Todos los barrios"}
-                  </option>
-                  {!props.lockedBarrio &&
-                    barriosDisponibles.map((b) => (
-                      <option key={b} value={b}>
-                        {b}
-                      </option>
-                    ))}
-                </select>
-              ) : null}
-
-              <button onClick={seleccionarPorFiltroActual} disabled={loading}>
-                Agregar filtrados
-              </button>
-
-              <button onClick={limpiarDestinatarios} disabled={loading}>
-                Limpiar destinatarios
-              </button>
-            </div>
-
-            <div style={{ border: "1px solid #ddd", maxHeight: 320, overflow: "auto" }}>
-              <table border={0} cellPadding={6} cellSpacing={0} style={{ width: "100%" }}>
-                <thead>
-                  <tr>
-                    {/* ✅ checkbox maestro */}
-                    <th style={{ textAlign: "center", width: 40 }}>
-                      <input
-                        type="checkbox"
-                        checked={todosVisiblesSeleccionados}
-                        ref={(el) => {
-                          if (!el) return;
-                          el.indeterminate = !todosVisiblesSeleccionados && algunosVisiblesSeleccionados;
-                        }}
-                        onChange={toggleSeleccionarTodosVisibles}
-                        disabled={loading || usuariosVisibles.length === 0}
-                        title="Seleccionar todos los visibles"
-                      />
-                    </th>
-                    <th>Usuario</th>
-                    <th>Rol</th>
-                    <th>Barrio</th>
-                    <th>Vivienda</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {usuariosVisibles.map((u) => {
-                    const id = String(u._id);
-                    const checked = paraIds.includes(id);
-                    return (
-                      <tr key={id}>
-                        <td style={{ textAlign: "center" }}>
-                          <input type="checkbox" checked={checked} onChange={() => togglePara(id)} disabled={loading} />
-                        </td>
-                        <td>{nombreUsuario(u)}</td>
-                        <td>{etiquetaRol(u)}</td>
-                        <td>{safe(u.barrioAsignado)}</td>
-                        <td>{u.viviendaLabel || "-"}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            <p style={{ margin: 0, fontSize: 12 }}>
-              Destinatarios seleccionados: <strong>{paraIds.length}</strong> (se muestran hasta{" "}
-              <strong>{limiteVisible}</strong> usuarios filtrados)
-            </p>
-
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button onClick={enviarMensaje} disabled={loading}>
-                Enviar
-              </button>
-              <button onClick={limpiarFormularioNuevo} disabled={loading}>
-                Limpiar formulario
-              </button>
-            </div>
-          </div>
-        </section>
-      ) : null}
-
-      {/* MODAL VER MENSAJE */}
-      {openMsgId ? (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.4)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            padding: 16,
-            zIndex: 50,
-          }}
-          onClick={cerrarMensaje}
-        >
-          <div
-            style={{
-              width: "min(900px, 95vw)",
-              maxHeight: "85vh",
-              overflow: "auto",
-              background: "#fff",
-              borderRadius: 8,
-              border: "1px solid #ddd",
-              padding: 16,
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
-              <strong>Mensaje</strong>
-              {openMsg ? (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    openMsg && responderAlMensaje(openMsg);
-                  }}
-                  disabled={openLoading}
-                >
-                  Responder
-                </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  cerrarMensaje();
-                }}
-              >
-                Cerrar
-              </button>
-            </div>
-
-            {openLoading ? <p>Cargando…</p> : null}
-
-            {!openLoading && openMsg ? (
-              <>
-                <p style={{ marginBottom: 6 }}>
-                  <strong>Fecha:</strong> {formatFecha(openMsg.creadoEn)}
-                </p>
-                <p style={{ marginBottom: 6 }}>
-                  <strong>Asunto:</strong> {safe(openMsg.asunto)}
-                </p>
-                <p style={{ marginBottom: 6 }}>
-                  <strong>Remitente:</strong> {nombreUsuario(usuariosById.get(idUsuario(openMsg.remitente)))}
-                </p>
-                <p style={{ marginBottom: 6 }}>
-                  <strong>Destinatarios:</strong>{" "}
-                  {Array.isArray(openMsg.destinatarios)
-                    ? openMsg.destinatarios.map((id) => nombreUsuario(usuariosById.get(String(id)))).join(", ")
-                    : "-"}
-                </p>
-
-                <hr />
-
-                <div style={{ whiteSpace: "pre-wrap" }}>{safe(openMsg.cuerpo)}</div>
-
-                <hr />
-
-                <div>
-                  <strong>Adjuntos:</strong>{" "}
-                  {openMsg.adjuntos && openMsg.adjuntos.length ? (
-                    <ul>
-                      {openMsg.adjuntos.map((a, idx) => (
-                        <li key={idx}>
-                          {a.fileId ? (
-                            <a
-                              href={`/api/mensajes/${openMsg._id}/adjuntos/${a.fileId}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
-                              {safe(a.nombre)}
-                            </a>
-                          ) : (
-                            <span>{safe(a.nombre)}</span>
-                          )}{" "}
-                          ({safe(a.mimetype)}) — {safe(a.size)}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <span>—</span>
-                  )}
+                <div style={styles.dashedBox}>
+                  <strong>Adjuntos (PDF / JPG / PNG)</strong>
+                  <div
+                    style={{
+                      marginTop: 8,
+                      display: "flex",
+                      gap: 10,
+                      flexWrap: "wrap",
+                      alignItems: "center",
+                    }}
+                  >
+                    <>
+  <input
+    id="mensajeria-adjuntos"
+    type="file"
+    multiple
+    accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+    onChange={(e) => setFiles(Array.from(e.target.files || []))}
+    disabled={loading}
+    style={styles.fileInputHidden}
+  />
+  <label htmlFor="mensajeria-adjuntos" style={styles.fileButton}>
+    Elegir archivos
+  </label>
+</>
+                    <button onClick={() => setFiles([])} disabled={loading} style={styles.actionButton}>
+                      Limpiar adjuntos
+                    </button>
+                  </div>
+                  <div style={{ marginTop: 8, fontSize: 12, color: "rgba(255,255,255,0.74)" }}>
+                    Adjuntos seleccionados: <strong>{files.length}</strong>
+                  </div>
                 </div>
-              </>
-            ) : null}
 
-            {!openLoading && !openMsg ? <p>No se pudo cargar el mensaje.</p> : null}
-          </div>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 8,
+                    flexWrap: "wrap",
+                    alignItems: "center",
+                  }}
+                >
+                  <input
+                    placeholder="Buscar destinatario (nombre/email/dni/matrícula)"
+                    value={buscaUsuario}
+                    onChange={(e) => setBuscaUsuario(e.target.value)}
+                    style={{ ...styles.input, flex: 1, minWidth: 260 }}
+                    disabled={loading}
+                  />
+
+                  <select
+  value={filtroRole}
+  onChange={(e) => setFiltroRole(e.target.value)}
+  disabled={loading}
+  style={styles.select}
+>
+  <option value="" style={styles.option}>
+    Todos los roles
+  </option>
+  {rolesDisponibles.map((r) => (
+    <option key={r} value={r} style={styles.option}>
+      {r === "ADMIN_GENERAL"
+        ? "ADMIN_GENERAL"
+        : r === "ADMIN"
+        ? "ADMIN"
+        : r === "INSPECTOR"
+        ? "INSPECTOR DE BARRIO"
+        : r === "JEFE_DE_BARRIO"
+        ? "JEFE DE BARRIO"
+        : r === "PERMISIONARIO"
+        ? "PERMISIONARIO"
+        : r}
+    </option>
+  ))}
+</select>
+
+                  {!props.hideBarrioSelect ? (
+                    <select
+  value={props.lockedBarrio ? String(props.lockedBarrio) : filtroBarrio}
+  onChange={(e) => {
+    if (!props.lockedBarrio) setFiltroBarrio(e.target.value);
+  }}
+  disabled={loading || !!props.lockedBarrio}
+  style={styles.select}
+>
+  <option value="" style={styles.option}>
+    {props.lockedBarrio ? String(props.lockedBarrio) : "Todos los barrios"}
+  </option>
+  {!props.lockedBarrio &&
+    barriosDisponibles.map((b) => (
+      <option key={b} value={b} style={styles.option}>
+        {b}
+      </option>
+    ))}
+</select>
+                  ) : null}
+
+                  <button onClick={seleccionarPorFiltroActual} disabled={loading} style={styles.actionButton}>
+                    Agregar filtrados
+                  </button>
+
+                  <button onClick={limpiarDestinatarios} disabled={loading} style={styles.actionButton}>
+                    Limpiar destinatarios
+                  </button>
+                </div>
+
+                <div style={styles.tableWrap}>
+                  <table style={styles.table}>
+                    <thead>
+                      <tr>
+                        <th style={{ ...styles.th, textAlign: "center", width: 40 }}>
+                          <input
+                            type="checkbox"
+                            checked={todosVisiblesSeleccionados}
+                            ref={(el) => {
+                              if (!el) return;
+                              el.indeterminate = !todosVisiblesSeleccionados && algunosVisiblesSeleccionados;
+                            }}
+                            onChange={toggleSeleccionarTodosVisibles}
+                            disabled={loading || usuariosVisibles.length === 0}
+                            title="Seleccionar todos los visibles"
+                          />
+                        </th>
+                        <th style={styles.th}>Usuario</th>
+                        <th style={styles.th}>Rol</th>
+                        <th style={styles.th}>Barrio</th>
+                        <th style={styles.th}>Vivienda</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {usuariosVisibles.map((u) => {
+                        const id = String(u._id);
+                        const checked = paraIds.includes(id);
+                        return (
+                          <tr key={id}>
+                            <td style={{ ...styles.td, textAlign: "center" }}>
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => togglePara(id)}
+                                disabled={loading}
+                              />
+                            </td>
+                            <td style={styles.td}>{nombreUsuario(u)}</td>
+                            <td style={styles.td}>{etiquetaRol(u)}</td>
+                            <td style={styles.td}>{safe(u.barrioAsignado)}</td>
+                            <td style={styles.td}>{u.viviendaLabel || "-"}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                <p style={{ margin: 0, fontSize: 12, color: "rgba(255,255,255,0.72)" }}>
+                  Destinatarios seleccionados: <strong>{paraIds.length}</strong> (se muestran hasta{" "}
+                  <strong>{limiteVisible}</strong> usuarios filtrados)
+                </p>
+
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button onClick={enviarMensaje} disabled={loading} style={styles.primaryButton}>
+                    Enviar
+                  </button>
+                  <button
+                    onClick={limpiarFormularioNuevo}
+                    disabled={loading}
+                    style={styles.mutedButton}
+                  >
+                    Limpiar formulario
+                  </button>
+                </div>
+              </div>
+            </section>
+          ) : null}
+
+          {openMsgId ? (
+            <div style={styles.modalBackdrop} onClick={cerrarMensaje}>
+              <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: 12,
+                    alignItems: "center",
+                    marginBottom: 12,
+                  }}
+                >
+                  <strong style={{ fontSize: 18, color: "#fff" }}>Mensaje</strong>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {openMsg ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          responderAlMensaje(openMsg);
+                        }}
+                        disabled={openLoading}
+                        style={styles.primaryButton}
+                      >
+                        Responder
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        cerrarMensaje();
+                      }}
+                      style={styles.mutedButton}
+                    >
+                      Cerrar
+                    </button>
+                  </div>
+                </div>
+
+                {openLoading ? <p style={styles.subtleText}>Cargando…</p> : null}
+
+                {!openLoading && openMsg ? (
+                  <>
+                    <p style={styles.metaLine}>
+                      <strong>Fecha:</strong> {formatFecha(openMsg.creadoEn)}
+                    </p>
+                    <p style={styles.metaLine}>
+                      <strong>Asunto:</strong> {safe(openMsg.asunto)}
+                    </p>
+                    <p style={styles.metaLine}>
+                      <strong>Remitente:</strong>{" "}
+                      {nombreUsuario(usuariosById.get(idUsuario(openMsg.remitente)))}
+                    </p>
+                    <p style={styles.metaLine}>
+                      <strong>Destinatarios:</strong>{" "}
+                      {Array.isArray(openMsg.destinatarios)
+                        ? openMsg.destinatarios
+                            .map((id) => nombreUsuario(usuariosById.get(String(id))))
+                            .join(", ")
+                        : "-"}
+                    </p>
+
+                    <hr style={styles.divider} />
+
+                    <div style={{ whiteSpace: "pre-wrap", color: "#eaf0ff" }}>
+                      {safe(openMsg.cuerpo)}
+                    </div>
+
+                    <hr style={styles.divider} />
+
+                    <div>
+                      <strong>Adjuntos:</strong>{" "}
+                      {openMsg.adjuntos && openMsg.adjuntos.length ? (
+                        <ul style={{ marginTop: 10 }}>
+                          {openMsg.adjuntos.map((a, idx) => (
+                            <li key={idx} style={{ marginBottom: 6 }}>
+                              {a.fileId ? (
+                                <a
+                                  href={`/api/mensajes/${openMsg._id}/adjuntos/${a.fileId}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{ color: "#93c5fd" }}
+                                >
+                                  {safe(a.nombre)}
+                                </a>
+                              ) : (
+                                <span>{safe(a.nombre)}</span>
+                              )}{" "}
+                              ({safe(a.mimetype)}) — {safe(a.size)}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <span>—</span>
+                      )}
+                    </div>
+                  </>
+                ) : null}
+
+                {!openLoading && !openMsg ? (
+                  <p style={styles.subtleText}>No se pudo cargar el mensaje.</p>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
         </div>
-      ) : null}
-    </>
+      </div>
+    </div>
   );
 }

@@ -66,6 +66,15 @@ import GestionarAnexoInspector from "../pages/permisionario/inspector/GestionarA
 import CrearAnexo09Desde08 from "../pages/permisionario/inspector/CrearAnexo09Desde08";
 import MantenimientosInspector from "../pages/permisionario/inspector/MantenimientosInspector";
 
+/* JEFE DE BARRIO */
+import MiBarrioJefe from "../pages/permisionario/jefe/MiBarrioJefe";
+import JefeBarrioDashboard from "../pages/permisionario/jefe/JefeBarrioDashboard";
+import GestionesJefeBarrio from "../pages/permisionario/jefe/GestionesJefeBarrio";
+import GestionarAnexoJefeBarrio from "../pages/permisionario/jefe/GestionarAnexoJefeBarrio";
+import CrearAnexo11JefeBarrio from "../pages/permisionario/jefe/CrearAnexo11JefeBarrio";
+import MensajeriaJefeBarrio from "../pages/permisionario/jefe/MensajeriaJefeBarrio";
+import VerAnexo04JefeBarrio from "../pages/permisionario/jefe/VerAnexo04JefeBarrio";
+
 /* POSTULANTE */
 import PostulanteDashboard from "../pages/postulante/PostulanteDashboard";
 import MisAnexos from "../pages/postulante/MisAnexos";
@@ -202,7 +211,19 @@ export default function RoleRoutes() {
           <Route path="anexo-04/nuevo" element={<CrearAnexo04Permisionario />} />
 
           {/* Mi Barrio (entry genérico existente, se deja intacto) */}
-          <Route path="mi-barrio-jefe" element={<MiBarrio />} />
+          <Route path="mi-barrio-jefe" element={<MiBarrioJefe />} />
+
+{/* ============================
+    JEFE DE BARRIO / MI BARRIO
+    Base: /app/permisionario/mi-barrio-jefe
+   ============================ */}
+<Route path="mi-barrio-jefe" element={<MiBarrioJefe />} />
+<Route path="mi-barrio-jefe/dashboard" element={<JefeBarrioDashboard />} />
+<Route path="mi-barrio-jefe/gestiones" element={<GestionesJefeBarrio />} />
+<Route path="mi-barrio-jefe/gestiones/:id" element={<GestionarAnexoJefeBarrio />} />
+<Route path="mi-barrio-jefe/anexo-04/:id" element={<VerAnexo04JefeBarrio />} />
+<Route path="mi-barrio-jefe/crear-anexo-11" element={<CrearAnexo11JefeBarrio />} />
+<Route path="mi-barrio-jefe/mensajeria" element={<MensajeriaJefeBarrio />} />
 
           {/* ============================
               INSPECTOR / MI BARRIO

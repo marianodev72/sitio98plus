@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from "react";
+// frontend/src/components/AdjuntosList.tsx
+import React, { useMemo, useState, type CSSProperties } from "react";
 
 type Adjunto = {
   nombre?: string;
@@ -46,44 +47,75 @@ export default function AdjuntosList({
     });
   }, [adjuntos, formularioId]);
 
-  if (!items.length) return <p>Sin adjuntos.</p>;
+  const cardStyle: CSSProperties = {
+    border: "1px solid rgba(255,255,255,0.12)",
+    borderRadius: 12,
+    padding: 14,
+    background: "rgba(255,255,255,0.04)",
+    color: "#eaf0ff",
+  };
+
+  const actionLinkStyle: CSSProperties = {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 40,
+    padding: "8px 12px",
+    borderRadius: 10,
+    border: "1px solid rgba(255,255,255,0.14)",
+    background: "rgba(255,255,255,0.05)",
+    color: "#ffffff",
+    textDecoration: "none",
+    fontWeight: 700,
+  };
+
+  const hintStyle: CSSProperties = {
+    marginTop: 10,
+    fontSize: 13,
+    color: "rgba(255,255,255,0.78)",
+    lineHeight: 1.5,
+  };
+
+  if (!items.length) {
+    return <p style={{ margin: 0, color: "rgba(255,255,255,0.78)" }}>Sin adjuntos.</p>;
+  }
 
   return (
     <div style={{ display: "grid", gap: 12 }}>
       {items.map((a, idx) => {
         const nombre = a.nombre || `Adjunto ${idx + 1}`;
-        const url = a.url;
+        const url = (a as Adjunto & { url?: string }).url;
 
         // Por seguridad: endpoint sirve attachment => no preview inline
         const canPreview = false;
 
         return (
-          <div
-            key={`${nombre}-${idx}`}
-            style={{
-              border: "1px solid #eee",
-              borderRadius: 10,
-              padding: 12,
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+          <div key={`${nombre}-${idx}`} style={cardStyle}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 12,
+                flexWrap: "wrap",
+              }}
+            >
               <div>
-                <div style={{ fontWeight: 700 }}>{nombre}</div>
-                <div style={{ fontSize: 12, color: "#444" }}>
+                <div style={{ fontWeight: 800, color: "#ffffff" }}>{nombre}</div>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.72)" }}>
                   {a.tipo || "tipo?"} • {bytes(a.size)}
                 </div>
-                <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.58)", marginTop: 4 }}>
                   <code>{a.ruta || "—"}</code>
                 </div>
               </div>
 
-              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
                 {url ? (
                   <>
-                    <a href={url} target="_blank" rel="noreferrer">
+                    <a href={url} target="_blank" rel="noreferrer" style={actionLinkStyle}>
                       Ver
                     </a>
-                    <a href={url}>
+                    <a href={url} style={actionLinkStyle}>
                       Descargar
                     </a>
 
@@ -91,30 +123,30 @@ export default function AdjuntosList({
                       <button
                         type="button"
                         onClick={() => setOpenIndex(openIndex === idx ? null : idx)}
+                        style={{
+                          ...actionLinkStyle,
+                          cursor: "pointer",
+                        }}
                       >
                         {openIndex === idx ? "Ocultar" : "Previsualizar"}
                       </button>
                     ) : null}
                   </>
                 ) : (
-                  <span style={{ color: "crimson" }}>
-                    No se pudo generar URL segura
-                  </span>
+                  <span style={{ color: "#fecaca" }}>No se pudo generar URL segura</span>
                 )}
               </div>
             </div>
 
-            {/* PREVIEW (deshabilitado por seguridad) */}
             {openIndex === idx && url ? (
-              <div style={{ marginTop: 10, fontSize: 13, color: "#444" }}>
+              <div style={hintStyle}>
                 Por seguridad institucional, los adjuntos se descargan como <b>attachment</b> y no se
                 previsualizan inline. Usá “Ver” o “Descargar”.
               </div>
             ) : null}
 
-            {/* Mensaje adicional para tipos no previsualizables (mantiene UX existente) */}
             {openIndex === idx && url && !canPreview ? (
-              <div style={{ marginTop: 10, fontSize: 13, color: "#444" }}>
+              <div style={hintStyle}>
                 Este tipo de archivo normalmente no se previsualiza en el navegador.
                 Usá “Ver” o “Descargar”.
               </div>

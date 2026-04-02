@@ -1,5 +1,5 @@
 // frontend/src/pages/admin/GestionesAdmin.tsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { http } from "../../api/http";
 import { useAuth } from "../../auth/useAuth";
 
@@ -33,7 +33,15 @@ const ANEXOS_PERMISIONARIO = [
   "ANEXO_11",
 ];
 
-const ANEXOS_ALOJADO = ["ANEXO_21", "ANEXO_22", "ANEXO_23", "ANEXO_24", "ANEXO_25", "ANEXO_26", "ANEXO_28"];
+const ANEXOS_ALOJADO = [
+  "ANEXO_21",
+  "ANEXO_22",
+  "ANEXO_23",
+  "ANEXO_24",
+  "ANEXO_25",
+  "ANEXO_26",
+  "ANEXO_28",
+];
 
 function safe(v: unknown) {
   return v === null || v === undefined || v === "" ? "-" : String(v);
@@ -53,12 +61,12 @@ function fmtDate(v?: string) {
 function safeFileNameDate() {
   const d = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(
+    d.getHours()
+  )}-${pad(d.getMinutes())}`;
 }
 
 function viviendaLabel(a: Anexo): string {
-
-  // ✅ 1) Prioridad absoluta: viviendaCodigo en el nivel superior
   if (
     typeof (a as any).viviendaCodigo === "string" &&
     (a as any).viviendaCodigo.trim()
@@ -68,17 +76,14 @@ function viviendaLabel(a: Anexo): string {
 
   const d = a.datos || {};
 
-  // ✅ 2) Código hidratado dentro de datos
   const codigo =
     typeof d.viviendaCodigo === "string" ? d.viviendaCodigo.trim() : "";
   if (codigo) return codigo;
 
-  // ✅ 3) Label legacy
   const label =
     typeof d.viviendaLabel === "string" ? d.viviendaLabel.trim() : "";
   if (label) return label;
 
-  // ✅ 4) Campos antiguos
   const unidad =
     typeof d.unidadHabitacional === "string" ? d.unidadHabitacional.trim() : "";
   const casa =
@@ -89,7 +94,6 @@ function viviendaLabel(a: Anexo): string {
   if (unidad) return unidad;
   if (casa) return casa;
 
-  // ❗ No mostrar ObjectId crudo
   const pareceObjectId =
     typeof vid === "string" && /^[a-fA-F0-9]{24}$/.test(vid);
   if (vid && !pareceObjectId) return vid;
@@ -189,87 +193,202 @@ export default function GestionesAdmin() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [codigo, esAdmin]);
 
-  return (
-    <>
-      <h1>Gestiones — ADMIN (solo lectura)</h1>
+  const pageStyle: CSSProperties = {
+    padding: 24,
+    background: "#0b1220",
+    minHeight: "100%",
+    color: "#eaf0ff",
+  };
 
-      <section style={{ display: "flex", gap: 12, marginBottom: 12 }}>
+  const cardStyle: CSSProperties = {
+    border: "1px solid rgba(255,255,255,0.14)",
+    borderRadius: 12,
+    padding: 16,
+    background: "rgba(255,255,255,0.05)",
+    backdropFilter: "blur(6px)",
+  };
+
+  const buttonStyle: CSSProperties = {
+    padding: "10px 14px",
+    borderRadius: 10,
+    border: "1px solid rgba(255,255,255,0.14)",
+    background: "rgba(255,255,255,0.05)",
+    color: "#ffffff",
+    fontWeight: 700,
+    cursor: "pointer",
+  };
+
+  const tabButtonStyle = (active: boolean): CSSProperties => ({
+    ...buttonStyle,
+    background: active ? "rgba(59,130,246,0.22)" : "rgba(255,255,255,0.05)",
+  });
+
+  const controlStyle: CSSProperties = {
+    padding: "10px 12px",
+    borderRadius: 10,
+    border: "1px solid rgba(255,255,255,0.14)",
+    background: "rgba(255,255,255,0.04)",
+    color: "#ffffff",
+    fontSize: 14,
+    minHeight: 42,
+    boxSizing: "border-box",
+  };
+
+  const selectStyle: CSSProperties = {
+    ...controlStyle,
+    appearance: "none",
+    WebkitAppearance: "none",
+    MozAppearance: "none",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    color: "#ffffff",
+  };
+
+  const optionStyle: CSSProperties = {
+    backgroundColor: "#1f2937",
+    color: "#ffffff",
+  };
+
+  const tableWrapStyle: CSSProperties = {
+    overflowX: "auto",
+    border: "1px solid rgba(255,255,255,0.12)",
+    borderRadius: 12,
+    background: "rgba(255,255,255,0.04)",
+  };
+
+  const tableStyle: CSSProperties = {
+    width: "100%",
+    borderCollapse: "collapse",
+    minWidth: 760,
+  };
+
+  const thStyle: CSSProperties = {
+    textAlign: "left",
+    padding: 10,
+    borderBottom: "1px solid rgba(255,255,255,0.12)",
+    color: "rgba(255,255,255,0.70)",
+    fontSize: 12,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    background: "rgba(255,255,255,0.04)",
+    whiteSpace: "nowrap",
+  };
+
+  const tdStyle: CSSProperties = {
+    padding: 10,
+    borderBottom: "1px solid rgba(255,255,255,0.08)",
+    color: "#ffffff",
+    verticalAlign: "middle",
+  };
+
+  return (
+    <div style={pageStyle}>
+      <h1 style={{ marginTop: 0, marginBottom: 16, color: "#ffffff" }}>
+        Gestiones — ADMIN (solo lectura)
+      </h1>
+
+      <section style={{ display: "flex", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
         <button
           onClick={() => setPanel("PERMISIONARIOS")}
-          style={{ background: panel === "PERMISIONARIOS" ? "#eee" : "white" }}
+          style={tabButtonStyle(panel === "PERMISIONARIOS")}
         >
           Permisionarios
         </button>
-        <button onClick={() => setPanel("ALOJADOS")} style={{ background: panel === "ALOJADOS" ? "#eee" : "white" }}>
+        <button
+          onClick={() => setPanel("ALOJADOS")}
+          style={tabButtonStyle(panel === "ALOJADOS")}
+        >
           Alojados
         </button>
       </section>
 
       {errorMsg ? (
-        <div style={{ marginBottom: 12, padding: 10, border: "1px solid #ccc", background: "#f7f7f7" }}>
+        <div
+          style={{
+            ...cardStyle,
+            marginBottom: 12,
+            border: "1px solid rgba(239,68,68,0.30)",
+            background: "rgba(127,29,29,0.18)",
+            color: "#fecaca",
+          }}
+        >
           {errorMsg}
         </div>
       ) : null}
 
-      <section style={{ marginBottom: 12, padding: 12, border: "1px solid #ddd" }}>
-        <select value={codigo} onChange={(e) => setCodigo(e.target.value)} disabled={loading}>
-          {anexosDisponibles.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
+      <section style={{ ...cardStyle, marginBottom: 12 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <select
+            value={codigo}
+            onChange={(e) => setCodigo(e.target.value)}
+            disabled={loading}
+            style={selectStyle}
+          >
+            {anexosDisponibles.map((c) => (
+              <option key={c} value={c} style={optionStyle}>
+                {c}
+              </option>
+            ))}
+          </select>
 
-        <button onClick={cargarLista} disabled={loading} style={{ marginLeft: 8 }}>
-          {loading ? "Cargando…" : "Actualizar"}
-        </button>
+          <button onClick={cargarLista} disabled={loading} style={buttonStyle}>
+            {loading ? "Cargando…" : "Actualizar"}
+          </button>
 
-        <span style={{ marginLeft: 12 }}>Resultados: {items.length}</span>
+          <span style={{ marginLeft: 12, color: "rgba(255,255,255,0.80)" }}>
+            Resultados: {items.length}
+          </span>
+        </div>
       </section>
 
-      <section style={{ border: "1px solid #ddd", padding: 12 }}>
+      <section style={cardStyle}>
         {loading ? (
-          <p>Cargando anexos…</p>
+          <p style={{ margin: 0 }}>Cargando anexos…</p>
         ) : items.length === 0 ? (
-          <p>No hay anexos.</p>
+          <p style={{ margin: 0 }}>No hay anexos.</p>
         ) : (
-          <table border={1} cellPadding={6} cellSpacing={0} style={{ width: "100%" }}>
-            <thead>
-              <tr>
-                <th>Código</th>
-                <th>Estado</th>
-                <th>Vivienda / Unidad</th>
-                <th>Postulante / Permisionario</th>
-                <th>Fecha</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((an) => {
-                const busy = busyId === an._id;
+          <div style={tableWrapStyle}>
+            <table style={tableStyle}>
+              <thead>
+                <tr>
+                  <th style={thStyle}>Código</th>
+                  <th style={thStyle}>Estado</th>
+                  <th style={thStyle}>Vivienda / Unidad</th>
+                  <th style={thStyle}>Postulante / Permisionario</th>
+                  <th style={thStyle}>Fecha</th>
+                  <th style={thStyle}>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((an) => {
+                  const busy = busyId === an._id;
 
-                return (
-                  <tr key={an._id}>
-                    <td>{safe(an.codigo)}</td>
-                    <td>
-                      {safe(an.estado)}
-                      {an.estadoInstitucional ? ` / ${safe(an.estadoInstitucional)}` : ""}
-                    </td>
-                    <td>{viviendaLabel(an)}</td>
-                    <td>{personaLabel(an)}</td>
-                    <td>{fmtDate(an.updatedAt || an.createdAt)}</td>
-                    <td style={{ whiteSpace: "nowrap" }}>
-                      <button disabled={busy} onClick={() => descargarPdf(an._id, up(an.codigo))}>
-                        PDF
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                  return (
+                    <tr key={an._id}>
+                      <td style={tdStyle}>{safe(an.codigo)}</td>
+                      <td style={tdStyle}>
+                        {safe(an.estado)}
+                        {an.estadoInstitucional ? ` / ${safe(an.estadoInstitucional)}` : ""}
+                      </td>
+                      <td style={tdStyle}>{viviendaLabel(an)}</td>
+                      <td style={tdStyle}>{personaLabel(an)}</td>
+                      <td style={tdStyle}>{fmtDate(an.updatedAt || an.createdAt)}</td>
+                      <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
+                        <button
+                          disabled={busy}
+                          onClick={() => descargarPdf(an._id, up(an.codigo))}
+                          style={buttonStyle}
+                        >
+                          PDF
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
-    </>
+    </div>
   );
 }

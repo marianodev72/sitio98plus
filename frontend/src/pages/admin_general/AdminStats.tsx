@@ -659,6 +659,25 @@ const actionBtnStyle: React.CSSProperties = {
   boxShadow: "0 4px 14px rgba(0,0,0,0.18)",
 };
 
+const selectStyle: React.CSSProperties = {
+  padding: "10px 14px",
+  borderRadius: 10,
+  border: "1px solid rgba(255,255,255,0.20)",
+  background: "rgba(255,255,255,0.08)",
+  backgroundColor: "rgba(255,255,255,0.08)",
+  color: "#ffffff",
+  fontSize: 16,
+  fontWeight: 700,
+  minHeight: 44,
+  appearance: "none",
+  WebkitAppearance: "none",
+  MozAppearance: "none",
+};
+
+const optionStyle: React.CSSProperties = {
+  backgroundColor: "#1f2937",
+  color: "#ffffff",
+};
 function onDownloadBoardCSV() {
   const blocks = [
     {
@@ -954,48 +973,32 @@ lineHeight: 1.45,
           >
             <span style={{ fontWeight: 900, fontSize: 18, color: "#ffffff" }}>Ámbito:</span>
             <select
-              value={barrio}
-              onChange={(e) => setBarrio(e.target.value)}
-              style={{
-  padding: "10px 14px",
-  borderRadius: 10,
-  border: "1px solid rgba(255,255,255,0.20)",
-  background: "rgba(255,255,255,0.08)",
-  color: "#ffffff",
-  fontSize: 16,
-  fontWeight: 700,
-  minHeight: 44,
-}}
-            >
-              <option value="TODOS">Todos</option>
-              {barrios.map((b) => (
-                <option key={b} value={b}>
-                  {b}
-                </option>
-              ))}
-            </select>
+  value={barrio}
+  onChange={(e) => setBarrio(e.target.value)}
+  style={selectStyle}
+>
+  <option value="TODOS" style={optionStyle}>
+    Todos
+  </option>
+  {barrios.map((b) => (
+    <option key={b} value={b} style={optionStyle}>
+      {b}
+    </option>
+  ))}
+</select>
 
             <span style={{ fontWeight: 900, fontSize: 18, color: "#ffffff" }}>Año:</span>
             <select
-              value={year}
-              onChange={(e) => setYear(Number(e.target.value))}
-              style={{
-  padding: "10px 14px",
-  borderRadius: 10,
-  border: "1px solid rgba(255,255,255,0.20)",
-  background: "rgba(255,255,255,0.08)",
-  color: "#ffffff",
-  fontSize: 16,
-  fontWeight: 700,
-  minHeight: 44,
-}}
-            >
-              {availableYears.map((y) => (
-                <option key={y} value={y}>
-                  {y}
-                </option>
-              ))}
-            </select>
+  value={year}
+  onChange={(e) => setYear(Number(e.target.value))}
+  style={selectStyle}
+>
+  {availableYears.map((y) => (
+    <option key={y} value={y} style={optionStyle}>
+      {y}
+    </option>
+  ))}
+</select>
 
             <span style={{ fontSize: 15, opacity: 0.82, color: "rgba(255,255,255,0.84)" }}>{emittedLabel}</span>
           </div>

@@ -1,5 +1,5 @@
 //frontend/src/pages/postulante/Anexo01Institucional.tsx
-import { useMemo, useState } from "react";
+import { CSSProperties, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { http } from "../../api/http";
 
@@ -36,6 +36,136 @@ type Representante = {
   telefono: string;
 };
 
+
+const pageStyle: CSSProperties = {
+  maxWidth: 1020,
+  margin: "0 auto",
+  padding: 24,
+  color: "#F8FAFC",
+};
+
+const cardStyle: CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(255,255,255,0.05)",
+  borderRadius: 12,
+  padding: 16,
+  marginBottom: 12,
+};
+
+const sectionTitleStyle: CSSProperties = {
+  fontWeight: 800,
+  marginBottom: 8,
+  color: "#F8FAFC",
+};
+
+const rowLabelStyle: CSSProperties = {
+  fontWeight: 700,
+  fontSize: 13,
+  marginBottom: 4,
+  color: "#CBD5E1",
+};
+
+const controlStyle: CSSProperties = {
+  width: "100%",
+  padding: "10px 12px",
+  borderRadius: 10,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(255,255,255,0.04)",
+  color: "#ffffff",
+};
+
+const selectStyle: CSSProperties = {
+  width: "100%",
+  padding: "8px 10px",
+  borderRadius: 8,
+  border: "1px solid rgba(255,255,255,0.12)",
+  backgroundColor: "rgba(255,255,255,0.04)",
+  color: "#ffffff",
+  appearance: "none",
+  WebkitAppearance: "none",
+  MozAppearance: "none",
+};
+
+const optionStyle: CSSProperties = {
+  backgroundColor: "#1f2937",
+  color: "#ffffff",
+};
+
+const neutralButtonStyle: CSSProperties = {
+  background: "rgba(255,255,255,0.06)",
+  border: "1px solid rgba(255,255,255,0.12)",
+  color: "#ffffff",
+  borderRadius: 10,
+  padding: "10px 14px",
+  fontWeight: 700,
+  cursor: "pointer",
+};
+
+const primaryButtonStyle: CSSProperties = {
+  background: "rgba(59,130,246,0.20)",
+  border: "1px solid rgba(255,255,255,0.12)",
+  color: "#ffffff",
+  borderRadius: 10,
+  padding: "10px 14px",
+  fontWeight: 800,
+  cursor: "pointer",
+};
+
+const dangerButtonStyle: CSSProperties = {
+  background: "rgba(127,29,29,0.18)",
+  border: "1px solid rgba(239,68,68,0.35)",
+  color: "#FCA5A5",
+  borderRadius: 10,
+  padding: "10px 14px",
+  fontWeight: 700,
+  cursor: "pointer",
+};
+
+const tableStyle: CSSProperties = {
+  width: "100%",
+  borderCollapse: "collapse",
+  background: "rgba(255,255,255,0.02)",
+};
+
+const thStyle: CSSProperties = {
+  color: "#9CA3AF",
+  borderBottom: "1px solid rgba(255,255,255,0.12)",
+  padding: 8,
+  textAlign: "left",
+};
+
+const tdStyle: CSSProperties = {
+  borderBottom: "1px solid rgba(255,255,255,0.06)",
+  padding: 6,
+};
+
+const dateControlStyle: CSSProperties = {
+  ...controlStyle,
+  colorScheme: "dark",
+};
+
+const fileInputStyle: CSSProperties = {
+  width: "100%",
+  padding: "8px 10px",
+  borderRadius: 10,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(255,255,255,0.04)",
+  color: "#CBD5E1",
+  cursor: "pointer",
+};
+
+const fileInputCompactStyle: CSSProperties = {
+  ...fileInputStyle,
+  minWidth: 220,
+};
+
+const fileNameStyle: CSSProperties = {
+  fontSize: 12,
+  color: "#9CA3AF",
+  marginTop: 4,
+};
+
+
 function Box({
   title,
   children,
@@ -44,9 +174,9 @@ function Box({
   children: React.ReactNode;
 }) {
   return (
-    <div style={{ border: "1px solid #222", padding: 14, marginBottom: 12 }}>
+    <div style={cardStyle}>
       {title && (
-        <div style={{ fontWeight: 800, marginBottom: 10, fontSize: 14 }}>
+        <div style={{ fontWeight: 800, marginBottom: 10, fontSize: 14, color: "#F8FAFC" }}>
           {title}
         </div>
       )}
@@ -66,7 +196,7 @@ function Row({
 }) {
   return (
     <div style={{ marginBottom: 10 }}>
-      <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 4 }}>
+      <div style={rowLabelStyle}>
         {label} {requiredMark ? "*" : ""}
       </div>
       {children}
@@ -82,7 +212,7 @@ function YesNoControl({
   onChange: (v: YesNo) => void;
 }) {
   return (
-    <div style={{ display: "inline-flex", gap: 10, alignItems: "center" }}>
+    <div style={{ display: "inline-flex", gap: 10, alignItems: "center", color: "#CBD5E1" }}>
       <label style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
         <input
           type="radio"
@@ -278,7 +408,7 @@ export default function Anexo01Institucional() {
     setErr("No se ha podido procesar su solicitud, contacte al administrador.");
 
   const small = useMemo(
-    () => ({ fontSize: 12, lineHeight: 1.35, opacity: 0.9 }),
+    () => ({ fontSize: 12, lineHeight: 1.35, opacity: 0.9, color: "#9CA3AF" }),
     []
   );
 
@@ -446,13 +576,13 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
   }
 
   return (
-    <div style={{ maxWidth: 1020, margin: "0 auto", padding: 24 }}>
-      <div style={{ border: "2px solid #222", padding: 16, marginBottom: 14 }}>
+    <div style={pageStyle}>
+      <div style={{ ...cardStyle, border: "1px solid rgba(255,255,255,0.14)", marginBottom: 14 }}>
         <div style={{ display: "flex", justifyContent: "space-between" }}>
-          <div style={{ fontWeight: 900 }}>ARMADA ARGENTINA</div>
-          <div style={{ fontWeight: 700 }}>R.G-6-002 — PÚBLICO</div>
+          <div style={{ fontWeight: 900, color: "#F8FAFC" }}>ARMADA ARGENTINA</div>
+          <div style={{ fontWeight: 700, color: "#CBD5E1" }}>R.G-6-002 — PÚBLICO</div>
         </div>
-        <div style={{ marginTop: 8, fontWeight: 900, fontSize: 16 }}>
+        <div style={{ marginTop: 8, fontWeight: 900, fontSize: 16, color: "#F8FAFC" }}>
           ANEXO 01 — FORMULARIO DE INSCRIPCIÓN PARA OCUPAR VIVIENDA FISCAL
         </div>
         <div style={small}>DECLARACIÓN JURADA DE POSTULACIÓN</div>
@@ -461,10 +591,11 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
       {err && (
         <div
           style={{
-            border: "1px solid #c00",
+            border: "1px solid rgba(239,68,68,0.35)",
             padding: 12,
             marginBottom: 12,
-            color: "#c00",
+            background: "rgba(127,29,29,0.18)",
+            color: "#FCA5A5",
           }}
         >
           {err}
@@ -473,10 +604,11 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
       {ok && (
         <div
           style={{
-            border: "1px solid #0a0",
+            border: "1px solid rgba(34,197,94,0.35)",
             padding: 12,
             marginBottom: 12,
-            color: "#0a0",
+            background: "rgba(22,163,74,0.18)",
+            color: "#86EFAC",
           }}
         >
           {ok}
@@ -504,13 +636,13 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
                   value={lugar}
                   onChange={(e) => setLugar(e.target.value)}
                   placeholder="Lugar (ej: Puerto Belgrano)"
-                  style={{ width: "100%" }}
+                  style={dateControlStyle}
                 />
                 <input
                   type="date"
                   value={fechaLugar}
                   onChange={(e) => setFechaLugar(e.target.value)}
-                  style={{ width: "100%" }}
+                  style={dateControlStyle}
                 />
               </div>
               <div style={{ marginTop: 6, ...small }}>
@@ -530,17 +662,17 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
                 <input
                   value={autoridadAsignacionFija}
                   readOnly
-                  style={{ width: "100%", background: "#f4f4f4" }}
+                  style={{ ...controlStyle, background: "rgba(255,255,255,0.08)", color: "#CBD5E1" }}
                 />
-                <div style={{ fontWeight: 800, fontSize: 13 }}>Zona Naval</div>
+                <div style={{ fontWeight: 800, fontSize: 13, color: "#CBD5E1" }}>Zona Naval</div>
                 <select
                   value={zonaNaval}
                   onChange={(e) => setZonaNaval(e.target.value)}
-                  style={{ width: "100%" }}
+                  style={selectStyle}
                 >
-                  <option value="">—</option>
+                  <option value="" style={optionStyle}>—</option>
                   {zones00a99.map((z) => (
-                    <option key={z} value={z}>
+                    <option key={z} value={z} style={optionStyle}>
                       {z}
                     </option>
                   ))}
@@ -566,7 +698,7 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
                 display: "flex",
                 gap: 8,
                 alignItems: "center",
-                border: "1px solid #222",
+                border: "1px solid rgba(255,255,255,0.14)",
                 padding: 10,
               }}
             >
@@ -584,7 +716,7 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
                 display: "flex",
                 gap: 8,
                 alignItems: "center",
-                border: "1px solid #222",
+                border: "1px solid rgba(255,255,255,0.14)",
                 padding: 10,
               }}
             >
@@ -599,11 +731,11 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
         </Box>
 
         <Box>
-          <div style={{ fontWeight: 800, marginBottom: 8 }}>
+          <div style={{ fontWeight: 800, marginBottom: 8, color: "#F8FAFC" }}>
             1. Conozco, cumplo con los requisitos y acepto sin objeción alguna
             las condiciones del Reglamento.
           </div>
-          <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <label style={{ display: "flex", gap: 8, alignItems: "center", color: "#CBD5E1" }}>
             <input
               type="checkbox"
               checked={aceptaReglamento}
@@ -626,7 +758,7 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
               <input
                 value={mr}
                 onChange={(e) => setMr(e.target.value)}
-                style={{ width: "100%" }}
+                style={dateControlStyle}
               />
             </Row>
 
@@ -634,7 +766,7 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
               <input
                 value={afiliadoOSFA}
                 onChange={(e) => setAfiliadoOSFA(e.target.value)}
-                style={{ width: "100%" }}
+                style={controlStyle}
               />
             </Row>
 
@@ -642,7 +774,7 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
               <input
                 value={gradoEscalafon}
                 onChange={(e) => setGradoEscalafon(e.target.value)}
-                style={{ width: "100%" }}
+                style={controlStyle}
               />
             </Row>
 
@@ -662,14 +794,14 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
               <input
                 value={apellido}
                 onChange={(e) => setApellido(e.target.value)}
-                style={{ width: "100%" }}
+                style={controlStyle}
               />
             </Row>
             <Row label="Nombres:" requiredMark>
               <input
                 value={nombres}
                 onChange={(e) => setNombres(e.target.value)}
-                style={{ width: "100%" }}
+                style={controlStyle}
               />
             </Row>
           </div>
@@ -685,14 +817,14 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
               <input
                 value={destinoActual}
                 onChange={(e) => setDestinoActual(e.target.value)}
-                style={{ width: "100%" }}
+                style={controlStyle}
               />
             </Row>
             <Row label="Destino futuro:">
               <input
                 value={destinoFuturo}
                 onChange={(e) => setDestinoFuturo(e.target.value)}
-                style={{ width: "100%" }}
+                style={controlStyle}
               />
             </Row>
           </div>
@@ -708,14 +840,14 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
               <input
                 value={telefonoActual}
                 onChange={(e) => setTelefonoActual(e.target.value)}
-                style={{ width: "100%" }}
+                style={controlStyle}
               />
             </Row>
             <Row label="Teléfono futuro:">
               <input
                 value={telefonoFuturo}
                 onChange={(e) => setTelefonoFuturo(e.target.value)}
-                style={{ width: "100%" }}
+                style={controlStyle}
               />
             </Row>
           </div>
@@ -737,7 +869,7 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
                 type="date"
                 value={fechaUltimoAscenso}
                 onChange={(e) => setFechaUltimoAscenso(e.target.value)}
-                style={{ width: "100%" }}
+                style={dateControlStyle}
               />
             </Row>
 
@@ -745,11 +877,11 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
               <select
                 value={aniosServicioRecibo}
                 onChange={(e) => setAniosServicioRecibo(e.target.value)}
-                style={{ width: "100%" }}
+                style={selectStyle}
               >
-                <option value="">—</option>
+                <option value="" style={optionStyle}>—</option>
                 {years00a50.map((y) => (
-                  <option key={y} value={y}>
+                  <option key={y} value={y} style={optionStyle}>
                     {y}
                   </option>
                 ))}
@@ -759,33 +891,53 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
         </Box>
 
         <Box>
-          <div style={{ fontWeight: 800, marginBottom: 8 }}>
-            4. Agrego fotocopia autenticada de la FIDOFAC / Actualización de
-            FIDOFAC
-          </div>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              gap: 12,
-              alignItems: "center",
-            }}
-          >
-            <YesNoControl value={agregaFidofac} onChange={setAgregaFidofac} />
-            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-              <div style={{ fontWeight: 700, fontSize: 13 }}>
-                Adjuntar (opcional):
-              </div>
-              <input
-                type="file"
-                onChange={(e) => setFidofacFile(e.target.files?.[0] || null)}
-              />
-            </div>
-          </div>
-        </Box>
+  <div style={{ fontWeight: 800, marginBottom: 8, color: "#F8FAFC" }}>
+    4. Agrego fotocopia autenticada de la FIDOFAC / Actualización de
+    FIDOFAC
+  </div>
+  <div
+    style={{
+      display: "flex",
+      justifyContent: "space-between",
+      gap: 12,
+      alignItems: "center",
+      flexWrap: "wrap",
+    }}
+  >
+    <YesNoControl value={agregaFidofac} onChange={setAgregaFidofac} />
+
+    <div
+      style={{
+        display: "flex",
+        gap: 10,
+        alignItems: "center",
+        flexWrap: "wrap",
+      }}
+    >
+      <div style={{ fontWeight: 700, fontSize: 13, color: "#CBD5E1" }}>
+        Adjuntar (opcional):
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <label style={neutralButtonStyle}>
+          Elegir archivo
+          <input
+            type="file"
+            onChange={(e) => setFidofacFile(e.target.files?.[0] || null)}
+            style={{ display: "none" }}
+          />
+        </label>
+
+        <div style={{ fontSize: 12, color: "#9CA3AF" }}>
+          {fidofacFile ? fidofacFile.name : "No se eligió ningún archivo"}
+        </div>
+      </div>
+    </div>
+  </div>
+</Box>
 
         <Box>
-          <div style={{ fontWeight: 800, marginBottom: 8 }}>
+          <div style={{ fontWeight: 800, marginBottom: 8, color: "#F8FAFC" }}>
             5. Conviviré con las siguientes personas de cuya conducta y actos
             asumo la absoluta responsabilidad.
           </div>
@@ -793,13 +945,13 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
           <div
             style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}
           >
-            <button type="button" onClick={addConviviente}>
+            <button type="button" style={neutralButtonStyle} onClick={addConviviente}>
               ➕ Agregar renglón
             </button>
           </div>
 
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <table style={tableStyle}>
               <thead>
                 <tr>
                   {[
@@ -813,11 +965,7 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
                   ].map((h) => (
                     <th
                       key={h}
-                      style={{
-                        border: "1px solid #222",
-                        padding: 8,
-                        textAlign: "left",
-                      }}
+                      style={thStyle}
                     >
                       {h}
                     </th>
@@ -829,11 +977,7 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
                   <tr>
                     <td
                       colSpan={7}
-                      style={{
-                        border: "1px solid #222",
-                        padding: 10,
-                        opacity: 0.8,
-                      }}
+                      style={{ ...tdStyle, opacity: 0.8, color: "#9CA3AF" }}
                     >
                       Sin renglones. Use “Agregar renglón”.
                     </td>
@@ -841,7 +985,7 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
                 ) : (
                   convivientes.map((c, idx) => (
                     <tr key={`conv_${idx}`}>
-                      <td style={{ border: "1px solid #222", padding: 6 }}>
+                      <td style={tdStyle}>
                         <input
                           value={c.apellidoNombres}
                           onChange={(e) =>
@@ -849,19 +993,19 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
                               apellidoNombres: e.target.value,
                             })
                           }
-                          style={{ width: "100%" }}
+                          style={controlStyle}
                         />
                       </td>
-                      <td style={{ border: "1px solid #222", padding: 6 }}>
+                      <td style={tdStyle}>
                         <input
                           value={c.relacion}
                           onChange={(e) =>
                             updateConviviente(idx, { relacion: e.target.value })
                           }
-                          style={{ width: "100%" }}
+                          style={controlStyle}
                         />
                       </td>
-                      <td style={{ border: "1px solid #222", padding: 6 }}>
+                      <td style={tdStyle}>
                         <select
                           value={c.aCargo}
                           onChange={(e) =>
@@ -869,43 +1013,44 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
                               aCargo: e.target.value as any,
                             })
                           }
-                          style={{ width: "100%" }}
+                          style={selectStyle}
                         >
-                          <option value="">—</option>
-                          <option value="SI">SI</option>
-                          <option value="NO">NO</option>
+                          <option value="" style={optionStyle}>—</option>
+                          <option value="SI" style={optionStyle}>SI</option>
+                          <option value="NO" style={optionStyle}>NO</option>
                         </select>
                       </td>
-                      <td style={{ border: "1px solid #222", padding: 6 }}>
+                      <td style={tdStyle}>
                         <input
                           value={c.edad}
                           onChange={(e) =>
                             updateConviviente(idx, { edad: e.target.value })
                           }
-                          style={{ width: "100%" }}
+                          style={controlStyle}
                         />
                       </td>
-                      <td style={{ border: "1px solid #222", padding: 6 }}>
+                      <td style={tdStyle}>
                         <input
                           value={c.dni}
                           onChange={(e) =>
                             updateConviviente(idx, { dni: e.target.value })
                           }
-                          style={{ width: "100%" }}
+                          style={controlStyle}
                         />
                       </td>
-                      <td style={{ border: "1px solid #222", padding: 6 }}>
+                      <td style={tdStyle}>
                         <input
                           value={c.OSFA}
                           onChange={(e) =>
                             updateConviviente(idx, { OSFA: e.target.value })
                           }
-                          style={{ width: "100%" }}
+                          style={controlStyle}
                         />
                       </td>
-                      <td style={{ border: "1px solid #222", padding: 6 }}>
+                      <td style={tdStyle}>
                         <button
                           type="button"
+                          style={dangerButtonStyle}
                           onClick={() => removeConviviente(idx)}
                         >
                           Quitar
@@ -920,7 +1065,7 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
         </Box>
 
         <Box>
-          <div style={{ fontWeight: 800, marginBottom: 8 }}>
+          <div style={{ fontWeight: 800, marginBottom: 8, color: "#F8FAFC" }}>
             6. Animales domésticos (vivienda tipo casa): indicar especie, raza,
             edad, sexo, peso, etc.
           </div>
@@ -928,13 +1073,13 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
           <div
             style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}
           >
-            <button type="button" onClick={addMascota}>
+            <button type="button" style={neutralButtonStyle} onClick={addMascota}>
               ➕ Agregar mascota
             </button>
           </div>
 
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <table style={tableStyle}>
               <thead>
                 <tr>
                   {[
@@ -948,11 +1093,7 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
                   ].map((h) => (
                     <th
                       key={h}
-                      style={{
-                        border: "1px solid #222",
-                        padding: 8,
-                        textAlign: "left",
-                      }}
+                      style={thStyle}
                     >
                       {h}
                     </th>
@@ -964,11 +1105,7 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
                   <tr>
                     <td
                       colSpan={7}
-                      style={{
-                        border: "1px solid #222",
-                        padding: 10,
-                        opacity: 0.8,
-                      }}
+                      style={{ ...tdStyle, opacity: 0.8, color: "#9CA3AF" }}
                     >
                       Sin mascotas cargadas. Use “Agregar mascota”.
                     </td>
@@ -976,64 +1113,71 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
                 ) : (
                   mascotas.map((m, idx) => (
                     <tr key={`mas_${idx}`}>
-                      <td style={{ border: "1px solid #222", padding: 6 }}>
+                      <td style={tdStyle}>
                         <input
                           value={m.especie}
                           onChange={(e) =>
                             updateMascota(idx, { especie: e.target.value })
                           }
-                          style={{ width: "100%" }}
+                          style={controlStyle}
                         />
                       </td>
-                      <td style={{ border: "1px solid #222", padding: 6 }}>
+                      <td style={tdStyle}>
                         <input
                           value={m.raza}
                           onChange={(e) =>
                             updateMascota(idx, { raza: e.target.value })
                           }
-                          style={{ width: "100%" }}
+                          style={controlStyle}
                         />
                       </td>
-                      <td style={{ border: "1px solid #222", padding: 6 }}>
+                      <td style={tdStyle}>
                         <input
                           value={m.edad}
                           onChange={(e) =>
                             updateMascota(idx, { edad: e.target.value })
                           }
-                          style={{ width: "100%" }}
+                          style={controlStyle}
                         />
                       </td>
-                      <td style={{ border: "1px solid #222", padding: 6 }}>
+                      <td style={tdStyle}>
                         <input
                           value={m.sexo}
                           onChange={(e) =>
                             updateMascota(idx, { sexo: e.target.value })
                           }
-                          style={{ width: "100%" }}
+                          style={controlStyle}
                         />
                       </td>
-                      <td style={{ border: "1px solid #222", padding: 6 }}>
+                      <td style={tdStyle}>
                         <input
                           value={m.peso}
                           onChange={(e) =>
                             updateMascota(idx, { peso: e.target.value })
                           }
-                          style={{ width: "100%" }}
+                          style={controlStyle}
                         />
                       </td>
-                      <td style={{ border: "1px solid #222", padding: 6 }}>
-                        <input
-                          type="file"
-                          onChange={(e) =>
-                            updateMascota(idx, {
-                              certificadoFile: e.target.files?.[0] || null,
-                            })
-                          }
-                        />
+                      <td style={tdStyle}>
+                        <div style={{ minWidth: 220 }}>
+                          <input
+                            type="file"
+                            onChange={(e) =>
+                              updateMascota(idx, {
+                                certificadoFile: e.target.files?.[0] || null,
+                              })
+                            }
+                            style={fileInputStyle}
+                          />
+                          {m.certificadoFile && (
+                            <div style={fileNameStyle}>{m.certificadoFile.name}</div>
+                          )}
+                        </div>
                       </td>
-                      <td style={{ border: "1px solid #222", padding: 6 }}>
+                      <td style={tdStyle}>
                         <button
                           type="button"
+                          style={dangerButtonStyle}
                           onClick={() => removeMascota(idx)}
                         >
                           Quitar
@@ -1048,7 +1192,7 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
         </Box>
 
         <Box>
-          <div style={{ fontWeight: 800, marginBottom: 8 }}>
+          <div style={{ fontWeight: 800, marginBottom: 8, color: "#F8FAFC" }}>
             7. Soy (o familiares a cargo) propietario de viviendas en la zona
             naval de interés. En caso afirmativo agrego escrituras y contratos.
           </div>
@@ -1065,30 +1209,47 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
               value={tienePropiedadesZona}
               onChange={setTienePropiedadesZona}
             />
-            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-              <div style={{ fontWeight: 700, fontSize: 13 }}>
+            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+              <div style={{ fontWeight: 700, fontSize: 13, color: "#CBD5E1" }}>
                 Adjuntar escrituras/contratos:
               </div>
-              <input
-                type="file"
-                onChange={(e) =>
-                  setEscriturasYContratosFile(e.target.files?.[0] || null)
-                }
-              />
+              <div style={{ minWidth: 260, flex: 1 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+  <label style={neutralButtonStyle}>
+    Elegir archivo
+    <input
+      type="file"
+      onChange={(e) =>
+        setEscriturasYContratosFile(e.target.files?.[0] || null)
+      }
+      style={{ display: "none" }}
+    />
+  </label>
+
+  <div style={{ fontSize: 12, color: "#9CA3AF" }}>
+    {escriturasYContratosFile
+      ? escriturasYContratosFile.name
+      : "No se eligió ningún archivo"}
+  </div>
+</div>
+                {escriturasYContratosFile && (
+                  <div style={fileNameStyle}>{escriturasYContratosFile.name}</div>
+                )}
+              </div>
             </div>
           </div>
 
           <div
             style={{ marginTop: 10, display: "grid", gridTemplateColumns: "1fr", gap: 10 }}
           >
-            <div style={{ border: "1px solid #222", padding: 10 }}>
-              <div style={{ fontWeight: 700, marginBottom: 6 }}>Dirección I</div>
+            <div style={{ border: "1px solid rgba(255,255,255,0.14)", padding: 10 }}>
+              <div style={{ fontWeight: 700, marginBottom: 6, color: "#CBD5E1" }}>Dirección I</div>
               <input
                 value={prop1.direccion}
                 onChange={(e) =>
                   setProp1((p) => ({ ...p, direccion: e.target.value }))
                 }
-                style={{ width: "100%" }}
+                style={controlStyle}
               />
               <div style={{ fontWeight: 700, marginTop: 8, marginBottom: 6 }}>
                 Observaciones
@@ -1098,12 +1259,12 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
                 onChange={(e) =>
                   setProp1((p) => ({ ...p, observaciones: e.target.value }))
                 }
-                style={{ width: "100%" }}
+                style={controlStyle}
               />
             </div>
 
-            <div style={{ border: "1px solid #222", padding: 10 }}>
-              <div style={{ fontWeight: 700, marginBottom: 6 }}>
+            <div style={{ border: "1px solid rgba(255,255,255,0.14)", padding: 10 }}>
+              <div style={{ fontWeight: 700, marginBottom: 6, color: "#CBD5E1" }}>
                 Dirección II
               </div>
               <input
@@ -1111,7 +1272,7 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
                 onChange={(e) =>
                   setProp2((p) => ({ ...p, direccion: e.target.value }))
                 }
-                style={{ width: "100%" }}
+                style={controlStyle}
               />
               <div style={{ fontWeight: 700, marginTop: 8, marginBottom: 6 }}>
                 Observaciones
@@ -1121,12 +1282,12 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
                 onChange={(e) =>
                   setProp2((p) => ({ ...p, observaciones: e.target.value }))
                 }
-                style={{ width: "100%" }}
+                style={controlStyle}
               />
             </div>
 
-            <div style={{ border: "1px solid #222", padding: 10 }}>
-              <div style={{ fontWeight: 700, marginBottom: 6 }}>
+            <div style={{ border: "1px solid rgba(255,255,255,0.14)", padding: 10 }}>
+              <div style={{ fontWeight: 700, marginBottom: 6, color: "#CBD5E1" }}>
                 Dirección III
               </div>
               <input
@@ -1134,7 +1295,7 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
                 onChange={(e) =>
                   setProp3((p) => ({ ...p, direccion: e.target.value }))
                 }
-                style={{ width: "100%" }}
+                style={controlStyle}
               />
               <div style={{ fontWeight: 700, marginTop: 8, marginBottom: 6 }}>
                 Observaciones
@@ -1144,7 +1305,7 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
                 onChange={(e) =>
                   setProp3((p) => ({ ...p, observaciones: e.target.value }))
                 }
-                style={{ width: "100%" }}
+                style={controlStyle}
               />
             </div>
           </div>
@@ -1157,7 +1318,7 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
               alignItems: "center",
             }}
           >
-            <div style={{ fontWeight: 800 }}>
+            <div style={{ fontWeight: 800, color: "#F8FAFC" }}>
               Verificó el contenido del Artículo 5.06., incisos 3 y 4.
             </div>
             <YesNoControl value={verificoArticulo506} onChange={setVerificoArticulo506} />
@@ -1165,7 +1326,7 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
         </Box>
 
         <Box>
-          <div style={{ fontWeight: 800, marginBottom: 8 }}>
+          <div style={{ fontWeight: 800, marginBottom: 8, color: "#F8FAFC" }}>
             8. Tengo problemas socioeconómicos atendibles e inicié el trámite
             correspondiente por Oficio:
           </div>
@@ -1182,13 +1343,13 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
               value={oficioSocio}
               onChange={(e) => setOficioSocio(e.target.value)}
               placeholder="Oficio: ..."
-              style={{ width: "55%" }}
+              style={{ ...controlStyle, width: "55%" }}
             />
           </div>
         </Box>
 
         <Box>
-          <div style={{ fontWeight: 800, marginBottom: 8 }}>
+          <div style={{ fontWeight: 800, marginBottom: 8, color: "#F8FAFC" }}>
             9. Agrego certificado de vacunación de los animales domésticos
             mencionados en punto 6.
           </div>
@@ -1196,7 +1357,7 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
         </Box>
 
         <Box>
-          <div style={{ fontWeight: 800, marginBottom: 8 }}>
+          <div style={{ fontWeight: 800, marginBottom: 8, color: "#F8FAFC" }}>
             10. Me encuentro declarado “INEPTO” por la Dirección General del
             Personal Naval para ocupar viviendas fiscales.
           </div>
@@ -1204,42 +1365,69 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
         </Box>
 
         <Box>
-          <div style={{ fontWeight: 800, marginBottom: 8 }}>
-            11. Agrego fotocopia de mi último Recibo de Haberes.
-          </div>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: 12,
-            }}
-          >
-            <YesNoControl value={agregaReciboHaberes} onChange={setAgregaReciboHaberes} />
-            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-              <div style={{ fontWeight: 700, fontSize: 13 }}>Adjuntar:</div>
-              <input
-                type="file"
-                onChange={(e) =>
-                  setReciboHaberesFile(e.target.files?.[0] || null)
-                }
-              />
-            </div>
-          </div>
-        </Box>
+  <div style={{ fontWeight: 800, marginBottom: 8, color: "#F8FAFC" }}>
+    11. Agrego fotocopia de mi último Recibo de Haberes.
+  </div>
+  <div
+    style={{
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      gap: 12,
+      flexWrap: "wrap",
+    }}
+  >
+    <YesNoControl
+      value={agregaReciboHaberes}
+      onChange={setAgregaReciboHaberes}
+    />
+
+    <div
+      style={{
+        display: "flex",
+        gap: 10,
+        alignItems: "center",
+        flexWrap: "wrap",
+      }}
+    >
+      <div style={{ fontWeight: 700, fontSize: 13, color: "#CBD5E1" }}>
+        Adjuntar:
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <label style={neutralButtonStyle}>
+          Elegir archivo
+          <input
+            type="file"
+            onChange={(e) =>
+              setReciboHaberesFile(e.target.files?.[0] || null)
+            }
+            style={{ display: "none" }}
+          />
+        </label>
+
+        <div style={{ fontSize: 12, color: "#9CA3AF" }}>
+          {reciboHaberesFile
+            ? reciboHaberesFile.name
+            : "No se eligió ningún archivo"}
+        </div>
+      </div>
+    </div>
+  </div>
+</Box>
 
         <Box>
-          <div style={{ fontWeight: 800, marginBottom: 8 }}>
+          <div style={{ fontWeight: 800, marginBottom: 8, color: "#F8FAFC" }}>
             12. Total de años de ocupación previa en la zona naval solicitada:
           </div>
           <select
             value={aniosOcupacionPrevia}
             onChange={(e) => setAniosOcupacionPrevia(e.target.value)}
-            style={{ width: "100%" }}
+            style={selectStyle}
           >
-            <option value="">—</option>
+            <option value="" style={optionStyle}>—</option>
             {years00a50.map((y) => (
-              <option key={y} value={y}>
+              <option key={y} value={y} style={optionStyle}>
                 {y}
               </option>
             ))}
@@ -1256,26 +1444,26 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
         {/* ↓↓↓ A PARTIR DE AQUÍ SIGUE TU CÓDIGO ORIGINAL SIN CAMBIOS ↓↓↓ */}
 
         <Box>
-          <div style={{ fontWeight: 800, marginBottom: 8 }}>
+          <div style={{ fontWeight: 800, marginBottom: 8, color: "#F8FAFC" }}>
             13. Si no me encuentro presente el día de la asignación, autorizo
             como representante(s):
           </div>
 
-          <div style={{ border: "1px solid #222", padding: 10, marginBottom: 10 }}>
-            <div style={{ fontWeight: 800, marginBottom: 8 }}>REPRESENTANTE I</div>
+          <div style={{ border: "1px solid rgba(255,255,255,0.14)", padding: 10, marginBottom: 10 }}>
+            <div style={{ fontWeight: 800, marginBottom: 8, color: "#F8FAFC" }}>REPRESENTANTE I</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 160px", gap: 10 }}>
               <Row label="Apellido y nombres:">
                 <input
                   value={rep1.apellidoNombres}
                   onChange={(e) => setRep1((p) => ({ ...p, apellidoNombres: e.target.value }))}
-                  style={{ width: "100%" }}
+                  style={controlStyle}
                 />
               </Row>
               <Row label="Grado:">
                 <input
                   value={rep1.grado}
                   onChange={(e) => setRep1((p) => ({ ...p, grado: e.target.value }))}
-                  style={{ width: "100%" }}
+                  style={controlStyle}
                 />
               </Row>
             </div>
@@ -1284,41 +1472,41 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
                 <input
                   value={rep1.mr}
                   onChange={(e) => setRep1((p) => ({ ...p, mr: e.target.value }))}
-                  style={{ width: "100%" }}
+                  style={controlStyle}
                 />
               </Row>
               <Row label="Destino:">
                 <input
                   value={rep1.destino}
                   onChange={(e) => setRep1((p) => ({ ...p, destino: e.target.value }))}
-                  style={{ width: "100%" }}
+                  style={controlStyle}
                 />
               </Row>
               <Row label="Teléfono:">
                 <input
                   value={rep1.telefono}
                   onChange={(e) => setRep1((p) => ({ ...p, telefono: e.target.value }))}
-                  style={{ width: "100%" }}
+                  style={controlStyle}
                 />
               </Row>
             </div>
           </div>
 
-          <div style={{ border: "1px solid #222", padding: 10 }}>
-            <div style={{ fontWeight: 800, marginBottom: 8 }}>REPRESENTANTE II</div>
+          <div style={{ border: "1px solid rgba(255,255,255,0.14)", padding: 10 }}>
+            <div style={{ fontWeight: 800, marginBottom: 8, color: "#F8FAFC" }}>REPRESENTANTE II</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 160px", gap: 10 }}>
               <Row label="Apellido y nombres:">
                 <input
                   value={rep2.apellidoNombres}
                   onChange={(e) => setRep2((p) => ({ ...p, apellidoNombres: e.target.value }))}
-                  style={{ width: "100%" }}
+                  style={controlStyle}
                 />
               </Row>
               <Row label="Grado:">
                 <input
                   value={rep2.grado}
                   onChange={(e) => setRep2((p) => ({ ...p, grado: e.target.value }))}
-                  style={{ width: "100%" }}
+                  style={controlStyle}
                 />
               </Row>
             </div>
@@ -1327,21 +1515,21 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
                 <input
                   value={rep2.mr}
                   onChange={(e) => setRep2((p) => ({ ...p, mr: e.target.value }))}
-                  style={{ width: "100%" }}
+                  style={controlStyle}
                 />
               </Row>
               <Row label="Destino:">
                 <input
                   value={rep2.destino}
                   onChange={(e) => setRep2((p) => ({ ...p, destino: e.target.value }))}
-                  style={{ width: "100%" }}
+                  style={controlStyle}
                 />
               </Row>
               <Row label="Teléfono:">
                 <input
                   value={rep2.telefono}
                   onChange={(e) => setRep2((p) => ({ ...p, telefono: e.target.value }))}
-                  style={{ width: "100%" }}
+                  style={controlStyle}
                 />
               </Row>
             </div>
@@ -1353,10 +1541,10 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
         </Box>
 
         <Box>
-          <div style={{ fontWeight: 800, marginBottom: 8 }}>
+          <div style={{ fontWeight: 800, marginBottom: 8, color: "#F8FAFC" }}>
             14. Autorizo descuentos de compensaciones por uso (Alquiler/Mantenimiento/Reparaciones/Expensas) del haber mensual.
           </div>
-          <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <label style={{ display: "flex", gap: 8, alignItems: "center", color: "#CBD5E1" }}>
             <input
               type="checkbox"
               checked={autorizaDescuentos}
@@ -1367,10 +1555,10 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
         </Box>
 
         <Box>
-          <div style={{ fontWeight: 800, marginBottom: 8 }}>
+          <div style={{ fontWeight: 800, marginBottom: 8, color: "#F8FAFC" }}>
             15. Autorizo administración de expensas comunes por Administrador bajo supervisión del Organismo Administrador.
           </div>
-          <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <label style={{ display: "flex", gap: 8, alignItems: "center", color: "#CBD5E1" }}>
             <input
               type="checkbox"
               checked={autorizaAdministradorExpensas}
@@ -1381,13 +1569,14 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
         </Box>
 
         <Box>
-          <div style={{ fontWeight: 800, marginBottom: 8 }}>
+          <div style={{ fontWeight: 800, marginBottom: 8, color: "#F8FAFC" }}>
             16. Fecha estimada de traslado a la zona:
           </div>
           <input
             type="date"
             value={fechaEstimadaTraslado}
             onChange={(e) => setFechaEstimadaTraslado(e.target.value)}
+            style={dateControlStyle}
           />
         </Box>
 
@@ -1407,18 +1596,18 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
           </div>
         </Box>
 
-        <div style={{ borderTop: "2px solid #222", marginTop: 14, paddingTop: 12 }}>
+        <div style={{ borderTop: "1px solid rgba(255,255,255,0.12)", marginTop: 14, paddingTop: 12 }}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
-            <button type="button" onClick={() => navigate("/app/postulante")}>
+            <button type="button" style={neutralButtonStyle} onClick={() => navigate("/app/postulante")}>
               Cancelar
             </button>
 
-            <button type="submit" disabled={loading}>
+            <button type="submit" style={primaryButtonStyle} disabled={loading}>
               {loading ? "Enviando..." : "Enviar ANEXO 01"}
             </button>
           </div>
 
-          <div style={{ marginTop: 16, textAlign: "right", fontWeight: 800 }}>
+          <div style={{ marginTop: 16, textAlign: "right", fontWeight: 800, color: "#CBD5E1" }}>
             Firma del Solicitante
           </div>
         </div>

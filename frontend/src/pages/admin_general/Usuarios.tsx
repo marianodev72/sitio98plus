@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { http } from "../../api/http";
 import { useAuth } from "../../auth/useAuth";
 
@@ -286,7 +286,32 @@ export default function UsuariosAdminGeneral() {
 
   const rows = useMemo(() => usuarios || [], [usuarios]);
 
-  if (loading) return <p style={{ color: "#E5E7EB" }}>Cargando usuarios…</p>;
+const controlStyle: CSSProperties = {
+  padding: "10px 12px",
+  borderRadius: 10,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(255,255,255,0.04)",
+  color: "#ffffff",
+  fontSize: 14,
+  minHeight: 42,
+  boxSizing: "border-box",
+};
+
+const selectStyle: CSSProperties = {
+  ...controlStyle,
+  appearance: "none",
+  WebkitAppearance: "none",
+  MozAppearance: "none",
+  backgroundColor: "rgba(255,255,255,0.04)",
+  color: "#ffffff",
+};
+
+const optionStyle: CSSProperties = {
+  backgroundColor: "#1f2937",
+  color: "#ffffff",
+};
+
+if (loading) return <p style={{ color: "#E5E7EB" }}>Cargando usuarios…</p>;
 
   return (
     <div
@@ -375,24 +400,19 @@ export default function UsuariosAdminGeneral() {
           <label style={{ fontSize: 14, fontWeight: 600, color: "#E5E7EB" }}>
             Rol base:{" "}
             <select
-              value={filtroRole}
-              onChange={(e) => setFiltroRole(e.target.value)}
-              style={{
-                padding: "10px 12px",
-                fontSize: 14,
-                color: "#F8FAFC",
-                background: "#111827",
-                border: "1px solid #475569",
-                borderRadius: 8,
-              }}
-            >
-              <option value="">Todos</option>
-              {ROLES_BASE.map((r) => (
-                <option key={r} value={r}>
-                  {r}
-                </option>
-              ))}
-            </select>
+  value={filtroRole}
+  onChange={(e) => setFiltroRole(e.target.value)}
+  style={selectStyle}
+>
+  <option value="" style={optionStyle}>
+    Todos
+  </option>
+  {ROLES_BASE.map((r) => (
+    <option key={r} value={r} style={optionStyle}>
+      {r}
+    </option>
+  ))}
+</select>
           </label>
         </div>
 
@@ -400,24 +420,19 @@ export default function UsuariosAdminGeneral() {
           <label style={{ fontSize: 14, fontWeight: 600, color: "#E5E7EB" }}>
             Permiso:{" "}
             <select
-              value={filtroPermiso}
-              onChange={(e) => setFiltroPermiso(e.target.value)}
-              style={{
-                padding: "10px 12px",
-                fontSize: 14,
-                color: "#F8FAFC",
-                background: "#111827",
-                border: "1px solid #475569",
-                borderRadius: 8,
-              }}
-            >
-              <option value="">Todos</option>
-              {PERMISOS_VALIDOS.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
+  value={filtroPermiso}
+  onChange={(e) => setFiltroPermiso(e.target.value)}
+  style={selectStyle}
+>
+  <option value="" style={optionStyle}>
+    Todos
+  </option>
+  {PERMISOS_VALIDOS.map((p) => (
+    <option key={p} value={p} style={optionStyle}>
+      {p}
+    </option>
+  ))}
+</select>
           </label>
         </div>
 
@@ -425,25 +440,20 @@ export default function UsuariosAdminGeneral() {
           <label style={{ fontSize: 14, fontWeight: 600, color: "#E5E7EB" }}>
             Barrio:{" "}
             <select
-              value={filtroBarrio}
-              onChange={(e) => setFiltroBarrio(e.target.value)}
-              disabled={loadingBarrios}
-              style={{
-                padding: "10px 12px",
-                fontSize: 14,
-                color: "#F8FAFC",
-                background: "#111827",
-                border: "1px solid #475569",
-                borderRadius: 8,
-              }}
-            >
-              <option value="">Todos</option>
-              {barrios.map((b) => (
-                <option key={b} value={b}>
-                  {b}
-                </option>
-              ))}
-            </select>
+  value={filtroBarrio}
+  onChange={(e) => setFiltroBarrio(e.target.value)}
+  disabled={loadingBarrios}
+  style={selectStyle}
+>
+  <option value="" style={optionStyle}>
+    Todos
+  </option>
+  {barrios.map((b) => (
+    <option key={b} value={b} style={optionStyle}>
+      {b}
+    </option>
+  ))}
+</select>
           </label>
         </div>
 
@@ -451,23 +461,22 @@ export default function UsuariosAdminGeneral() {
           <label style={{ fontSize: 14, fontWeight: 600, color: "#E5E7EB" }}>
             Activo:{" "}
             <select
-              value={filtroActivo}
-              onChange={(e) =>
-                setFiltroActivo(e.target.value as "todos" | "true" | "false")
-              }
-              style={{
-                padding: "10px 12px",
-                fontSize: 14,
-                color: "#F8FAFC",
-                background: "#111827",
-                border: "1px solid #475569",
-                borderRadius: 8,
-              }}
-            >
-              <option value="todos">Todos</option>
-              <option value="true">Solo activos</option>
-              <option value="false">Solo inactivos</option>
-            </select>
+  value={filtroActivo}
+  onChange={(e) =>
+    setFiltroActivo(e.target.value as "todos" | "true" | "false")
+  }
+  style={selectStyle}
+>
+  <option value="todos" style={optionStyle}>
+    Todos
+  </option>
+  <option value="true" style={optionStyle}>
+    Solo activos
+  </option>
+  <option value="false" style={optionStyle}>
+    Solo inactivos
+  </option>
+</select>
           </label>
         </div>
 
@@ -475,23 +484,22 @@ export default function UsuariosAdminGeneral() {
           <label style={{ fontSize: 14, fontWeight: 600, color: "#E5E7EB" }}>
             Archivado:{" "}
             <select
-              value={filtroArchivado}
-              onChange={(e) =>
-                setFiltroArchivado(e.target.value as "todos" | "true" | "false")
-              }
-              style={{
-                padding: "10px 12px",
-                fontSize: 14,
-                color: "#F8FAFC",
-                background: "#111827",
-                border: "1px solid #475569",
-                borderRadius: 8,
-              }}
-            >
-              <option value="false">No archivados</option>
-              <option value="true">Solo archivados</option>
-              <option value="todos">Todos</option>
-            </select>
+  value={filtroArchivado}
+  onChange={(e) =>
+    setFiltroArchivado(e.target.value as "todos" | "true" | "false")
+  }
+  style={selectStyle}
+>
+  <option value="false" style={optionStyle}>
+    No archivados
+  </option>
+  <option value="true" style={optionStyle}>
+    Solo archivados
+  </option>
+  <option value="todos" style={optionStyle}>
+    Todos
+  </option>
+</select>
           </label>
         </div>
 
@@ -700,25 +708,20 @@ export default function UsuariosAdminGeneral() {
         {/* ROL */}
         <td style={{ padding: "12px 14px", border: "1px solid #334155", fontSize: 14 }}>
           <select
-            value={u.role || ""}
-            onChange={(e) => cambiarRol(u._id, e.target.value)}
-            disabled={busy}
-            style={{
-              padding: "9px 10px",
-              fontSize: 14,
-              color: "#F8FAFC",
-              background: "#111827",
-              border: "1px solid #475569",
-              borderRadius: 8,
-            }}
-          >
-            <option value="">(sin rol)</option>
-            {ROLES_BASE.map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
-            ))}
-          </select>
+  value={u.role || ""}
+  onChange={(e) => cambiarRol(u._id, e.target.value)}
+  disabled={busy}
+  style={{ ...selectStyle, minWidth: 160 }}
+>
+  <option value="" style={optionStyle}>
+    (sin rol)
+  </option>
+  {ROLES_BASE.map((r) => (
+    <option key={r} value={r} style={optionStyle}>
+      {r}
+    </option>
+  ))}
+</select>
         </td>
 
         {/* 👇 NUEVA COLUMNA VIVIENDA */}
@@ -774,28 +777,22 @@ export default function UsuariosAdminGeneral() {
           {habilitaBarrio ? (
             <>
               <select
-                value={draft}
-                disabled={busy || loadingBarrios}
-                onChange={(e) =>
-                  setBarrioDraft((curr) => ({ ...curr, [u._id]: e.target.value }))
-                }
-                style={{
-                  minWidth: 220,
-                  padding: "9px 10px",
-                  fontSize: 14,
-                  color: "#F8FAFC",
-                  background: "#111827",
-                  border: "1px solid #475569",
-                  borderRadius: 8,
-                }}
-              >
-                <option value="">Seleccione barrio…</option>
-                {barrios.map((b) => (
-                  <option key={b} value={b}>
-                    {b}
-                  </option>
-                ))}
-              </select>{" "}
+  value={draft}
+  onChange={(e) =>
+    setBarrioDraft((curr) => ({ ...curr, [u._id]: e.target.value }))
+  }
+  disabled={busy || loadingBarrios}
+  style={{ ...selectStyle, minWidth: 160 }}
+>
+  <option value="" style={optionStyle}>
+    Seleccionar
+  </option>
+  {barrios.map((b) => (
+    <option key={b} value={b} style={optionStyle}>
+      {b}
+    </option>
+  ))}
+</select>{" "}
               <button
                 disabled={busy || loadingBarrios}
                 onClick={() => guardarBarrio(u._id)}

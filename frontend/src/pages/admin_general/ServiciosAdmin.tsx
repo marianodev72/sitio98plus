@@ -1,6 +1,20 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import http from "../../api/http";
 import { useAuth } from "../../auth/useAuth";
+import {
+  buttonRowStyle,
+  cardStyle,
+  heroStyle,
+  pageStyle,
+  primaryButtonStyle,
+  secondaryButtonStyle,
+  sectionTitleStyle,
+  shellStyle,
+  softCardStyle,
+  subtitleStyle,
+  successButtonStyle,
+  titleStyle,
+} from "../permisionario/uiStyles";
 
 type Item = {
   _id: string;
@@ -37,14 +51,7 @@ function parseMontoOrNull(raw: string): number | null {
   const s = String(raw || "").trim();
   if (!s) return null;
 
-  // Permitimos "1200", "1200.50", "1.200,50" etc.
-  // Normalizamos: quitamos espacios y separadores de miles, y convertimos coma a punto.
-  const normalized = s
-    .replace(/\s+/g, "")
-    .replace(/\./g, "") // miles
-    .replace(",", "."); // decimal
-
-  // fail-closed: si no es número válido, devolvemos NaN para que el caller bloquee
+  const normalized = s.replace(/\s+/g, "").replace(/\./g, "").replace(",", ".");
   const n = Number(normalized);
   if (!Number.isFinite(n)) return NaN as any;
   return n;
@@ -58,11 +65,9 @@ export default function ServiciosAdmin() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
 
-  // filtros
   const [vivienda, setVivienda] = useState("");
   const [estado, setEstado] = useState<"all" | "leidos" | "noleidos">("all");
 
-  // modal corrección
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<Item | null>(null);
 
@@ -118,7 +123,6 @@ export default function ServiciosAdmin() {
     setSelected(x);
     setObs("");
 
-    // ✅ Normalizamos a string SIEMPRE (evita crash/rareza)
     setElectricidad(toStrMonto(x.servicios?.electricidad));
     setGas(toStrMonto(x.servicios?.gas));
     setAgua(toStrMonto(x.servicios?.agua));
@@ -145,18 +149,15 @@ export default function ServiciosAdmin() {
   async function guardarCorreccion() {
     if (!selected) return;
 
-    // Observación obligatoria
     if (!obs.trim()) {
       setError(true);
       return;
     }
 
-    // Convertimos montos en forma estricta
     const e = parseMontoOrNull(electricidad);
     const g = parseMontoOrNull(gas);
     const a = parseMontoOrNull(agua);
 
-    // fail-closed: si algún monto viene inválido, bloqueamos sin explicar
     if ([e, g, a].some((x) => typeof x === "number" && !Number.isFinite(x))) {
       setError(true);
       return;
@@ -188,166 +189,407 @@ export default function ServiciosAdmin() {
     }
   }
 
+  const controlStyle: CSSProperties = {
+  padding: "10px 12px",
+  borderRadius: 10,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(255,255,255,0.04)",
+  color: "#F8FAFC",
+  fontSize: 14,
+  minHeight: 42,
+  boxSizing: "border-box",
+};
+
+const selectStyle: CSSProperties = {
+  ...controlStyle,
+  appearance: "none",
+  WebkitAppearance: "none",
+  MozAppearance: "none",
+  backgroundColor: "rgba(255,255,255,0.04)",
+  color: "#ffffff",
+};
+
+const optionStyle: CSSProperties = {
+  backgroundColor: "#1f2937",
+  color: "#ffffff",
+};
+
+  const thStyle: CSSProperties = {
+    textAlign: "left",
+    padding: "12px 10px",
+    fontSize: 12,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    color: "rgba(255,255,255,0.70)",
+    borderBottom: "1px solid rgba(255,255,255,0.12)",
+    background: "rgba(255,255,255,0.04)",
+    whiteSpace: "nowrap",
+  };
+
+  const tdStyle: CSSProperties = {
+    padding: "12px 10px",
+    borderBottom: "1px solid rgba(255,255,255,0.08)",
+    color: "#ffffff",
+    verticalAlign: "middle",
+  };
+
   return (
-    <div>
-      <h2>Servicios — Administración</h2>
-
-      {error && (
-        <div style={{ color: "#b00020", marginBottom: 12 }}>
-          No es posible procesar su solicitud, contáctese con el Administrador
-        </div>
-      )}
-
-      {/* Filtros */}
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
-        <div>
-          <div style={{ fontWeight: 800, marginBottom: 4 }}>Vivienda</div>
-          <input
-            value={vivienda}
-            onChange={(e) => setVivienda(e.target.value)}
-            placeholder="Ej: AB-401"
-          />
+    <div style={pageStyle}>
+      <div style={shellStyle}>
+        <div style={heroStyle}>
+          <h2 style={titleStyle}>Servicios — Administración</h2>
+          <p style={subtitleStyle}>
+            Gestión administrativa de lecturas, alertas y correcciones institucionales.
+          </p>
         </div>
 
-        <div>
-          <div style={{ fontWeight: 800, marginBottom: 4 }}>Lectura</div>
-          <select value={estado} onChange={(e) => setEstado(e.target.value as any)}>
-            <option value="all">Todos</option>
-            <option value="leidos">Leídos</option>
-            <option value="noleidos">No leídos</option>
-          </select>
-        </div>
-
-        <div style={{ display: "flex", alignItems: "end", gap: 8 }}>
-          <button onClick={cargar} disabled={loading}>
-            Aplicar
-          </button>
-          <button onClick={limpiarFiltros} disabled={loading}>
-            Limpiar
-          </button>
-        </div>
-      </div>
-
-      {/* Tabla */}
-      {loading ? (
-        <div>Cargando…</div>
-      ) : !items.length ? (
-        <div>Sin resultados</div>
-      ) : (
-        <table width="100%" cellPadding={8}>
-          <thead>
-            <tr>
-              <th>Vivienda</th>
-              <th>Período</th>
-              <th>Lectura</th>
-              <th>Pendiente Admin</th>
-              <th>Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((x) => (
-              <tr key={x._id}>
-                <td>{x.viviendaCodigo}</td>
-                <td>{x.periodo}</td>
-                <td>{x.leidoPorUsuario ? "Leído" : "No leído"}</td>
-                <td>{x.requiereAdministracion ? "Sí" : "No"}</td>
-                <td>
-                  <button onClick={() => openPdf(x._id)}>Ver PDF</button>{" "}
-                  {isAdminGeneral ? <button onClick={() => openCorreccion(x)}>Corregir</button> : null}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-
-      {/* Modal corrección */}
-      {open && selected ? (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.35)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 16,
-            zIndex: 50,
-          }}
-          onClick={closeCorreccion}
-        >
+        {error ? (
           <div
             style={{
-              background: "white",
-              borderRadius: 12,
-              padding: 16,
-              width: 720,
-              maxWidth: "100%",
+              ...softCardStyle,
+              marginBottom: 12,
+              border: "1px solid rgba(239,68,68,0.30)",
+              background: "rgba(127,29,29,0.18)",
+              color: "#fecaca",
             }}
-            onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+            No es posible procesar su solicitud, contáctese con el Administrador
+          </div>
+        ) : null}
+
+        <div style={cardStyle}>
+          <div style={{ ...softCardStyle, marginBottom: 16 }}>
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "end" }}>
               <div>
-                <div style={{ fontSize: 16, fontWeight: 900 }}>Corrección administrativa</div>
-                <div style={{ fontSize: 12, opacity: 0.8 }}>
-                  {selected.viviendaCodigo} — {selected.periodo}
+                <div
+                  style={{
+                    fontSize: 11,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.12em",
+                    color: "rgba(255,255,255,0.62)",
+                    marginBottom: 6,
+                  }}
+                >
+                  Vivienda
                 </div>
+                <input
+                  value={vivienda}
+                  onChange={(e) => setVivienda(e.target.value)}
+                  placeholder="Ej: AB-401"
+                  style={controlStyle}
+                />
               </div>
-              <button onClick={closeCorreccion}>Cerrar</button>
-            </div>
 
-            <div style={{ marginTop: 12 }}>
-              <div style={{ fontWeight: 800, marginBottom: 6 }}>Observación (obligatoria)</div>
-              <textarea
-                value={obs}
-                onChange={(e) => setObs(e.target.value)}
-                rows={3}
-                style={{ width: "100%" }}
-                placeholder="Observación institucional"
-              />
-            </div>
+              <div>
+                <div
+                  style={{
+                    fontSize: 11,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.12em",
+                    color: "rgba(255,255,255,0.62)",
+                    marginBottom: 6,
+                  }}
+                >
+                  Lectura
+                </div>
+                <select
+  value={estado}
+  onChange={(e) => setEstado(e.target.value as any)}
+  style={selectStyle}
+>
+  <option value="all" style={optionStyle}>
+    Todos
+  </option>
+  <option value="leidos" style={optionStyle}>
+    Leídos
+  </option>
+  <option value="noleidos" style={optionStyle}>
+    No leídos
+  </option>
+</select>
+              </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginTop: 12 }}>
-              <div>
-                <div style={{ fontWeight: 800, marginBottom: 6 }}>Electricidad (DPE)</div>
-                <input value={electricidad} onChange={(e) => setElectricidad(e.target.value)} placeholder="Monto" />
+              <div style={buttonRowStyle}>
+                <button onClick={cargar} disabled={loading} style={primaryButtonStyle}>
+                  Aplicar
+                </button>
+                <button onClick={limpiarFiltros} disabled={loading} style={secondaryButtonStyle}>
+                  Limpiar
+                </button>
               </div>
-              <div>
-                <div style={{ fontWeight: 800, marginBottom: 6 }}>Gas (CAMUZZI)</div>
-                <input value={gas} onChange={(e) => setGas(e.target.value)} placeholder="Monto" />
-              </div>
-              <div>
-                <div style={{ fontWeight: 800, marginBottom: 6 }}>Agua (DPOSS)</div>
-                <input value={agua} onChange={(e) => setAgua(e.target.value)} placeholder="Monto" />
-              </div>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginTop: 12 }}>
-              <div>
-                <div style={{ fontWeight: 800, marginBottom: 6 }}>N° servicio DPE</div>
-                <input value={dpe} onChange={(e) => setDpe(e.target.value)} />
-              </div>
-              <div>
-                <div style={{ fontWeight: 800, marginBottom: 6 }}>N° servicio CAMUZZI</div>
-                <input value={camuzzi} onChange={(e) => setCamuzzi(e.target.value)} />
-              </div>
-              <div>
-                <div style={{ fontWeight: 800, marginBottom: 6 }}>N° servicio DPOSS</div>
-                <input value={dposs} onChange={(e) => setDposs(e.target.value)} />
-              </div>
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
-              <button onClick={closeCorreccion} disabled={loading}>
-                Cancelar
-              </button>
-              <button onClick={guardarCorreccion} disabled={loading}>
-                Guardar corrección
-              </button>
             </div>
           </div>
+
+          <h3 style={sectionTitleStyle}>Resultados</h3>
+
+          {loading ? (
+            <div style={softCardStyle}>Cargando…</div>
+          ) : !items.length ? (
+            <div style={softCardStyle}>Sin resultados</div>
+          ) : (
+            <div
+              style={{
+                overflowX: "auto",
+                border: "1px solid rgba(255,255,255,0.12)",
+                borderRadius: 12,
+                background: "rgba(255,255,255,0.04)",
+              }}
+            >
+              <table
+                width="100%"
+                cellPadding={8}
+                style={{ borderCollapse: "collapse", minWidth: 760 }}
+              >
+                <thead>
+                  <tr>
+                    <th style={thStyle}>Vivienda</th>
+                    <th style={thStyle}>Período</th>
+                    <th style={thStyle}>Lectura</th>
+                    <th style={thStyle}>Pendiente Admin</th>
+                    <th style={thStyle}>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((x) => (
+                    <tr key={x._id}>
+                      <td style={tdStyle}>{x.viviendaCodigo}</td>
+                      <td style={tdStyle}>{x.periodo}</td>
+                      <td style={tdStyle}>{x.leidoPorUsuario ? "Leído" : "No leído"}</td>
+                      <td style={tdStyle}>{x.requiereAdministracion ? "Sí" : "No"}</td>
+                      <td style={tdStyle}>
+                        <div style={{ ...buttonRowStyle, marginTop: 0 }}>
+                          <button onClick={() => openPdf(x._id)} style={secondaryButtonStyle}>
+                            Ver PDF
+                          </button>
+                          {isAdminGeneral ? (
+                            <button
+                              onClick={() => openCorreccion(x)}
+                              style={successButtonStyle}
+                            >
+                              Corregir
+                            </button>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
-      ) : null}
+
+        {open && selected ? (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.55)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 16,
+              zIndex: 50,
+            }}
+            onClick={closeCorreccion}
+          >
+            <div
+              style={{
+                ...cardStyle,
+                width: 720,
+                maxWidth: "100%",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  alignItems: "center",
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: 16, fontWeight: 900, color: "#ffffff" }}>
+                    Corrección administrativa
+                  </div>
+                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.72)" }}>
+                    {selected.viviendaCodigo} — {selected.periodo}
+                  </div>
+                </div>
+                <button onClick={closeCorreccion} style={secondaryButtonStyle}>
+                  Cerrar
+                </button>
+              </div>
+
+              <div style={{ marginTop: 12 }}>
+                <div
+                  style={{
+                    fontSize: 11,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.12em",
+                    color: "rgba(255,255,255,0.62)",
+                    marginBottom: 6,
+                  }}
+                >
+                  Observación (obligatoria)
+                </div>
+                <textarea
+                  value={obs}
+                  onChange={(e) => setObs(e.target.value)}
+                  rows={3}
+                  style={{ ...controlStyle, width: "100%", resize: "vertical" }}
+                  placeholder="Observación institucional"
+                />
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                  gap: 12,
+                  marginTop: 12,
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.12em",
+                      color: "rgba(255,255,255,0.62)",
+                      marginBottom: 6,
+                    }}
+                  >
+                    Electricidad (DPE)
+                  </div>
+                  <input
+                    value={electricidad}
+                    onChange={(e) => setElectricidad(e.target.value)}
+                    placeholder="Monto"
+                    style={{ ...controlStyle, width: "100%" }}
+                  />
+                </div>
+                <div>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.12em",
+                      color: "rgba(255,255,255,0.62)",
+                      marginBottom: 6,
+                    }}
+                  >
+                    Gas (CAMUZZI)
+                  </div>
+                  <input
+                    value={gas}
+                    onChange={(e) => setGas(e.target.value)}
+                    placeholder="Monto"
+                    style={{ ...controlStyle, width: "100%" }}
+                  />
+                </div>
+                <div>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.12em",
+                      color: "rgba(255,255,255,0.62)",
+                      marginBottom: 6,
+                    }}
+                  >
+                    Agua (DPOSS)
+                  </div>
+                  <input
+                    value={agua}
+                    onChange={(e) => setAgua(e.target.value)}
+                    placeholder="Monto"
+                    style={{ ...controlStyle, width: "100%" }}
+                  />
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                  gap: 12,
+                  marginTop: 12,
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.12em",
+                      color: "rgba(255,255,255,0.62)",
+                      marginBottom: 6,
+                    }}
+                  >
+                    N° servicio DPE
+                  </div>
+                  <input
+                    value={dpe}
+                    onChange={(e) => setDpe(e.target.value)}
+                    style={{ ...controlStyle, width: "100%" }}
+                  />
+                </div>
+                <div>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.12em",
+                      color: "rgba(255,255,255,0.62)",
+                      marginBottom: 6,
+                    }}
+                  >
+                    N° servicio CAMUZZI
+                  </div>
+                  <input
+                    value={camuzzi}
+                    onChange={(e) => setCamuzzi(e.target.value)}
+                    style={{ ...controlStyle, width: "100%" }}
+                  />
+                </div>
+                <div>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.12em",
+                      color: "rgba(255,255,255,0.62)",
+                      marginBottom: 6,
+                    }}
+                  >
+                    N° servicio DPOSS
+                  </div>
+                  <input
+                    value={dposs}
+                    onChange={(e) => setDposs(e.target.value)}
+                    style={{ ...controlStyle, width: "100%" }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ ...buttonRowStyle, justifyContent: "flex-end", marginTop: 16 }}>
+                <button onClick={closeCorreccion} disabled={loading} style={secondaryButtonStyle}>
+                  Cancelar
+                </button>
+                <button
+                  onClick={guardarCorreccion}
+                  disabled={loading}
+                  style={successButtonStyle}
+                >
+                  Guardar corrección
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

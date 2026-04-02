@@ -4,13 +4,17 @@ import { useAuth } from "../auth/useAuth";
 
 function linkStyle({ isActive }: { isActive: boolean }) {
   return {
-    padding: "8px 10px",
-    borderRadius: 8,
+    padding: "10px 14px",
+    borderRadius: 10,
     textDecoration: "none",
     fontWeight: 800,
-    color: isActive ? "white" : "#111",
-    background: isActive ? "#111" : "transparent",
-    border: "1px solid #e5e5e5",
+    color: "#ffffff",
+    background: isActive ? "rgba(59,130,246,0.22)" : "rgba(255,255,255,0.05)",
+    border: "1px solid rgba(255,255,255,0.14)",
+    display: "inline-flex",
+    alignItems: "center",
+    minHeight: 40,
+    boxSizing: "border-box",
   } as const;
 }
 
@@ -27,28 +31,68 @@ export default function AdminLayout() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "#fafafa" }}>
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "#0b1220",
+        color: "#eaf0ff",
+      }}
+    >
       <header
         style={{
-          background: "white",
-          borderBottom: "1px solid #e5e5e5",
+          background: "rgba(255,255,255,0.05)",
+          borderBottom: "1px solid rgba(255,255,255,0.12)",
           padding: "12px 16px",
           position: "sticky",
           top: 0,
           zIndex: 5,
+          backdropFilter: "blur(6px)",
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 12,
+            flexWrap: "wrap",
+          }}
+        >
           <div>
-            <div style={{ fontSize: 18, fontWeight: 900 }}>Panel ADMIN</div>
-            <div style={{ fontSize: 12, opacity: 0.8 }}>
+            <div style={{ fontSize: 18, fontWeight: 900, color: "#ffffff" }}>Panel ADMIN</div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.78)" }}>
               {user?.apellido} {user?.nombre} — <b>{String(user?.role || "")}</b>
             </div>
           </div>
 
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <button onClick={() => navigate(-1)}>Volver</button>
-            <button onClick={handleLogout}>Cerrar sesión</button>
+            <button
+              onClick={() => navigate(-1)}
+              style={{
+                padding: "10px 14px",
+                borderRadius: 10,
+                border: "1px solid rgba(255,255,255,0.14)",
+                background: "rgba(255,255,255,0.05)",
+                color: "#ffffff",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              Volver
+            </button>
+            <button
+              onClick={handleLogout}
+              style={{
+                padding: "10px 14px",
+                borderRadius: 10,
+                border: "1px solid rgba(255,255,255,0.14)",
+                background: "rgba(255,255,255,0.05)",
+                color: "#ffffff",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              Cerrar sesión
+            </button>
           </div>
         </div>
 

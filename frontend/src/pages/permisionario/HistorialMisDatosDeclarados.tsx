@@ -1,4 +1,4 @@
-//frontend/src/pages/permisionario/HistorialMisDatosDeclarados.tsx
+// frontend/src/pages/permisionario/HistorialMisDatosDeclarados.tsx
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { http } from "../../api/http";
@@ -15,6 +15,225 @@ function fmtFecha(ts?: string) {
 function safeArray<T = any>(v: any): T[] {
   return Array.isArray(v) ? v : [];
 }
+
+const styles = {
+  page: {
+    maxWidth: 1180,
+    color: "rgba(255,255,255,0.92)",
+  } as React.CSSProperties,
+
+  hero: {
+    padding: 18,
+    borderRadius: 18,
+    border: "1px solid rgba(255,255,255,0.1)",
+    background:
+      "linear-gradient(180deg, rgba(15,23,42,0.94) 0%, rgba(11,18,32,0.96) 100%)",
+    boxShadow: "0 18px 40px rgba(0,0,0,0.28)",
+    marginBottom: 16,
+  } as React.CSSProperties,
+
+  topBar: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap" as const,
+    alignItems: "flex-start",
+  } as React.CSSProperties,
+
+  title: {
+    margin: 0,
+    marginBottom: 6,
+    fontSize: 28,
+    fontWeight: 800,
+    letterSpacing: "-0.03em",
+    color: "#ffffff",
+  } as React.CSSProperties,
+
+  subtitle: {
+    fontSize: 14,
+    color: "rgba(255,255,255,0.68)",
+    lineHeight: 1.55,
+    maxWidth: 900,
+  } as React.CSSProperties,
+
+  buttonRow: {
+    display: "flex",
+    gap: 10,
+    alignItems: "center",
+    flexWrap: "wrap" as const,
+  } as React.CSSProperties,
+
+  primaryButton: {
+    border: "1px solid rgba(59,130,246,0.9)",
+    background: "linear-gradient(180deg, rgba(59,130,246,0.95), rgba(37,99,235,0.95))",
+    color: "#fff",
+    padding: "10px 16px",
+    borderRadius: 12,
+    fontWeight: 700,
+    cursor: "pointer",
+    boxShadow: "0 10px 20px rgba(37,99,235,0.28)",
+  } as React.CSSProperties,
+
+  secondaryButton: {
+    border: "1px solid rgba(255,255,255,0.12)",
+    background: "rgba(255,255,255,0.05)",
+    color: "#fff",
+    padding: "10px 16px",
+    borderRadius: 12,
+    fontWeight: 700,
+    cursor: "pointer",
+  } as React.CSSProperties,
+
+  smallButton: {
+    border: "1px solid rgba(255,255,255,0.12)",
+    background: "rgba(255,255,255,0.05)",
+    color: "#fff",
+    padding: "8px 12px",
+    borderRadius: 10,
+    fontWeight: 700,
+    cursor: "pointer",
+  } as React.CSSProperties,
+
+  shell: {
+    display: "grid",
+    gap: 16,
+  } as React.CSSProperties,
+
+  alertError: {
+    padding: 12,
+    border: "1px solid rgba(244,67,54,0.6)",
+    background: "rgba(244,67,54,0.12)",
+    borderRadius: 12,
+    color: "#ffe5e5",
+  } as React.CSSProperties,
+
+  emptyState: {
+    padding: 14,
+    border: "1px solid rgba(255,255,255,0.1)",
+    borderRadius: 14,
+    background: "rgba(255,255,255,0.04)",
+    color: "rgba(255,255,255,0.82)",
+  } as React.CSSProperties,
+
+  tableWrap: {
+    border: "1px solid rgba(255,255,255,0.1)",
+    borderRadius: 16,
+    overflow: "hidden",
+    background: "rgba(255,255,255,0.05)",
+    boxShadow: "0 12px 30px rgba(0,0,0,0.2)",
+  } as React.CSSProperties,
+
+  tableScroller: {
+    overflowX: "auto" as const,
+  } as React.CSSProperties,
+
+  table: {
+    width: "100%",
+    borderCollapse: "collapse" as const,
+    minWidth: 900,
+  } as React.CSSProperties,
+
+  th: {
+    textAlign: "left" as const,
+    padding: 12,
+    borderBottom: "1px solid rgba(255,255,255,0.1)",
+    fontSize: 11,
+    fontWeight: 700,
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.08em",
+    color: "rgba(255,255,255,0.6)",
+    background: "rgba(255,255,255,0.03)",
+  } as React.CSSProperties,
+
+  td: {
+    padding: 12,
+    borderBottom: "1px solid rgba(255,255,255,0.08)",
+    verticalAlign: "top" as const,
+    color: "rgba(255,255,255,0.92)",
+  } as React.CSSProperties,
+
+  subtleText: {
+    color: "rgba(255,255,255,0.72)",
+    lineHeight: 1.45,
+  } as React.CSSProperties,
+
+  detailRow: {
+    background: "rgba(255,255,255,0.03)",
+  } as React.CSSProperties,
+
+  detailCell: {
+    padding: 14,
+    borderBottom: "1px solid rgba(255,255,255,0.08)",
+  } as React.CSSProperties,
+
+  loadingBox: {
+    color: "rgba(255,255,255,0.78)",
+  } as React.CSSProperties,
+
+  detailGrid: {
+    display: "grid",
+    gap: 12,
+  } as React.CSSProperties,
+
+  detailMeta: {
+    fontSize: 12,
+    color: "rgba(255,255,255,0.68)",
+  } as React.CSSProperties,
+
+  card: {
+    border: "1px solid rgba(255,255,255,0.1)",
+    borderRadius: 14,
+    padding: 14,
+    background: "rgba(255,255,255,0.04)",
+  } as React.CSSProperties,
+
+  cardTitle: {
+    marginTop: 0,
+    marginBottom: 12,
+    fontSize: 17,
+    fontWeight: 800,
+    color: "#fff",
+    letterSpacing: "-0.02em",
+  } as React.CSSProperties,
+
+  kvGrid: {
+    display: "grid",
+    gridTemplateColumns: "240px 1fr",
+    gap: 10,
+  } as React.CSSProperties,
+
+  kvLabel: {
+    fontSize: 11,
+    fontWeight: 700,
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.08em",
+    color: "rgba(255,255,255,0.6)",
+  } as React.CSSProperties,
+
+  kvValue: {
+    color: "rgba(255,255,255,0.94)",
+    lineHeight: 1.5,
+  } as React.CSSProperties,
+
+  stack: {
+    display: "grid",
+    gap: 8,
+  } as React.CSSProperties,
+
+  itemCard: {
+    padding: 10,
+    border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: 12,
+    background: "rgba(255,255,255,0.03)",
+  } as React.CSSProperties,
+
+  itemMeta: {
+    fontSize: 12,
+    color: "rgba(255,255,255,0.68)",
+    marginTop: 4,
+    lineHeight: 1.45,
+  } as React.CSSProperties,
+};
 
 export default function HistorialMisDatosDeclarados() {
   const navigate = useNavigate();
@@ -66,7 +285,6 @@ export default function HistorialMisDatosDeclarados() {
   }
 
   function descargarPdf(id: string) {
-    // abre nueva pestaña, el backend fuerza attachment
     window.open(`/api/formularios/mis-datos-declarados/${id}/pdf`, "_blank", "noopener,noreferrer");
   }
 
@@ -75,95 +293,107 @@ export default function HistorialMisDatosDeclarados() {
   }, []);
 
   return (
-    <div style={{ maxWidth: 1100 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-        <div>
-          <h2 style={{ marginBottom: 6 }}>Historial de actualizaciones</h2>
-          <div style={{ fontSize: 13, opacity: 0.8 }}>
-            Registro auditable de modificaciones realizadas por el permisionario.
+    <div style={styles.page}>
+      <div style={styles.hero}>
+        <div style={styles.topBar}>
+          <div>
+            <h2 style={styles.title}>Historial de actualizaciones</h2>
+            <div style={styles.subtitle}>
+              Registro auditable de modificaciones realizadas por el permisionario.
+            </div>
           </div>
-        </div>
 
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <button onClick={() => navigate("/app/permisionario/mis-datos")}>Volver</button>
-          <button onClick={() => navigate("/app/permisionario/mis-datos/actualizar")}>Actualizar</button>
+          <div style={styles.buttonRow}>
+            <button
+              onClick={() => navigate("/app/permisionario/mis-datos")}
+              style={styles.secondaryButton}
+            >
+              Volver
+            </button>
+            <button
+              onClick={() => navigate("/app/permisionario/mis-datos/actualizar")}
+              style={styles.primaryButton}
+            >
+              Actualizar
+            </button>
+          </div>
         </div>
       </div>
 
-      <div style={{ marginTop: 16 }}>
-        {loading ? <div>Cargando…</div> : null}
+      <div style={styles.shell}>
+        {loading ? <div style={styles.emptyState}>Cargando…</div> : null}
 
         {error ? (
-          <div style={{ padding: 12, border: "1px solid #ffb3b3", background: "#fff3f3", borderRadius: 8 }}>
+          <div style={styles.alertError}>
             <b>Error:</b> {error}
           </div>
         ) : null}
 
         {!loading && !error && items.length === 0 ? (
-          <div style={{ padding: 12, border: "1px solid #ddd", borderRadius: 8 }}>
-            Sin actualizaciones registradas.
-          </div>
+          <div style={styles.emptyState}>Sin actualizaciones registradas.</div>
         ) : null}
 
         {!loading && !error && items.length > 0 ? (
-          <div style={{ border: "1px solid #ddd", borderRadius: 8, overflow: "hidden", background: "white" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr>
-                  <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid #ddd", width: 220 }}>Fecha</th>
-                  <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid #ddd" }}>Resumen</th>
-                  <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid #ddd" }}>Motivo</th>
-                  <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid #ddd", width: 170 }}>
-                    Acciones
-                  </th>
-                </tr>
-              </thead>
+          <div style={styles.tableWrap}>
+            <div style={styles.tableScroller}>
+              <table style={styles.table}>
+                <thead>
+                  <tr>
+                    <th style={{ ...styles.th, width: 220 }}>Fecha</th>
+                    <th style={styles.th}>Resumen</th>
+                    <th style={styles.th}>Motivo</th>
+                    <th style={{ ...styles.th, width: 180 }}>Acciones</th>
+                  </tr>
+                </thead>
 
-              <tbody>
-                {items.map((it) => {
-                  const id = String(it?._id || "");
-                  const isOpen = openId === id;
+                <tbody>
+                  {items.map((it) => {
+                    const id = String(it?._id || "");
+                    const isOpen = openId === id;
 
-                  return (
-                    <>
-                      <tr key={id}>
-                        <td style={{ padding: 10, borderBottom: "1px solid #eee" }}>
-                          {fmtFecha(it?.createdAt)}
-                        </td>
-                        <td style={{ padding: 10, borderBottom: "1px solid #eee" }}>
-                          {it?.resumen || "—"}
-                        </td>
-                        <td style={{ padding: 10, borderBottom: "1px solid #eee" }}>
-                          {it?.motivo || "—"}
-                        </td>
-                        <td style={{ padding: 10, borderBottom: "1px solid #eee" }}>
-                          <div style={{ display: "flex", gap: 8 }}>
-                            <button onClick={() => verItem(id)}>{isOpen ? "Cerrar" : "Ver"}</button>
-                            <button onClick={() => descargarPdf(id)}>PDF</button>
-                          </div>
-                        </td>
-                      </tr>
-
-                      {isOpen ? (
-                        <tr>
-                          <td colSpan={4} style={{ padding: 12, borderBottom: "1px solid #eee", background: "#fafafa" }}>
-                            {loadingDetalle ? (
-                              <div>Cargando detalle…</div>
-                            ) : detalle?._error ? (
-                              <div style={{ padding: 10, border: "1px solid #ffb3b3", background: "#fff3f3", borderRadius: 8 }}>
-                                <b>Error:</b> {detalle._error}
-                              </div>
-                            ) : (
-                              <DetalleMisDatos item={detalle} />
-                            )}
+                    return (
+                      <>
+                        <tr key={id}>
+                          <td style={styles.td}>{fmtFecha(it?.createdAt)}</td>
+                          <td style={{ ...styles.td, ...styles.subtleText }}>
+                            {it?.resumen || "—"}
+                          </td>
+                          <td style={{ ...styles.td, ...styles.subtleText }}>
+                            {it?.motivo || "—"}
+                          </td>
+                          <td style={styles.td}>
+                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                              <button onClick={() => verItem(id)} style={styles.smallButton}>
+                                {isOpen ? "Cerrar" : "Ver"}
+                              </button>
+                              <button onClick={() => descargarPdf(id)} style={styles.smallButton}>
+                                PDF
+                              </button>
+                            </div>
                           </td>
                         </tr>
-                      ) : null}
-                    </>
-                  );
-                })}
-              </tbody>
-            </table>
+
+                        {isOpen ? (
+                          <tr style={styles.detailRow}>
+                            <td colSpan={4} style={styles.detailCell}>
+                              {loadingDetalle ? (
+                                <div style={styles.loadingBox}>Cargando detalle…</div>
+                              ) : detalle?._error ? (
+                                <div style={styles.alertError}>
+                                  <b>Error:</b> {detalle._error}
+                                </div>
+                              ) : (
+                                <DetalleMisDatos item={detalle} />
+                              )}
+                            </td>
+                          </tr>
+                        ) : null}
+                      </>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         ) : null}
       </div>
@@ -178,36 +408,51 @@ function DetalleMisDatos({ item }: { item: any }) {
   const mascotas = safeArray(d?.mascotas);
 
   return (
-    <div style={{ display: "grid", gap: 12 }}>
-      <div style={{ fontSize: 12, opacity: 0.75 }}>
+    <div style={styles.detailGrid}>
+      <div style={styles.detailMeta}>
         <b>ID:</b> {String(item?._id || "—")} &nbsp;|&nbsp; <b>Fecha:</b>{" "}
         {item?.createdAt ? new Date(item.createdAt).toLocaleString("es-AR") : "—"}
       </div>
 
-      <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12, background: "white" }}>
-        <h3 style={{ marginTop: 0 }}>Datos personales y destino</h3>
-        <div style={{ display: "grid", gridTemplateColumns: "240px 1fr", gap: 8 }}>
-          <b>Apellido</b><span>{d.apellido || "—"}</span>
-          <b>Nombres</b><span>{d.nombres || "—"}</span>
-          <b>Grado / Escalafón</b><span>{d.gradoEscalafon || "—"}</span>
-          <b>Matrícula</b><span>{d.matricula || "—"}</span>
-          <b>Años de servicio</b><span>{d.aniosServicioRecibo || "—"}</span>
-          <b>Destino (lugar de trabajo)</b><span>{d.destinoActual || "—"}</span>
-          <b>Teléfono de contacto</b><span>{d.telefonoActual || "—"}</span>
+      <div style={styles.card}>
+        <h3 style={styles.cardTitle}>Datos personales y destino</h3>
+        <div style={styles.kvGrid}>
+          <div style={styles.kvLabel}>Apellido</div>
+          <div style={styles.kvValue}>{d.apellido || "—"}</div>
+
+          <div style={styles.kvLabel}>Nombres</div>
+          <div style={styles.kvValue}>{d.nombres || "—"}</div>
+
+          <div style={styles.kvLabel}>Grado / Escalafón</div>
+          <div style={styles.kvValue}>{d.gradoEscalafon || "—"}</div>
+
+          <div style={styles.kvLabel}>Matrícula</div>
+          <div style={styles.kvValue}>{d.matricula || "—"}</div>
+
+          <div style={styles.kvLabel}>Años de servicio</div>
+          <div style={styles.kvValue}>{d.aniosServicioRecibo || "—"}</div>
+
+          <div style={styles.kvLabel}>Destino (lugar de trabajo)</div>
+          <div style={styles.kvValue}>{d.destinoActual || "—"}</div>
+
+          <div style={styles.kvLabel}>Teléfono de contacto</div>
+          <div style={styles.kvValue}>{d.telefonoActual || "—"}</div>
         </div>
       </div>
 
-      <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12, background: "white" }}>
-        <h3 style={{ marginTop: 0 }}>Grupo conviviente / familiar</h3>
+      <div style={styles.card}>
+        <h3 style={styles.cardTitle}>Grupo conviviente / familiar</h3>
         {convivientes.length === 0 ? (
-          <div>(sin datos)</div>
+          <div style={styles.subtleText}>(sin datos)</div>
         ) : (
-          <div style={{ display: "grid", gap: 6 }}>
+          <div style={styles.stack}>
             {convivientes.map((c: any, idx: number) => (
-              <div key={idx} style={{ padding: 8, border: "1px solid #eee", borderRadius: 8 }}>
-                <b>{idx + 1}.</b>{" "}
-                {[c.parentesco, c.apellido, c.nombre].filter(Boolean).join(" — ") || "(registro)"}
-                <div style={{ fontSize: 12, opacity: 0.85, marginTop: 4 }}>
+              <div key={idx} style={styles.itemCard}>
+                <div style={{ color: "#fff", fontWeight: 700 }}>
+                  <b>{idx + 1}.</b>{" "}
+                  {[c.parentesco, c.apellido, c.nombre].filter(Boolean).join(" — ") || "(registro)"}
+                </div>
+                <div style={styles.itemMeta}>
                   {c.dni ? <>DNI: {c.dni} &nbsp; </> : null}
                   {c.edad ? <>Edad: {c.edad} &nbsp; </> : null}
                   {c.observaciones ? <>Obs: {c.observaciones}</> : null}
@@ -218,20 +463,19 @@ function DetalleMisDatos({ item }: { item: any }) {
         )}
       </div>
 
-      <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12, background: "white" }}>
-        <h3 style={{ marginTop: 0 }}>Mascotas</h3>
+      <div style={styles.card}>
+        <h3 style={styles.cardTitle}>Mascotas</h3>
         {mascotas.length === 0 ? (
-          <div>(sin datos)</div>
+          <div style={styles.subtleText}>(sin datos)</div>
         ) : (
-          <div style={{ display: "grid", gap: 6 }}>
+          <div style={styles.stack}>
             {mascotas.map((m: any, idx: number) => (
-              <div key={idx} style={{ padding: 8, border: "1px solid #eee", borderRadius: 8 }}>
-                <b>{idx + 1}.</b>{" "}
-                {[m.tipo, m.nombre].filter(Boolean).join(" — ") || "(registro)"}
+              <div key={idx} style={styles.itemCard}>
+                <div style={{ color: "#fff", fontWeight: 700 }}>
+                  <b>{idx + 1}.</b> {[m.tipo, m.nombre].filter(Boolean).join(" — ") || "(registro)"}
+                </div>
                 {m.observaciones ? (
-                  <div style={{ fontSize: 12, opacity: 0.85, marginTop: 4 }}>
-                    Obs: {m.observaciones}
-                  </div>
+                  <div style={styles.itemMeta}>Obs: {m.observaciones}</div>
                 ) : null}
               </div>
             ))}

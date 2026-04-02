@@ -1,5 +1,5 @@
 // frontend/src/pages/permisionario/inspector/GestionesInspector.tsx
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
 import { http } from "../../../api/http";
 import { useAuth } from "../../../auth/useAuth";
@@ -290,117 +290,213 @@ function iniciarAnexo09Desde08(anexo08Id: string) {
 }
 // Aplicamos filtro por código
   const visibles =
-    codigoFiltro === "TODOS"
-      ? items
-      : items.filter((a) => up(a.codigo) === codigoFiltro);
+  codigoFiltro === "TODOS"
+    ? items
+    : items.filter((a) => up(a.codigo) === codigoFiltro);
 
-  if (loading) return <div style={{ padding: 24 }}>Cargando…</div>;
+const pageStyle: CSSProperties = {
+  padding: 24,
+  background: "#0b1220",
+  minHeight: "100vh",
+  color: "#eaf0ff",
+};
+
+const cardStyle: CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.14)",
+  borderRadius: 12,
+  padding: 16,
+  background: "rgba(255,255,255,0.05)",
+  backdropFilter: "blur(6px)",
+};
+
+const mutedTextStyle: CSSProperties = {
+  color: "rgba(255,255,255,0.78)",
+};
+
+const buttonStyle: CSSProperties = {
+  padding: "10px 14px",
+  borderRadius: 10,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(255,255,255,0.05)",
+  color: "#ffffff",
+  fontWeight: 700,
+  cursor: "pointer",
+};
+
+const controlStyle: CSSProperties = {
+  padding: "10px 12px",
+  borderRadius: 10,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(255,255,255,0.04)",
+  color: "#ffffff",
+  fontSize: 14,
+  minHeight: 42,
+  boxSizing: "border-box",
+};
+
+const selectStyle: CSSProperties = {
+  ...controlStyle,
+  appearance: "none",
+  WebkitAppearance: "none",
+  MozAppearance: "none",
+  backgroundColor: "rgba(255,255,255,0.04)",
+  color: "#ffffff",
+};
+
+const optionStyle: CSSProperties = {
+  backgroundColor: "#1f2937",
+  color: "#ffffff",
+};
+
+const tableWrapStyle: CSSProperties = {
+  overflowX: "auto",
+  border: "1px solid rgba(255,255,255,0.12)",
+  borderRadius: 12,
+  background: "rgba(255,255,255,0.04)",
+};
+
+const thStyle: CSSProperties = {
+  borderBottom: "1px solid rgba(255,255,255,0.12)",
+  textAlign: "left",
+  padding: 10,
+  fontSize: 12,
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+  color: "rgba(255,255,255,0.70)",
+  background: "rgba(255,255,255,0.04)",
+  whiteSpace: "nowrap",
+};
+
+const tdStyle: CSSProperties = {
+  borderBottom: "1px solid rgba(255,255,255,0.08)",
+  padding: 10,
+  color: "#ffffff",
+  verticalAlign: "middle",
+};
+
+if (loading) return <div style={pageStyle}>Cargando…</div>;
 
   return (
-    <div style={{ padding: 24 }}>
-      <h2>Gestiones — Inspector</h2>
+  <div style={pageStyle}>
+    <h2>Gestiones — Inspector</h2>
 
-      <div
-        style={{
-          border: "1px solid #ddd",
-          borderRadius: 8,
-          padding: 12,
-          marginBottom: 16,
-          background: "#f7f7f7",
-          fontSize: 14,
-        }}
-      >
-        <div>
-          <b>Inspector:</b> {inspectorNombre || "— —"}
-        </div>
-        <div>
-          <b>Barrio asignado:</b> {barrioAsignado}
-        </div>
-        <p style={{ marginTop: 8 }}>
-          Aquí verá las gestiones en las que interviene como inspector del barrio:
-          <br />— <b>ANEXO_02</b>: actas de asignación desde las que puede generar el
-          ANEXO_03.
-          <br />— <b>ANEXO_03</b>: actas de recepción en las que intervino como inspector.
-          <br />— <b>ANEXO_07</b>: ampliación de novedades posteriores al ANEXO_03.
-          <br />— <b>ANEXO_08</b>: actas de inspección previa antes de la entrega de la
-          vivienda.
-          <br />— <b>ANEXO_09</b>: actas de entrega derivadas de ANEXO_08 cerrado.
-          <br />— <b>ANEXO_11</b>: pedidos de trabajo sobre vivienda fiscal.
-        </p>
+    <div
+      style={{
+        ...cardStyle,
+        marginBottom: 16,
+        fontSize: 14,
+      }}
+    >
+      <div>
+        <b>Inspector:</b> {inspectorNombre || "— —"}
       </div>
+      <div>
+        <b>Barrio asignado:</b> {barrioAsignado}
+      </div>
+      <p style={{ marginTop: 8 }}>
+        Aquí verá las gestiones en las que interviene como inspector del barrio:
+        <br />— <b>ANEXO_02</b>: actas de asignación desde las que puede generar el
+        ANEXO_03.
+        <br />— <b>ANEXO_03</b>: actas de recepción en las que intervino como inspector.
+        <br />— <b>ANEXO_07</b>: ampliación de novedades posteriores al ANEXO_03.
+        <br />— <b>ANEXO_08</b>: actas de inspección previa antes de la entrega de la
+        vivienda.
+        <br />— <b>ANEXO_09</b>: actas de entrega derivadas de ANEXO_08 cerrado.
+        <br />— <b>ANEXO_11</b>: pedidos de trabajo sobre vivienda fiscal.
+      </p>
+    </div>
 
-      {error ? <div style={{ marginBottom: 12, color: "crimson" }}>{error}</div> : null}
-
+    {error ? (
       <div
         style={{
-          display: "flex",
-          gap: 8,
+          ...cardStyle,
           marginBottom: 12,
-          flexWrap: "wrap",
-          alignItems: "center",
+          border: "1px solid rgba(239,68,68,0.30)",
+          background: "rgba(127,29,29,0.18)",
+          color: "#fecaca",
         }}
       >
-        <button onClick={cargar} disabled={!!workingId}>
-          Recargar
-        </button>
-
-        <button
-          onClick={() => navigate("/app/permisionario/mi-barrio-inspector")}
-          disabled={!!workingId}
-        >
-          Volver a: Mi Barrio (Inspector)
-        </button>
-
-        <div style={{ marginLeft: "auto" }}>
-          <label style={{ fontSize: 13, marginRight: 4 }}>Filtrar por código:</label>
-          <select
-            value={codigoFiltro}
-            onChange={(e) =>
-              setCodigoFiltro(
-                e.target.value as
-                  | "TODOS"
-                  | "ANEXO_02"
-                  | "ANEXO_03"
-                  | "ANEXO_07"
-                  | "ANEXO_08"
-                  | "ANEXO_09"
-                  | "ANEXO_11"
-              )
-            }
-          >
-            <option value="TODOS">Todos</option>
-            <option value="ANEXO_02">ANEXO_02</option>
-            <option value="ANEXO_03">ANEXO_03</option>
-            <option value="ANEXO_07">ANEXO_07</option>
-            <option value="ANEXO_08">ANEXO_08</option>
-            <option value="ANEXO_09">ANEXO_09</option>
-            <option value="ANEXO_11">ANEXO_11</option>
-          </select>
-        </div>
+        {error}
       </div>
+    ) : null}
 
-      {visibles.length === 0 ? (
-        <p>No se encontraron gestiones para su usuario/barrio.</p>
-      ) : (
+    <div
+      style={{
+        display: "flex",
+        gap: 8,
+        marginBottom: 12,
+        flexWrap: "wrap",
+        alignItems: "center",
+      }}
+    >
+      <button onClick={cargar} disabled={!!workingId} style={buttonStyle}>
+        Recargar
+      </button>
+
+      <button
+        onClick={() => navigate("/app/permisionario/mi-barrio-inspector")}
+        disabled={!!workingId}
+        style={buttonStyle}
+      >
+        Volver a: Mi Barrio (Inspector)
+      </button>
+
+      <div style={{ marginLeft: "auto" }}>
+        <label style={{ fontSize: 13, marginRight: 4 }}>Filtrar por código:</label>
+        <select
+          value={codigoFiltro}
+          onChange={(e) =>
+            setCodigoFiltro(
+              e.target.value as
+                | "TODOS"
+                | "ANEXO_02"
+                | "ANEXO_03"
+                | "ANEXO_07"
+                | "ANEXO_08"
+                | "ANEXO_09"
+                | "ANEXO_11"
+            )
+          }
+          style={selectStyle}
+        >
+          <option value="TODOS" style={optionStyle}>
+            Todos
+          </option>
+          <option value="ANEXO_02" style={optionStyle}>
+            ANEXO_02
+          </option>
+          <option value="ANEXO_03" style={optionStyle}>
+            ANEXO_03
+          </option>
+          <option value="ANEXO_07" style={optionStyle}>
+            ANEXO_07
+          </option>
+          <option value="ANEXO_08" style={optionStyle}>
+            ANEXO_08
+          </option>
+          <option value="ANEXO_09" style={optionStyle}>
+            ANEXO_09
+          </option>
+          <option value="ANEXO_11" style={optionStyle}>
+            ANEXO_11
+          </option>
+        </select>
+      </div>
+    </div>
+
+    {visibles.length === 0 ? (
+      <p>No se encontraron gestiones para su usuario/barrio.</p>
+    ) : (
+      <div style={tableWrapStyle}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr>
-              <th style={{ borderBottom: "1px solid #ccc", textAlign: "left", padding: 4 }}>
-                Código
-              </th>
-              <th style={{ borderBottom: "1px solid #ccc", textAlign: "left", padding: 4 }}>
-                Estado
-              </th>
-              <th style={{ borderBottom: "1px solid #ccc", textAlign: "left", padding: 4 }}>
-                Vivienda / Unidad
-              </th>
-              <th style={{ borderBottom: "1px solid #ccc", textAlign: "left", padding: 4 }}>
-                Permisionario / Postulante
-              </th>
-              <th style={{ borderBottom: "1px solid #ccc", textAlign: "left", padding: 4 }}>
-                Creado
-              </th>
-              <th style={{ borderBottom: "1px solid #ccc", padding: 4 }}>Acciones</th>
+              <th style={thStyle}>Código</th>
+              <th style={thStyle}>Estado</th>
+              <th style={thStyle}>Vivienda / Unidad</th>
+              <th style={thStyle}>Permisionario / Postulante</th>
+              <th style={thStyle}>Creado</th>
+              <th style={thStyle}>Acciones</th>
             </tr>
           </thead>
 
@@ -410,7 +506,7 @@ function iniciarAnexo09Desde08(anexo08Id: string) {
               const est = up(a.estado);
               const isBusy = workingId === a._id;
 
-                            const handleGestionar = () => {
+              const handleGestionar = () => {
                 if (cod === "ANEXO_02" || cod === "ANEXO_11") {
                   navigate(`/app/permisionario/mi-barrio-inspector/gestiones/${a._id}`);
                 } else {
@@ -420,16 +516,18 @@ function iniciarAnexo09Desde08(anexo08Id: string) {
 
               return (
                 <tr key={a._id}>
-                  <td style={{ borderBottom: "1px solid #eee", padding: 4 }}>{safe(a.codigo)}</td>
-                  <td style={{ borderBottom: "1px solid #eee", padding: 4 }}>{safe(a.estado)}</td>
-                  <td style={{ borderBottom: "1px solid #eee", padding: 4 }}>{viviendaLabel(a)}</td>
-                  <td style={{ borderBottom: "1px solid #eee", padding: 4 }}>
-                    {permisionarioLabel(a)}
-                  </td>
-                  <td style={{ borderBottom: "1px solid #eee", padding: 4 }}>{fmtDate(a.createdAt)}</td>
+                  <td style={tdStyle}>{safe(a.codigo)}</td>
+                  <td style={tdStyle}>{safe(a.estado)}</td>
+                  <td style={tdStyle}>{viviendaLabel(a)}</td>
+                  <td style={tdStyle}>{permisionarioLabel(a)}</td>
+                  <td style={tdStyle}>{fmtDate(a.createdAt)}</td>
 
-                  <td style={{ borderBottom: "1px solid #eee", padding: 4, whiteSpace: "nowrap" }}>
-                    <button onClick={handleGestionar} disabled={!!workingId}>
+                  <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
+                    <button
+                      onClick={handleGestionar}
+                      disabled={!!workingId}
+                      style={buttonStyle}
+                    >
                       Gestionar
                     </button>
 
@@ -440,6 +538,7 @@ function iniciarAnexo09Desde08(anexo08Id: string) {
                           onClick={() => iniciarAnexo03Desde02(a)}
                           disabled={!!workingId}
                           title="Generar ANEXO_03 derivado de este ANEXO_02"
+                          style={buttonStyle}
                         >
                           {isBusy ? "Iniciando…" : "Iniciar ANEXO_03"}
                         </button>
@@ -453,6 +552,7 @@ function iniciarAnexo09Desde08(anexo08Id: string) {
                           onClick={() => iniciarAnexo08Desde03(a._id)}
                           disabled={!!workingId}
                           title="Generar ANEXO_08 derivado de este ANEXO_03"
+                          style={buttonStyle}
                         >
                           {isBusy ? "Iniciando…" : "Iniciar ANEXO_08"}
                         </button>
@@ -470,6 +570,7 @@ function iniciarAnexo09Desde08(anexo08Id: string) {
                               ? "Generar ANEXO_09 derivado de este ANEXO_08"
                               : "Disponible cuando el ANEXO_08 esté cerrado/finalizado"
                           }
+                          style={buttonStyle}
                         >
                           {isBusy ? "Iniciando…" : "Iniciar ANEXO_09"}
                         </button>
@@ -481,7 +582,8 @@ function iniciarAnexo09Desde08(anexo08Id: string) {
             })}
           </tbody>
         </table>
-      )}
-    </div>
-  );
+      </div>
+    )}
+  </div>
+);
 }

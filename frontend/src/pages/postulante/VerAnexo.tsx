@@ -1,5 +1,5 @@
 // frontend/src/pages/postulante/VerAnexo.tsx
-import { useEffect, useMemo, useState } from "react";
+import { CSSProperties, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { http } from "../../api/http";
 import { useAuth } from "../../auth/useAuth";
@@ -42,6 +42,43 @@ type Anexo = {
   datos?: DatosAnexo;
   adjuntos?: AdjuntoMeta[];
   conformidadPostulante?: Conformidad | null;
+};
+
+const pageStyle: CSSProperties = {
+  padding: 24,
+  color: "#F8FAFC",
+};
+
+const cardStyle: CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(255,255,255,0.05)",
+  borderRadius: 12,
+  padding: 16,
+};
+
+const deniedStyle: CSSProperties = {
+  padding: 32,
+  color: "#F8FAFC",
+};
+
+const neutralButtonStyle: CSSProperties = {
+  background: "rgba(255,255,255,0.06)",
+  border: "1px solid rgba(255,255,255,0.12)",
+  color: "#ffffff",
+  borderRadius: 10,
+  padding: "10px 14px",
+  fontWeight: 700,
+  cursor: "pointer",
+};
+
+const primaryButtonStyle: CSSProperties = {
+  background: "rgba(59,130,246,0.20)",
+  border: "1px solid rgba(255,255,255,0.12)",
+  color: "#ffffff",
+  borderRadius: 10,
+  padding: "10px 14px",
+  fontWeight: 800,
+  cursor: "pointer",
 };
 
 function up(v: unknown) {
@@ -127,33 +164,33 @@ export default function VerAnexo() {
   }
 
   async function cargarPdfPreview() {
-  if (!id) return;
+    if (!id) return;
 
-  // liberar anterior si existe
-  setPdfObjectUrl((prev) => {
-    if (prev) URL.revokeObjectURL(prev);
-    return null;
-  });
-
-  setPdfLoading(true);
-  try {
-    console.log("BASE URL:", http.defaults?.baseURL);
-    console.log("REQUESTING:", `/formularios/${id}/pdf`);
-
-    const res = await http.get(`/formularios/${id}/pdf`, {
-      responseType: "blob",
+    // liberar anterior si existe
+    setPdfObjectUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
     });
 
-    const blob = new Blob([res.data], { type: "application/pdf" });
-    const url = URL.createObjectURL(blob);
-    setPdfObjectUrl(url);
-  } catch (e) {
-    console.error("[VER ANEXO] Error preview PDF", e);
-    setPdfObjectUrl(null);
-  } finally {
-    setPdfLoading(false);
+    setPdfLoading(true);
+    try {
+      console.log("BASE URL:", http.defaults?.baseURL);
+      console.log("REQUESTING:", `/formularios/${id}/pdf`);
+
+      const res = await http.get(`/formularios/${id}/pdf`, {
+        responseType: "blob",
+      });
+
+      const blob = new Blob([res.data], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      setPdfObjectUrl(url);
+    } catch (e) {
+      console.error("[VER ANEXO] Error preview PDF", e);
+      setPdfObjectUrl(null);
+    } finally {
+      setPdfLoading(false);
+    }
   }
-}
 
   useEffect(() => {
     cargar();
@@ -180,30 +217,47 @@ export default function VerAnexo() {
     role !== "INSPECTOR"
   ) {
     return (
-      <div style={{ padding: 32 }}>
-        <h2>La página solicitada no está disponible.</h2>
-        <p>Por favor, contacte al administrador.</p>
+      <div style={deniedStyle}>
+        <h2 style={{ marginTop: 0, color: "#F8FAFC" }}>
+          La página solicitada no está disponible.
+        </h2>
+        <p style={{ color: "#CBD5E1" }}>Por favor, contacte al administrador.</p>
       </div>
     );
   }
 
-  if (loading) return <div style={{ padding: 24 }}>Cargando…</div>;
+  if (loading) return <div style={pageStyle}>Cargando…</div>;
 
   if (error)
     return (
-      <div style={{ padding: 24, color: "crimson" }}>
-        {error}
-        <div style={{ marginTop: 12 }}>
-          <button onClick={() => navigate(-1)}>Volver</button>
+      <div style={pageStyle}>
+        <div
+          style={{
+            ...cardStyle,
+            background: "rgba(127,29,29,0.18)",
+            border: "1px solid rgba(239,68,68,0.35)",
+            color: "#FCA5A5",
+          }}
+        >
+          {error}
+          <div style={{ marginTop: 12 }}>
+            <button style={neutralButtonStyle} onClick={() => navigate(-1)}>
+              Volver
+            </button>
+          </div>
         </div>
       </div>
     );
 
   if (!anexo)
     return (
-      <div style={{ padding: 24 }}>
-        <p>Sin datos.</p>
-        <button onClick={() => navigate(-1)}>Volver</button>
+      <div style={pageStyle}>
+        <div style={cardStyle}>
+          <p style={{ marginTop: 0, color: "#CBD5E1" }}>Sin datos.</p>
+          <button style={neutralButtonStyle} onClick={() => navigate(-1)}>
+            Volver
+          </button>
+        </div>
       </div>
     );
 
@@ -260,10 +314,10 @@ export default function VerAnexo() {
   const tituloAdjuntos = isAnexo02 ? "Adjuntos (ANEXO_01 vinculado)" : "Adjuntos";
 
   return (
-    <div style={{ padding: 24 }}>
-      <h2>Anexo</h2>
+    <div style={pageStyle}>
+      <h2 style={{ marginTop: 0, color: "#F8FAFC" }}>Anexo</h2>
 
-      <div style={{ marginBottom: 12 }}>
+      <div style={{ ...cardStyle, marginBottom: 12 }}>
         <div>
           <b>ID:</b> {anexo._id}
         </div>
@@ -310,10 +364,10 @@ export default function VerAnexo() {
       {/* DEBUG */}
       <div
         style={{
+          ...cardStyle,
           marginBottom: 12,
-          padding: 8,
-          border: "1px dashed #bbb",
-          background: "#f9f9f9",
+          border: "1px dashed rgba(255,255,255,0.25)",
+          background: "rgba(255,255,255,0.03)",
           fontSize: 11,
         }}
       >
@@ -337,10 +391,11 @@ export default function VerAnexo() {
       {infoMsg && (
         <div
           style={{
+            ...cardStyle,
             marginBottom: 12,
-            padding: 10,
-            border: "1px solid #4caf50",
-            background: "#e8f5e9",
+            background: "rgba(22,163,74,0.18)",
+            border: "1px solid rgba(34,197,94,0.35)",
+            color: "#86EFAC",
             fontSize: 13,
           }}
         >
@@ -351,10 +406,11 @@ export default function VerAnexo() {
       {error && (
         <div
           style={{
+            ...cardStyle,
             marginBottom: 12,
-            padding: 10,
-            border: "1px solid crimson",
-            background: "#ffe6e6",
+            background: "rgba(127,29,29,0.18)",
+            border: "1px solid rgba(239,68,68,0.35)",
+            color: "#FCA5A5",
             fontSize: 13,
           }}
         >
@@ -364,6 +420,7 @@ export default function VerAnexo() {
 
       <div
         style={{
+          ...cardStyle,
           display: "flex",
           gap: 12,
           alignItems: "center",
@@ -371,13 +428,14 @@ export default function VerAnexo() {
           flexWrap: "wrap",
         }}
       >
-        <button onClick={() => navigate(-1)} disabled={busy}>
+        <button style={neutralButtonStyle} onClick={() => navigate(-1)} disabled={busy}>
           Volver
         </button>
 
         {/* ✅ abrir en pestaña usando el objectURL autenticado */}
         <button
           type="button"
+          style={neutralButtonStyle}
           onClick={() => {
             if (pdfObjectUrl) window.open(pdfObjectUrl, "_blank", "noopener,noreferrer");
           }}
@@ -389,6 +447,7 @@ export default function VerAnexo() {
 
         <button
           type="button"
+          style={neutralButtonStyle}
           onClick={() => {
             cargar();
             cargarPdfPreview();
@@ -400,6 +459,7 @@ export default function VerAnexo() {
 
         <button
           type="button"
+          style={neutralButtonStyle}
           onClick={() => setMostrarPreview((x) => !x)}
           disabled={busy}
         >
@@ -408,9 +468,9 @@ export default function VerAnexo() {
 
         {puedeDarConformidad02 && (
           <button
+            style={primaryButtonStyle}
             onClick={darConformidad02}
             disabled={busy}
-            style={{ fontWeight: 700 }}
           >
             Dar conformidad (ANEXO 02)
           </button>
@@ -418,9 +478,9 @@ export default function VerAnexo() {
 
         {puedeDarConformidad03 && (
           <button
+            style={primaryButtonStyle}
             onClick={darConformidad03}
             disabled={busy}
-            style={{ fontWeight: 700 }}
           >
             Dar conformidad (ANEXO 03)
           </button>
@@ -428,17 +488,17 @@ export default function VerAnexo() {
       </div>
 
       {/* ✅ PDF embebido autenticado */}
-      <h3>PDF (previsualización)</h3>
+      <h3 style={{ color: "#F8FAFC" }}>PDF (previsualización)</h3>
       <div
         style={{
-          border: "1px solid #eee",
-          borderRadius: 10,
+          ...cardStyle,
           overflow: "hidden",
           marginBottom: 18,
+          padding: 0,
         }}
       >
         {pdfLoading ? (
-          <div style={{ padding: 12, fontSize: 13 }}>Cargando PDF…</div>
+          <div style={{ padding: 12, fontSize: 13, color: "#CBD5E1" }}>Cargando PDF…</div>
         ) : pdfObjectUrl ? (
           <iframe
             title="pdf-preview"
@@ -446,21 +506,14 @@ export default function VerAnexo() {
             style={{ width: "100%", height: 720, border: "none" }}
           />
         ) : (
-          <div style={{ padding: 12, fontSize: 13 }}>
+          <div style={{ padding: 12, fontSize: 13, color: "#CBD5E1" }}>
             No se pudo cargar la previsualización del PDF.
           </div>
         )}
       </div>
 
-      <h3>Visualización del anexo</h3>
-      <div
-        style={{
-          border: "1px solid #eee",
-          borderRadius: 10,
-          padding: 12,
-          marginBottom: 18,
-        }}
-      >
+      <h3 style={{ color: "#F8FAFC" }}>Visualización del anexo</h3>
+      <div style={{ ...cardStyle, marginBottom: 18 }}>
         {mostrarPreview ? (
           <AnexoViewer codigo={anexo.codigo} datos={anexo.datos} />
         ) : (
@@ -468,9 +521,11 @@ export default function VerAnexo() {
             style={{
               whiteSpace: "pre-wrap",
               fontSize: 12,
-              background: "#f7f7f7",
+              background: "rgba(255,255,255,0.04)",
               padding: 8,
               borderRadius: 6,
+              color: "#CBD5E1",
+              margin: 0,
             }}
           >
             {JSON.stringify(anexo.datos, null, 2)}
@@ -478,18 +533,20 @@ export default function VerAnexo() {
         )}
       </div>
 
-      <h3>{tituloAdjuntos}</h3>
-      <AdjuntosList formularioId={anexo._id} adjuntos={adjuntosParaMostrar} />
+      <h3 style={{ color: "#F8FAFC" }}>{tituloAdjuntos}</h3>
+      <div style={cardStyle}>
+        <AdjuntosList formularioId={anexo._id} adjuntos={adjuntosParaMostrar} />
+      </div>
 
       {isAnexo02 && !origen?._id && (
-        <div style={{ marginTop: 10, fontSize: 12, color: "#555" }}>
+        <div style={{ marginTop: 10, fontSize: 12, color: "#9CA3AF" }}>
           Nota: este ANEXO_02 no tiene un ANEXO_01 vinculado (derivadoDe) o no está disponible.
         </div>
       )}
 
       {/* Info institucional opcional */}
       {isAnexo01 && (anexo.adjuntos || []).length === 0 && (
-        <div style={{ marginTop: 10, fontSize: 12, color: "#555" }}>
+        <div style={{ marginTop: 10, fontSize: 12, color: "#9CA3AF" }}>
           Nota: este ANEXO_01 no registra adjuntos.
         </div>
       )}

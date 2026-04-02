@@ -1,4 +1,5 @@
-//frontend/src/components/anexos/Anexo11ResumenRegistro.tsximport React from "react";
+// frontend/src/components/anexos/Anexo11ResumenRegistro.tsx
+import React from "react";
 
 type Usuario = {
   _id?: string;
@@ -81,6 +82,146 @@ type Props = {
   };
   // opcional: si querés ocultar cosas según rol
   mostrarAdmin?: boolean;
+};
+
+const styles = {
+  wrapper: {
+    marginBottom: 16,
+    padding: 18,
+    borderRadius: 18,
+    border: "1px solid rgba(255,255,255,0.1)",
+    background:
+      "linear-gradient(180deg, rgba(15,23,42,0.94) 0%, rgba(11,18,32,0.96) 100%)",
+    boxShadow: "0 18px 40px rgba(0,0,0,0.28)",
+    color: "rgba(255,255,255,0.92)",
+    backdropFilter: "blur(8px)",
+  } as React.CSSProperties,
+
+  title: {
+    margin: 0,
+    fontSize: 20,
+    fontWeight: 700,
+    letterSpacing: "-0.02em",
+    color: "#ffffff",
+  } as React.CSSProperties,
+
+  subtitle: {
+    marginTop: 6,
+    fontSize: 12,
+    color: "rgba(255,255,255,0.62)",
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.08em",
+  } as React.CSSProperties,
+
+  sectionDivider: {
+    height: 1,
+    border: "none",
+    margin: "14px 0",
+    background: "rgba(255,255,255,0.08)",
+  } as React.CSSProperties,
+
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+    gap: 12,
+    marginTop: 14,
+  } as React.CSSProperties,
+
+  card: {
+    padding: 14,
+    borderRadius: 14,
+    border: "1px solid rgba(255,255,255,0.08)",
+    background: "rgba(255,255,255,0.05)",
+  } as React.CSSProperties,
+
+  fullCard: {
+    padding: 14,
+    borderRadius: 14,
+    border: "1px solid rgba(255,255,255,0.08)",
+    background: "rgba(255,255,255,0.05)",
+    marginTop: 12,
+  } as React.CSSProperties,
+
+  sectionLabel: {
+    marginBottom: 10,
+    fontSize: 11,
+    fontWeight: 700,
+    color: "rgba(255,255,255,0.6)",
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.08em",
+  } as React.CSSProperties,
+
+  fieldRow: {
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: 4,
+    marginBottom: 10,
+  } as React.CSSProperties,
+
+  fieldLabel: {
+    fontSize: 11,
+    fontWeight: 700,
+    color: "rgba(255,255,255,0.58)",
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.07em",
+  } as React.CSSProperties,
+
+  fieldValue: {
+    fontSize: 14,
+    fontWeight: 600,
+    color: "rgba(255,255,255,0.94)",
+    lineHeight: 1.45,
+    wordBreak: "break-word" as const,
+  } as React.CSSProperties,
+
+  timelineOuter: {
+    border: "1px solid rgba(255,255,255,0.08)",
+    background: "rgba(255,255,255,0.04)",
+    borderRadius: 14,
+    padding: 12,
+    maxHeight: 320,
+    overflow: "auto" as const,
+  } as React.CSSProperties,
+
+  timelineItem: {
+    padding: "10px 0",
+    borderBottom: "1px dashed rgba(255,255,255,0.1)",
+  } as React.CSSProperties,
+
+  timelineMeta: {
+    display: "flex",
+    flexWrap: "wrap" as const,
+    gap: 8,
+    alignItems: "center",
+    marginBottom: 6,
+    fontSize: 12,
+    color: "rgba(255,255,255,0.72)",
+  } as React.CSSProperties,
+
+  badge: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "4px 8px",
+    borderRadius: 999,
+    border: "1px solid rgba(255,255,255,0.1)",
+    background: "rgba(255,255,255,0.06)",
+    fontSize: 11,
+    fontWeight: 700,
+    color: "rgba(255,255,255,0.86)",
+    letterSpacing: "0.04em",
+  } as React.CSSProperties,
+
+  timelineText: {
+    whiteSpace: "pre-wrap" as const,
+    fontSize: 13,
+    lineHeight: 1.5,
+    color: "rgba(255,255,255,0.9)",
+  } as React.CSSProperties,
+
+  emptyState: {
+    fontSize: 13,
+    color: "rgba(255,255,255,0.68)",
+  } as React.CSSProperties,
 };
 
 export default function Anexo11ResumenRegistro({
@@ -178,99 +319,161 @@ export default function Anexo11ResumenRegistro({
   });
 
   return (
-    <div
-      style={{
-        marginBottom: 16,
-        padding: 12,
-        borderRadius: 10,
-        border: "1px solid #ddd",
-        background: "#fafafa",
-      }}
-    >
-      <h3 style={{ marginTop: 0 }}>Resumen y registro — ANEXO 11</h3>
+    <div style={styles.wrapper}>
+      <h3 style={styles.title}>Resumen y registro — ANEXO 11</h3>
+      <div style={styles.subtitle}>Vista consolidada del registro</div>
 
-      <div style={{ fontSize: 13, lineHeight: 1.35 }}>
-        <div>
-          <b>ID:</b> {prettyId(anexo._id)} &nbsp;|&nbsp; <b>Código:</b> {up(anexo.codigo)}
-        </div>
-        <div>
-          <b>Estado:</b> {estado}
-          {estadoInst ? ` / ${estadoInst}` : ""}
-        </div>
-        <div>
-          <b>Iniciado por:</b> {iniciadoPor} &nbsp;|&nbsp; <b>Creado:</b> {creado}
-        </div>
-        <div>
-          <b>Actualizado:</b> {actualizado}
-        </div>
+      <div style={styles.grid}>
+        <section style={styles.card}>
+          <div style={styles.sectionLabel}>Identificación</div>
 
-        <hr style={{ margin: "10px 0" }} />
+          <div style={styles.fieldRow}>
+            <span style={styles.fieldLabel}>ID</span>
+            <span style={styles.fieldValue}>{prettyId(anexo._id)}</span>
+          </div>
 
-        <div>
-          <b>Vivienda / Espacio:</b> {safe(vivienda)} &nbsp;|&nbsp; <b>Barrio:</b> {safe(barrio)}
-        </div>
-        <div>
-          <b>Permisionario:</b> {safe(permisionario)}
-        </div>
-        <div>
-          <b>Solicitud:</b> {safe(solicitud)}
-        </div>
-        <div>
-          <b>Fecha solicitud:</b> {fechaSolicitud}
-        </div>
+          <div style={styles.fieldRow}>
+            <span style={styles.fieldLabel}>Código</span>
+            <span style={styles.fieldValue}>{up(anexo.codigo)}</span>
+          </div>
 
-        <hr style={{ margin: "10px 0" }} />
+          <div style={styles.fieldRow}>
+            <span style={styles.fieldLabel}>Estado</span>
+            <span style={styles.fieldValue}>
+              {estado}
+              {estadoInst ? ` / ${estadoInst}` : ""}
+            </span>
+          </div>
+        </section>
 
-        <div>
-          <b>Prioridad:</b> {safe(prioridad)} &nbsp;|&nbsp; <b>Decisión Inspector:</b>{" "}
-          {safe(decisionInspector)}
-        </div>
-        <div>
-          <b>Responsable:</b> {safe(responsable)} &nbsp;|&nbsp; <b>Finalizado por inspector:</b>{" "}
-          {finalizadoInspector}
-        </div>
+        <section style={styles.card}>
+          <div style={styles.sectionLabel}>Registro base</div>
+
+          <div style={styles.fieldRow}>
+            <span style={styles.fieldLabel}>Iniciado por</span>
+            <span style={styles.fieldValue}>{iniciadoPor}</span>
+          </div>
+
+          <div style={styles.fieldRow}>
+            <span style={styles.fieldLabel}>Creado</span>
+            <span style={styles.fieldValue}>{creado}</span>
+          </div>
+
+          <div style={styles.fieldRow}>
+            <span style={styles.fieldLabel}>Actualizado</span>
+            <span style={styles.fieldValue}>{actualizado}</span>
+          </div>
+        </section>
+      </div>
+
+      <hr style={styles.sectionDivider} />
+
+      <div style={styles.grid}>
+        <section style={styles.card}>
+          <div style={styles.sectionLabel}>Ubicación</div>
+
+          <div style={styles.fieldRow}>
+            <span style={styles.fieldLabel}>Vivienda / espacio</span>
+            <span style={styles.fieldValue}>{safe(vivienda)}</span>
+          </div>
+
+          <div style={styles.fieldRow}>
+            <span style={styles.fieldLabel}>Barrio</span>
+            <span style={styles.fieldValue}>{safe(barrio)}</span>
+          </div>
+        </section>
+
+        <section style={styles.card}>
+          <div style={styles.sectionLabel}>Solicitud</div>
+
+          <div style={styles.fieldRow}>
+            <span style={styles.fieldLabel}>Permisionario</span>
+            <span style={styles.fieldValue}>{safe(permisionario)}</span>
+          </div>
+
+          <div style={styles.fieldRow}>
+            <span style={styles.fieldLabel}>Solicitud</span>
+            <span style={styles.fieldValue}>{safe(solicitud)}</span>
+          </div>
+
+          <div style={styles.fieldRow}>
+            <span style={styles.fieldLabel}>Fecha solicitud</span>
+            <span style={styles.fieldValue}>{fechaSolicitud}</span>
+          </div>
+        </section>
+      </div>
+
+      <hr style={styles.sectionDivider} />
+
+      <div style={styles.grid}>
+        <section style={styles.card}>
+          <div style={styles.sectionLabel}>Gestión del inspector</div>
+
+          <div style={styles.fieldRow}>
+            <span style={styles.fieldLabel}>Prioridad</span>
+            <span style={styles.fieldValue}>{safe(prioridad)}</span>
+          </div>
+
+          <div style={styles.fieldRow}>
+            <span style={styles.fieldLabel}>Decisión inspector</span>
+            <span style={styles.fieldValue}>{safe(decisionInspector)}</span>
+          </div>
+
+          <div style={styles.fieldRow}>
+            <span style={styles.fieldLabel}>Responsable</span>
+            <span style={styles.fieldValue}>{safe(responsable)}</span>
+          </div>
+
+          <div style={styles.fieldRow}>
+            <span style={styles.fieldLabel}>Finalizado por inspector</span>
+            <span style={styles.fieldValue}>{finalizadoInspector}</span>
+          </div>
+        </section>
 
         {mostrarAdmin && (
-          <>
-            <hr style={{ margin: "10px 0" }} />
-            <div>
-              <b>Observación ADMIN (última):</b> {obsAdminUlt ? obsAdminUlt : "—"}
+          <section style={styles.card}>
+            <div style={styles.sectionLabel}>Administrador general</div>
+
+            <div style={{ ...styles.fieldRow, marginBottom: 0 }}>
+              <span style={styles.fieldLabel}>Observación ADMIN (última)</span>
+              <span style={{ ...styles.fieldValue, whiteSpace: "pre-wrap" }}>
+                {obsAdminUlt ? obsAdminUlt : "—"}
+              </span>
             </div>
-          </>
+          </section>
         )}
+      </div>
 
-        <hr style={{ margin: "10px 0" }} />
-
-        <div style={{ marginBottom: 6 }}>
-          <b>Registro (timeline):</b>
-        </div>
+      <section style={styles.fullCard}>
+        <div style={styles.sectionLabel}>Registro (timeline)</div>
 
         {timeline.length === 0 ? (
-          <div style={{ fontSize: 12 }}>No hay eventos registrados todavía.</div>
+          <div style={styles.emptyState}>No hay eventos registrados todavía.</div>
         ) : (
-          <div
-            style={{
-              border: "1px solid #eee",
-              background: "#fff",
-              borderRadius: 8,
-              padding: 10,
-              maxHeight: 320,
-              overflow: "auto",
-              fontSize: 12,
-            }}
-          >
+          <div style={styles.timelineOuter}>
             {timeline.map((t, idx) => (
-              <div key={idx} style={{ padding: "6px 0", borderBottom: "1px dashed #eee" }}>
-                <div>
-                  <b>{fmtDate(t.fecha)}</b> &nbsp;·&nbsp; <b>{t.tipo}</b>
-                  {t.actor ? ` · ${t.actor}` : ""}
+              <div
+                key={idx}
+                style={{
+                  ...styles.timelineItem,
+                  borderBottom:
+                    idx === timeline.length - 1
+                      ? "none"
+                      : "1px dashed rgba(255,255,255,0.1)",
+                }}
+              >
+                <div style={styles.timelineMeta}>
+                  <span style={styles.badge}>{fmtDate(t.fecha)}</span>
+                  <span style={styles.badge}>{t.tipo}</span>
+                  {t.actor ? <span style={styles.badge}>{t.actor}</span> : null}
                 </div>
-                <div style={{ whiteSpace: "pre-wrap" }}>{t.texto || "—"}</div>
+
+                <div style={styles.timelineText}>{t.texto || "—"}</div>
               </div>
             ))}
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }

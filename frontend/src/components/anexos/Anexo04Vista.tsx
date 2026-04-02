@@ -15,18 +15,68 @@ function fmtDateISO(v: any) {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div style={{ border: "1px solid #eee", borderRadius: 10, padding: 12, marginBottom: 12, background: "#fff" }}>
-      <h4 style={{ marginTop: 0, marginBottom: 10 }}>{title}</h4>
+    <section
+      style={{
+        border: "1px solid rgba(255,255,255,0.1)",
+        borderRadius: 16,
+        padding: 16,
+        marginBottom: 14,
+        background: "rgba(255,255,255,0.06)",
+        boxShadow: "0 10px 30px rgba(0,0,0,0.18)",
+      }}
+    >
+      <h4
+        style={{
+          marginTop: 0,
+          marginBottom: 12,
+          fontSize: 16,
+          fontWeight: 700,
+          color: "rgba(255,255,255,0.96)",
+          letterSpacing: "-0.01em",
+        }}
+      >
+        {title}
+      </h4>
       {children}
-    </div>
+    </section>
   );
 }
 
 function Row({ label, value }: { label: string; value: any }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 10, padding: "6px 0" }}>
-      <div style={{ fontWeight: 700 }}>{label}</div>
-      <div style={{ whiteSpace: "pre-wrap" }}>{safe(value)}</div>
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "minmax(180px, 220px) 1fr",
+        gap: 12,
+        padding: "9px 0",
+        borderBottom: "1px solid rgba(255,255,255,0.08)",
+        alignItems: "start",
+      }}
+    >
+      <div
+        style={{
+          fontSize: 11,
+          fontWeight: 700,
+          textTransform: "uppercase",
+          letterSpacing: "0.08em",
+          color: "rgba(255,255,255,0.58)",
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          whiteSpace: "pre-wrap",
+          fontSize: 14,
+          fontWeight: 600,
+          lineHeight: 1.5,
+          color: "rgba(255,255,255,0.94)",
+          wordBreak: "break-word",
+        }}
+      >
+        {safe(value)}
+      </div>
     </div>
   );
 }
@@ -41,6 +91,19 @@ export default function Anexo04Vista({ datos }: { datos: any }) {
 
   return (
     <div>
+      <h3
+        style={{
+          marginTop: 0,
+          marginBottom: 12,
+          fontSize: 20,
+          fontWeight: 700,
+          color: "#fff",
+          letterSpacing: "-0.02em",
+        }}
+      >
+        ANEXO 04 – Solicitud de ausencia transitoria
+      </h3>
+
       <Section title="Datos del trámite">
         <Row label="Permisionario" value={d.permisionarioNombre} />
         <Row label="Grado / Jerarquía" value={d.permisionarioGrado} />
@@ -59,7 +122,10 @@ export default function Anexo04Vista({ datos }: { datos: any }) {
       </Section>
 
       <Section title="Representante en caso de emergencia">
-        <Row label="Apellido y nombres" value={repE.apellidoNombres || repE.nombreCompleto} />
+        <Row
+          label="Apellido y nombres"
+          value={repE.apellidoNombres || repE.nombreCompleto}
+        />
         <Row label="Parentesco" value={repE.parentesco} />
         <Row label="Domicilio" value={repE.domicilio} />
         <Row label="Teléfono" value={repE.telefono} />
@@ -68,7 +134,10 @@ export default function Anexo04Vista({ datos }: { datos: any }) {
       </Section>
 
       <Section title="Representante del organismo (si corresponde)">
-        <Row label="Apellido y nombres" value={repO.apellidoNombres || repO.nombreCompleto} />
+        <Row
+          label="Apellido y nombres"
+          value={repO.apellidoNombres || repO.nombreCompleto}
+        />
         <Row label="Cargo / Función" value={repO.cargo} />
         <Row label="Destino / Oficina" value={repO.destino || repO.oficina} />
         <Row label="Teléfono" value={repO.telefono} />

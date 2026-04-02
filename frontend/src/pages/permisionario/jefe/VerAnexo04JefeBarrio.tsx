@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { http } from "../../../api/http";
 import { useAuth } from "../../../auth/useAuth";
@@ -50,6 +50,68 @@ export default function VerAnexo04JefeBarrio() {
   const puedeUsar = useMemo(() => {
     return up(user?.role) === "PERMISIONARIO" && hasPerm(user, "JEFE_DE_BARRIO");
   }, [user]);
+
+  const pageStyle: CSSProperties = {
+    padding: 24,
+    color: "#E5E7EB",
+    width: "100%",
+    maxWidth: "100%",
+    boxSizing: "border-box",
+  };
+
+  const cardStyle: CSSProperties = {
+    marginTop: 12,
+    marginBottom: 12,
+    padding: 16,
+    borderRadius: 12,
+    border: "1px solid rgba(255,255,255,0.14)",
+    background: "rgba(255,255,255,0.05)",
+    boxSizing: "border-box",
+  };
+
+  const buttonStyle: CSSProperties = {
+    padding: "10px 14px",
+    borderRadius: 8,
+    border: "1px solid rgba(255,255,255,0.12)",
+    background: "rgba(255,255,255,0.06)",
+    color: "#ffffff",
+    cursor: "pointer",
+    fontWeight: 700,
+  };
+
+  const primaryButtonStyle: CSSProperties = {
+    ...buttonStyle,
+    background: "rgba(59,130,246,0.20)",
+    fontWeight: 800,
+  };
+
+  const inputStyle: CSSProperties = {
+    width: "100%",
+    padding: "10px 12px",
+    borderRadius: 10,
+    border: "1px solid rgba(255,255,255,0.14)",
+    background: "rgba(255,255,255,0.04)",
+    color: "#ffffff",
+    boxSizing: "border-box",
+  };
+
+  const errorStyle: CSSProperties = {
+    marginBottom: 12,
+    padding: 10,
+    borderRadius: 8,
+    border: "1px solid rgba(239,68,68,0.35)",
+    background: "rgba(127,29,29,0.18)",
+    color: "#FCA5A5",
+  };
+
+  const okStyle: CSSProperties = {
+    marginBottom: 12,
+    padding: 10,
+    borderRadius: 8,
+    border: "1px solid rgba(34,197,94,0.35)",
+    background: "rgba(22,163,74,0.18)",
+    color: "#86EFAC",
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -135,13 +197,15 @@ export default function VerAnexo04JefeBarrio() {
     );
   }
 
-  if (loading) return <div style={{ padding: 24 }}>Cargando…</div>;
+  if (loading) return <div style={{ padding: 24, color: "#CBD5E1" }}>Cargando…</div>;
 
   if (!anexo) {
     return (
-      <div style={{ padding: 24 }}>
-        {errorMsg ? <p style={{ color: "crimson" }}>{errorMsg}</p> : <p>Sin datos.</p>}
-        <button onClick={() => navigate(-1)}>Volver</button>
+      <div style={pageStyle}>
+        {errorMsg ? <p style={{ color: "#FCA5A5" }}>{errorMsg}</p> : <p>Sin datos.</p>}
+        <button onClick={() => navigate(-1)} style={buttonStyle}>
+          Volver
+        </button>
       </div>
     );
   }
@@ -162,56 +226,29 @@ export default function VerAnexo04JefeBarrio() {
   const confOk = Boolean(d?.conformidadJefeBarrio?.ok);
 
   return (
-    <div style={{ padding: 24 }}>
-      <h2>ANEXO 04 — JEFE DE BARRIO</h2>
+    <div style={pageStyle}>
+      <h2 style={{ marginTop: 0, color: "#F8FAFC" }}>ANEXO 04 — JEFE DE BARRIO</h2>
 
-      {errorMsg && (
-        <div
-          style={{
-            marginBottom: 12,
-            padding: 10,
-            border: "1px solid #f44336",
-            background: "#ffebee",
-          }}
-        >
-          {errorMsg}
-        </div>
-      )}
+      {errorMsg && <div style={errorStyle}>{errorMsg}</div>}
+      {infoMsg && !errorMsg && <div style={okStyle}>{infoMsg}</div>}
 
-      {infoMsg && !errorMsg && (
-        <div
-          style={{
-            marginBottom: 12,
-            padding: 10,
-            border: "1px solid #4caf50",
-            background: "#e8f5e9",
-          }}
-        >
-          {infoMsg}
-        </div>
-      )}
-
-      <section
-        style={{
-          marginTop: 12,
-          marginBottom: 12,
-          padding: 12,
-          borderRadius: 8,
-          border: "1px solid #ddd",
-          background: "#fafafa",
-        }}
-      >
-        <p>
+      <section style={cardStyle}>
+        <p style={{ marginTop: 0 }}>
           <b>Estado:</b> {safe(anexo.estado)}
           {anexo.estadoInstitucional ? ` / ${anexo.estadoInstitucional}` : ""}
         </p>
-        <p>
+        <p style={{ marginBottom: 0 }}>
           <b>Fecha de inicio:</b> {fmtDate(anexo.createdAt)}
         </p>
       </section>
 
       <section style={{ marginBottom: 12 }}>
-        <a href={pdfUrl} target="_blank" rel="noreferrer">
+        <a
+          href={pdfUrl}
+          target="_blank"
+          rel="noreferrer"
+          style={{ color: "#93C5FD", textDecoration: "none", fontWeight: 700 }}
+        >
           Descargar PDF
         </a>
       </section>
@@ -220,41 +257,43 @@ export default function VerAnexo04JefeBarrio() {
         <AnexoViewer anexo={anexo as any} />
       </section>
 
-      <section
-        style={{
-          marginTop: 12,
-          marginBottom: 12,
-          padding: 12,
-          borderRadius: 8,
-          border: "1px solid #ddd",
-          background: "#fff",
-        }}
-      >
-        <h3 style={{ marginTop: 0 }}>Observaciones del JEFE (opcional)</h3>
+      <section style={cardStyle}>
+        <h3 style={{ marginTop: 0, color: "#F8FAFC" }}>
+          Observaciones del JEFE (opcional)
+        </h3>
+
         <textarea
           value={observaciones}
           onChange={(e) => setObservaciones(e.target.value)}
           rows={5}
-          style={{ width: "100%", padding: 8 }}
+          style={inputStyle}
           disabled={confOk}
         />
 
-        <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
-          <button onClick={() => navigate(-1)} disabled={busyObs || busyConf}>
+        <div style={{ display: "flex", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
+          <button onClick={() => navigate(-1)} disabled={busyObs || busyConf} style={buttonStyle}>
             Volver
           </button>
 
-          <button onClick={guardarObservaciones} disabled={busyObs || busyConf || confOk}>
+          <button
+            onClick={guardarObservaciones}
+            disabled={busyObs || busyConf || confOk}
+            style={buttonStyle}
+          >
             {busyObs ? "Guardando..." : "Guardar observaciones"}
           </button>
 
-          <button onClick={darConformidad} disabled={busyObs || busyConf || confOk}>
+          <button
+            onClick={darConformidad}
+            disabled={busyObs || busyConf || confOk}
+            style={primaryButtonStyle}
+          >
             {confOk ? "Conformidad registrada" : busyConf ? "Registrando..." : "Dar conformidad"}
           </button>
         </div>
 
         {confOk && (
-          <p style={{ marginTop: 10, fontSize: 13, opacity: 0.9 }}>
+          <p style={{ marginTop: 10, fontSize: 13, color: "#CBD5E1" }}>
             Conformidad registrada: {fmtDate(d?.conformidadJefeBarrio?.fecha || null)}
           </p>
         )}

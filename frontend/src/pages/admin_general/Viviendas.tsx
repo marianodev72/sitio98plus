@@ -2,6 +2,17 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { http } from "../../api/http";
 import { useAuth } from "../../auth/useAuth";
+import {
+  cardStyle,
+  heroStyle,
+  pageStyle,
+  primaryButtonStyle,
+  secondaryButtonStyle,
+  shellStyle,
+  softCardStyle,
+  subtitleStyle,
+  titleStyle,
+} from "../permisionario/uiStyles";
 
 type Vivienda = {
   _id: string;
@@ -324,269 +335,398 @@ export default function Viviendas({ readOnly = false }: Props) {
 
   const total = viviendas.length;
 
+  const controlStyle: CSSProperties = {
+    padding: "10px 12px",
+    borderRadius: 10,
+    border: "1px solid rgba(255,255,255,0.14)",
+    background: "rgba(255,255,255,0.04)",
+    color: "#ffffff",
+    fontSize: 14,
+    minHeight: 42,
+    boxSizing: "border-box",
+  };
+
+  const inputStyle: CSSProperties = {
+    ...controlStyle,
+  };
+
+  const selectStyle: CSSProperties = {
+    ...controlStyle,
+    appearance: "none",
+    WebkitAppearance: "none",
+    MozAppearance: "none",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    color: "#ffffff",
+  };
+
+  const optionStyle: CSSProperties = {
+    backgroundColor: "#1f2937",
+    color: "#ffffff",
+  };
+
   const thStyle: CSSProperties = {
     cursor: "pointer",
     userSelect: "none",
     whiteSpace: "nowrap",
+    textAlign: "left",
+    padding: "12px 10px",
+    fontSize: 12,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    color: "rgba(255,255,255,0.70)",
+    borderBottom: "1px solid rgba(255,255,255,0.12)",
+    background: "rgba(255,255,255,0.04)",
+  };
+
+  const tdStyle: CSSProperties = {
+    padding: "12px 10px",
+    borderBottom: "1px solid rgba(255,255,255,0.08)",
+    color: "#ffffff",
+    verticalAlign: "middle",
   };
 
   return (
-    <>
-      <h1>Viviendas</h1>
-
-      {readOnly ? (
-        <div style={{ marginBottom: 10, padding: 10, border: "1px solid #ddd", background: "#fafafa" }}>
-          Modo inspector: solo visualización.
+    <div style={pageStyle}>
+      <div style={shellStyle}>
+        <div style={heroStyle}>
+          <h1 style={titleStyle}>Viviendas</h1>
+          <p style={subtitleStyle}>
+            Gestión institucional de viviendas, estados, ocupación y control operativo.
+          </p>
         </div>
-      ) : null}
 
-      {errorMsg ? (
-        <div style={{ marginBottom: "1rem", padding: "0.75rem", border: "1px solid #ccc", background: "#f7f7f7" }}>
-          {errorMsg}
-        </div>
-      ) : null}
+        {readOnly ? (
+          <div style={{ ...softCardStyle, marginBottom: 10 }}>
+            Modo inspector: solo visualización.
+          </div>
+        ) : null}
 
-      <section style={{ marginBottom: "1rem" }}>
-        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-          <input placeholder="Código" value={codigo} onChange={(e) => setCodigo(e.target.value)} />
+        {errorMsg ? (
+          <div
+            style={{
+              ...softCardStyle,
+              marginBottom: 16,
+              border: "1px solid rgba(239,68,68,0.30)",
+              background: "rgba(127,29,29,0.18)",
+              color: "#fecaca",
+            }}
+          >
+            {errorMsg}
+          </div>
+        ) : null}
 
-          {role === "ADMIN_GENERAL" && !inspectorLike ? (
-            <select
-              value={barrio}
-              onChange={(e) => setBarrio(e.target.value)}
-              title="Filtrar por barrio"
-              style={{ minWidth: 220 }}
-            >
-              <option value="">Todos los barrios</option>
-              {barriosDisponibles
-                .filter((b) => b !== "")
-                .map((b) => (
-                  <option key={b} value={b}>
-                    {b}
+        <div style={cardStyle}>
+          <section style={{ marginBottom: "1rem" }}>
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+              <input
+                placeholder="Código"
+                value={codigo}
+                onChange={(e) => setCodigo(e.target.value)}
+                style={inputStyle}
+              />
+
+              {role === "ADMIN_GENERAL" && !inspectorLike ? (
+                <select
+                  value={barrio}
+                  onChange={(e) => setBarrio(e.target.value)}
+                  title="Filtrar por barrio"
+                  style={{ ...selectStyle, minWidth: 220 }}
+                >
+                  <option value="" style={optionStyle}>
+                    Todos los barrios
                   </option>
-                ))}
-            </select>
+                  {barriosDisponibles
+                    .filter((b) => b !== "")
+                    .map((b) => (
+                      <option key={b} value={b} style={optionStyle}>
+                        {b}
+                      </option>
+                    ))}
+                </select>
+              ) : (
+                <input
+                  placeholder="Barrio"
+                  value={barrio}
+                  onChange={(e) => setBarrio(e.target.value)}
+                  disabled={inspectorLike}
+                  title={inspectorLike ? "Barrio fijado por su asignación" : ""}
+                  style={inputStyle}
+                />
+              )}
+
+              <select value={estado} onChange={(e) => setEstado(e.target.value)} style={selectStyle}>
+                <option value="" style={optionStyle}>
+                  Todos
+                </option>
+                <option value="DISPONIBLE" style={optionStyle}>
+                  Disponible
+                </option>
+                <option value="A_DESOCUPARSE" style={optionStyle}>
+                  A desocuparse
+                </option>
+                <option value="OCUPADA" style={optionStyle}>
+                  Ocupada
+                </option>
+                <option value="RESERVADA" style={optionStyle}>
+                  Reservada
+                </option>
+                <option value="REPARACION" style={optionStyle}>
+                  Reparación
+                </option>
+                <option value="BAJA" style={optionStyle}>
+                  Baja
+                </option>
+              </select>
+
+              <select value={dormitorios} onChange={(e) => setDormitorios(e.target.value)} style={selectStyle}>
+                <option value="" style={optionStyle}>
+                  Dormitorios
+                </option>
+                <option value="1" style={optionStyle}>
+                  1
+                </option>
+                <option value="2" style={optionStyle}>
+                  2
+                </option>
+                <option value="3" style={optionStyle}>
+                  3
+                </option>
+                <option value="4" style={optionStyle}>
+                  4+
+                </option>
+              </select>
+
+              <input
+                placeholder="Permisionario (nombre/apellido/matrícula)"
+                value={permisionario}
+                onChange={(e) => setPermisionario(e.target.value)}
+                style={{ ...inputStyle, minWidth: 280 }}
+              />
+
+              <input
+                placeholder="Personas mín."
+                value={personasMin}
+                onChange={(e) => setPersonasMin(e.target.value)}
+                inputMode="numeric"
+                style={{ ...inputStyle, width: 120 }}
+              />
+              <input
+                placeholder="Personas máx."
+                value={personasMax}
+                onChange={(e) => setPersonasMax(e.target.value)}
+                inputMode="numeric"
+                style={{ ...inputStyle, width: 120 }}
+              />
+
+              <select value={sortBy} onChange={(e) => setSortBy(e.target.value as SortBy)} style={selectStyle}>
+                <option value="barrio" style={optionStyle}>
+                  Orden: Barrio
+                </option>
+                <option value="codigo" style={optionStyle}>
+                  Orden: Código
+                </option>
+                <option value="dormitorios" style={optionStyle}>
+                  Orden: Dormitorios
+                </option>
+                <option value="estado" style={optionStyle}>
+                  Orden: Estado
+                </option>
+                <option value="permisionario" style={optionStyle}>
+                  Orden: Permisionario
+                </option>
+                <option value="personas" style={optionStyle}>
+                  Orden: Personas
+                </option>
+                <option value="hacinamiento" style={optionStyle}>
+                  Orden: Hacinamiento
+                </option>
+              </select>
+
+              <button
+                onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+                disabled={loading || downloadingPdf}
+                style={secondaryButtonStyle}
+              >
+                {sortDir === "asc" ? "Asc ↑" : "Desc ↓"}
+              </button>
+
+              <button
+                onClick={cargarViviendas}
+                disabled={loading || downloadingPdf}
+                style={primaryButtonStyle}
+              >
+                Aplicar
+              </button>
+
+              <button
+                onClick={limpiarFiltros}
+                disabled={loading || downloadingPdf}
+                style={secondaryButtonStyle}
+              >
+                Limpiar filtros
+              </button>
+
+              <button
+                onClick={descargarPdf}
+                disabled={loading || downloadingPdf}
+                style={secondaryButtonStyle}
+              >
+                {downloadingPdf ? "Generando PDF…" : "Descargar PDF (con filtros)"}
+              </button>
+            </div>
+
+            <p style={{ marginTop: "0.75rem", color: "rgba(255,255,255,0.72)" }}>
+              Resultados: {total} — Orden actual: {sortLabel(sortBy)} {sortDir === "asc" ? "(Asc)" : "(Desc)"}
+            </p>
+          </section>
+
+          {loading ? (
+            <div style={softCardStyle}>
+              <p style={{ margin: 0, color: "rgba(255,255,255,0.78)" }}>Cargando viviendas…</p>
+            </div>
           ) : (
-            <input
-              placeholder="Barrio"
-              value={barrio}
-              onChange={(e) => setBarrio(e.target.value)}
-              disabled={inspectorLike}
-              title={inspectorLike ? "Barrio fijado por su asignación" : ""}
-            />
+            <div
+              style={{
+                overflowX: "auto",
+                border: "1px solid rgba(255,255,255,0.12)",
+                borderRadius: 12,
+                background: "rgba(255,255,255,0.04)",
+              }}
+            >
+              <table
+                border={0}
+                cellPadding={6}
+                cellSpacing={0}
+                style={{ width: "100%", borderCollapse: "collapse", minWidth: 980 }}
+              >
+                <thead>
+                  <tr>
+                    <th style={thStyle} onClick={() => applySort("codigo")}>
+                      Código{sortIndicator("codigo")}
+                    </th>
+                    <th style={thStyle} onClick={() => applySort("barrio")}>
+                      Barrio{sortIndicator("barrio")}
+                    </th>
+                    <th style={thStyle} onClick={() => applySort("dormitorios")}>
+                      Dormitorios{sortIndicator("dormitorios")}
+                    </th>
+                    <th style={thStyle} onClick={() => applySort("estado")}>
+                      Estado{sortIndicator("estado")}
+                    </th>
+                    <th style={thStyle} onClick={() => applySort("permisionario")}>
+                      Permisionario{sortIndicator("permisionario")}
+                    </th>
+                    <th style={thStyle} onClick={() => applySort("personas")}>
+                      Personas{sortIndicator("personas")}
+                    </th>
+                    <th style={thStyle} onClick={() => applySort("hacinamiento")}>
+                      Hacinamiento{sortIndicator("hacinamiento")}
+                    </th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {viviendas.map((v) => {
+                    const perm = v.permisionario
+                      ? (
+                          `${v.permisionario.apellido || ""} ${v.permisionario.nombre || ""}`.trim() ||
+                          v.permisionario.matricula ||
+                          "-"
+                        )
+                      : "-";
+
+                    const estadoActual: EstadoVivienda = isEstadoVivienda(v.estado) ? v.estado : "DISPONIBLE";
+
+                    const personasNum = typeof v.cantidadHabitantes === "number" ? v.cantidadHabitantes : null;
+
+                    const personas = v.estado === "OCUPADA" && personasNum !== null ? personasNum : "-";
+
+                    const color = v.hacinamientoColor ?? null;
+
+                    const pct = typeof v.hacinamientoPct === "number" ? v.hacinamientoPct : null;
+
+                    return (
+                      <tr key={v._id}>
+                        <td style={tdStyle}>{v.codigo}</td>
+                        <td style={tdStyle}>{v.barrio}</td>
+                        <td style={tdStyle}>{v.dormitorios}</td>
+
+                        <td style={tdStyle}>
+                          {canEdit ? (
+                            <>
+                              <select
+                                value={estadoActual}
+                                disabled={updatingId === v._id || downloadingPdf}
+                                onChange={(e) => {
+                                  const next = e.target.value;
+                                  if (!isEstadoVivienda(next)) return;
+                                  if (next === estadoActual) return;
+                                  actualizarEstado(v._id, next);
+                                }}
+                                style={{ ...selectStyle, minWidth: 160 }}
+                              >
+                                {ESTADOS.map((opt) => (
+                                  <option key={opt.value} value={opt.value} style={optionStyle}>
+                                    {opt.label}
+                                  </option>
+                                ))}
+                              </select>
+
+                              {updatingId === v._id ? (
+                                <span style={{ marginLeft: 8, fontSize: 12, color: "rgba(255,255,255,0.72)" }}>
+                                  Guardando…
+                                </span>
+                              ) : null}
+                            </>
+                          ) : (
+                            <span>{estadoActual}</span>
+                          )}
+                        </td>
+
+                        <td style={tdStyle}>{perm}</td>
+
+                        <td style={tdStyle}>
+                          {v.estado === "OCUPADA" && typeof v.cantidadHabitantes === "number"
+                            ? v.cantidadHabitantes
+                            : "-"}
+                        </td>
+
+                        <td style={tdStyle}>
+                          {v.estado !== "OCUPADA" || !v.hacinamientoColor ? (
+                            "-"
+                          ) : (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                              <span
+                                style={{
+                                  width: 10,
+                                  height: 10,
+                                  borderRadius: "50%",
+                                  background:
+                                    v.hacinamientoColor === "VERDE"
+                                      ? "green"
+                                      : v.hacinamientoColor === "AMARILLO"
+                                      ? "orange"
+                                      : "red",
+                                  display: "inline-block",
+                                }}
+                              />
+                              <span>
+                                {typeof v.hacinamientoRatio === "number"
+                                  ? v.hacinamientoRatio.toFixed(2)
+                                  : "-"}
+                              </span>
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
-
-          <select value={estado} onChange={(e) => setEstado(e.target.value)}>
-            <option value="">Todos</option>
-            <option value="DISPONIBLE">Disponible</option>
-            <option value="A_DESOCUPARSE">A desocuparse</option>
-            <option value="OCUPADA">Ocupada</option>
-            <option value="RESERVADA">Reservada</option>
-            <option value="REPARACION">Reparación</option>
-            <option value="BAJA">Baja</option>
-          </select>
-
-          <select value={dormitorios} onChange={(e) => setDormitorios(e.target.value)}>
-            <option value="">Dormitorios</option>
-            <option value="1">1</option>
-            <option value="2">2</option>
-            <option value="3">3</option>
-            <option value="4">4+</option>
-          </select>
-
-          <input
-            placeholder="Permisionario (nombre/apellido/matrícula)"
-            value={permisionario}
-            onChange={(e) => setPermisionario(e.target.value)}
-            style={{ minWidth: 280 }}
-          />
-
-          <input
-            placeholder="Personas mín."
-            value={personasMin}
-            onChange={(e) => setPersonasMin(e.target.value)}
-            inputMode="numeric"
-            style={{ width: 120 }}
-          />
-          <input
-            placeholder="Personas máx."
-            value={personasMax}
-            onChange={(e) => setPersonasMax(e.target.value)}
-            inputMode="numeric"
-            style={{ width: 120 }}
-          />
-
-          <select value={sortBy} onChange={(e) => setSortBy(e.target.value as SortBy)}>
-            <option value="barrio">Orden: Barrio</option>
-            <option value="codigo">Orden: Código</option>
-            <option value="dormitorios">Orden: Dormitorios</option>
-            <option value="estado">Orden: Estado</option>
-            <option value="permisionario">Orden: Permisionario</option>
-            <option value="personas">Orden: Personas</option>
-            <option value="hacinamiento">Orden: Hacinamiento</option>
-          </select>
-
-          <button onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))} disabled={loading || downloadingPdf}>
-            {sortDir === "asc" ? "Asc ↑" : "Desc ↓"}
-          </button>
-
-          <button onClick={cargarViviendas} disabled={loading || downloadingPdf}>
-            Aplicar
-          </button>
-
-          <button onClick={limpiarFiltros} disabled={loading || downloadingPdf}>
-            Limpiar filtros
-          </button>
-
-          <button onClick={descargarPdf} disabled={loading || downloadingPdf}>
-            {downloadingPdf ? "Generando PDF…" : "Descargar PDF (con filtros)"}
-          </button>
         </div>
-
-        <p style={{ marginTop: "0.5rem" }}>
-          Resultados: {total} — Orden actual: {sortLabel(sortBy)} {sortDir === "asc" ? "(Asc)" : "(Desc)"}
-        </p>
-      </section>
-
-      {loading ? (
-        <p>Cargando viviendas…</p>
-      ) : (
-        <table border={1} cellPadding={6} cellSpacing={0} style={{ width: "100%" }}>
-          <thead>
-            <tr>
-              <th style={thStyle} onClick={() => applySort("codigo")}>
-                Código{sortIndicator("codigo")}
-              </th>
-              <th style={thStyle} onClick={() => applySort("barrio")}>
-                Barrio{sortIndicator("barrio")}
-              </th>
-              <th style={thStyle} onClick={() => applySort("dormitorios")}>
-                Dormitorios{sortIndicator("dormitorios")}
-              </th>
-              <th style={thStyle} onClick={() => applySort("estado")}>
-                Estado{sortIndicator("estado")}
-              </th>
-              <th style={thStyle} onClick={() => applySort("permisionario")}>
-                Permisionario{sortIndicator("permisionario")}
-              </th>
-              <th style={thStyle} onClick={() => applySort("personas")}>
-                Personas{sortIndicator("personas")}
-              </th>
-              <th style={thStyle} onClick={() => applySort("hacinamiento")}>
-                Hacinamiento{sortIndicator("hacinamiento")}
-              </th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {viviendas.map((v) => {
-              const perm = v.permisionario
-                ? (
-                    `${v.permisionario.apellido || ""} ${v.permisionario.nombre || ""}`.trim() ||
-                    v.permisionario.matricula ||
-                    "-"
-                  )
-                : "-";
-
-              const estadoActual: EstadoVivienda = isEstadoVivienda(v.estado)
-  ? v.estado
-  : "DISPONIBLE";
-
-const personasNum =
-  typeof v.cantidadHabitantes === "number"
-    ? v.cantidadHabitantes
-    : null;
-
-const personas =
-  v.estado === "OCUPADA" && personasNum !== null
-    ? personasNum
-    : "-";
-
-const color = v.hacinamientoColor ?? null;
-
-const pct =
-  typeof v.hacinamientoPct === "number"
-    ? v.hacinamientoPct
-    : null;
-
-              return (
-                <tr key={v._id}>
-                  <td>{v.codigo}</td>
-                  <td>{v.barrio}</td>
-                  <td>{v.dormitorios}</td>
-
-                  <td>
-                    {canEdit ? (
-                      <>
-                        <select
-                          value={estadoActual}
-                          disabled={updatingId === v._id || downloadingPdf}
-                          onChange={(e) => {
-                            const next = e.target.value;
-                            if (!isEstadoVivienda(next)) return;
-                            if (next === estadoActual) return;
-                            actualizarEstado(v._id, next);
-                          }}
-                          style={{ minWidth: 160 }}
-                        >
-                          {ESTADOS.map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </option>
-                          ))}
-                        </select>
-
-                        {updatingId === v._id ? (
-                          <span style={{ marginLeft: 8, fontSize: 12 }}>Guardando…</span>
-                        ) : null}
-                      </>
-                    ) : (
-                      <span>{estadoActual}</span>
-                    )}
-                  </td>
-
-                  <td>{perm}</td>
-                  {/* PERSONAS */}
-<td>
-  {v.estado === "OCUPADA" && typeof v.cantidadHabitantes === "number"
-    ? v.cantidadHabitantes
-    : "-"}
-</td>
-
-{/* HACINAMIENTO */}
-<td>
-  {v.estado !== "OCUPADA" || !v.hacinamientoColor ? (
-    "-"
-  ) : (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-      <span
-        style={{
-          width: 10,
-          height: 10,
-          borderRadius: "50%",
-          background:
-            v.hacinamientoColor === "VERDE"
-              ? "green"
-              : v.hacinamientoColor === "AMARILLO"
-              ? "orange"
-              : "red",
-          display: "inline-block",
-        }}
-      />
-      <span>
-        {typeof v.hacinamientoRatio === "number"
-          ? v.hacinamientoRatio.toFixed(2)
-          : "-"}
-      </span>
-    </span>
-  )}
-</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      )}
-    </>
+      </div>
+    </div>
   );
 }
