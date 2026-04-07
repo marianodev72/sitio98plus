@@ -1,8 +1,23 @@
 // backend/middleware/auth.js
+/**
+ * AUTORIDAD OFICIAL DE AUTENTICACIÓN
+ * ----------------------------------
+ * Este archivo define la política JWT/cookie vigente del sistema.
+ *
+ * Fuente de verdad operativa:
+ * - firma y verificación de JWT
+ * - cookie de sesión
+ * - authRequired
+ * - exports oficiales consumibles por compatibilidad
+ *
+ * No duplicar esta lógica en otros módulos.
+ * Si se requieren mejoras, deben sumarse aquí sin degradar el hardening vigente.
+ */
 const fs = require("fs");
 const path = require("path");
 const jwt = require("jsonwebtoken");
 const { User } = require("../models/user");
+const { requireRole } = require("./authz");
 
 const ACTIVE_KID = "key-actual";
 
@@ -211,30 +226,22 @@ async function authRequired(req, res, next) {
 
     // ✅ req.user con campos mínimos necesarios para el resto del pipeline (incluye tokenVersion)
     req.user = {
-      _id: String(dbUser._id),
-      role: dbUser.role,
-      permisos: Array.isArray(dbUser.permisos) ? dbUser.permisos : [],
-      tokenVersion: typeof dbUser.tokenVersion === "number" ? dbUser.tokenVersion : 0,
-      barrioAsignado: dbUser.barrioAsignado || "",
-      viviendaAsignada: dbUser.viviendaAsignada ?? null,
-      alojamientoAsignado: dbUser.alojamientoAsignado ?? null,
-    };
+     _id: String(dbUser._id),
+     id: String(dbUser._id), // alias compat
+     role: dbUser.role,
+     permisos: Array.isArray(dbUser.permisos) ? dbUser.permisos : [],
+     activo: dbUser.activo,
+     tokenVersion: typeof dbUser.tokenVersion === "number" ? dbUser.tokenVersion : 0,
+     barrioAsignado: dbUser.barrioAsignado || "",
+     viviendaAsignada: dbUser.viviendaAsignada ?? null,
+     alojamientoAsignado: dbUser.alojamientoAsignado ?? null,
+   };
 
     return next();
   } catch (err) {
     console.error("[authRequired] error", err);
     return res.status(401).json({ message: "No autenticado" });
   }
-}
-
-function requireRole(...roles) {
-  const allowed = roles.map((r) => String(r).toUpperCase());
-  return (req, res, next) => {
-    const role = String(req.user?.role || "").toUpperCase();
-    if (!role) return res.status(403).json({ message: "No autorizado" });
-    if (!allowed.includes(role)) return res.status(403).json({ message: "No autorizado" });
-    return next();
-  };
 }
 
 module.exports = {

@@ -366,140 +366,144 @@ const ControllerAnexo03 = {
    * - Multi-write: Vivienda + User + Submission (con transacción). Fail-closed si no hay)
    */
   async closeByAdminGeneral(ctx) {
-    const { res, user, submission } = ctx;
-    const { genericDenied, up, isObjectId, isAdminGeneral, isAdminReadOnly } = ctx.core;
-    const { FormSubmission, Vivienda, User } = ctx.models;
+  const { res, user, submission } = ctx;
+  const { genericDenied, up, isObjectId, isAdminGeneral, isAdminReadOnly } = ctx.core;
+  const { FormSubmission, Vivienda, User } = ctx.models;
 
-    if (!user || !user.role) return genericDenied(res);
-    if (isAdminReadOnly(user)) return genericDenied(res);
-    if (!isAdminGeneral(user)) return genericDenied(res);
-    if (!submission || up(submission.codigo) !== "ANEXO_03") return genericDenied(res);
+  if (!user || !user.role) return genericDenied(res);
+  if (isAdminReadOnly(user)) return genericDenied(res);
+  if (!isAdminGeneral(user)) return genericDenied(res);
+  if (!submission || up(submission.codigo) !== "ANEXO_03") return genericDenied(res);
 
-    // Transacciones requeridas (fail-closed)
-    if (!FormSubmission?.startSession || !mongoose?.connection) {
-      console.error("[ANEXO_03][closeByAdminGeneral] Transacciones no disponibles");
-      return genericDenied(res);
-    }
+  // Transacciones requeridas (fail-closed)
+  if (!FormSubmission?.startSession || !mongoose?.connection) {
+    console.error("[ANEXO_03][closeByAdminGeneral] Transacciones no disponibles");
+    return genericDenied(res);
+  }
 
-    const session = await FormSubmission.startSession();
+  const session = await FormSubmission.startSession();
 
-    try {
-      let responsePayload = null;
+  try {
+    let responsePayload = null;
 
-      await session.withTransaction(async () => {
-        const anexo = await FormSubmission.findById(submission._id).session(session);
-        if (!anexo) throw new Error("DENY: no anexo");
+    await session.withTransaction(async () => {
+      const anexo = await FormSubmission.findById(submission._id).session(session);
+      if (!anexo) throw new Error("DENY: no anexo");
 
-        if (up(anexo.codigo) !== "ANEXO_03") throw new Error("DENY: codigo mismatch");
+      if (up(anexo.codigo) !== "ANEXO_03") throw new Error("DENY: codigo mismatch");
 
-        // Idempotencia
-        if (up(anexo.estado) === "CERRADO") {
-          responsePayload = { type: "ok", anexo: anexo.toObject() };
-          return;
-        }
-
-        // Estado requerido
-        if (up(anexo.estado) !== "EN_REVISION") {
-          responsePayload = { type: "deny" };
-          return;
-        }
-
-        // Allowlist transition
-        if (!isTransitionAllowed(ControllerAnexo03.TRANSITIONS, up(anexo.estado), "CERRADO")) {
-          throw new Error("DENY: invalid transition");
-        }
-
-        // Cross-anexo obligatorio
-        if (!isObjectId(anexo.derivadoDe)) throw new Error("DENY: missing derivadoDe");
-        const a02 = await FormSubmission.findById(anexo.derivadoDe)
-          .select("codigo estado usuario datos historialEstados intervinientes")
-          .session(session)
-          .lean();
-        if (!a02 || up(a02.codigo) !== "ANEXO_02") throw new Error("DENY: invalid origen");
-        if (up(a02.estado) !== "CERRADO") throw new Error("DENY: origen not closed");
-
-        // Fuente de verdad de vivienda/permisionario
-        const a02Datos = safePlainObject(a02.datos) ? a02.datos : {};
-        const postulanteId =
-          a02Datos.postulanteId ||
-          a02.usuario ||
-          getIntervinienteUserIdByRol(a02, "PERMISIONARIO");
-        const viviendaId = a02Datos.viviendaId || null;
-
-        if (!isObjectId(postulanteId)) throw new Error("DENY: invalid postulanteId");
-        if (viviendaId && !isObjectId(viviendaId)) throw new Error("DENY: invalid viviendaId");
-
-        // Conformidad permisionario
-        anexo.datos = safePlainObject(anexo.datos) ? anexo.datos : {};
-        if (!anexo.datos?.conformidadPermisionario?.ok) {
-          responsePayload = { type: "deny" };
-          return;
-        }
-
-        // Persistimos coherencia mínima
-        anexo.usuario = postulanteId;
-        anexo.datos.postulanteId = postulanteId;
-        if (viviendaId) anexo.datos.viviendaId = viviendaId;
-
-        anexo.datos.conformidadAdminGeneral = {
-          ok: true,
-          fecha: new Date(),
-          usuario: user._id,
-        };
-        anexo.markModified("datos");
-
-        // Vivienda: OCUPADA + ocupacionActual (si el modelo existe)
-        if (Vivienda && viviendaId) {
-          const v = await Vivienda.findById(viviendaId).session(session);
-          if (!v) throw new Error("DENY: vivienda not found");
-
-          const estadoV = up(v.estado || "");
-          if (!v.estado || estadoV === "RESERVADA") {
-            v.estado = "OCUPADA";
-          }
-
-          v.ocupacionActual = {
-            permisionario: postulanteId,
-            fechaAsignacion: new Date(),
-            observacion: "Ocupación materializada por ANEXO_03",
-          };
-
-          await v.save({ session });
-        }
-
-        // User: role PERMISIONARIO
-        if (User && isObjectId(postulanteId)) {
-          await User.updateOne(
-            { _id: postulanteId },
-            {
-              $set: {
-                role: "PERMISIONARIO",
-                estadoHabitacional: "PERMISIONARIO_ACTIVO",
-              },
-            },
-            { session }
-          );
-        }
-
-        // Cierre del anexo
-        if (typeof anexo.cambiarEstado !== "function") throw new Error("DENY: missing cambiarEstado");
-        anexo.cambiarEstado("CERRADO", user._id, "Cierre ADMIN_GENERAL (ANEXO_03)");
-
-        await anexo.save({ session });
+      // Idempotencia
+      if (up(anexo.estado) === "CERRADO") {
         responsePayload = { type: "ok", anexo: anexo.toObject() };
-      });
+        return;
+      }
 
-      if (!responsePayload || responsePayload.type !== "ok") return genericDenied(res);
-      return res.json({ anexo: responsePayload.anexo });
-    } catch (e) {
-      console.error("[ANEXO_03][closeByAdminGeneral] Error:", e);
-      return genericDenied(res);
-    } finally {
-      try {
-        await session.endSession();
-      } catch {}
-    }
-  },
+      // Estado requerido
+      if (up(anexo.estado) !== "EN_REVISION") {
+        responsePayload = { type: "deny" };
+        return;
+      }
+
+      // Allowlist transition
+      if (!isTransitionAllowed(ControllerAnexo03.TRANSITIONS, up(anexo.estado), "CERRADO")) {
+        throw new Error("DENY: invalid transition");
+      }
+
+      // Cross-anexo obligatorio
+      if (!isObjectId(anexo.derivadoDe)) throw new Error("DENY: missing derivadoDe");
+      const a02 = await FormSubmission.findById(anexo.derivadoDe)
+        .select("codigo estado usuario datos historialEstados intervinientes")
+        .session(session)
+        .lean();
+
+      if (!a02 || up(a02.codigo) !== "ANEXO_02") throw new Error("DENY: invalid origen");
+      if (up(a02.estado) !== "CERRADO") throw new Error("DENY: origen not closed");
+
+      // Fuente de verdad de vivienda/permisionario
+      const a02Datos = safePlainObject(a02.datos) ? a02.datos : {};
+      const postulanteId =
+        a02Datos.postulanteId ||
+        a02.usuario ||
+        getIntervinienteUserIdByRol(a02, "PERMISIONARIO");
+      const viviendaId = a02Datos.viviendaId || null;
+
+      if (!isObjectId(postulanteId)) throw new Error("DENY: invalid postulanteId");
+      if (viviendaId && !isObjectId(viviendaId)) throw new Error("DENY: invalid viviendaId");
+
+      // Conformidad permisionario
+      anexo.datos = safePlainObject(anexo.datos) ? anexo.datos : {};
+      if (!anexo.datos?.conformidadPermisionario?.ok) {
+        responsePayload = { type: "deny" };
+        return;
+      }
+
+      // Persistimos coherencia mínima
+      anexo.usuario = postulanteId;
+      anexo.datos.postulanteId = postulanteId;
+      if (viviendaId) anexo.datos.viviendaId = viviendaId;
+
+      anexo.datos.conformidadAdminGeneral = {
+        ok: true,
+        fecha: new Date(),
+        usuario: user._id,
+      };
+      anexo.markModified("datos");
+
+      // Vivienda: OCUPADA + ocupacionActual (si el modelo existe)
+      if (Vivienda && viviendaId) {
+        const v = await Vivienda.findById(viviendaId).session(session);
+        if (!v) throw new Error("DENY: vivienda not found");
+
+        const estadoV = up(v.estado || "");
+        if (!v.estado || estadoV === "RESERVADA") {
+          v.estado = "OCUPADA";
+        }
+
+        v.ocupacionActual = {
+          permisionario: postulanteId,
+          fechaAsignacion: new Date(),
+          observacion: "Ocupación materializada por ANEXO_03",
+        };
+
+        await v.save({ session });
+      }
+
+      // User: role PERMISIONARIO
+      if (User && isObjectId(postulanteId)) {
+        await User.updateOne(
+          { _id: postulanteId },
+          {
+            $set: {
+              role: "PERMISIONARIO",
+              estadoHabitacional: "PERMISIONARIO_ACTIVO",
+            },
+          },
+          { session }
+        );
+      }
+
+      // Cierre del anexo
+      if (typeof anexo.cambiarEstado !== "function") {
+        throw new Error("DENY: missing cambiarEstado");
+      }
+
+      anexo.cambiarEstado("CERRADO", user._id, "Cierre ADMIN_GENERAL (ANEXO_03)");
+
+      await anexo.save({ session });
+      responsePayload = { type: "ok", anexo: anexo.toObject() };
+    });
+
+    if (!responsePayload || responsePayload.type !== "ok") return genericDenied(res);
+    return res.json({ anexo: responsePayload.anexo });
+  } catch (e) {
+    console.error("[ANEXO_03][closeByAdminGeneral] Error:", e);
+    return genericDenied(res);
+  } finally {
+    try {
+      await session.endSession();
+    } catch {}
+  }
+},
 
   /**
    * GET detalle hidratado (V2 getById lo llama)

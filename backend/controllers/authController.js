@@ -1,4 +1,13 @@
 // backend/controllers/authController.js
+
+/**
+ * FLUJO OFICIAL DE LOGIN / LOGOUT / REFRESH / ME
+ * ----------------------------------------------
+ * Este controller implementa el flujo institucional endurecido de autenticación.
+ *
+ * No reemplazar esta lógica por utilidades paralelas.
+ * Cualquier mejora futura (ej. MFA) debe integrarse sobre este flujo.
+ */
 const fs = require("fs");
 const path = require("path");
 const jwt = require("jsonwebtoken");

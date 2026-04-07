@@ -1,0 +1,266 @@
+// backend/security/authToken.js
+const fs = require("fs");
+const path = require("path");
+const jwt = require("jsonwebtoken");
+
+const ACTIVE_KID = process.env.JWT_ACTIVE_KID || "key-actual";
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "30m";
+
+function readKeySafe(p) {
+  try {
+    if (p && fs.existsSync(p)) return fs.readFileSync(p, "utf8");
+  } catch (_) {}
+  return null;
+}
+
+function readPemFromEnv(varName) {
+  const raw = process.env[varName];
+  if (!raw) return null;
+  if (raw.includes("\\n")) return raw.replace(/\\n/g, "\n");
+  return raw;
+}
+
+const ROOT = path.join(__dirname, "..");
+
+const PRIVATE_CANDIDATES = [
+  process.env.JWT_PRIVATE_KEY_PATH,
+  path.join(ROOT, "private.pem"),
+  path.join(ROOT, "keys", "private.pem"),
+  path.join(ROOT, "config", "private.pem"),
+  path.join(ROOT, "security", "jwtRS256.key"),
+].filter(Boolean);
+
+const PUBLIC_CANDIDATES = [
+  process.env.JWT_PUBLIC_KEY_PATH,
+  path.join(ROOT, "public.pem"),
+  path.join(ROOT, "keys", "public.pem"),
+  path.join(ROOT, "config", "public.pem"),
+  path.join(ROOT, "security", "jwtRS256.key.pub"),
+].filter(Boolean);
+
+const PRIVATE_KEY =
+  readPemFromEnv("JWT_PRIVATE_KEY") ||
+  PRIVATE_CANDIDATES.map(readKeySafe).find(Boolean);
+
+const PUBLIC_KEY =
+  readPemFromEnv("JWT_PUBLIC_KEY") ||
+  PUBLIC_CANDIDATES.map(readKeySafe).find(Boolean);
+
+const KEYRING_PUBLIC = {
+  [ACTIVE_KID]: PUBLIC_KEY,
+};
+
+if (PRIVATE_KEY && PUBLIC_KEY) {
+  console.log("[authToken] Claves JWT cargadas");
+} else {
+  console.warn("[authToken] ⚠️ No se pudieron cargar las claves JWT (private/public).");
+}
+
+function normalizeSameSite(v, fallback = "lax") {
+  const s = String(v || fallback).trim().toLowerCase();
+  if (s === "lax") return "lax";
+  if (s === "strict") return "strict";
+  if (s === "none") return "none";
+  return fallback;
+}
+
+function getCookieConfig() {
+  const nodeEnv = String(process.env.NODE_ENV || "").toLowerCase();
+  const isProd = nodeEnv === "production";
+
+  const sameSiteEnv = normalizeSameSite(
+    process.env.AUTH_COOKIE_SAMESITE || (isProd ? "strict" : "lax")
+  );
+
+  const secureEnvRaw = process.env.AUTH_COOKIE_SECURE;
+  const secureEnv =
+    secureEnvRaw === undefined || secureEnvRaw === null || secureEnvRaw === ""
+      ? isProd
+      : String(secureEnvRaw).toLowerCase() === "true";
+
+  let sameSite = sameSiteEnv;
+  let secure = secureEnv;
+
+  if (sameSite === "none" && !secure) {
+    console.warn("[authToken] ⚠️ SameSite=None sin Secure: forzando Secure=true.");
+    secure = true;
+  }
+
+  return { secure, sameSite };
+}
+
+function getSessionMaxMinutes() {
+  const raw = process.env.SESSION_MAX_MINUTES;
+  const parsed = Number(raw);
+  if (!raw || !Number.isFinite(parsed) || parsed <= 0) return 30;
+  return parsed;
+}
+
+function setAuthCookie(res, token) {
+  const cookieName = process.env.AUTH_COOKIE_NAME || "token";
+  const { secure, sameSite } = getCookieConfig();
+  const sessionMinutes = getSessionMaxMinutes();
+
+  res.cookie(cookieName, token, {
+    httpOnly: true,
+    secure,
+    sameSite,
+    maxAge: sessionMinutes * 60 * 1000,
+    path: "/",
+  });
+}
+
+function clearAuthCookie(res) {
+  const cookieName = process.env.AUTH_COOKIE_NAME || "token";
+  const { secure, sameSite } = getCookieConfig();
+
+  res.clearCookie(cookieName, {
+    httpOnly: true,
+    secure,
+    sameSite,
+    path: "/",
+  });
+}
+
+function buildUserPayload(user) {
+  const permisos = Array.isArray(user?.permisos) ? user.permisos : [];
+
+  return {
+    _id: String(user?._id || ""),
+    role: user?.role || "",
+    permisos,
+    activo: user?.activo !== false,
+    barrioAsignado: user?.barrioAsignado || "",
+    viviendaAsignada: user?.viviendaAsignada ?? null,
+    alojamientoAsignado: user?.alojamientoAsignado ?? null,
+    tokenVersion: typeof user?.tokenVersion === "number" ? user.tokenVersion : 0,
+  };
+}
+
+function signCanonicalToken(userOrPayload) {
+  if (!PRIVATE_KEY) throw new Error("JWT private key no cargada.");
+
+  const payload = buildUserPayload(userOrPayload);
+
+  return jwt.sign({ user: payload }, PRIVATE_KEY, {
+    algorithm: "RS256",
+    expiresIn: JWT_EXPIRES_IN,
+    header: { kid: ACTIVE_KID },
+  });
+}
+
+function verifyRawToken(token) {
+  if (!PUBLIC_KEY) throw new Error("JWT public key no cargada.");
+
+  let selectedPublicKey = PUBLIC_KEY;
+
+  try {
+    const decoded = jwt.decode(token, { complete: true });
+    const kid = decoded?.header?.kid;
+    if (kid) {
+      const key = KEYRING_PUBLIC[kid];
+      if (!key) throw new Error("kid desconocido");
+      selectedPublicKey = key;
+    }
+  } catch (_) {
+    throw new Error("JWT inválido");
+  }
+
+  return jwt.verify(token, selectedPublicKey, { algorithms: ["RS256"] });
+}
+
+/**
+ * Acepta:
+ *  1) Formato canónico: { user: { _id, role, permisos, tokenVersion } }
+ *  2) Formato ya semi-normalizado: { _id, role, ... }
+ *  3) Legacy transitorio: { sub, role, email, matricula }
+ *
+ * Importante:
+ * - solo se usa para compatibilidad de lectura;
+ * - toda emisión nueva debe salir en formato canónico.
+ */
+function normalizeTokenPayload(decoded) {
+  if (decoded?.user?._id) {
+    return {
+      _id: String(decoded.user._id),
+      role: decoded.user.role || "",
+      permisos: Array.isArray(decoded.user.permisos) ? decoded.user.permisos : [],
+      tokenVersion:
+        typeof decoded.user.tokenVersion === "number" ? decoded.user.tokenVersion : 0,
+      activo: decoded.user.activo !== false,
+      barrioAsignado: decoded.user.barrioAsignado || "",
+      viviendaAsignada: decoded.user.viviendaAsignada ?? null,
+      alojamientoAsignado: decoded.user.alojamientoAsignado ?? null,
+    };
+  }
+
+  if (decoded?._id && decoded?.role) {
+    return {
+      _id: String(decoded._id),
+      role: decoded.role || "",
+      permisos: Array.isArray(decoded.permisos) ? decoded.permisos : [],
+      tokenVersion: typeof decoded.tokenVersion === "number" ? decoded.tokenVersion : 0,
+      activo: decoded.activo !== false,
+      barrioAsignado: decoded.barrioAsignado || "",
+      viviendaAsignada: decoded.viviendaAsignada ?? null,
+      alojamientoAsignado: decoded.alojamientoAsignado ?? null,
+    };
+  }
+
+  // Legacy: utils/jwt.js viejo
+  if (decoded?.sub && decoded?.role) {
+    return {
+      _id: String(decoded.sub),
+      role: decoded.role || "",
+      permisos: [],
+      tokenVersion: 0,
+      activo: true,
+      barrioAsignado: "",
+      viviendaAsignada: null,
+      alojamientoAsignado: null,
+      legacy: {
+        sub: String(decoded.sub),
+        email: decoded.email || "",
+        matricula: decoded.matricula || "",
+      },
+    };
+  }
+
+  return null;
+}
+
+function verifyCanonicalToken(token) {
+  const decoded = verifyRawToken(token);
+  const normalized = normalizeTokenPayload(decoded);
+
+  if (!normalized?._id) {
+    throw new Error("JWT inválido");
+  }
+
+  return normalized;
+}
+
+function extractToken(req) {
+  const header = req.headers?.authorization || "";
+  if (header.startsWith("Bearer ")) return header.slice(7);
+
+  const cookieName = process.env.AUTH_COOKIE_NAME || "token";
+  if (req.cookies && req.cookies[cookieName]) return req.cookies[cookieName];
+
+  return null;
+}
+
+module.exports = {
+  ACTIVE_KID,
+  JWT_EXPIRES_IN,
+  buildUserPayload,
+  signCanonicalToken,
+  verifyCanonicalToken,
+  verifyRawToken,
+  normalizeTokenPayload,
+  extractToken,
+  setAuthCookie,
+  clearAuthCookie,
+  getCookieConfig,
+  getSessionMaxMinutes,
+};

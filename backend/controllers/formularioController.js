@@ -60,7 +60,50 @@ function badRequest(res, msg = "Datos inválidos") {
   return res.status(400).json({ message: msg });
 }
 
+function toPlain(value) {
+  if (Array.isArray(value)) return value.map(toPlain);
+  if (value && typeof value.toObject === "function") return value.toObject();
+  return value;
+}
 
+function stripAdjuntoRutas(value) {
+  if (Array.isArray(value)) {
+    return value.map(stripAdjuntoRutas);
+  }
+
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  const out = { ...value };
+
+  if (Array.isArray(out.adjuntos)) {
+    out.adjuntos = out.adjuntos.map((adj) => {
+      if (!adj || typeof adj !== "object") return adj;
+
+      return {
+        nombre: adj.nombre || "",
+        tipo: adj.tipo || "application/octet-stream",
+        size: Number(adj.size || 0),
+        fechaSubida: adj.fechaSubida || null,
+      };
+    });
+  }
+
+  if (out.anexo && typeof out.anexo === "object") {
+    out.anexo = stripAdjuntoRutas(out.anexo);
+  }
+
+  if (out.origen && typeof out.origen === "object") {
+    out.origen = stripAdjuntoRutas(out.origen);
+  }
+
+  if (Array.isArray(out.anexos)) {
+    out.anexos = out.anexos.map(stripAdjuntoRutas);
+  }
+
+  return out;
+}
 // ─────────────────────────────
 // ✅ Seguridad / Auditoría (ANEXO_09)
 // - O1: estadoInstitucional NO se expone a frontend como “estado real”.
@@ -342,7 +385,7 @@ async function getById(req, res) {
         }
       }
 
-      return res.json({ anexo: stripEstadoInstitucionalIfNeeded(user, anexo.toObject ? anexo.toObject() : anexo), origen });
+      return res.json(stripAdjuntoRutas({ anexo: stripEstadoInstitucionalIfNeeded(user, anexo.toObject ? anexo.toObject() : anexo), origen }));
     }
 
     // Resto de roles: visibilidad normal
@@ -463,7 +506,7 @@ origen = {
   }
 }
 
-    return res.json({ anexo: stripEstadoInstitucionalIfNeeded(user, anexo.toObject ? anexo.toObject() : anexo), origen });
+    return res.json(stripAdjuntoRutas({ anexo: stripEstadoInstitucionalIfNeeded(user, anexo.toObject ? anexo.toObject() : anexo), origen }));
   } catch (e) {
     console.error("[getById] Error:", e);
     return genericDenied(res);
@@ -551,7 +594,7 @@ async function darConformidadPermisionario11(req, res) {
     await anexo.save();
 
     const plano = anexo.toObject();
-    return res.json({ anexo: plano });
+    return res.json(stripAdjuntoRutas({ anexo: plano }));
   } catch (e) {
     console.error("[ANEXO_11] Error en darConformidadPermisionario11", e);
     return genericDenied(res);
@@ -665,7 +708,7 @@ async function setEstadoInstitucional(req, res) {
 
     await anexo.save();
 
-    return res.json({ anexo: anexo.toObject() });
+    return res.json(stripAdjuntoRutas({ anexo: anexo.toObject() }));
   } catch (e) {
     console.error("[setEstadoInstitucional] Error:", e);
     return genericDenied(res);
@@ -3983,7 +4026,7 @@ if (codigo === "ANEXO_03") {
       if (existing09) {
         // O1: no exponer estadoInstitucional a roles no-admin en respuesta
         const safeExisting = stripEstadoInstitucionalIfNeeded(user, { ...existing09 });
-        return res.status(200).json({ anexo: safeExisting, origen: { _id: datos.derivadoDe, codigo: "ANEXO_08" } });
+        return res.status(200).json(stripAdjuntoRutas({ anexo: safeExisting, origen: { _id: datos.derivadoDe, codigo: "ANEXO_08" } }));
       }
 
       // Debe provenir de un ANEXO_08 CERRADO
@@ -4173,15 +4216,19 @@ if (codigo === "ANEXO_03") {
     }
 
     // ───────── Adjuntos ─────────
-    const adjuntos = [];
-    (req.files || []).forEach((f) =>
-      adjuntos.push({
-        nombre: f.originalname,
-        ruta: String(f.path || "").replace(/\\/g, "/"),
-        tipo: f.mimetype,
-        size: f.size,
-      })
-    );
+    const uploadedFiles = Array.isArray(req.files)
+  ? req.files
+  : Object.values(req.files || {}).flat();
+
+const adjuntos = [];
+uploadedFiles.forEach((f) =>
+  adjuntos.push({
+    nombre: f.originalname,
+    ruta: String(f.path || "").replace(/\\/g, "/"),
+    tipo: f.mimetype,
+    size: f.size,
+  })
+);
 
     // ─────────────────────────────
     // ANEXO_04 — Ausencia prolongada
@@ -4379,7 +4426,12 @@ if (codigo === "ANEXO_03" && !origen && isObjectId(datos.derivadoDe)) {
   origen = await FormSubmission.findById(datos.derivadoDe).lean();
 }
 
-return res.status(201).json({ anexo: sub, origen });
+return res.status(201).json(
+  stripAdjuntoRutas({
+    anexo: sub?.toObject ? sub.toObject() : sub,
+    origen: origen?.toObject ? origen.toObject() : origen,
+  })
+);
   } catch (e) {
     console.error(e);
     return genericDenied(res);
@@ -4390,6 +4442,7 @@ async function listarPorCodigo(req, res) {
   try {
     const user = req.user;
     const role = up(user?.role);
+console.log("[listarPorCodigo] user:", req.user);
 
     if (!user || !user.role) return genericDenied(res);
 
@@ -4426,10 +4479,10 @@ const anexos = await FormSubmission.find(filter)
     // ✅ Solo para ANEXO_02: agregamos viviendaCodigo sin romper formato
     if (codigo === "ANEXO_02") {
       const anexosHidratados = await hydrateViviendaCodigo(anexos);
-      return res.json({ anexos: anexosHidratados });
+      return res.json(stripAdjuntoRutas({ anexos: anexosHidratados }));
     }
 
-    return res.json({ anexos: Array.isArray(anexos) ? anexos.map((a) => stripEstadoInstitucionalIfNeeded(user, a?.toObject ? a.toObject() : a)) : anexos });
+    return res.json(stripAdjuntoRutas({ anexos: Array.isArray(anexos) ? anexos.map((a) => stripEstadoInstitucionalIfNeeded(user, a?.toObject ? a.toObject() : a)) : anexos }));
   } catch (e) {
     console.error(e);
     return genericDenied(res);
@@ -4573,7 +4626,7 @@ if (String(req.query?.codigo || "").toUpperCase() === "ANEXO_02") {
   }
 }
 
-      return res.json({ anexos: anexosFinal });
+      return res.json(stripAdjuntoRutas({ anexos: anexosFinal }));
     }
 
     // ─────────────────────────────
@@ -4595,7 +4648,7 @@ if (String(req.query?.codigo || "").toUpperCase() === "ANEXO_02") {
 
       const anexosHidratados = await hydrateViviendaCodigo(anexos);
 
-      return res.json({ anexos: anexosHidratados });
+      return res.json(stripAdjuntoRutas({ anexos: anexosHidratados }));
     }
 
     // ─────────────────────────────
@@ -4611,7 +4664,7 @@ if (String(req.query?.codigo || "").toUpperCase() === "ANEXO_02") {
 
     const anexosHidratados = await hydrateViviendaCodigo(anexos);
 
-    return res.json({ anexos: anexosHidratados });
+    return res.json(stripAdjuntoRutas({ anexos: anexosHidratados }));
   } catch (e) {
     console.error("[getMisAnexos] Error:", e);
     return genericDenied(res);
@@ -4725,10 +4778,10 @@ try {
   console.error("[LISTADO] Error hidratando vivienda.codigo:", e2);
 }
 
-    return res.json({ anexos: Array.isArray(anexos) ? anexos.map((a) => stripEstadoInstitucionalIfNeeded(user, a?.toObject ? a.toObject() : a)) : anexos });
+    return res.json(stripAdjuntoRutas({ anexos: Array.isArray(anexos) ? anexos.map((a) => stripEstadoInstitucionalIfNeeded(user, a?.toObject ? a.toObject() : a)) : anexos }));
   } catch (e) {
     console.error("[FORMULARIOS] Error mis-anexos:", e);
-    return res.status(500).json({ message: "Recurso no disponible" });
+    return res.status(500).json(stripAdjuntoRutas({ message: "Recurso no disponible" }));
   }
 }
 
@@ -4755,10 +4808,10 @@ async function historialMisDatosDeclarados(req, res) {
       .limit(limit)
       .lean();
 
-    return res.json({ ok: true, items });
+    return res.json(stripAdjuntoRutas({ ok: true, items }));
   } catch (e) {
     console.error("[MIS_DATOS] Error historial:", e);
-    return res.status(500).json({ message: "Error interno" });
+    return res.status(500).json(stripAdjuntoRutas({ message: "Error interno" }));
   }
 }
 
@@ -4783,12 +4836,12 @@ async function actualizarMisDatosDeclarados(req, res) {
     } = req.body || {};
 
     if (!baseAnexoId) {
-      return res.status(400).json({ ok: false, message: "Falta baseAnexoId" });
+      return res.status(400).json(stripAdjuntoRutas({ ok: false, message: "Falta baseAnexoId" }));
     }
 
     // Validar que exista el Anexo base
     const base = await FormSubmission.findById(baseAnexoId).lean();
-    if (!base) return res.status(404).json({ ok: false, message: "Base no encontrada" });
+    if (!base) return res.status(404).json(stripAdjuntoRutas({ ok: false, message: "Base no encontrada" }));
 
     const upd = await MisDatosDeclaradosUpdate.create({
       usuario: dbUser._id,
@@ -4804,10 +4857,10 @@ async function actualizarMisDatosDeclarados(req, res) {
       mascotas: Array.isArray(mascotas) ? mascotas : (mascotas ? [mascotas] : []),
     });
 
-    return res.json({ ok: true, update: upd.toObject ? upd.toObject() : upd });
+    return res.json(stripAdjuntoRutas({ ok: true, update: upd.toObject ? upd.toObject() : upd }));
   } catch (e) {
     console.error("[MIS_DATOS] Error actualizar:", e);
-    return res.status(500).json({ ok: false, message: "Error interno" });
+    return res.status(500).json(stripAdjuntoRutas({ ok: false, message: "Error interno" }));
   }
 }
 
@@ -4823,7 +4876,7 @@ async function getMisDatosDeclaradosUpdateById(req, res) {
     // Sólo el dueño (PERMISIONARIO) o ADMIN/ADMIN_GENERAL pueden ver
     const role = up(user.role);
     const upd = await MisDatosDeclaradosUpdate.findById(id).lean();
-    if (!upd) return res.status(404).json({ message: "No encontrado" });
+    if (!upd) return res.status(404).json(stripAdjuntoRutas({ message: "No encontrado" }));
 
     if (role === "PERMISIONARIO") {
       if (String(upd.usuario) !== String(user._id)) return genericDenied(res);
@@ -4831,10 +4884,10 @@ async function getMisDatosDeclaradosUpdateById(req, res) {
       return genericDenied(res);
     }
 
-    return res.json({ ok: true, item: upd });
+    return res.json(stripAdjuntoRutas({ ok: true, item: upd }));
   } catch (e) {
     console.error("[MIS_DATOS] Error getById:", e);
-    return res.status(500).json({ message: "Error interno" });
+    return res.status(500).json(stripAdjuntoRutas({ message: "Error interno" }));
   }
 }
 
@@ -4951,7 +5004,7 @@ async function descargarMisDatosDeclaradosPdf(req, res) {
     const role = up(user.role);
 
     const upd = await MisDatosDeclaradosUpdate.findById(id).lean();
-    if (!upd) return res.status(404).json({ message: "No encontrado" });
+    if (!upd) return res.status(404).json(stripAdjuntoRutas({ message: "No encontrado" }));
 
     if (role === "PERMISIONARIO") {
       if (String(upd.usuario) !== String(user._id)) return genericDenied(res);
@@ -5026,7 +5079,7 @@ async function descargarMisDatosDeclaradosPdf(req, res) {
       return;
     }
 
-    return res.status(500).json({ message: "Error interno" });
+    return res.status(500).json(stripAdjuntoRutas({ message: "Error interno" }));
   }
 }
 
@@ -5044,7 +5097,7 @@ async function verMisDatosDeclaradosPdf(req, res) {
     const role = up(user.role);
 
     const upd = await MisDatosDeclaradosUpdate.findById(id).lean();
-    if (!upd) return res.status(404).json({ message: "No encontrado" });
+    if (!upd) return res.status(404).json(stripAdjuntoRutas({ message: "No encontrado" }));
 
     // permisos: dueño o admins
     if (role === "PERMISIONARIO") {
@@ -5116,7 +5169,7 @@ async function verMisDatosDeclaradosPdf(req, res) {
       return;
     }
 
-    return res.status(500).json({ message: "Error interno" });
+    return res.status(500).json(stripAdjuntoRutas({ message: "Error interno" }));
   }
 }
 
@@ -5131,7 +5184,7 @@ async function previewMisDatosDeclaradosPdf(req, res) {
     const role = up(user.role);
 
     const upd = await MisDatosDeclaradosUpdate.findById(id).lean();
-    if (!upd) return res.status(404).json({ message: "No encontrado" });
+    if (!upd) return res.status(404).json(stripAdjuntoRutas({ message: "No encontrado" }));
 
     if (role === "PERMISIONARIO") {
       if (String(upd.usuario) !== String(user._id)) return genericDenied(res);
@@ -5178,7 +5231,7 @@ async function previewMisDatosDeclaradosPdf(req, res) {
     doc.end();
   } catch (e) {
     console.error("[MIS_DATOS] Error preview pdf:", e);
-    return res.status(500).json({ message: "Error interno" });
+    return res.status(500).json(stripAdjuntoRutas({ message: "Error interno" }));
   }
 }
 
@@ -5193,7 +5246,7 @@ async function historialMisDatosDeclaradosPorUsuario(req, res) {
     if (!isAdmin) return genericDenied(res);
 
     const { userId } = req.params;
-    if (!isObjectId(userId)) return res.status(400).json({ message: "userId inválido" });
+    if (!isObjectId(userId)) return res.status(400).json(stripAdjuntoRutas({ message: "userId inválido" }));
 
     let limit = 50;
     if (req.query.limit !== undefined) {
@@ -5206,10 +5259,10 @@ async function historialMisDatosDeclaradosPorUsuario(req, res) {
       .limit(limit)
       .lean();
 
-    return res.json({ ok: true, items });
+    return res.json(stripAdjuntoRutas({ ok: true, items }));
   } catch (e) {
     console.error("[MIS_DATOS][ADMIN] Error historial por usuario:", e);
-    return res.status(500).json({ message: "Error interno" });
+    return res.status(500).json(stripAdjuntoRutas({ message: "Error interno" }));
   }
 }
 
@@ -5224,16 +5277,16 @@ async function ultimoMisDatosDeclaradosPorUsuario(req, res) {
     if (!isAdmin) return genericDenied(res);
 
     const { userId } = req.params;
-    if (!isObjectId(userId)) return res.status(400).json({ message: "userId inválido" });
+    if (!isObjectId(userId)) return res.status(400).json(stripAdjuntoRutas({ message: "userId inválido" }));
 
     const item = await MisDatosDeclaradosUpdate.findOne({ usuario: userId })
       .sort({ createdAt: -1 })
       .lean();
 
-    return res.json({ ok: true, item: item || null });
+    return res.json(stripAdjuntoRutas({ ok: true, item: item || null }));
   } catch (e) {
     console.error("[MIS_DATOS][ADMIN] Error último por usuario:", e);
-    return res.status(500).json({ message: "Error interno" });
+    return res.status(500).json(stripAdjuntoRutas({ message: "Error interno" }));
   }
 }
 
@@ -5250,7 +5303,7 @@ async function getAnexosPropios(req, res) {
       .sort({ createdAt: -1 })
       .lean();
 
-    return res.json({ anexos: Array.isArray(anexos) ? anexos.map((a) => stripEstadoInstitucionalIfNeeded(user, a?.toObject ? a.toObject() : a)) : anexos });
+    return res.json(stripAdjuntoRutas({ anexos: Array.isArray(anexos) ? anexos.map((a) => stripEstadoInstitucionalIfNeeded(user, a?.toObject ? a.toObject() : a)) : anexos }));
   } catch (e) {
     console.error("[getAnexosPropios] Error:", e);
     return genericDenied(res);
@@ -5313,7 +5366,7 @@ async function darConformidad(req, res) {
     if (["EN_REVISION", "CERRADO"].includes(up(anexo.estado))) {
       // Guardamos por si acabamos de persistir postulanteId/anexo01Id
       await anexo.save();
-      return res.json({ anexo });
+      return res.json(stripAdjuntoRutas({ anexo: toPlain(anexo) }));
     }
 
     // Registrar conformidad
@@ -5326,7 +5379,7 @@ async function darConformidad(req, res) {
     anexo.cambiarEstado("EN_REVISION", user._id, "Conformidad postulante");
     await anexo.save();
 
-    return res.json({ anexo });
+    return res.json(stripAdjuntoRutas({ anexo: toPlain(anexo) }));
   } catch (e) {
     console.error(e);
     return genericDenied(res);
@@ -5512,7 +5565,7 @@ async function darConformidadAdmin(req, res) {
     if (matched !== 1) return genericDenied(res);
 
     await anexo.save();
-    return res.json({ anexo });
+    return res.json(stripAdjuntoRutas({ anexo: toPlain(anexo) }));
   } catch (e) {
     console.error(e);
     return genericDenied(res);
@@ -5542,11 +5595,11 @@ async function generarAnexo02DesdeAnexo01(req, res) {
     // FAIL-CLOSED: validar vivienda antes de crear ANEXO_02
     const vivienda = await Vivienda.findById(viviendaId);
     if (!vivienda) {
-      return res.status(403).json({ message: "Recurso no disponible" });
+      return res.status(403).json(stripAdjuntoRutas({ message: "Recurso no disponible" }));
     }
     const estadoVivienda = up(vivienda.estado);
     if (estadoVivienda !== "DISPONIBLE" && estadoVivienda !== "A_DESOCUPARSE") {
-      return res.status(403).json({ message: "Recurso no disponible" });
+      return res.status(403).json(stripAdjuntoRutas({ message: "Recurso no disponible" }));
     }
 
     // NO tocar idempotencia existente por derivadoDe
@@ -5565,7 +5618,7 @@ async function generarAnexo02DesdeAnexo01(req, res) {
         });
       }
 
-      return res.json({ anexo: existente });
+      return res.json(stripAdjuntoRutas({ anexo: toPlain(existente) }));
     }
 
     // ─────────────────────────────
@@ -5581,7 +5634,7 @@ async function generarAnexo02DesdeAnexo01(req, res) {
       .lean();
 
     if (!template02?._id) {
-      return res.status(403).json({ message: "Recurso no disponible" });
+      return res.status(403).json(stripAdjuntoRutas({ message: "Recurso no disponible" }));
     }
 
     const nuevo = new FormSubmission({
@@ -5597,10 +5650,10 @@ async function generarAnexo02DesdeAnexo01(req, res) {
     });
 
     await nuevo.save();
-    return res.json({ anexo: nuevo });
+    return res.json(stripAdjuntoRutas({ anexo: toPlain(nuevo) }));
   } catch (err) {
     console.error("Error generarAnexo02DesdeAnexo01:", err);
-    return res.status(500).json({ message: "Recurso no disponible" });
+    return res.status(500).json(stripAdjuntoRutas({ message: "Recurso no disponible" }));
   }
 }
 
@@ -5997,7 +6050,7 @@ async function enviarAnexo03(req, res) {
     }
 
     await anexo.save();
-    return res.json({ ok: true, anexo });
+    return res.json(stripAdjuntoRutas({ ok: true, anexo: toPlain(anexo) }));
   } catch (e) {
     console.error("[enviarAnexo03] Error:", e);
     return genericDenied(res);
@@ -6075,7 +6128,7 @@ async function updateDatosAnexo03(req, res) {
       anexo.datos = sanitizeDatosAnexo03(anexo.datos || {}, datos);
       await anexo.save();
 
-      return res.json({ anexo: anexo.toObject() });
+      return res.json(stripAdjuntoRutas({ anexo: anexo.toObject() }));
     }
 
     // ------------- ANEXO_07 (INSPECTOR envía a ADMIN_GENERAL) -------------
@@ -6084,7 +6137,7 @@ async function updateDatosAnexo03(req, res) {
       if (!hasRolOrPermiso(user, ["INSPECTOR"])) return genericDenied(res);
 
       if (up(anexo.estado) !== "ENVIADO") {
-        return res.json({ anexo: anexo.toObject() });
+        return res.json(stripAdjuntoRutas({ anexo: anexo.toObject() }));
       }
 
       anexo.datos =
@@ -6112,7 +6165,7 @@ async function updateDatosAnexo03(req, res) {
       );
 
       await anexo.save();
-      return res.json({ anexo: anexo.toObject() });
+      return res.json(stripAdjuntoRutas({ anexo: anexo.toObject() }));
     }
 
     // ------------- ANEXO_09 (solo INSPECTOR-like, ENVIADO) -------------
@@ -6121,14 +6174,14 @@ async function updateDatosAnexo03(req, res) {
 
       if (up(anexo.estado) !== "ENVIADO") {
         // Si ya está en otra etapa, no editamos nada
-        return res.json({ anexo: anexo.toObject() });
+        return res.json(stripAdjuntoRutas({ anexo: anexo.toObject() }));
       }
       if (!isInspectorInterviniente(anexo, user._id)) return genericDenied(res);
 
       anexo.datos = sanitizeDatosAnexo09(anexo.datos || {}, datos);
       await anexo.save();
 
-      return res.json({ anexo: anexo.toObject() });
+      return res.json(stripAdjuntoRutas({ anexo: anexo.toObject() }));
     }
 
                 // ------------- ANEXO_11 (INSPECTOR / ADMIN_GENERAL / ADMIN / JEFE_DE_BARRIO / PERMISIONARIO) -------------
@@ -6145,7 +6198,7 @@ async function updateDatosAnexo03(req, res) {
       // Solo permitimos modificaciones mientras está ENVIADO o EN_REVISION
       // La conformidad del permisionario va por su endpoint específico
       if (!["ENVIADO", "EN_REVISION"].includes(estadoUp)) {
-        return res.json({ anexo: anexo.toObject() });
+        return res.json(stripAdjuntoRutas({ anexo: anexo.toObject() }));
       }
 
       aplicarCambiosAnexo11({
@@ -6160,7 +6213,7 @@ async function updateDatosAnexo03(req, res) {
       });
 
       await anexo.save();
-      return res.json({ anexo: anexo.toObject() });
+      return res.json(stripAdjuntoRutas({ anexo: anexo.toObject() }));
     }
 
     // Otros códigos no usan este endpoint
@@ -6199,7 +6252,7 @@ async function cerrarAnexo03AdminGeneral(req, res) {
     const datos = anexo.datos;
 
     if (up(anexo.estado) === "CERRADO") {
-      return res.json({ anexo: anexo.toObject() });
+      return res.json(stripAdjuntoRutas({ anexo: anexo.toObject() }));
     }
 
     if (!datos.conformidadPermisionario || !datos.conformidadPermisionario.ok) {
@@ -6256,7 +6309,7 @@ async function cerrarAnexo03AdminGeneral(req, res) {
     }
 
     await anexo.save();
-    return res.json({ anexo: anexo.toObject() });
+    return res.json(stripAdjuntoRutas({ anexo: anexo.toObject() }));
   } catch (e) {
     console.error(e);
     return genericDenied(res);
@@ -6319,7 +6372,7 @@ async function darConformidadPermisionario03(req, res) {
     }
 
     if (["EN_REVISION", "CERRADO"].includes(up(anexo.estado))) {
-      return res.json({ anexo });
+      return res.json(stripAdjuntoRutas({ anexo: toPlain(anexo) }));
     }
 
     anexo.datos = anexo.datos || {};
@@ -6362,7 +6415,7 @@ async function darConformidadPermisionario03(req, res) {
 
     await anexo.save();
 
-    return res.json({ anexo });
+    return res.json(stripAdjuntoRutas({ anexo: toPlain(anexo) }));
   } catch (e) {
     console.error(e);
     return genericDenied(res);
@@ -6421,7 +6474,7 @@ async function cerrarAnexo07AdminGeneral(req, res) {
     };
 
     await anexo.save();
-    return res.json({ anexo: anexo.toObject() });
+    return res.json(stripAdjuntoRutas({ anexo: anexo.toObject() }));
   } catch (e) {
     console.error(e);
     return genericDenied(res);
@@ -6438,7 +6491,7 @@ async function darConformidadPermisionario08(req, res) {
     if (!isObjectId(id)) return badRequest(res, "ID inválido");
 
     const anexo = await FormSubmission.findById(id);
-    if (!anexo) return res.status(404).json({ message: "Anexo no encontrado" });
+    if (!anexo) return res.status(404).json(stripAdjuntoRutas({ message: "Anexo no encontrado" }));
     if (up(anexo.codigo) !== "ANEXO_08") {
       return badRequest(res, "El formulario no corresponde a ANEXO_08");
     }
@@ -6473,13 +6526,15 @@ async function darConformidadPermisionario08(req, res) {
 
     await anexo.save();
 
-    return res.json({
-      ok: true,
-      anexo: anexo.toObject(),
-    });
+    return res.json(
+  stripAdjuntoRutas({
+    ok: true,
+    anexo: anexo.toObject(),
+  })
+);
   } catch (err) {
     console.error("darConformidadPermisionario08 error:", err);
-    return res.status(500).json({ message: "Error interno del servidor" });
+    return res.status(500).json(stripAdjuntoRutas({ message: "Error interno del servidor" }));
   }
 }
 
@@ -6556,7 +6611,7 @@ async function cerrarAnexo08AdminGeneral(req, res) {
     };
 
     await anexo.save();
-    return res.json({ anexo: anexo.toObject() });
+    return res.json(stripAdjuntoRutas({ anexo: anexo.toObject() }));
   } catch (e) {
     console.error(e);
     return genericDenied(res);
@@ -6602,13 +6657,15 @@ async function darConformidadPermisionario09(req, res) {
 
     // Idempotencia: si ya avanzó o cerró, devolvemos el recurso
     if (["EN_REVISION", "CERRADO"].includes(estadoUp)) {
-      return res.json({
+      return res.json(
+      stripAdjuntoRutas({
         ok: true,
         anexo: stripEstadoInstitucionalIfNeeded(
           user,
           anexo.toObject ? anexo.toObject() : anexo
         ),
-      });
+      })
+   );
     }
 
     // Solo bloqueamos estados terminales
@@ -6672,16 +6729,18 @@ async function darConformidadPermisionario09(req, res) {
 
     await anexo.save();
 
-    return res.json({
-      ok: true,
-      anexo: stripEstadoInstitucionalIfNeeded(
-        user,
-        anexo.toObject ? anexo.toObject() : anexo
-      ),
-    });
+    return res.json(
+  stripAdjuntoRutas({
+    ok: true,
+    anexo: stripEstadoInstitucionalIfNeeded(
+      user,
+      anexo.toObject ? anexo.toObject() : anexo
+    ),
+  })
+);
   } catch (e) {
     console.error("[ANEXO_09] Error en darConformidadPermisionario09:", e);
-    return res.status(500).json({ message: "Error interno del servidor" });
+    return res.status(500).json(stripAdjuntoRutas({ message: "Error interno del servidor" }));
   }
 }
 
@@ -6772,7 +6831,7 @@ async function cerrarAnexo09AdminGeneral(req, res) {
     }
 
     await anexo.save();
-    return res.json({ anexo: stripEstadoInstitucionalIfNeeded(user, anexo.toObject()) });
+    return res.json(stripAdjuntoRutas({ anexo: stripEstadoInstitucionalIfNeeded(user, anexo.toObject()) }));
   } catch (e) {
     console.error(e);
     return genericDenied(res);
@@ -6905,7 +6964,7 @@ async function gestionarAnexo11Admin(req, res) {
     }
 
     await anexo.save();
-    return res.json({ anexo: anexo.toObject() });
+    return res.json(stripAdjuntoRutas({ anexo: anexo.toObject() }));
   } catch (e) {
     console.error("[ANEXO_11 ADMIN_GENERAL] Error gestionando ANEXO_11:", e);
     return genericDenied(res);
@@ -6970,25 +7029,37 @@ async function descargarAdjuntoFormulario(req, res) {
     }
 
     const adjuntos = Array.isArray(source.adjuntos) ? source.adjuntos : [];
-    const adjunto = adjuntos[index];
-    if (!adjunto || !adjunto.ruta) return genericDenied(res);
+const adjunto = adjuntos[index];
+if (!adjunto || !adjunto.ruta) return genericDenied(res);
 
-    // Sanitización: solo basename para evitar traversal.
-    const filename = path.basename(String(adjunto.ruta));
+// Sanitización: solo basename para evitar traversal.
+const filename = path.basename(String(adjunto.ruta || ""));
 
-    const baseDir = path.resolve(process.cwd(), "uploads", "formularios");
-    const base = baseDir + path.sep;
-    const absPath = path.resolve(baseDir, filename);
+// Compatibilidad segura con raíces históricas / actuales
+const candidateDirs = [
+  path.resolve(process.cwd(), "uploads", "formularios"),
+  path.resolve(process.cwd(), "uploads", "forms"),
+];
 
-    // Defensa anti bypass por prefijo (con separador)
-    if (!absPath.startsWith(base)) return genericDenied(res);
+let absPath = null;
 
-    // Verificar existencia/lectura (async)
-    try {
-      await fs.promises.access(absPath, fs.constants.R_OK);
-    } catch {
-      return genericDenied(res);
-    }
+for (const dir of candidateDirs) {
+  const base = dir + path.sep;
+  const candidate = path.resolve(dir, filename);
+
+  // Defensa anti bypass por prefijo (con separador)
+  if (!candidate.startsWith(base)) continue;
+
+  try {
+    await fs.promises.access(candidate, fs.constants.R_OK);
+    absPath = candidate;
+    break;
+  } catch {
+    // probar siguiente root
+  }
+}
+
+if (!absPath) return genericDenied(res);
 
     // Headers de descarga segura (SIEMPRE attachment)
     res.setHeader(
@@ -7098,7 +7169,7 @@ async function updateObservacionesAnexo04(req, res) {
     });
 
     await anexo.save();
-    return res.json({ anexo: anexo.toObject() });
+    return res.json(stripAdjuntoRutas({ anexo: anexo.toObject() }));
   } catch (e) {
     console.error("[ANEXO_04] Error updateObservacionesAnexo04:", e);
     return genericDenied(res);
@@ -7151,7 +7222,7 @@ async function darConformidadJefeBarrio04(req, res) {
     });
 
     await anexo.save();
-    return res.json({ anexo: anexo.toObject() });
+    return res.json(stripAdjuntoRutas({ anexo: anexo.toObject() }));
   } catch (e) {
     console.error("[ANEXO_04] Error darConformidadJefeBarrio04:", e);
     return genericDenied(res);
@@ -7242,7 +7313,7 @@ async function darConformidadJefeAnexo04(req, res) {
 
     await anexo.save();
 
-    return res.json({ anexo: anexo.toObject() });
+    return res.json(stripAdjuntoRutas({ anexo: anexo.toObject() }));
   } catch (e) {
     console.error("[ANEXO_04] Error en darConformidadJefeAnexo04", e);
     return genericDenied(res);

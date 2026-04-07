@@ -142,7 +142,10 @@ async function listarUsuarios(req, res) {
       filtro.$or = [{ mr: regex }, { apellido: regex }, { nombres: regex }, { nombre: regex }, { email: regex }];
     }
 
-    const usuarios = await User.find(filtro).select("-password").sort({ createdAt: -1 });
+    const usuarios = await User.find(filtro)
+    .select("-password")
+    .sort({ createdAt: -1 })
+    .lean();
 
     // Auditoría: acceso administrativo a listado (sin incluir resultados)
     await registrarAuditoria(req, {
@@ -427,15 +430,16 @@ async function verHistorial(req, res) {
 
     // Compat: buscar por usuarioAfectado (viejo) OR entity
     const historial = await AuditLog.find({
-      $or: [
-        { usuarioAfectado: usuario._id },
-        { "entity.type": "User", "entity.id": String(usuario._id) },
-        { recursoTipo: "User", recursoId: String(usuario._id) },
-      ],
-    })
-      .sort({ timestamp: -1, fecha: -1, createdAt: -1 })
-      .limit(200);
-
+    $or: [
+      { usuarioAfectado: usuario._id },
+      { "entity.type": "User", "entity.id": String(usuario._id) },
+      { recursoTipo: "User", recursoId: String(usuario._id) },
+    ],
+  })
+    .sort({ timestamp: -1, fecha: -1, createdAt: -1 })
+    .limit(200)
+    .lean();
+      
     // Auditoría del acceso a historial (sin devolver contenido en el log)
     await registrarAuditoria(req, {
       action: "ADMIN_VIEW_AUDIT_HISTORY",

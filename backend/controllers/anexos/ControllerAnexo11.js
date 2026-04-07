@@ -621,16 +621,16 @@ async function obtener(ctxOrReq, maybeRes) {
     // Maestro ya tiene lógica base para canRead, pero no dependemos de middleware:
     const role = roleUp(user);
     if (role === "ADMIN" || role === "ADMIN_GENERAL") {
-      return res.json({ anexo: sub });
+      return res.json({ anexo: sub?.toObject ? sub.toObject() : sub });
     }
 
     if (String(sub.usuario) === String(user._id)) {
-      return res.json({ anexo: sub });
+      return res.json({ anexo: sub?.toObject ? sub.toObject() : sub });
     }
 
     const inv = Array.isArray(sub.intervinientes) ? sub.intervinientes : [];
     if (inv.some((x) => String(x?.userId) === String(user._id))) {
-      return res.json({ anexo: sub });
+      return res.json({ anexo: sub?.toObject ? sub.toObject() : sub });
     }
 
     return deny(core, res);

@@ -1,47 +1,33 @@
-// utils/jwt.js
-// Utilidades JWT para autenticación en ZN98 (RS256)
+// backend/utils/jwt.js
+// DEPRECADO:
+// Este archivo NO define una política JWT propia.
+// Se mantiene únicamente por compatibilidad transitoria.
+// La autoridad oficial de autenticación está en:
+//   - backend/controllers/authController.js
+//   - backend/middleware/auth.js
+//
+// No agregar lógica nueva acá.
 
-const jwt = require('jsonwebtoken');
+const { signToken, verifyToken } = require("../middleware/auth");
 
-// Las claves deben venir de variables de entorno
-// JWT_PRIVATE_KEY y JWT_PUBLIC_KEY en formato PEM
-// (si están con \n, las normalizamos)
-function getPrivateKey() {
-  const key = process.env.JWT_PRIVATE_KEY;
-  if (!key) {
-    throw new Error('JWT_PRIVATE_KEY no está definida en el entorno');
-  }
-  return key.replace(/\\n/g, '\n');
+let warned = false;
+
+function warnOnce() {
+  if (warned) return;
+  warned = true;
+  console.warn(
+    "[DEPRECATION] backend/utils/jwt.js está deprecado. Usar backend/middleware/auth.js"
+  );
 }
 
-function getPublicKey() {
-  const key = process.env.JWT_PUBLIC_KEY;
-  if (!key) {
-    throw new Error('JWT_PUBLIC_KEY no está definida en el entorno');
-  }
-  return key.replace(/\\n/g, '\n');
-}
-
-// Crea el token de autenticación para un usuario
 function signAuthToken(user) {
-  const payload = {
-    sub: user._id.toString(),
-    role: user.role,
-    matricula: user.matricula,
-    email: user.email,
-  };
-
-  return jwt.sign(payload, getPrivateKey(), {
-    algorithm: 'RS256',
-    expiresIn: '1d', // 1 día, ajustable
-  });
+  warnOnce();
+  return signToken(user);
 }
 
-// Verifica un token y devuelve el payload
 function verifyAuthToken(token) {
-  return jwt.verify(token, getPublicKey(), {
-    algorithms: ['RS256'],
-  });
+  warnOnce();
+  return verifyToken(token);
 }
 
 module.exports = {

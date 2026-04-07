@@ -11,7 +11,6 @@ const { Liquidacion } = require("../models/Liquidacion");
 const { LiquidacionLote } = require("../models/LiquidacionLote");
 const PDFDocument = require("pdfkit");
 
-
 function up(v) {
   return String(v || "").toUpperCase().trim();
 }
@@ -85,6 +84,74 @@ function sha256File(filePath) {
   return crypto.createHash("sha256").update(buf).digest("hex");
 }
 
+function looksLikeTextCsv(buffer) {
+  if (!Buffer.isBuffer(buffer) || buffer.length === 0) return false;
+
+  // 1) Rechazo rápido de binarios típicos
+  const sample = buffer.subarray(0, Math.min(buffer.length, 4096));
+
+  for (const byte of sample) {
+    if (byte === 0x00) return false; // null byte => muy probablemente binario
+  }
+
+  // 2) Intentamos leer como UTF-8
+  const text = sample.toString("utf8");
+
+  // Si hay demasiados caracteres de reemplazo, probablemente no es texto válido
+  const replacementChars = (text.match(/\uFFFD/g) || []).length;
+  if (replacementChars > 10) return false;
+
+  // 3) Debe parecer tabla CSV
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .slice(0, 5);
+
+  if (lines.length === 0) return false;
+
+  const hasDelimiter = lines.some(
+    (line) => line.includes(",") || line.includes(";")
+  );
+  if (!hasDelimiter) return false;
+
+  return true;
+}
+
+function safeUnlink(filePath) {
+  try {
+    if (filePath && fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+  } catch (_) {}
+}
+
+function detectDelimiter(text) {
+  const firstLine = (text || "").split(/\r?\n/)[0] || "";
+  const semi = (firstLine.match(/;/g) || []).length;
+  const comma = (firstLine.match(/,/g) || []).length;
+  return semi >= comma ? ";" : ",";
+}
+
+function hasExcessiveInvalidChars(text) {
+  if (!text) return true;
+
+  const invalid = (text.match(/\uFFFD/g) || []).length;
+
+  // ratio sobre tamaño (más robusto que número fijo)
+  const ratio = invalid / text.length;
+
+  return ratio > 0.02; // 2% → umbral seguro
+}
+
+function normalizeHeader(h) {
+  return String(h || "")
+    .replace("\ufeff", "")
+    .replace(/\u200b/g, "")
+    .trim()
+    .toUpperCase();
+}
+
 // Columnas EXA (ejemplo)
 // Ajustar según CSV real del sistema si cambia el formato.
 const COLS = {
@@ -96,11 +163,51 @@ const COLS = {
   COD411: ["COD. 411", "CODIGO 411", "COD411", "COD_411", "411"],
 };
 
+function headerMatchesAny(header, aliases) {
+  const h = normalizeHeader(header);
+  return aliases.some((a) => normalizeHeader(a) === h);
+}
+
+function findHeader(headers, aliases) {
+  return headers.find((h) => headerMatchesAny(h, aliases)) || null;
+}
+
+function validateLiquidacionHeaders(headers) {
+  const list = Array.isArray(headers) ? headers : [];
+
+  const requiredGroups = [
+    { key: "MR", aliases: COLS.MR },
+    { key: "APELLIDO", aliases: COLS.APELLIDO },
+    { key: "COD457", aliases: COLS.COD457 },
+    { key: "COD411", aliases: COLS.COD411 },
+  ];
+
+  const missing = requiredGroups
+    .filter((g) => !findHeader(list, g.aliases))
+    .map((g) => g.key);
+
+  return {
+    ok: missing.length === 0,
+    missing,
+  };
+}
+
 function pickCol(row, names) {
   for (const k of names) {
     if (row && Object.prototype.hasOwnProperty.call(row, k)) return row[k];
   }
   return "";
+}
+
+function hasUsefulLiquidacionRows(rows) {
+  return Array.isArray(rows) && rows.some((row) => {
+    const mr = safeStr(pickCol(row, COLS.MR));
+    const apellido = safeStr(pickCol(row, COLS.APELLIDO));
+    const cod457 = String(pickCol(row, COLS.COD457) || "").trim();
+    const cod411 = String(pickCol(row, COLS.COD411) || "").trim();
+
+    return !!(mr || apellido || cod457 || cod411);
+  });
 }
 
 function toNum(v) {
@@ -151,13 +258,18 @@ function buildLiquidacionPatch({ tipo, loteId, cod457, cod411 }) {
 }
 
 function computeVista(liq) {
-  const p = liq && liq.principal ? liq.principal : { cod457: 0, cod411: 0 };
-  const r = liq && liq.reintegrosParticulares ? liq.reintegrosParticulares : { cod457: 0, cod411: 0 };
+  const p =
+    liq && liq.principal ? liq.principal : { cod457: 0, cod411: 0 };
+  const r =
+    liq && liq.reintegrosParticulares
+      ? liq.reintegrosParticulares
+      : { cod457: 0, cod411: 0 };
 
   const total457 = Number(p.cod457 || 0) - Number(r.cod457 || 0);
   const total411 = Number(p.cod411 || 0) - Number(r.cod411 || 0);
 
-  const etiqueta = (n) => (n > 0 ? "DESCUENTO" : n < 0 ? "REINTEGRO" : "0");
+  const etiqueta = (n) =>
+    n > 0 ? "DESCUENTO" : n < 0 ? "REINTEGRO" : "0";
 
   return {
     _id: liq._id,
@@ -182,11 +294,18 @@ async function resolveMrFromDb(userId) {
 
   // authRequired ya valida activo/bloqueado/archivado y tokenVersion,
   // pero acá necesitamos matricula (no viene en req.user por minimización A5).
-  const dbUser = await User.findById(userId).select("_id role matricula activo bloqueado archivado").lean();
+  const dbUser = await User.findById(userId)
+    .select("_id role matricula activo bloqueado archivado")
+    .lean();
   if (!dbUser) return "";
 
   // Defensa en profundidad: si el usuario fue desactivado luego de autenticarse, fail-closed
-  if (dbUser.activo === false || dbUser.bloqueado === true || dbUser.archivado === true) return "";
+  if (
+    dbUser.activo === false ||
+    dbUser.bloqueado === true ||
+    dbUser.archivado === true
+  )
+    return "";
 
   // Solo PERMISIONARIO / ALOJADO pueden consumir /mis
   if (!isPermOrAloj(dbUser)) return "";
@@ -200,15 +319,13 @@ async function resolveMrFromDb(userId) {
 async function getUltimaMia(req, res) {
   try {
     const user = req.user;
-    if (!user) return res.status(404).json({ message: "Recurso no disponible" });
+    if (!user)
+      return res.status(404).json({ message: "Recurso no disponible" });
 
-    // ⚠️ req.user está minimizado (A5): no trae matricula.
-    // Se obtiene desde DB para calcular MR y filtrar estrictamente "mis" liquidaciones.
     const mr = await resolveMrFromDb(user._id);
-    if (!mr) return res.status(404).json({ message: "Recurso no disponible" });
+    if (!mr)
+      return res.status(404).json({ message: "Recurso no disponible" });
 
-    // Robustez: algunas liquidaciones históricas pueden no tener userId materializado.
-    // Seguridad: el filtro sigue siendo por MR (identidad institucional) del usuario autenticado.
     const liq = await Liquidacion.findOne({
       mr,
       $or: [{ userId: user._id }, { userId: null }],
@@ -228,10 +345,12 @@ async function getUltimaMia(req, res) {
 async function getHistorialMio(req, res) {
   try {
     const user = req.user;
-    if (!user) return res.status(404).json({ message: "Recurso no disponible" });
+    if (!user)
+      return res.status(404).json({ message: "Recurso no disponible" });
 
     const mr = await resolveMrFromDb(user._id);
-    if (!mr) return res.status(404).json({ message: "Recurso no disponible" });
+    if (!mr)
+      return res.status(404).json({ message: "Recurso no disponible" });
 
     const list = await Liquidacion.find({
       mr,
@@ -265,7 +384,6 @@ async function getAdmin(req, res) {
 
     const q = {};
 
-    // últimos 12 meses por defecto
     const now = new Date();
     const minDate = new Date(now.getFullYear(), now.getMonth() - 11, 1);
     const minPeriodo = `${minDate.getFullYear()}-${String(
@@ -274,19 +392,19 @@ async function getAdmin(req, res) {
 
     q.periodo = { $gte: minPeriodo };
 
-    // si viene período válido, pisa el rango automático
     if (periodo && periodoValido(periodo)) {
       q.periodo = periodo;
     }
 
-    // filtro exacto por MR
     if (mr) {
       q.mr = mr;
     }
 
-    // búsqueda libre por MR o apellidoNombre
     if (qSearch) {
-      const rx = new RegExp(qSearch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+      const rx = new RegExp(
+        qSearch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+        "i"
+      );
 
       if (q.mr) {
         q.$or = [{ apellidoNombre: rx }];
@@ -295,7 +413,6 @@ async function getAdmin(req, res) {
       }
     }
 
-    // filtro por estado
     if (estado === "ENTREGADA") {
       q.estadoEntrega = "ENTREGADA";
     } else if (estado === "NO_ENTREGADA") {
@@ -328,16 +445,12 @@ async function getAdminResumen(req, res) {
 
     const results = [];
 
-    // 🔹 FILTRO 12 MESES
     const now = new Date();
     const minDate = new Date(now.getFullYear(), now.getMonth() - 11, 1);
     const minPeriodo = `${minDate.getFullYear()}-${String(
       minDate.getMonth() + 1
     ).padStart(2, "0")}`;
 
-    // =========================
-    // 1. LIQUIDACIONES
-    // =========================
     const qLiq = {
       periodo: periodo || { $gte: minPeriodo },
     };
@@ -347,28 +460,20 @@ async function getAdminResumen(req, res) {
     for (const liq of liquidaciones) {
       results.push({
         tipoRegistro: "LIQUIDACION",
-
         periodo: liq.periodo,
         mr: liq.mr,
         apellidoNombre: liq.apellidoNombre || "",
-
         cod457:
           (liq.principal?.cod457 || 0) -
           (liq.reintegrosParticulares?.cod457 || 0),
-
         cod411:
           (liq.principal?.cod411 || 0) -
           (liq.reintegrosParticulares?.cod411 || 0),
-
         estado: liq.estadoEntrega || "ENTREGADA",
-
         lote: liq.origen?.loteParticularesId || null,
       });
     }
 
-    // =========================
-    // 2. PENDIENTES DE LOTES
-    // =========================
     const qLote = {
       periodo: periodo || { $gte: minPeriodo },
     };
@@ -379,24 +484,17 @@ async function getAdminResumen(req, res) {
       for (const p of lote.pendientes || []) {
         results.push({
           tipoRegistro: "PENDIENTE",
-
           periodo: lote.periodo,
           mr: p.mr || "",
           apellidoNombre: p.apellidoNombre || "",
-
           cod457: p.cod457 || 0,
           cod411: p.cod411 || 0,
-
           estado: p.motivo || "PENDIENTE",
-
           lote: lote._id,
         });
       }
     }
 
-    // =========================
-    // 3. FILTRO DE BUSQUEDA
-    // =========================
     let final = results;
 
     if (qSearch) {
@@ -410,9 +508,6 @@ async function getAdminResumen(req, res) {
       });
     }
 
-    // =========================
-    // 4. ORDEN
-    // =========================
     final.sort((a, b) => {
       if (a.periodo !== b.periodo) return b.periodo.localeCompare(a.periodo);
       return (a.apellidoNombre || "").localeCompare(b.apellidoNombre || "");
@@ -443,7 +538,6 @@ async function getAdminResumenPDF(req, res) {
       minDate.getMonth() + 1
     ).padStart(2, "0")}`;
 
-    // 🔹 LIQUIDACIONES
     const qLiq = {
       periodo: periodo || { $gte: minPeriodo },
     };
@@ -466,7 +560,6 @@ async function getAdminResumenPDF(req, res) {
       });
     }
 
-    // 🔹 LOTES (PENDIENTES)
     const qLote = {
       periodo: periodo || { $gte: minPeriodo },
     };
@@ -487,7 +580,6 @@ async function getAdminResumenPDF(req, res) {
       }
     }
 
-    // 🔹 BUSQUEDA
     let final = results;
 
     if (qSearch) {
@@ -499,14 +591,16 @@ async function getAdminResumenPDF(req, res) {
       );
     }
 
-    // 🔹 ORDEN
     final.sort((a, b) => {
       if (a.periodo !== b.periodo) return b.periodo.localeCompare(a.periodo);
       return (a.apellidoNombre || "").localeCompare(b.apellidoNombre || "");
     });
 
-        // 🔹 PDF
-    const doc = new PDFDocument({ size: "A4", layout: "landscape", margin: 30 });
+    const doc = new PDFDocument({
+      size: "A4",
+      layout: "landscape",
+      margin: 30,
+    });
 
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
@@ -533,15 +627,20 @@ async function getAdminResumenPDF(req, res) {
     };
 
     function drawHeader() {
-      doc.fontSize(16).font("Helvetica-Bold").text("Resumen de Liquidaciones", left, top, {
-        align: "center",
-        width: pageWidth - left * 2,
-      });
+      doc
+        .fontSize(16)
+        .font("Helvetica-Bold")
+        .text("Resumen de Liquidaciones", left, top, {
+          align: "center",
+          width: pageWidth - left * 2,
+        });
 
       const headerY = top + 28;
 
       doc.fontSize(9).font("Helvetica-Bold");
-      doc.text("Periodo", cols.periodo.x, headerY, { width: cols.periodo.width });
+      doc.text("Periodo", cols.periodo.x, headerY, {
+        width: cols.periodo.width,
+      });
       doc.text("MR", cols.mr.x, headerY, { width: cols.mr.width });
       doc.text("Nombre", cols.nombre.x, headerY, { width: cols.nombre.width });
       doc.text("457", cols.cod457.x, headerY, { width: cols.cod457.width });
@@ -549,9 +648,7 @@ async function getAdminResumenPDF(req, res) {
       doc.text("Estado", cols.estado.x, headerY, { width: cols.estado.width });
       doc.text("Tipo", cols.tipo.x, headerY, { width: cols.tipo.width });
 
-      doc.moveTo(left, headerY + 14)
-        .lineTo(pageWidth - left, headerY + 14)
-        .stroke();
+      doc.moveTo(left, headerY + 14).lineTo(pageWidth - left, headerY + 14).stroke();
 
       return headerY + 20;
     }
@@ -634,12 +731,20 @@ async function getAdminResumenPDF(req, res) {
 async function getPendientes(req, res) {
   try {
     const user = req.user;
-    if (!user || !isAdminGeneral(user)) return res.status(404).json({ message: "Recurso no disponible" });
+    if (!user || !isAdminGeneral(user)) {
+      return res.status(404).json({ message: "Recurso no disponible" });
+    }
 
     const periodo = safeStr(req.query.periodo);
-    if (!periodoValido(periodo)) return res.status(400).json({ message: "Periodo inválido" });
+    if (!periodoValido(periodo)) {
+      return res.status(400).json({ message: "Periodo inválido" });
+    }
 
-    const lotes = await LiquidacionLote.find({ periodo }).sort({ createdAt: -1 }).limit(50).lean();
+    const lotes = await LiquidacionLote.find({ periodo })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean();
+
     return res.json({ lotes });
   } catch (err) {
     console.error("[LIQUIDACIONES] Error pendientes:", err);
@@ -648,33 +753,89 @@ async function getPendientes(req, res) {
 }
 
 // ─────────────────────────────
-// Carga CSV (preview + confirmar) — mantiene estructura existente
+// Carga CSV (preview + confirmar)
 
 async function previewCarga(req, res) {
   try {
     const user = req.user;
-    if (!user || !isAdminGeneral(user)) return res.status(404).json({ message: "Recurso no disponible" });
+    if (!user || !isAdminGeneral(user)) {
+      return res.status(404).json({ message: "Recurso no disponible" });
+    }
 
     const periodo = safeStr(req.params.periodo);
     const tipo = up(req.params.tipo);
 
-    if (!periodoValido(periodo)) return res.status(400).json({ message: "Periodo inválido" });
+    if (!periodoValido(periodo)) {
+      return res.status(400).json({ message: "Periodo inválido" });
+    }
+
     if (!["PRINCIPAL", "DESCUENTOS", "REINTEGROS", "PARTICULARES"].includes(tipo)) {
       return res.status(400).json({ message: "Tipo inválido" });
     }
 
-    if (!req.file || !req.file.path) return res.status(400).json({ message: "Archivo requerido" });
+    if (!req.file || !req.file.path) {
+      return res.status(400).json({ message: "Archivo requerido" });
+    }
 
-    const sha = sha256File(req.file.path);
+    const filePath = req.file.path;
+    const sha = sha256File(filePath);
 
-    const content = fs.readFileSync(req.file.path);
-    const rows = parse(content, {
-  columns: true,
-  skip_empty_lines: true,
-  trim: true,
-  delimiter: ";",
-  bom: true,
-});
+    const contentBuffer = fs.readFileSync(filePath);
+
+    if (!looksLikeTextCsv(contentBuffer)) {
+      safeUnlink(filePath);
+      return res.status(400).json({ message: "Archivo CSV inválido" });
+    }
+
+    const contentText = contentBuffer.toString("utf8");
+
+if (hasExcessiveInvalidChars(contentText)) {
+  safeUnlink(filePath);
+  return res.status(400).json({ message: "Archivo CSV inválido" });
+}
+    const delimiter = detectDelimiter(contentText);
+
+    let rows = [];
+    try {
+      rows = parse(contentText, {
+        columns: true,
+        skip_empty_lines: true,
+        trim: true,
+        delimiter,
+        bom: true,
+        relax_quotes: true,
+        relax_column_count: true,
+      });
+    } catch (err) {
+      console.error(
+        "[LIQUIDACIONES] CSV inválido (parse):",
+        err?.code || err?.message || err
+      );
+      safeUnlink(filePath);
+      return res.status(400).json({ message: "Archivo CSV inválido" });
+    }
+
+    if (!Array.isArray(rows) || rows.length === 0) {
+      safeUnlink(filePath);
+      return res.status(400).json({ message: "Archivo CSV inválido" });
+    }
+
+    const headers = Object.keys(rows[0] || {});
+    const headersValidation = validateLiquidacionHeaders(headers);
+
+    if (!headersValidation.ok) {
+      console.error(
+        "[LIQUIDACIONES] CSV inválido (headers faltantes):",
+        headersValidation.missing
+      );
+      safeUnlink(filePath);
+      return res.status(400).json({ message: "Archivo CSV inválido" });
+    }
+
+    if (!hasUsefulLiquidacionRows(rows)) {
+      safeUnlink(filePath);
+      return res.status(400).json({ message: "Archivo CSV inválido" });
+    }
 
     const pendientes = [];
     const duplicadas = new Set();
@@ -682,40 +843,41 @@ async function previewCarga(req, res) {
 
     let filas = 0;
 
-  // 🔢 Obtener última versión para este período y tipo
-const last = await LiquidacionLote.findOne({ periodo, tipo })
-  .sort({ version: -1 })
-  .select("version")
-  .lean();
+    const last = await LiquidacionLote.findOne({ periodo, tipo })
+      .sort({ version: -1 })
+      .select("version")
+      .lean();
 
-const nextVersion = last ? last.version + 1 : 1;
+    const nextVersion = last ? last.version + 1 : 1;
 
-// Lote borrador
-const retenerHasta = new Date();
-retenerHasta.setFullYear(retenerHasta.getFullYear() + 1);
+    const retenerHasta = new Date();
+    retenerHasta.setFullYear(retenerHasta.getFullYear() + 1);
 
-const lote = await LiquidacionLote.create({
-  periodo,
-  tipo,
-  version: nextVersion, // 👈 CLAVE
+    const lote = await LiquidacionLote.create({
+      periodo,
+      tipo,
+      version: nextVersion,
+      estado: "BORRADOR",
+      cargadoPor: req.user?._id,
+      retenerHasta,
+      archivo: {
+        originalName: req.file.originalname,
+        storedName: path.basename(filePath),
+        path: filePath,
+        size: req.file.size,
+        sha256: sha,
+        delimiter,
+      },
+      resumen: {
+        filas: 0,
+        asignadas: 0,
+        pendientes: 0,
+        duplicadas: 0,
+        invalidas: 0,
+      },
+      pendientes: [],
+    });
 
-  estado: "BORRADOR",
-  cargadoPor: req.user?._id,
-  retenerHasta,
-
-  archivo: {
-    originalName: req.file.originalname,
-    storedName: path.basename(req.file.path),
-    path: req.file.path,
-    size: req.file.size,
-    sha256: sha,
-  },
-
-  resumen: { filas: 0, asignadas: 0, pendientes: 0, duplicadas: 0, invalidas: 0 },
-  pendientes: [],
-});
-
-    // Procesamiento básico (esto es "preview": no altera liquidaciones finales)
     const seen = new Set();
 
     for (const row of rows) {
@@ -734,7 +896,6 @@ const lote = await LiquidacionLote.create({
       }
       seen.add(key);
 
-                 // En preview marcamos pendiente si no hay usuario por MR
       const u = await findUserByMatriculaFlexible(mr).catch(() => null);
 
       if (!u) {
@@ -776,7 +937,6 @@ const lote = await LiquidacionLote.create({
       pendientesCount: pendientes.length,
       pendientes: lote.pendientes,
     });
-
   } catch (err) {
     console.error("[LIQUIDACIONES] Error preview:", err);
     return res.status(500).json({ message: "Error interno" });
@@ -812,25 +972,66 @@ async function confirmarCarga(req, res) {
     }
 
     if (String(lote.periodo) !== periodo || String(lote.tipo) !== tipo) {
-      return res.status(400).json({ message: "El lote no coincide con período/tipo" });
+      return res
+        .status(400)
+        .json({ message: "El lote no coincide con período/tipo" });
     }
 
     if (lote.estado !== "BORRADOR") {
-      return res.status(400).json({ message: "El lote no está en estado BORRADOR" });
+      return res
+        .status(400)
+        .json({ message: "El lote no está en estado BORRADOR" });
     }
 
     if (!lote.archivo || !lote.archivo.path) {
-      return res.status(400).json({ message: "El lote no tiene archivo asociado" });
+      return res
+        .status(400)
+        .json({ message: "El lote no tiene archivo asociado" });
     }
 
-    const content = fs.readFileSync(lote.archivo.path);
-    const rows = parse(content, {
-      columns: true,
-      skip_empty_lines: true,
-      trim: true,
-      delimiter: ";",
-      bom: true,
-    });
+    const filePath = lote.archivo.path;
+    const contentBuffer = fs.readFileSync(filePath);
+
+    if (!looksLikeTextCsv(contentBuffer)) {
+      return res.status(400).json({ message: "El archivo del lote es inválido" });
+    }
+
+    const contentText = contentBuffer.toString("utf8");
+    const delimiter = safeStr(lote.archivo?.delimiter) || detectDelimiter(contentText);
+
+    let rows = [];
+    try {
+      rows = parse(contentText, {
+        columns: true,
+        skip_empty_lines: true,
+        trim: true,
+        delimiter,
+        bom: true,
+        relax_quotes: true,
+        relax_column_count: true,
+      });
+    } catch (err) {
+      console.error(
+        "[LIQUIDACIONES] CSV inválido al confirmar:",
+        err?.code || err?.message || err
+      );
+      return res.status(400).json({ message: "El archivo del lote es inválido" });
+    }
+
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).json({ message: "El archivo del lote es inválido" });
+    }
+
+    const headers = Object.keys(rows[0] || {});
+    const headersValidation = validateLiquidacionHeaders(headers);
+
+    if (!headersValidation.ok) {
+      console.error(
+        "[LIQUIDACIONES] CSV inválido al confirmar (headers faltantes):",
+        headersValidation.missing
+      );
+      return res.status(400).json({ message: "El archivo del lote es inválido" });
+    }
 
     const seen = new Set();
 
@@ -888,7 +1089,9 @@ async function confirmarCarga(req, res) {
       });
 
       try {
-        const existing = await Liquidacion.findOne({ periodo, mr }).select("_id").lean();
+        const existing = await Liquidacion.findOne({ periodo, mr })
+          .select("_id")
+          .lean();
 
         await Liquidacion.updateOne(
           { periodo, mr },
@@ -950,12 +1153,20 @@ async function cargarParticular(req, res) {
     const mrCorregido = normMR(req.body?.mrCorregido);
     const fila = Number(req.body?.fila);
 
-    if (!loteId) return res.status(400).json({ message: "loteId requerido" });
-    if (!mrCorregido) return res.status(400).json({ message: "MR corregido requerido" });
-    if (!Number.isFinite(fila)) return res.status(400).json({ message: "fila requerida" });
+    if (!loteId) {
+      return res.status(400).json({ message: "loteId requerido" });
+    }
+    if (!mrCorregido) {
+      return res.status(400).json({ message: "MR corregido requerido" });
+    }
+    if (!Number.isFinite(fila)) {
+      return res.status(400).json({ message: "fila requerida" });
+    }
 
     const lote = await LiquidacionLote.findById(loteId);
-    if (!lote) return res.status(404).json({ message: "Lote no encontrado" });
+    if (!lote) {
+      return res.status(404).json({ message: "Lote no encontrado" });
+    }
 
     const pendientes = Array.isArray(lote.pendientes) ? lote.pendientes : [];
 
@@ -966,77 +1177,76 @@ async function cargarParticular(req, res) {
     });
 
     if (idx < 0) {
-      return res.status(404).json({ message: "Pendiente no encontrado en el lote" });
+      return res
+        .status(404)
+        .json({ message: "Pendiente no encontrado en el lote" });
     }
 
     const usuario = await findUserByMatriculaFlexible(mrCorregido);
 
-if (!usuario) {
-  return res.status(400).json({ message: "No existe un usuario con la matrícula indicada" });
-}
+    if (!usuario) {
+      return res
+        .status(400)
+        .json({ message: "No existe un usuario con la matrícula indicada" });
+    }
 
-// 📦 pendiente actual
-const pendiente = pendientes[idx];
+    const pendiente = pendientes[idx];
 
-// 📅 retención (1 año)
-const retenerHasta = new Date();
-retenerHasta.setFullYear(retenerHasta.getFullYear() + 1);
+    const retenerHasta = new Date();
+    retenerHasta.setFullYear(retenerHasta.getFullYear() + 1);
 
-// 🧾 Crear liquidación REAL alineada al schema
-const patch = buildLiquidacionPatch({
-  tipo: lote.tipo,
-  loteId: lote._id,
-  cod457: pendiente?.cod457,
-  cod411: pendiente?.cod411,
-});
+    const patch = buildLiquidacionPatch({
+      tipo: lote.tipo,
+      loteId: lote._id,
+      cod457: pendiente?.cod457,
+      cod411: pendiente?.cod411,
+    });
 
-await Liquidacion.updateOne(
-  { periodo: lote.periodo, mr: mrCorregido },
-  {
-    $set: {
+    await Liquidacion.updateOne(
+      { periodo: lote.periodo, mr: mrCorregido },
+      {
+        $set: {
+          periodo: lote.periodo,
+          mr: mrCorregido,
+          userId: usuario._id,
+          grado: pendiente?.grado || "",
+          apellidoNombre: pendiente?.apellidoNombre || "",
+          vivienda: pendiente?.vivienda || "",
+          estadoEntrega: "ENTREGADA",
+          motivoPendiente: "",
+          retenerHasta,
+          ...patch,
+        },
+      },
+      { upsert: true }
+    );
+
+    const liq = await Liquidacion.findOne({
       periodo: lote.periodo,
       mr: mrCorregido,
-      userId: usuario._id,
+    })
+      .select("_id")
+      .lean();
 
-      grado: pendiente?.grado || "",
-      apellidoNombre: pendiente?.apellidoNombre || "",
-      vivienda: pendiente?.vivienda || "",
-
-      estadoEntrega: "ENTREGADA",
-      motivoPendiente: "",
-      retenerHasta,
-
-      ...patch,
-    },
-  },
-  { upsert: true }
-);
-
-const liq = await Liquidacion.findOne({
-  periodo: lote.periodo,
-  mr: mrCorregido,
-})
-  .select("_id")
-  .lean();
     return res.json({
-  message: "Pendiente resuelto y liquidación creada",
-  loteId: String(lote._id),
-  resumen: lote.resumen,
-  pendientes: lote.pendientes || [],
-  liquidacionId: liq ? String(liq._id) : null,
-  usuarioVinculado: {
-    _id: String(usuario._id),
-    matricula: usuario.matricula,
-    nombre: usuario.nombre || "",
-    apellido: usuario.apellido || "",
-  },
-});
-
+      message: "Pendiente resuelto y liquidación creada",
+      loteId: String(lote._id),
+      resumen: lote.resumen,
+      pendientes: lote.pendientes || [],
+      liquidacionId: liq ? String(liq._id) : null,
+      usuarioVinculado: {
+        _id: String(usuario._id),
+        matricula: usuario.matricula,
+        nombre: usuario.nombre || "",
+        apellido: usuario.apellido || "",
+      },
+    });
   } catch (err) {
     console.error("[LIQUIDACIONES] Error particular:", err);
     return res.status(500).json({ message: "Error interno" });
   }
 }
+
 module.exports = {
   previewCarga,
   confirmarCarga,

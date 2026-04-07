@@ -64,10 +64,10 @@ async function refreshUserPrivileges(req, res, next) {
 
     // Buscamos en BD con campos necesarios para seguridad.
     const dbUser = await User.findById(id)
-      .select(
-        "nombre apellido email dni matricula role permisos activo bloqueado archivado barrioAsignado viviendaAsignada alojamientoAsignado tokenVersion"
-      )
-      .lean();
+     .select(
+       "_id role permisos activo bloqueado archivado barrioAsignado viviendaAsignada alojamientoAsignado tokenVersion"
+     )
+     .lean();
 
     if (!dbUser) {
       clearAuthCookie(res);
@@ -99,20 +99,16 @@ async function refreshUserPrivileges(req, res, next) {
 
     // Actualizamos req.user con la foto actual de BD.
     req.user = {
-      _id: String(dbUser._id),
-      nombre: dbUser.nombre,
-      apellido: dbUser.apellido,
-      email: dbUser.email,
-      dni: dbUser.dni,
-      matricula: dbUser.matricula,
-      role: dbUser.role,
-      permisos: Array.isArray(dbUser.permisos) ? dbUser.permisos : [],
-      activo: dbUser.activo,
-      barrioAsignado: dbUser.barrioAsignado ?? null,
-      viviendaAsignada: dbUser.viviendaAsignada ?? null,
-      alojamientoAsignado: dbUser.alojamientoAsignado ?? null,
-      tokenVersion: tokenVersionDb,
-    };
+  _id: String(dbUser._id),
+   id: String(dbUser._id), // alias compat
+  role: dbUser.role,
+  permisos: Array.isArray(dbUser.permisos) ? dbUser.permisos : [],
+  activo: dbUser.activo,
+  tokenVersion: typeof dbUser.tokenVersion === "number" ? dbUser.tokenVersion : 0,
+  barrioAsignado: dbUser.barrioAsignado || "",
+  viviendaAsignada: dbUser.viviendaAsignada ?? null,
+  alojamientoAsignado: dbUser.alojamientoAsignado ?? null,
+};
 
     return next();
   } catch (err) {

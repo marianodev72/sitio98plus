@@ -232,7 +232,10 @@ async function crear(req, res) {
       ],
     });
 
-    return res.status(201).json({ mantenimiento: doc });
+    return res.status(201).json({
+     mantenimiento: doc?.toObject ? doc.toObject() : doc,
+   });
+
   } catch {
     return fail(res);
   }

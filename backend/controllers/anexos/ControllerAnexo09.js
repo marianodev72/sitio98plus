@@ -379,7 +379,7 @@ async function updateDatos(ctx) {
     sub.markModified("datos");
 
     await sub.save();
-    return res.json(sub);
+    return res.json(sub?.toObject ? sub.toObject() : sub);
   } catch (e) {
     console.error("[V2][ANEXO_09.updateDatos] Error:", e);
     return genericDenied(res);
@@ -434,7 +434,7 @@ async function confirmByPermisionario09(ctx) {
     sub.cambiarEstado("EN_REVISION", user._id, obsCambio);
     await sub.save();
 
-    return res.json(sub);
+    return res.json(sub?.toObject ? sub.toObject() : sub);
   } catch (e) {
     console.error("[V2][ANEXO_09.confirmByPermisionario09] Error:", e);
     return genericDenied(res);
@@ -497,7 +497,7 @@ async function closeByAdminGeneral09(ctx) {
     sub.cambiarEstado("CERRADO", user._id, obsCierre);
     await sub.save();
 
-    return res.json(sub);
+    return res.json(sub?.toObject ? sub.toObject() : sub);
   } catch (e) {
     console.error("[V2][ANEXO_09.closeByAdminGeneral09] Error:", e);
     return genericDenied(res);

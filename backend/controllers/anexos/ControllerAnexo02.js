@@ -142,7 +142,9 @@ const ControllerAnexo02 = {
     const est = up(anexo.estado);
     if (["EN_REVISION", "CERRADO"].includes(est)) {
       await anexo.save();
-      return res.json({ anexo });
+      return res.json({
+        anexo: anexo?.toObject ? anexo.toObject() : anexo,
+    });
     }
 
     // Transición válida: solo ENVIADO -> EN_REVISION
@@ -161,7 +163,9 @@ const ControllerAnexo02 = {
     await anexo.cambiarEstado("EN_REVISION", user._id, "Conformidad postulante");
 
     await anexo.save();
-    return res.json({ anexo });
+    return res.json({
+    anexo: anexo?.toObject ? anexo.toObject() : anexo,
+  });
   },
 
   /**
@@ -310,7 +314,9 @@ const ControllerAnexo02 = {
         }
       }
 
-      return res.json({ anexo });
+      return res.json({
+  anexo: anexo?.toObject ? anexo.toObject() : anexo,
+});
     } catch (e) {
       console.error("[ANEXO_02][closeByAdminGeneral] Error:", e);
       return genericDenied(res);
@@ -375,7 +381,9 @@ const ControllerAnexo02 = {
       if (existenteVivienda && existenteVivienda !== String(viviendaId)) {
         return genericDenied(res); // mismatch no revelable
       }
-      return res.status(200).json({ anexo: existente });
+  return res.status(200).json({
+  anexo: existente?.toObject ? existente.toObject() : existente,
+  });
     }
 
     const templateId = await resolveTemplate02Id(FormTemplate);
@@ -407,8 +415,10 @@ const ControllerAnexo02 = {
     await nuevo.cambiarEstado(ControllerAnexo02.ESTADO_INICIAL, user._id, "Generación ANEXO_02");
 
     await nuevo.save();
-    return res.status(201).json({ anexo: nuevo });
-  },
+    return res.status(201).json({
+   anexo: nuevo?.toObject ? nuevo.toObject() : nuevo,
+ });
+ },
 
   /**
    * PDF: lectura permitida (ADMIN incluido), acciones sensibles ya bloqueadas arriba.

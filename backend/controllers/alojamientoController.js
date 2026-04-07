@@ -181,7 +181,9 @@ async function crear(req, res) {
     });
 
     const guardado = await alojamiento.save();
-    return res.status(201).json(guardado);
+      return res.status(201).json(
+      guardado?.toObject ? guardado.toObject() : guardado
+   );
   } catch (err) {
     console.error('Error al crear alojamiento:', err);
     return res.status(500).json({ error: 'Error interno al crear alojamiento' });
@@ -241,7 +243,9 @@ async function actualizar(req, res) {
     if (data.estado !== undefined) alojamiento.estado = data.estado;
 
     const guardado = await alojamiento.save();
-    return res.json(guardado);
+    return res.json(
+     guardado?.toObject ? guardado.toObject() : guardado
+   );
   } catch (err) {
     console.error('Error al actualizar alojamiento:', err);
     return res.status(500).json({ error: 'Error interno al actualizar alojamiento' });
@@ -290,7 +294,7 @@ async function bajaLogica(req, res) {
 
     return res.json({
       message: 'Alojamiento dado de baja correctamente (baja lógica)',
-      alojamiento: guardado
+      alojamiento: guardado?.toObject ? guardado.toObject() : guardado
     });
   } catch (err) {
     console.error('Error en baja lógica de alojamiento:', err);

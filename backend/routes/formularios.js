@@ -27,6 +27,7 @@ const { authRequired, requireRole } = require("../middleware/auth");
 const { refreshUserPrivileges } = require("../middleware/refreshUserPrivileges");
 const { audit, attachAuditHelpers } = require("../middleware/audit");
 const c = require("../controllers/formularioController");
+const { validateUploadedFiles } = require("../middleware/validateUploadedFiles");
 
 const {
   actualizarDatosAnexo07,
@@ -179,7 +180,6 @@ router.get(
   allowAdminOrInspectorForAnexo02,
   c.listarPorCodigo
 );
-
 // ─────────────────────────────
 // Detalle + PDF
 
@@ -230,15 +230,27 @@ router.patch(
 // ─────────────────────────────
 // Crear anexos
 
+// 🔥 1. ANEXO 02 → SACAR upload (seguro)
 router.post(
   "/:id/generar-anexo-02",
   requireRole("ADMIN_GENERAL"),
-  upload.any(),
   c.generarAnexo02DesdeAnexo01
 );
 
-router.post("/:codigo", upload.any(), c.crearAnexo);
-
+// 🔥 2. CREAR ANEXOS → agregar validación REAL
+router.post(
+  "/:codigo",
+  upload.fields([
+    { name: "adjuntos", maxCount: 10 },
+    { name: "adj_fidofac", maxCount: 1 },
+    { name: "adj_vacunacion", maxCount: 1 },
+    { name: "adj_recibo_haberes", maxCount: 1 },
+    { name: "adj_escrituras_contratos", maxCount: 1 },
+    { name: "adj_oficio_socio", maxCount: 1 },
+  ]),
+  validateUploadedFiles,
+  c.crearAnexo
+);
 // ─────────────────────────────
 // ANEXO_02
 

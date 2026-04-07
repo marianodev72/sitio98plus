@@ -344,20 +344,22 @@ export default function CrearAnexo04Permisionario() {
       };
 
       const res = await http.post("/formularios/ANEXO_04", { datos });
-      const anexo = res.data?.anexo || null;
+console.log("[ANEXO_04] status:", res.status);
+console.log("[ANEXO_04] data:", res.data);
+      const anexo = res.data?.anexo ?? res.data ?? null;
+const anexoId = anexo?._id ?? anexo?.id ?? null;
 
-      if (anexo?._id) {
-        setInfoMsg("ANEXO 04 creado correctamente.");
-        navigate(`/app/permisionario/anexos/${anexo._id}`);
-      } else {
-        setErrorMsg("No se pudo crear el ANEXO 04. Por favor, contacte al administrador.");
-      }
-    } catch (e: any) {
-      console.error("[ANEXO_04] Error creando", e);
-      setErrorMsg(
-        e?.response?.data?.message ||
-          "No se pudo procesar su solicitud. Por favor, contacte al administrador."
-      );
+console.log("[ANEXO_04] status:", res.status);
+console.log("[ANEXO_04] data:", res.data);
+console.log("[ANEXO_04] anexo:", anexo);
+console.log("[ANEXO_04] anexoId:", anexoId);
+
+if (res.status >= 200 && res.status < 300 && anexoId) {
+  setInfoMsg("ANEXO 04 creado correctamente.");
+  navigate(`/app/permisionario/anexos/${anexoId}`);
+} else {
+  setErrorMsg("No se pudo crear el ANEXO 04. Por favor, contacte al administrador.");
+}
     } finally {
       setBusy(false);
     }
