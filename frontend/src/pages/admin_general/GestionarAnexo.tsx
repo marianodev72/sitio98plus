@@ -5,6 +5,7 @@ import { http } from "../../api/http";
 import { useAuth } from "../../auth/useAuth";
 import AnexoViewer from "../../components/anexos/AnexoViewer";
 import Anexo11ResumenRegistro from "../../components/anexos/Anexo11ResumenRegistro";
+import Anexo04Vista from "../../components/anexos/Anexo04Vista";
 import Anexo01Viewer from "../../components/anexos/Anexo01Viewer";
 import {
   buttonRowStyle,
@@ -568,17 +569,19 @@ export default function GestionarAnexo() {
           )}
 
           <div style={{ marginTop: 16 }}>
-            {codigo === "ANEXO_01" ? (
-              <Anexo01Viewer datos={datos} />
-            ) : (
-              <AnexoViewer
-                codigo={anexo.codigo}
-                datos={datos}
-                anexo01Datos={anexo01Datos}
-                vivienda={undefined}
-              />
-            )}
-          </div>
+  {codigo === "ANEXO_01" ? (
+    <Anexo01Viewer datos={datos} />
+  ) : codigo === "ANEXO_04" ? (
+    <Anexo04Vista datos={datos} />
+  ) : (
+    <AnexoViewer
+      codigo={anexo.codigo}
+      datos={datos}
+      anexo01Datos={anexo01Datos}
+      vivienda={undefined}
+    />
+  )}
+</div>
 
           {esAnexo11 && (
             <div style={{ ...softCardStyle, marginTop: 16, marginBottom: 16 }}>

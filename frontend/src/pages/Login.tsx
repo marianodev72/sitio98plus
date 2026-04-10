@@ -19,8 +19,25 @@ export default function Login() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [mfaCode, setMfaCode] = useState("");
+  const [mfaRequired, setMfaRequired] = useState(false);
+  const [mfaToken, setMfaToken] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [useRecovery, setUseRecovery] = useState(false);
+  const [recoveryCode, setRecoveryCode] = useState("");
+
+  async function completeLoginAfterMfa() {
+    const refreshed = await refresh();
+
+    if (refreshed?.mustChangePassword === true) {
+      navigate("/change-password", { replace: true });
+      return;
+    }
+
+    navigate("/app", { replace: true });
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -35,17 +52,75 @@ export default function Login() {
 
     setLoading(true);
     try {
-      await http.post("/auth/login", {
+      const { data } = await http.post("/auth/login", {
         email: email.trim(),
         password,
       });
 
-      await refresh();
-      navigate("/app", { replace: true });
+      if (data?.mfaRequired === true && data?.mfaToken) {
+        setMfaRequired(true);
+        setMfaToken(String(data.mfaToken));
+        setUseRecovery(false);
+        setMfaCode("");
+        setRecoveryCode("");
+        return;
+      }
+
+      await completeLoginAfterMfa();
     } catch {
       setError(
         "No es posible procesar su solicitud en este momento, intente más tarde o comuníquese con el Administrador."
       );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleVerifyMfa(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+
+    if (!email || !mfaToken || !mfaCode) {
+      setError("Debe ingresar el código de verificación.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await http.post("/auth/mfa/verify", {
+        email: email.trim(),
+        mfaToken,
+        code: mfaCode.trim(),
+      });
+
+      await completeLoginAfterMfa();
+    } catch {
+      setError("Código MFA inválido o expirado.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleVerifyRecovery(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+
+    if (!email || !mfaToken || !recoveryCode) {
+      setError("Debe ingresar un código de recuperación.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await http.post("/auth/mfa/recovery", {
+        email: email.trim(),
+        mfaToken,
+        recoveryCode: recoveryCode.trim(),
+      });
+
+      await completeLoginAfterMfa();
+    } catch {
+      setError("Código de recuperación inválido o expirado.");
     } finally {
       setLoading(false);
     }
@@ -57,9 +132,21 @@ export default function Login() {
 
   const ESCUDO_SIZE = "clamp(52px, 4.6vw, 88px)";
 
+  const secondaryActionStyle = {
+    marginTop: 2,
+    padding: "10px 14px",
+    fontWeight: 900,
+    fontSize: 13,
+    borderRadius: 12,
+    border: "1px solid rgba(255,255,255,0.18)",
+    background: "rgba(255,255,255,0.06)",
+    color: "rgba(255,255,255,0.92)",
+    cursor: loading ? "not-allowed" : "pointer",
+    opacity: loading ? 0.8 : 1,
+  } as const;
+
   return (
     <main style={{ minHeight: "100vh", background: "#0b1220", color: "#eaf0ff" }}>
-      {/* Header institucional */}
       <section
         aria-label="Encabezado institucional"
         style={{
@@ -177,7 +264,6 @@ export default function Login() {
         </div>
       </section>
 
-      {/* Card de login */}
       <section style={{ padding: "22px 24px 24px" }}>
         <div style={{ maxWidth: 980, margin: "0 auto", display: "flex", justifyContent: "center" }}>
           <div
@@ -191,65 +277,198 @@ export default function Login() {
               boxShadow: "0 12px 30px rgba(0,0,0,0.38)",
             }}
           >
-            <form onSubmit={handleSubmit} style={{ display: "grid", gap: 14 }}>
-              <label style={{ display: "grid", gap: 8 }}>
-                <span style={{ fontSize: 13, fontWeight: 900, opacity: 0.9 }}>Email</span>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  autoComplete="username"
-                  style={{
-                    padding: "12px 12px",
-                    borderRadius: 12,
-                    border: "1px solid rgba(255,255,255,0.18)",
-                    background: "rgba(255,255,255,0.06)",
-                    color: "#ffffff",
-                    outline: "none",
-                  }}
-                />
-              </label>
+            {!mfaRequired ? (
+              <form onSubmit={handleSubmit} style={{ display: "grid", gap: 14 }}>
+                <label style={{ display: "grid", gap: 8 }}>
+                  <span style={{ fontSize: 13, fontWeight: 900, opacity: 0.9 }}>Email</span>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    autoComplete="username"
+                    style={{
+                      padding: "12px 12px",
+                      borderRadius: 12,
+                      border: "1px solid rgba(255,255,255,0.18)",
+                      background: "rgba(255,255,255,0.06)",
+                      color: "#ffffff",
+                      outline: "none",
+                    }}
+                  />
+                </label>
 
-              <label style={{ display: "grid", gap: 8 }}>
-                <span style={{ fontSize: 13, fontWeight: 900, opacity: 0.9 }}>Contraseña</span>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  autoComplete="current-password"
-                  style={{
-                    padding: "12px 12px",
-                    borderRadius: 12,
-                    border: "1px solid rgba(255,255,255,0.18)",
-                    background: "rgba(255,255,255,0.06)",
-                    color: "#ffffff",
-                    outline: "none",
-                  }}
-                />
-              </label>
+                <label style={{ display: "grid", gap: 8 }}>
+                  <span style={{ fontSize: 13, fontWeight: 900, opacity: 0.9 }}>Contraseña</span>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    autoComplete="current-password"
+                    style={{
+                      padding: "12px 12px",
+                      borderRadius: 12,
+                      border: "1px solid rgba(255,255,255,0.18)",
+                      background: "rgba(255,255,255,0.06)",
+                      color: "#ffffff",
+                      outline: "none",
+                    }}
+                  />
+                </label>
 
-              <button
-                type="submit"
-                disabled={loading}
-                style={{
-                  marginTop: 6,
-                  padding: "12px 18px",
-                  fontWeight: 950,
-                  fontSize: 16,
-                  borderRadius: 12,
-                  border: "1px solid rgba(56,189,248,0.40)",
-                  background:
-                    "linear-gradient(180deg, rgba(56,189,248,0.26), rgba(56,189,248,0.12))",
-                  color: "#ffffff",
-                  cursor: loading ? "not-allowed" : "pointer",
-                  opacity: loading ? 0.8 : 1,
-                }}
-              >
-                {loading ? "Ingresando..." : "Ingresar"}
-              </button>
-            </form>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  style={{
+                    marginTop: 6,
+                    padding: "12px 18px",
+                    fontWeight: 950,
+                    fontSize: 16,
+                    borderRadius: 12,
+                    border: "1px solid rgba(56,189,248,0.40)",
+                    background:
+                      "linear-gradient(180deg, rgba(56,189,248,0.26), rgba(56,189,248,0.12))",
+                    color: "#ffffff",
+                    cursor: loading ? "not-allowed" : "pointer",
+                    opacity: loading ? 0.8 : 1,
+                  }}
+                >
+                  {loading ? "Ingresando..." : "Ingresar"}
+                </button>
+              </form>
+            ) : !useRecovery ? (
+              <form onSubmit={handleVerifyMfa} style={{ display: "grid", gap: 14 }}>
+                <div
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 800,
+                    color: "rgba(255,255,255,0.92)",
+                  }}
+                >
+                  Ingrese el código MFA para completar el acceso
+                </div>
+
+                <label style={{ display: "grid", gap: 8 }}>
+                  <span style={{ fontSize: 13, fontWeight: 900, opacity: 0.9 }}>Código MFA</span>
+                  <input
+                    type="text"
+                    value={mfaCode}
+                    onChange={(e) => setMfaCode(e.target.value)}
+                    required
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    style={{
+                      padding: "12px 12px",
+                      borderRadius: 12,
+                      border: "1px solid rgba(255,255,255,0.18)",
+                      background: "rgba(255,255,255,0.06)",
+                      color: "#ffffff",
+                      outline: "none",
+                    }}
+                  />
+                </label>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  style={{
+                    marginTop: 6,
+                    padding: "12px 18px",
+                    fontWeight: 950,
+                    fontSize: 16,
+                    borderRadius: 12,
+                    border: "1px solid rgba(56,189,248,0.40)",
+                    background:
+                      "linear-gradient(180deg, rgba(56,189,248,0.26), rgba(56,189,248,0.12))",
+                    color: "#ffffff",
+                    cursor: loading ? "not-allowed" : "pointer",
+                    opacity: loading ? 0.8 : 1,
+                  }}
+                >
+                  {loading ? "Verificando..." : "Verificar MFA"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUseRecovery(true);
+                    setError(null);
+                    setMfaCode("");
+                  }}
+                  disabled={loading}
+                  style={secondaryActionStyle}
+                >
+                  Usar código de recuperación
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleVerifyRecovery} style={{ display: "grid", gap: 14 }}>
+                <div
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 800,
+                    color: "rgba(255,255,255,0.92)",
+                  }}
+                >
+                  Ingrese un código de recuperación para completar el acceso
+                </div>
+
+                <label style={{ display: "grid", gap: 8 }}>
+                  <span style={{ fontSize: 13, fontWeight: 900, opacity: 0.9 }}>
+                    Código de recuperación
+                  </span>
+                  <input
+                    type="text"
+                    value={recoveryCode}
+                    onChange={(e) => setRecoveryCode(e.target.value.toUpperCase())}
+                    required
+                    autoComplete="one-time-code"
+                    style={{
+                      padding: "12px 12px",
+                      borderRadius: 12,
+                      border: "1px solid rgba(255,255,255,0.18)",
+                      background: "rgba(255,255,255,0.06)",
+                      color: "#ffffff",
+                      outline: "none",
+                    }}
+                  />
+                </label>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  style={{
+                    marginTop: 6,
+                    padding: "12px 18px",
+                    fontWeight: 950,
+                    fontSize: 16,
+                    borderRadius: 12,
+                    border: "1px solid rgba(56,189,248,0.40)",
+                    background:
+                      "linear-gradient(180deg, rgba(56,189,248,0.26), rgba(56,189,248,0.12))",
+                    color: "#ffffff",
+                    cursor: loading ? "not-allowed" : "pointer",
+                    opacity: loading ? 0.8 : 1,
+                  }}
+                >
+                  {loading ? "Verificando..." : "Verificar código de recuperación"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUseRecovery(false);
+                    setError(null);
+                    setRecoveryCode("");
+                  }}
+                  disabled={loading}
+                  style={secondaryActionStyle}
+                >
+                  Volver a código MFA
+                </button>
+              </form>
+            )}
 
             {error && (
               <div
@@ -283,7 +502,6 @@ export default function Login() {
           </div>
         </div>
 
-        {/* ✅ Texto largo movido desde Home, más grande y legible */}
         <div style={{ maxWidth: 980, margin: "18px auto 0", padding: "0 24px" }}>
           <div
             style={{

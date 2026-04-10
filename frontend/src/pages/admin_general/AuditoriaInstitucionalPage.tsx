@@ -24,6 +24,8 @@ type AuditItem = {
   createdAt: string;
   requestId?: string;
   actorNombre?: string;
+  targetNombre?: string;
+  actionTexto?: string;
 };
 
 type AuditResponse = {
@@ -49,6 +51,8 @@ type UsuarioMini = {
   role?: string;
 };
 
+type EstadoAudit = "Normal" | "Atención" | "Crítico";
+
 function formatDateLocal(iso?: string) {
   if (!iso) return "";
   const d = new Date(iso);
@@ -71,9 +75,11 @@ function traducirRol(v?: string) {
     ADMIN: "Administrador",
     PERMISIONARIO: "Permisionario",
     POSTULANTE: "Postulante",
+    ALOJADO: "Alojado",
     INSPECTOR: "Inspector",
     JEFE_DE_BARRIO: "Jefe de Barrio",
     SISTEMA: "Sistema",
+    SYSTEM: "Sistema",
   };
 
   return map[String(v || "").trim()] || String(v || "—");
@@ -85,11 +91,22 @@ function traducirAccion(v?: string) {
     ADMIN_HOUSES_LIST: "Consulta de viviendas",
     ADMIN_HOUSES_BARRIOS: "Consulta de barrios",
     ADMIN_GESTIONES_LIST: "Consulta de gestiones",
+    ADMIN_RESET_PASSWORD: "Reseteo administrativo de clave",
+    ADMIN_HOUSES_ELIGIBLE_ASSIGN: "Consulta de elegibilidad de asignación",
     FORM_CREATE: "Creación de formulario",
     FORM_UPDATE: "Actualización de formulario",
     FORM_CLOSE: "Cierre de formulario",
     FORM_VIEW: "Consulta de formulario",
-    LOGIN_SUCCESS: "Inicio de sesión",
+    FORM_CONFORMIDAD: "Registro de formulario de conformidad",
+    FORM_CONFORMIDAD_ADMIN: "Intervención administrativa en formulario de conformidad",
+    LOGIN_SUCCESS: "Inicio de sesión exitoso",
+    LOGIN_FAILED: "Falló el inicio de sesión",
+    MFA_REQUIRED: "Se requirió segundo factor",
+    MFA_SUCCESS: "Segundo factor validado",
+    MFA_FAILED: "Falló la verificación del segundo factor",
+    RECOVERY_USED: "Ingreso mediante código de recuperación",
+    RECOVERY_FAILED: "Falló el código de recuperación",
+    AUTH_LOCKED: "Cuenta bloqueada por seguridad",
     LOGOUT: "Cierre de sesión",
   };
 
@@ -99,7 +116,9 @@ function traducirAccion(v?: string) {
 function traducirEntidad(v?: string) {
   const map: Record<string, string> = {
     User: "Usuario",
+    AUTH: "Autenticación",
     Vivienda: "Vivienda",
+    FORM: "Formulario",
     FormSubmission: "Formulario",
     Formulario: "Formulario",
     AuditLog: "Auditoría",
@@ -111,8 +130,22 @@ function traducirEntidad(v?: string) {
 function formatReferencia(v?: string) {
   const s = String(v || "").trim();
   if (!s) return "—";
-  if (/^[0-9a-fA-F]{24}$/.test(s)) return `…${s.slice(-6)}`;
+  if (/^[0-9a-fA-F-]{24,}$/.test(s)) return `…${s.slice(-8)}`;
   return s;
+}
+
+function buildEstado(action?: string): { estado: EstadoAudit; color: string } {
+  const a = String(action || "").trim();
+
+  if (a === "AUTH_LOCKED") {
+    return { estado: "Crítico", color: "#ef4444" };
+  }
+
+  if (["LOGIN_FAILED", "MFA_FAILED", "RECOVERY_FAILED"].includes(a)) {
+    return { estado: "Atención", color: "#f59e0b" };
+  }
+
+  return { estado: "Normal", color: "#22c55e" };
 }
 
 export default function AuditoriaInstitucionalPage() {
@@ -126,6 +159,7 @@ export default function AuditoriaInstitucionalPage() {
   const [targetType, setTargetType] = useState("");
   const [targetId, setTargetId] = useState("");
   const [requestId, setRequestId] = useState("");
+  const [estadoFiltro, setEstadoFiltro] = useState<"" | EstadoAudit>("");
 
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -235,6 +269,7 @@ export default function AuditoriaInstitucionalPage() {
     setTargetType("");
     setTargetId("");
     setRequestId("");
+    setEstadoFiltro("");
     setFrom("");
     setTo("");
     setPage(1);
@@ -285,32 +320,39 @@ export default function AuditoriaInstitucionalPage() {
     });
   }, [options.actorIds, usersById]);
 
+  const visibleItems = useMemo(() => {
+    const base = data?.items || [];
+    if (!estadoFiltro) return base;
+
+    return base.filter((it) => buildEstado(it.action).estado === estadoFiltro);
+  }, [data?.items, estadoFiltro]);
+
   const controlStyle: CSSProperties = {
-  width: "100%",
-  minWidth: 0,
-  padding: "10px 12px",
-  borderRadius: 10,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(255,255,255,0.04)",
-  color: "#ffffff",
-  fontSize: 14,
-  minHeight: 42,
-  boxSizing: "border-box",
-};
+    width: "100%",
+    minWidth: 0,
+    padding: "10px 12px",
+    borderRadius: 10,
+    border: "1px solid rgba(255,255,255,0.14)",
+    background: "rgba(255,255,255,0.04)",
+    color: "#ffffff",
+    fontSize: 14,
+    minHeight: 42,
+    boxSizing: "border-box",
+  };
 
-const selectStyle: CSSProperties = {
-  ...controlStyle,
-  appearance: "none",
-  WebkitAppearance: "none",
-  MozAppearance: "none",
-  backgroundColor: "rgba(255,255,255,0.04)",
-  color: "#ffffff",
-};
+  const selectStyle: CSSProperties = {
+    ...controlStyle,
+    appearance: "none",
+    WebkitAppearance: "none",
+    MozAppearance: "none",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    color: "#ffffff",
+  };
 
-const optionStyle: CSSProperties = {
-  backgroundColor: "#1f2937",
-  color: "#ffffff",
-};
+  const optionStyle: CSSProperties = {
+    backgroundColor: "#1f2937",
+    color: "#ffffff",
+  };
 
   const thStyle: CSSProperties = {
     textAlign: "left",
@@ -362,78 +404,140 @@ const optionStyle: CSSProperties = {
           >
             <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <span style={smallLabelStyle}>Acción</span>
-              <select value={action} onChange={(e) => setAction(e.target.value)} disabled={loadingOptions} style={selectStyle}>
-  <option value="" style={optionStyle}>
-    (Todas)
-  </option>
-  {options.actions.map((a) => (
-    <option key={a} value={a} style={optionStyle}>
-      {traducirAccion(a)}
-    </option>
-  ))}
-</select>
+              <select
+                value={action}
+                onChange={(e) => setAction(e.target.value)}
+                disabled={loadingOptions}
+                style={selectStyle}
+              >
+                <option value="" style={optionStyle}>
+                  (Todas)
+                </option>
+                {options.actions.map((a) => (
+                  <option key={a} value={a} style={optionStyle}>
+                    {traducirAccion(a)}
+                  </option>
+                ))}
+              </select>
             </label>
 
             <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <span style={smallLabelStyle}>Usuario</span>
-              <select value={actorId} onChange={(e) => setActorId(e.target.value)} disabled={loadingOptions} style={selectStyle}>
-  <option value="" style={optionStyle}>
-    (Todos)
-  </option>
-  {actorIdOptions.map((o) => (
-    <option key={o.id} value={o.id} style={optionStyle}>
-      {o.label}
-    </option>
-  ))}
-</select>
+              <select
+                value={actorId}
+                onChange={(e) => setActorId(e.target.value)}
+                disabled={loadingOptions}
+                style={selectStyle}
+              >
+                <option value="" style={optionStyle}>
+                  (Todos)
+                </option>
+                {actorIdOptions.map((o) => (
+                  <option key={o.id} value={o.id} style={optionStyle}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
             </label>
 
             <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <span style={smallLabelStyle}>Rol</span>
-              <select value={actorRole} onChange={(e) => setActorRole(e.target.value)} disabled={loadingOptions} style={selectStyle}>
-  <option value="" style={optionStyle}>
-    (Todos)
-  </option>
-  {options.actorRoles.map((r) => (
-    <option key={r} value={r} style={optionStyle}>
-      {traducirRol(r)}
-    </option>
-  ))}
-</select>
+              <select
+                value={actorRole}
+                onChange={(e) => setActorRole(e.target.value)}
+                disabled={loadingOptions}
+                style={selectStyle}
+              >
+                <option value="" style={optionStyle}>
+                  (Todos)
+                </option>
+                {options.actorRoles.map((r) => (
+                  <option key={r} value={r} style={optionStyle}>
+                    {traducirRol(r)}
+                  </option>
+                ))}
+              </select>
             </label>
 
             <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <span style={smallLabelStyle}>ID de operación</span>
-              <input value={requestId} onChange={(e) => setRequestId(e.target.value)} placeholder="x-request-id" style={controlStyle} />
+              <input
+                value={requestId}
+                onChange={(e) => setRequestId(e.target.value)}
+                placeholder="x-request-id"
+                style={controlStyle}
+              />
             </label>
 
             <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <span style={smallLabelStyle}>Entidad</span>
-              <select value={targetType} onChange={(e) => setTargetType(e.target.value)} disabled={loadingOptions} style={selectStyle}>
-  <option value="" style={optionStyle}>
-    (Todas)
-  </option>
-  {options.targetTypes.map((t) => (
-    <option key={t} value={t} style={optionStyle}>
-      {traducirEntidad(t)}
-    </option>
-  ))}
-</select>
+              <select
+                value={targetType}
+                onChange={(e) => setTargetType(e.target.value)}
+                disabled={loadingOptions}
+                style={selectStyle}
+              >
+                <option value="" style={optionStyle}>
+                  (Todas)
+                </option>
+                {options.targetTypes.map((t) => (
+                  <option key={t} value={t} style={optionStyle}>
+                    {traducirEntidad(t)}
+                  </option>
+                ))}
+              </select>
             </label>
 
             <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <span style={smallLabelStyle}>Referencia</span>
-              <input value={targetId} onChange={(e) => setTargetId(e.target.value)} placeholder="LIST o ID" style={controlStyle} />
+              <input
+                value={targetId}
+                onChange={(e) => setTargetId(e.target.value)}
+                placeholder="LIST o ID"
+                style={controlStyle}
+              />
+            </label>
+
+            <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <span style={smallLabelStyle}>Estado</span>
+              <select
+                value={estadoFiltro}
+                onChange={(e) => setEstadoFiltro(e.target.value as "" | EstadoAudit)}
+                style={selectStyle}
+              >
+                <option value="" style={optionStyle}>
+                  (Todos)
+                </option>
+                <option value="Normal" style={optionStyle}>
+                  Normal
+                </option>
+                <option value="Atención" style={optionStyle}>
+                  Atención
+                </option>
+                <option value="Crítico" style={optionStyle}>
+                  Crítico
+                </option>
+              </select>
             </label>
 
             <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <span style={smallLabelStyle}>Desde</span>
-              <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={controlStyle} />
+              <input
+                type="date"
+                value={from}
+                onChange={(e) => setFrom(e.target.value)}
+                style={controlStyle}
+              />
             </label>
 
             <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <span style={smallLabelStyle}>Hasta</span>
-              <input type="date" value={to} onChange={(e) => setTo(e.target.value)} style={controlStyle} />
+              <input
+                type="date"
+                value={to}
+                onChange={(e) => setTo(e.target.value)}
+                style={controlStyle}
+              />
             </label>
 
             <div style={{ gridColumn: "1 / -1", ...buttonRowStyle, marginTop: 4 }}>
@@ -489,36 +593,72 @@ const optionStyle: CSSProperties = {
               <thead>
                 <tr>
                   <th style={thStyle}>Fecha y hora</th>
-                  <th style={thStyle}>Usuario</th>
+                  <th style={thStyle}>Actor</th>
                   <th style={thStyle}>Rol</th>
-                  <th style={thStyle}>Acción</th>
-                  <th style={thStyle}>Entidad</th>
-                  <th style={thStyle}>Referencia</th>
-                  <th style={thStyle}>ID de operación</th>
+                  <th style={thStyle}>Evento</th>
+                  <th style={thStyle}>Objeto</th>
+                  <th style={thStyle}>Estado</th>
+                  <th style={thStyle}>Operación</th>
                 </tr>
               </thead>
               <tbody>
-                {(data?.items || []).map((it) => (
-                  <tr key={it._id}>
-                    <td style={tdStyle}>{formatDateLocal(it.createdAt)}</td>
-                    <td style={tdStyle}>
-                      {it.actorNombre
-                        ? it.actorNombre
-                        : it.actorId
-                        ? usersById[it.actorId]
-                          ? safeLabelUser(usersById[it.actorId])
-                          : it.actorId
-                        : "Sistema"}
-                    </td>
-                    <td style={tdStyle}>{traducirRol(it.actorRole)}</td>
-                    <td style={tdStyle}>{traducirAccion(it.action)}</td>
-                    <td style={tdStyle}>{traducirEntidad(it.targetType)}</td>
-                    <td style={tdStyle}>{formatReferencia(it.targetId)}</td>
-                    <td style={tdStyle}>{it.requestId || "—"}</td>
-                  </tr>
-                ))}
+                {visibleItems.map((it) => {
+                  const evento = it.actionTexto || traducirAccion(it.action);
+                  const { estado, color } = buildEstado(it.action);
 
-                {!loading && (data?.items?.length || 0) === 0 ? (
+                  const objeto =
+                    it.targetNombre ||
+                    (it.targetType === "AUTH"
+                      ? "Acceso de usuario"
+                      : traducirEntidad(it.targetType));
+
+                  const operacion = it.requestId
+                    ? `OP-${formatReferencia(it.requestId)}`
+                    : it._id
+                    ? `LOG-${formatReferencia(it._id)}`
+                    : "—";
+
+                  return (
+                    <tr key={it._id}>
+                      <td style={tdStyle}>{formatDateLocal(it.createdAt)}</td>
+
+                      <td style={tdStyle}>
+                        {it.actorNombre
+                          ? it.actorNombre
+                          : it.actorId
+                          ? usersById[it.actorId]
+                            ? safeLabelUser(usersById[it.actorId])
+                            : it.actorId
+                          : "Sistema"}
+                      </td>
+
+                      <td style={tdStyle}>{traducirRol(it.actorRole)}</td>
+
+                      <td style={{ ...tdStyle, fontWeight: 500 }}>{evento}</td>
+
+                      <td style={tdStyle}>{objeto}</td>
+
+                      <td style={tdStyle}>
+                        <span
+                          style={{
+                            padding: "4px 8px",
+                            borderRadius: 6,
+                            background: `${color}22`,
+                            color,
+                            fontWeight: 600,
+                            fontSize: 11,
+                          }}
+                        >
+                          {estado}
+                        </span>
+                      </td>
+
+                      <td style={tdStyle}>{operacion}</td>
+                    </tr>
+                  );
+                })}
+
+                {!loading && visibleItems.length === 0 ? (
                   <tr>
                     <td colSpan={7} style={{ ...tdStyle, opacity: 0.8 }}>
                       Sin resultados
@@ -530,12 +670,17 @@ const optionStyle: CSSProperties = {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12 }}>
-            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={loading || page <= 1} style={secondaryButtonStyle}>
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={loading || page <= 1}
+              style={secondaryButtonStyle}
+            >
               Anterior
             </button>
 
             <div style={{ fontSize: 12, color: "rgba(255,255,255,0.82)" }}>
               Página {page} / {totalPages} — Total: {total}
+              {estadoFiltro ? ` — Estado: ${estadoFiltro}` : ""}
             </div>
 
             <button
@@ -548,20 +693,25 @@ const optionStyle: CSSProperties = {
 
             <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ fontSize: 12, color: "rgba(255,255,255,0.78)" }}>Límite</span>
-              <select value={limit} onChange={(e) => setLimit(Number(e.target.value))} disabled={loading} style={selectStyle}>
-  <option value={25} style={optionStyle}>
-    25
-  </option>
-  <option value={50} style={optionStyle}>
-    50
-  </option>
-  <option value={100} style={optionStyle}>
-    100
-  </option>
-  <option value={200} style={optionStyle}>
-    200
-  </option>
-</select>
+              <select
+                value={limit}
+                onChange={(e) => setLimit(Number(e.target.value))}
+                disabled={loading}
+                style={selectStyle}
+              >
+                <option value={25} style={optionStyle}>
+                  25
+                </option>
+                <option value={50} style={optionStyle}>
+                  50
+                </option>
+                <option value={100} style={optionStyle}>
+                  100
+                </option>
+                <option value={200} style={optionStyle}>
+                  200
+                </option>
+              </select>
             </div>
           </div>
         </div>

@@ -161,6 +161,9 @@ export default function AdminGeneralLayout() {
             <NavLink to="auditoria" style={linkStyle}>
               Auditoría Institucional
             </NavLink>
+            <NavLink to="perfil" style={linkStyle}>
+              Perfil
+            </NavLink>
           </nav>
         </div>
       </header>

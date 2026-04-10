@@ -301,10 +301,19 @@ router.post(
   requireRole("ADMIN", "ADMIN_GENERAL"),
   audit("ADMIN_RESET_PASSWORD", {
     targetType: "User",
-    // NO body: evita filtrar nuevaPassword
     metaAllowlist: ["params.id"],
   }),
   usersController.resetPassword
+);
+
+router.post(
+  "/:id/reset-mfa",
+  requireRole("ADMIN", "ADMIN_GENERAL"),
+  audit("ADMIN_RESET_MFA", {
+    targetType: "User",
+    metaAllowlist: ["params.id"],
+  }),
+  usersController.resetMFA
 );
 
 router.post(

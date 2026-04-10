@@ -75,11 +75,40 @@ const userSchema = new Schema(
 
     tokenVersion: { type: Number, default: 0, index: true, select: false },
 
+    // 🔐 MFA (TOTP on-prem)
+    mfaEnabled: { type: Boolean, default: false, index: true },
+    mfaMethod: { type: String, default: "TOTP", select: false },
+
+    // Secreto ACTIVO cifrado
+    mfaSecretEnc: {
+      iv: { type: String, default: "", select: false },
+      tag: { type: String, default: "", select: false },
+      data: { type: String, default: "", select: false },
+    },
+
+    // Secreto PENDIENTE durante enrolamiento
+    mfaPendingSecretEnc: {
+      iv: { type: String, default: "", select: false },
+      tag: { type: String, default: "", select: false },
+      data: { type: String, default: "", select: false },
+    },
+    mfaPendingSecretExpiresAt: { type: Date, default: null, select: false },
+
+    // Recovery codes (hashes, nunca texto plano)
+    mfaRecoveryCodesHash: { type: [String], default: [], select: false },
+
+    // Challenge temporal para completar MFA en login
+    mfaPendingChallengeHash: { type: String, default: "", select: false },
+    mfaPendingChallengeExpiresAt: { type: Date, default: null, select: false },
+
+    mfaEnabledAt: { type: Date, default: null, select: false },
+    mfaLastUsedAt: { type: Date, default: null, select: false },
     // 🔐 Técnicos / seguridad (no exponer)
     loginFallidos: { type: Number, default: 0, select: false },
     loginBloqueadoHasta: { type: Date, default: null, select: false },
     ultimoLogin: { type: Date, default: null, select: false },
     ultimoCambioPassword: { type: Date, default: null, select: false },
+    mustChangePassword: { type: Boolean, default: false, select: false },
 
     loginEventos: { type: Array, default: [], select: false },
     adminEventos: { type: Array, default: [], select: false },

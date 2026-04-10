@@ -1,4 +1,3 @@
-// backend/routes/authRoutes.js
 const express = require("express");
 const router = express.Router();
 
@@ -18,6 +17,7 @@ const hasTurnstile = !!(
 const turnstileRequired = isProd ? hasTurnstile : false;
 
 router.post("/login", verifyTurnstile({ required: turnstileRequired }), authController.login);
+router.post("/mfa/verify", authController.verifyMfa);
 
 // ✅ Compatibilidad + endpoint institucional correcto
 router.post(
@@ -38,5 +38,11 @@ router.post("/logout", authController.logout);
 router.get("/me", authRequired, authController.me);
 
 router.post("/refresh", authController.refresh);
+router.post("/change-password", authRequired, authController.changePassword);
+
+router.post("/mfa/enroll/start", authRequired, authController.startMfaEnroll);
+router.post("/mfa/enroll/confirm", authRequired, authController.confirmMfaEnroll);
+router.post("/mfa/recovery", authController.verifyMfaRecovery);
+router.post("/mfa/recovery/regenerate", authRequired, authController.regenerateRecoveryCodes);
 
 module.exports = router;

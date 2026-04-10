@@ -518,6 +518,33 @@ function makeTempPassword() {
   return out;
 }
 
+async function confirmAdminPassword(req, res) {
+  try {
+    const adminPassword = String(req.body?.adminPassword || "");
+    if (!adminPassword) {
+      res.status(400).json({ message: "Se requiere confirmación de contraseña" });
+      return null;
+    }
+
+    const admin = await User.findById(req.user?._id).select("+passwordHash");
+    if (!admin) {
+      deny(res);
+      return null;
+    }
+
+    const ok = await admin.validarPassword(adminPassword);
+    if (!ok) {
+      res.status(401).json({ message: "Contraseña incorrecta" });
+      return null;
+    }
+
+    return admin;
+  } catch (err) {
+    console.error("[USERS] Error confirmando contraseña de admin:", err);
+    res.status(500).json({ message: "Error interno" });
+    return null;
+  }
+}
 /**
  * POST /api/users/:id/reset-password
  * ✅ SOLO ADMIN_GENERAL (escritura)
@@ -528,15 +555,29 @@ async function resetPassword(req, res) {
 
     const { id } = req.params;
     const { observacion } = req.body || {};
+
     if (!mongoose.Types.ObjectId.isValid(id)) return deny(res);
+
+    const selfId = String(req.user?._id || "");
+    if (selfId && String(id) === selfId) return deny(res);
+
+    const adminConfirmed = await confirmAdminPassword(req, res);
+    if (!adminConfirmed) return;
 
     const user = await User.findById(id).select("+adminEventos +passwordHash +tokenVersion");
     if (!user) return deny(res);
 
     const tempPassword = makeTempPassword();
     await user.setPassword(tempPassword);
+    user.mustChangePassword = true;
 
-    registrarAdminEvento(user, req, "RESET_PASSWORD", { tempPasswordEmitida: true }, observacion);
+    registrarAdminEvento(
+      user,
+      req,
+      "RESET_PASSWORD",
+      { tempPasswordEmitida: true },
+      observacion
+    );
 
     bumpTokenVersion(user);
     await user.save();
@@ -544,6 +585,58 @@ async function resetPassword(req, res) {
     return res.json({ message: "Contraseña reseteada", tempPassword });
   } catch (err) {
     console.error("[USERS] Error reseteando password:", err);
+    return res.status(500).json({ message: "Error interno" });
+  }
+}
+
+/**
+ * POST /api/users/:id/reset-mfa
+ * ✅ SOLO ADMIN_GENERAL (escritura)
+ */
+async function resetMFA(req, res) {
+  try {
+    if (!isAdminGeneral(req)) return deny(res);
+
+    const { id } = req.params;
+    const { observacion } = req.body || {};
+
+    if (!mongoose.Types.ObjectId.isValid(id)) return deny(res);
+
+    const selfId = String(req.user?._id || "");
+    if (selfId && String(id) === selfId) return deny(res);
+
+    const adminConfirmed = await confirmAdminPassword(req, res);
+    if (!adminConfirmed) return;
+
+    const user = await User.findById(id).select(
+      "+adminEventos +tokenVersion +mfaEnabled +mfaSecretEnc +mfaChallenge +mfaRecoveryCodes"
+    );
+    if (!user) return deny(res);
+
+    user.mfaEnabled = false;
+    user.mfaSecretEnc = undefined;
+    user.mfaChallenge = undefined;
+
+    if (Array.isArray(user.mfaRecoveryCodes)) {
+      user.mfaRecoveryCodes = [];
+    }
+
+    registrarAdminEvento(
+      user,
+      req,
+      "RESET_MFA",
+      { mfaReseteado: true },
+      observacion
+    );
+
+    bumpTokenVersion(user);
+    await user.save();
+
+    return res.json({
+      message: "MFA reseteado correctamente. El usuario deberá configurarlo nuevamente."
+    });
+  } catch (err) {
+    console.error("[USERS] Error reseteando MFA:", err);
     return res.status(500).json({ message: "Error interno" });
   }
 }
@@ -679,6 +772,7 @@ module.exports = {
   asignarVivienda,
   cambiarActivo,
   resetPassword,
+  resetMFA,
   archivar,
 
   // ✅ compat con routes/users.js que usa usersController.unarchivar

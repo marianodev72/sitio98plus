@@ -21,6 +21,8 @@ export type User = {
   viviendaAsignada?: string | null;
   alojamientoAsignado?: string | null;
   tokenVersion?: number;
+  mustChangePassword?: boolean;
+  mfaEnabled?: boolean;
 };
 
 type AuthCtx = {
@@ -43,7 +45,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   async function loadMeOnce() {
     try {
       const res = await http.get("/auth/me");
-      const u = res.data?.user || null;
+      const u = (res.data?.user || null) as User | null;
       setUser(u);
     } catch {
       // 401 es normal si no hay sesión
@@ -69,7 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   async function refresh(): Promise<User | null> {
     try {
       const res = await http.post("/auth/refresh", {});
-      const u = res.data?.user || null;
+      const u = (res.data?.user || null) as User | null;
       setUser(u);
       return u;
     } catch {

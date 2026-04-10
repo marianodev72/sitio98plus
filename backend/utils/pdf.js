@@ -304,14 +304,13 @@ function generateAuditInstitucionalPDF(stream, payload = {}) {
   const rowH = 16;
 
   const cols = [
-    { key: "createdAt", label: "createdAt", w: Math.floor(usableW * 0.16) },
-    { key: "actorId", label: "actorId", w: Math.floor(usableW * 0.20) },
-    { key: "actorRole", label: "actorRole", w: Math.floor(usableW * 0.12) },
-    { key: "action", label: "action", w: Math.floor(usableW * 0.18) },
-    { key: "targetType", label: "targetType", w: Math.floor(usableW * 0.10) },
-    { key: "targetId", label: "targetId", w: Math.floor(usableW * 0.12) },
-    { key: "requestId", label: "requestId", w: Math.floor(usableW * 0.12) },
-  ];
+  { key: "createdAt", label: "Fecha", w: Math.floor(usableW * 0.16) },
+  { key: "actorNombre", label: "Actor", w: Math.floor(usableW * 0.18) },
+  { key: "actorRole", label: "Rol", w: Math.floor(usableW * 0.10) },
+  { key: "actionTexto", label: "Acción", w: Math.floor(usableW * 0.22) },
+  { key: "targetNombre", label: "Objeto", w: Math.floor(usableW * 0.18) },
+  { key: "requestId", label: "Solicitud", w: Math.floor(usableW * 0.16) },
+];
 
   // Ajuste para cerrar exacto al ancho usable
   const sumW = cols.reduce((a, c) => a + c.w, 0);
@@ -415,14 +414,13 @@ function generateAuditInstitucionalPDF(stream, payload = {}) {
     doc.font("Helvetica").fontSize(8);
 
     const values = {
-      createdAt: createdAtTxt,
-      actorId: it.actorId || "",
-      actorRole: it.actorRole || "",
-      action: it.action || "",
-      targetType: it.targetType || "",
-      targetId: it.targetId || "",
-      requestId: it.requestId || "",
-    };
+  createdAt: createdAtTxt,
+  actorNombre: it.actorNombre || "Sistema",
+  actorRole: it.actorRole || "",
+  actionTexto: it.actionTexto || it.action || "",
+  targetNombre: it.targetNombre || "",
+  requestId: it.requestId || "",
+};
 
     for (const c of cols) {
       doc.rect(c.x, y, c.w, rowH).stroke();

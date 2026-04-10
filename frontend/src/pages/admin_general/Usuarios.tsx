@@ -206,35 +206,59 @@ export default function UsuariosAdminGeneral() {
   }
 
   async function resetPassword(userId: string) {
-    clearMessages();
-    const confirm = window.confirm(
-      "Va a generar una contraseña temporal para este usuario.\n\n¿Desea continuar?"
-    );
-    if (!confirm) return;
+  clearMessages();
 
-    setBusyId(userId);
-    try {
-      const res = await http.post(`/users/${userId}/reset-password`);
-      const tempPassword = String(res.data?.tempPassword || "").trim();
-      setInfo("Contraseña temporal generada correctamente.");
+  const confirm = window.confirm(
+    "Va a generar una contraseña temporal para este usuario.\n\n¿Desea continuar?"
+  );
+  if (!confirm) return;
 
-      if (tempPassword) {
-        window.alert(
-          `Contraseña temporal generada:\n\n${tempPassword}\n\nPor favor, entréguesela al usuario por un canal seguro.`
-        );
-      } else {
-        window.alert(
-          "La contraseña temporal fue generada, pero no se pudo mostrar el valor.\nPor favor, contacte al administrador."
-        );
-      }
-      await cargar();
-      await refreshIfSelf(userId);
-    } catch {
-      setError("No se pudo resetear la contraseña. Si el problema persiste, contacte al administrador.");
-    } finally {
-      setBusyId(null);
-    }
+  const adminPassword = window.prompt(
+    "Para continuar, ingrese su contraseña de ADMIN GENERAL:",
+    ""
+  );
+  if (adminPassword === null) return;
+
+  const trimmedAdminPassword = adminPassword.trim();
+  if (!trimmedAdminPassword) {
+    setError("Debe ingresar su contraseña para confirmar la operación.");
+    return;
   }
+
+  const observacion = "Reset manual de contraseña por ADMIN_GENERAL";
+
+  setBusyId(userId);
+  try {
+    const res = await http.post(`/users/${userId}/reset-password`, {
+      adminPassword: trimmedAdminPassword,
+      observacion,
+    });
+
+    const tempPassword = String(res.data?.tempPassword || "").trim();
+    setInfo("Contraseña temporal generada correctamente.");
+
+    if (tempPassword) {
+      window.alert(
+        `Contraseña temporal generada:\n\n${tempPassword}\n\nPor favor, entréguesela al usuario por un canal seguro.`
+      );
+    } else {
+      window.alert(
+        "La contraseña temporal fue generada, pero no se pudo mostrar el valor.\nPor favor, contacte al administrador."
+      );
+    }
+
+    await cargar();
+    await refreshIfSelf(userId);
+  } catch (e: any) {
+    const message =
+      String(e?.response?.data?.message || "").trim() ||
+      "No se pudo resetear la contraseña. Si el problema persiste, contacte al administrador.";
+
+    setError(message);
+  } finally {
+    setBusyId(null);
+  }
+}
 
   async function archivar(userId: string) {
     clearMessages();

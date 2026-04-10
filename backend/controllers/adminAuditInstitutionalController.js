@@ -3,7 +3,7 @@ const mongoose = require("mongoose");
 const { AuditLog } = require("../models/AuditLog");
 const { generateAuditInstitucionalPDF } = require("../utils/pdf");
 
-// ✅ Proyección canónica: SOLO estos campos salen del módulo institucional
+// ✅ Proyección canónica base
 const CANONICAL_PROJECTION = {
   _id: 1,
   actorId: 1,
@@ -35,7 +35,6 @@ function parseDateSafe(v) {
 function buildAuditFilter(query = {}) {
   const filter = {};
 
-  // filtros canónicos y controlados
   if (query.action) filter.action = String(query.action);
   if (query.actorRole) filter.actorRole = String(query.actorRole);
   if (query.targetType) filter.targetType = String(query.targetType);
@@ -76,7 +75,6 @@ function buildSort(query = {}) {
   const sortBy = String(query.sortBy || "createdAt");
   const sortDir = String(query.sortDir || "desc").toLowerCase();
 
-  // orden controlado
   if (sortBy !== "createdAt") return { createdAt: -1 };
   return { createdAt: sortDir === "asc" ? 1 : -1 };
 }
@@ -94,6 +92,102 @@ function filtrosAplicadosFromQuery(query = {}) {
   return out;
 }
 
+function buildPersonName(u) {
+  if (!u) return "";
+  return `${u.apellido || ""} ${u.nombre || ""}`.trim() || u.email || "Usuario";
+}
+
+function actionToText(action) {
+  const map = {
+    LOGIN_SUCCESS: "Inicio de sesión exitoso",
+    LOGIN_FAILED: "Falló el inicio de sesión",
+    MFA_REQUIRED: "Se requirió segundo factor",
+    MFA_SUCCESS: "Segundo factor validado",
+    MFA_FAILED: "Falló la verificación del segundo factor",
+    RECOVERY_USED: "Ingreso mediante código de recuperación",
+    RECOVERY_FAILED: "Falló el código de recuperación",
+    AUTH_LOCKED: "Cuenta bloqueada por seguridad",
+
+    ADMIN_USERS_LIST: "Consulta de usuarios",
+    ADMIN_RESET_PASSWORD: "Reseteo administrativo de clave",
+    ADMIN_HOUSES_LIST: "Consulta de viviendas",
+    ADMIN_HOUSES_BARRIOS: "Consulta de barrios y viviendas",
+    ADMIN_HOUSES_ELIGIBLE_ASSIGN: "Consulta de elegibilidad de asignación",
+    FORM_CONFORMIDAD: "Registro de formulario de conformidad",
+    FORM_CONFORMIDAD_ADMIN: "Intervención administrativa en formulario de conformidad",
+  };
+
+  return map[String(action || "").trim()] || String(action || "");
+}
+
+async function resolveUsersByIds(ids = []) {
+  const cleanIds = Array.from(new Set(ids.filter(Boolean).map(String)));
+  if (!cleanIds.length) return {};
+
+  const objectIds = cleanIds
+    .filter((id) => mongoose.Types.ObjectId.isValid(id))
+    .map((id) => new mongoose.Types.ObjectId(id));
+
+  if (!objectIds.length) return {};
+
+  const users = await mongoose.model("User")
+    .find({ _id: { $in: objectIds } })
+    .select("nombre apellido email")
+    .lean();
+
+  const map = {};
+  users.forEach((u) => {
+    map[String(u._id)] = buildPersonName(u);
+  });
+  return map;
+}
+
+async function enrichAuditItems(rawItems = []) {
+  const actorIds = rawItems
+    .map((i) => (i.actorId ? String(i.actorId) : ""))
+    .filter(Boolean);
+
+  const userTargetIds = rawItems
+    .filter((i) => String(i.targetType || "") === "User" || String(i.targetType || "") === "AUTH")
+    .map((i) => String(i.targetId || ""))
+    .filter(Boolean);
+
+  const usersMap = await resolveUsersByIds([...actorIds, ...userTargetIds]);
+
+  return rawItems.map((i) => {
+    const actorId = i.actorId ? String(i.actorId) : "";
+    const targetId = String(i.targetId || "");
+    const targetType = String(i.targetType || "");
+
+    let actorNombre = "Sistema";
+    if (actorId) {
+      actorNombre = usersMap[actorId] || "Usuario";
+    }
+
+    let targetNombre = "";
+    if (targetType === "User" || targetType === "AUTH") {
+      targetNombre = usersMap[targetId] || (targetId ? "Usuario" : "");
+    } else if (targetType === "Vivienda") {
+      targetNombre = targetId ? `Vivienda ${targetId}` : "";
+    } else if (targetType === "FORM") {
+      targetNombre = targetId ? `Formulario ${targetId}` : "";
+    } else {
+      targetNombre = targetId || "";
+    }
+
+    return {
+      ...i,
+      actorNombre,
+      targetNombre,
+      actionTexto: actionToText(i.action),
+
+      // respaldo técnico visible si hace falta
+      actorIdTexto: actorId || "",
+      targetIdTexto: targetId || "",
+    };
+  });
+}
+
 // GET /api/admin/audit
 async function listAuditEvents(req, res) {
   try {
@@ -105,47 +199,16 @@ async function listAuditEvents(req, res) {
     const sort = buildSort(req.query);
 
     const [total, rawItems] = await Promise.all([
-  AuditLog.countDocuments(filter),
-  AuditLog.find(filter)
-    .select(CANONICAL_PROJECTION)
-    .sort(sort)
-    .skip(skip)
-    .limit(limit)
-    .lean(),
-]);
+      AuditLog.countDocuments(filter),
+      AuditLog.find(filter)
+        .select(CANONICAL_PROJECTION)
+        .sort(sort)
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+    ]);
 
-// obtener ids únicos
-const userIds = [
-  ...new Set(
-    rawItems
-      .map((i) => (i.actorId ? String(i.actorId) : ""))
-      .filter(Boolean)
-  ),
-];
-
-// traer usuarios
-let usersMap = {};
-if (userIds.length) {
-  const users = await mongoose.model("User")
-    .find({ _id: { $in: userIds } })
-    .select("nombre apellido email")
-    .lean();
-
-  users.forEach((u) => {
-    usersMap[String(u._id)] =
-      `${u.apellido || ""} ${u.nombre || ""}`.trim() ||
-      u.email ||
-      "Usuario";
-  });
-}
-
-// mapear salida
-const items = rawItems.map((i) => ({
-  ...i,
-  actorNombre: i.actorId
-    ? usersMap[String(i.actorId)] || "Usuario"
-    : "Sistema",
-}));
+    const items = await enrichAuditItems(rawItems);
 
     return res.json({
       page,
@@ -155,7 +218,9 @@ const items = rawItems.map((i) => ({
       items,
     });
   } catch (err) {
-    if (err?.code === "INVALID_ACTOR_ID") return res.status(400).json({ error: "Filtro inválido" });
+    if (err?.code === "INVALID_ACTOR_ID") {
+      return res.status(400).json({ error: "Filtro inválido" });
+    }
     console.error("[AUDIT_INSTITUCIONAL] listAuditEvents error:", err);
     return res.status(500).json({ error: "Error interno del servidor" });
   }
@@ -175,10 +240,17 @@ async function listAuditByRequestId(req, res) {
 
     const filter = { requestId };
 
-    const [total, items] = await Promise.all([
+    const [total, rawItems] = await Promise.all([
       AuditLog.countDocuments(filter),
-      AuditLog.find(filter).select(CANONICAL_PROJECTION).sort(sort).skip(skip).limit(limit).lean(),
+      AuditLog.find(filter)
+        .select(CANONICAL_PROJECTION)
+        .sort(sort)
+        .skip(skip)
+        .limit(limit)
+        .lean(),
     ]);
+
+    const items = await enrichAuditItems(rawItems);
 
     return res.json({
       page,
@@ -193,15 +265,13 @@ async function listAuditByRequestId(req, res) {
   }
 }
 
-// ✅ GET /api/admin/audit/options
+// GET /api/admin/audit/options
 async function getAuditOptions(req, res) {
   try {
     const role = String(req.user?.role || "");
     if (role !== "ADMIN_GENERAL") return denyOpaque(res);
 
     const limit = Math.min(500, Math.max(50, parseIntSafe(req.query.limit, 200)));
-
-    // Opcional: rango de fechas para “acotar” opciones sin filtros libres
     const baseFilter = buildAuditFilter({ from: req.query.from, to: req.query.to });
 
     const [actions, actorRoles, targetTypes, actorIdsAgg] = await Promise.all([
@@ -247,11 +317,15 @@ async function exportAuditPdf(req, res) {
 
     const filter = buildAuditFilter(req.query);
     const sort = buildSort(req.query);
-
-    // ✅ Máximo 1000 por exportación
     const max = 1000;
 
-    const items = await AuditLog.find(filter).select(CANONICAL_PROJECTION).sort(sort).limit(max).lean();
+    const rawItems = await AuditLog.find(filter)
+      .select(CANONICAL_PROJECTION)
+      .sort(sort)
+      .limit(max)
+      .lean();
+
+    const items = await enrichAuditItems(rawItems);
 
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
@@ -259,18 +333,21 @@ async function exportAuditPdf(req, res) {
       `attachment; filename="auditoria_institucional_${new Date().toISOString().slice(0, 10)}.pdf"`
     );
 
-    // OJO: tu PDF institucional mejorado (folio/registro/leyenda por hoja)
-    // lo resolvemos en backend/utils/pdf.js
     generateAuditInstitucionalPDF(res, {
       titulo: "Auditoría Institucional — ADMIN_GENERAL",
       fecha: new Date(),
       filtros: filtrosAplicadosFromQuery(req.query),
-      orden: { sortBy: "createdAt", sortDir: sort.createdAt === 1 ? "asc" : "desc" },
+      orden: {
+        sortBy: "createdAt",
+        sortDir: sort.createdAt === 1 ? "asc" : "desc",
+      },
       items,
       leyenda: "USO INTERNO — Acceso exclusivo ADMIN_GENERAL — Solo lectura",
     });
   } catch (err) {
-    if (err?.code === "INVALID_ACTOR_ID") return res.status(400).json({ error: "Filtro inválido" });
+    if (err?.code === "INVALID_ACTOR_ID") {
+      return res.status(400).json({ error: "Filtro inválido" });
+    }
     console.error("[AUDIT_INSTITUCIONAL] exportAuditPdf error:", err);
     return res.status(500).json({ error: "Error interno del servidor" });
   }
