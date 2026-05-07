@@ -149,7 +149,7 @@ async function registerPostulante(req, res) {
     await User.create({
       email,
       passwordHash: hash,
-      role: "POSTULANTE",
+      role: "PENDIENTE",
       permisos: [],
       nombre,
       apellido,
