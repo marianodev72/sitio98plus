@@ -290,12 +290,26 @@ async function cambiarRol(req, res) {
 
     normalizeLegacyRoleToPermisos(user);
 
-    user.role = nextRole;
+user.role = nextRole;
 
-    registrarAdminEvento(user, req, "CAMBIO_ROL", { role: nextRole }, observacion);
+if (nextRole === "POSTULANTE") {
+  user.activo = true;
+  user.bloqueado = false;
+  user.archivado = false;
 
-    bumpTokenVersion(user);
-    await user.save();
+  if (!user.meta || typeof user.meta !== "object") {
+    user.meta = {};
+  }
+
+  user.meta.pendienteAprobacion = false;
+  user.meta.aprobadoPor = req.user?._id || null;
+  user.meta.aprobadoEn = new Date();
+}
+
+registrarAdminEvento(user, req, "CAMBIO_ROL", { role: nextRole }, observacion);
+
+bumpTokenVersion(user);
+await user.save();
 
     return res.json({ message: "Rol actualizado" });
   } catch (err) {
