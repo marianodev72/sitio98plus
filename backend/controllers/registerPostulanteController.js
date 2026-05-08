@@ -91,16 +91,29 @@ async function registerPostulante(req, res) {
 
     // Mínimos
     if (!email || !matricula || !nombre || !apellido || !dni || !password || !confirmarPassword) {
+      console.warn("[registerPostulante] NO_PROCESABLE: campos obligatorios faltantes", {
+        email: !!email,
+        matricula: !!matricula,
+        nombre: !!nombre,
+        apellido: !!apellido,
+        dni: !!dni,
+        password: !!password,
+        confirmarPassword: !!confirmarPassword,
+      });
       return noProcesable(res);
     }
 
     if (password !== confirmarPassword) {
+      console.warn("[registerPostulante] NO_PROCESABLE: passwords no coinciden");
       return noProcesable(res);
     }
 
     // 1) Validación institucional contra CSV (obligatoria)
     const record = findMatriculaRecord(matricula);
     if (!record) {
+      console.warn("[registerPostulante] NO_PROCESABLE: matricula no encontrada", {
+        matricula,
+      });
       return noProcesable(res);
     }
 
@@ -108,14 +121,28 @@ async function registerPostulante(req, res) {
     // Si el CSV no trae DNI para la matrícula, fallamos cerrado.
     const csvDni = normDni(record.dni);
     if (!csvDni) {
+      console.warn("[registerPostulante] NO_PROCESABLE: csv sin dni para matricula", {
+        matricula,
+      });
       return noProcesable(res);
     }
+
     if (csvDni !== dni) {
+      console.warn("[registerPostulante] NO_PROCESABLE: dni no coincide", {
+        matricula,
+        dniIngresado: dni,
+        dniCsv: csvDni,
+      });
       return noProcesable(res);
     }
 
     // 3) Validación extra opcional: grado (solo si viene y CSV lo trae)
     if (grado && record.grado && up(record.grado) !== up(grado)) {
+      console.warn("[registerPostulante] NO_PROCESABLE: grado no coincide", {
+        matricula,
+        gradoIngresado: grado,
+        gradoCsv: record.grado,
+      });
       return noProcesable(res);
     }
 
@@ -130,6 +157,12 @@ async function registerPostulante(req, res) {
       const ok = csvFull === fullNombreApellido || csvFull === fullApellidoNombre;
 
       if (!ok) {
+        console.warn("[registerPostulante] NO_PROCESABLE: nombre/apellido no coincide", {
+          matricula,
+          nombreIngresado: nombre,
+          apellidoIngresado: apellido,
+          nombreCsv: record.nombreApellido,
+        });
         return noProcesable(res);
       }
     }
@@ -140,12 +173,26 @@ async function registerPostulante(req, res) {
     }).lean();
 
     if (existente) {
+      console.warn("[registerPostulante] NO_PROCESABLE: usuario existente", {
+        email,
+        matricula,
+        existenteId: existente._id,
+        existenteRole: existente.role,
+        existenteActivo: existente.activo,
+      });
       return noProcesable(res);
     }
 
     const hash = await bcrypt.hash(String(password), 10);
 
-    // ✅ Usuario creado como POSTULANTE pero INACTIVO (pendiente aprobación ADMIN_GENERAL)
+    console.warn("[registerPostulante] DEBUG antes de crear usuario", {
+      email,
+      matricula,
+      dni,
+      role: "PENDIENTE",
+    });
+
+    // ✅ Usuario creado como PENDIENTE e INACTIVO (pendiente aprobación ADMIN_GENERAL)
     await User.create({
       email,
       passwordHash: hash,
