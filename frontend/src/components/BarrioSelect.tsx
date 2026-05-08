@@ -21,7 +21,7 @@ export default function BarrioSelect({
   async function cargar() {
     setLoading(true);
     try {
-      const res = await http.get("/barrios");
+      const res = await http.get("/viviendas/barrios");
       const list = Array.isArray(res.data?.barrios) ? res.data.barrios : [];
       setBarrios(list.map((x: any) => String(x || "").trim()).filter(Boolean));
     } catch (e) {

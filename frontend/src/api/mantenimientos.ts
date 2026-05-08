@@ -178,7 +178,7 @@ export async function decisionAdmin(id: string, decision: "SI" | "NO"): Promise<
 
 export async function cierreAdmin(id: string): Promise<void> {
   try {
-    await http.patch(`/mis-mantenimientos/admin/${encodeURIComponent(id)}/cierre`, {});
+    await http.post(`/mis-mantenimientos/admin/${encodeURIComponent(id)}/cierre`, {});
   } catch (e) {
     throw opaqueError(e);
   }

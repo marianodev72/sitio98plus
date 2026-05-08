@@ -7,6 +7,7 @@ import AnexoViewer from "../../components/anexos/AnexoViewer";
 import Anexo11ResumenRegistro from "../../components/anexos/Anexo11ResumenRegistro";
 import Anexo04Vista from "../../components/anexos/Anexo04Vista";
 import Anexo01Viewer from "../../components/anexos/Anexo01Viewer";
+import AdjuntosList from "../../components/AdjuntosList";
 import {
   buttonRowStyle,
   cardStyle,
@@ -29,6 +30,13 @@ type Conformidad = {
   observacion?: string;
 };
 
+type Adjunto = {
+  nombre?: string;
+  ruta?: string;
+  tipo?: string;
+  size?: number;
+};
+
 type Anexo = {
   _id: string;
   codigo: string;
@@ -38,12 +46,7 @@ type Anexo = {
   updatedAt?: string;
   derivadoDe?: string | null;
   datos?: any;
-  adjuntos?: Array<{
-    nombre?: string;
-    ruta?: string;
-    tipo?: string;
-    size?: number;
-  }>;
+  adjuntos?: Adjunto[];
 };
 
 function up(v: unknown) {
@@ -89,6 +92,7 @@ export default function GestionarAnexo() {
   const [loadingViviendas, setLoadingViviendas] = useState(false);
 
   const [anexo01Datos, setAnexo01Datos] = useState<any>(null);
+  const [origen, setOrigen] = useState<Anexo | null>(null);
 
   async function cargarViviendasElegiblesAsignacion() {
     setLoadingViviendas(true);
@@ -123,6 +127,7 @@ export default function GestionarAnexo() {
       const res = await http.get(`/formularios/${id}`);
       const a = (res.data?.anexo || res.data?.formulario || null) as Anexo | null;
       setAnexo(a);
+      setOrigen((res.data?.origen || null) as Anexo | null);
 
       const datosLocal = a?.datos || {};
       if (datosLocal?.observacionesAdminGeneral) {
@@ -134,6 +139,7 @@ export default function GestionarAnexo() {
       console.error("[ADMIN] Error cargando anexo", e);
       setError("No se pudo cargar el anexo. Contacte al administrador.");
       setAnexo(null);
+      setOrigen(null);
     } finally {
       setLoading(false);
     }
@@ -147,6 +153,8 @@ export default function GestionarAnexo() {
   const codigo = useMemo(() => up(anexo?.codigo), [anexo?.codigo]);
   const estado = useMemo(() => up(anexo?.estado), [anexo?.estado]);
   const datos = anexo?.datos || {};
+  const adjuntosParaMostrar: Adjunto[] =
+    codigo === "ANEXO_02" ? origen?.adjuntos || [] : anexo?.adjuntos || [];
 
   useEffect(() => {
     if (!anexo?._id) return;
@@ -676,7 +684,7 @@ export default function GestionarAnexo() {
             </button>
 
             <a
-              href={`http://localhost:3000/api/formularios/${anexo._id}/pdf`}
+              href={`/api/formularios/${anexo._id}/pdf`}
               target="_blank"
               rel="noreferrer"
               style={{
@@ -692,6 +700,11 @@ export default function GestionarAnexo() {
             <button onClick={cargar} disabled={busy} style={primaryButtonStyle}>
               Recargar
             </button>
+          </div>
+
+          <div style={{ ...softCardStyle, marginBottom: 18 }}>
+            <h3 style={sectionTitleStyle}>Adjuntos</h3>
+            <AdjuntosList formularioId={anexo._id} adjuntos={adjuntosParaMostrar} />
           </div>
 
           {(puedeCerrarAdminClasico || puedeGestionarAdmin11 || puedeGenerarAnexo02) && (

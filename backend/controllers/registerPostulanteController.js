@@ -5,7 +5,7 @@ const bcrypt = require("bcryptjs");
 
 let User = null;
 try {
-  ({ User } = require("../models/User"));
+  ({ User } = require("../models/user"));
 } catch {
   try {
     ({ User } = require("../models/user"));
