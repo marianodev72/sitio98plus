@@ -277,7 +277,7 @@ export default function VerAnexo() {
         </button>
 
         <a
-          href={`http://localhost:3000/api/formularios/${anexo._id}/pdf`}
+          href={`/api/formularios/${anexo._id}/pdf`}
           target="_blank"
           rel="noreferrer"
         >

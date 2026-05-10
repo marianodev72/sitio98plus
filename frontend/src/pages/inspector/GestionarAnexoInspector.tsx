@@ -225,7 +225,7 @@ export default function GestionarAnexoInspector() {
         <button onClick={() => navigate(-1)}>Volver</button>
 
         <a
-          href={`http://localhost:3000/api/formularios/${anexo._id}/pdf`}
+          href={`/api/formularios/${anexo._id}/pdf`}
           target="_blank"
           rel="noreferrer"
         >

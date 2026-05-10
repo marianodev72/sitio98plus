@@ -501,7 +501,7 @@ export default function GestionarAnexo11Inspector({
         </button>
 
         <a
-          href={`http://localhost:3000/api/formularios/${anexo._id}/pdf`}
+          href={`/api/formularios/${anexo._id}/pdf`}
           target="_blank"
           rel="noreferrer"
           style={{

@@ -179,7 +179,7 @@ export default function GestionEnCurso() {
                       Abrir
                     </button>{" "}
                     <a
-                      href={`http://localhost:3000/api/formularios/${an._id}/pdf`}
+                      href={`/api/formularios/${an._id}/pdf`}
                       target="_blank"
                       rel="noreferrer"
                     >
