@@ -471,6 +471,11 @@ export default function GestionarAnexo() {
     boxSizing: "border-box",
   };
 
+  const housingActionRowStyle: CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" };
+  const housingFieldStyle: CSSProperties = { display: "grid", gap: 6, flex: "1 1 360px", minWidth: 0 };
+  const housingLabelStyle: CSSProperties = { fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "rgba(255,255,255,0.62)" };
+  const housingSelectStyle: CSSProperties = { ...controlStyle, width: "100%", minWidth: 0, minHeight: 46, borderRadius: 12, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.04)", backgroundColor: "rgba(255,255,255,0.04)", outline: "none", appearance: "none", WebkitAppearance: "none", MozAppearance: "none" };
+
   const miniTableWrap: CSSProperties = {
     overflowX: "auto",
     border: "1px solid rgba(255,255,255,0.12)",
@@ -738,12 +743,14 @@ export default function GestionarAnexo() {
                 <div style={{ ...softCardStyle, marginBottom: 16 }}>
                   <h4 style={{ marginTop: 0, color: "#ffffff" }}>Generación institucional</h4>
 
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                  <div style={housingActionRowStyle}>
+                    <div style={housingFieldStyle}>
+                      <label style={housingLabelStyle}>Vivienda elegible</label>
                     <select
                       value={viviendaId}
                       onChange={(e) => setViviendaId(e.target.value)}
                       disabled={busy || loadingViviendas}
-                      style={{ ...controlStyle, width: 320 }}
+                      style={housingSelectStyle}
                     >
                       <option value="">
                         {loadingViviendas ? "Cargando viviendas…" : "Seleccionar vivienda…"}
@@ -771,6 +778,7 @@ export default function GestionarAnexo() {
                             ))}
                       </optgroup>
                     </select>
+                    </div>
 
                     <button
                       type="button"
