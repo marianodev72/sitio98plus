@@ -474,7 +474,9 @@ export default function GestionarAnexo() {
   const housingActionRowStyle: CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" };
   const housingFieldStyle: CSSProperties = { display: "grid", gap: 6, flex: "1 1 360px", minWidth: 0 };
   const housingLabelStyle: CSSProperties = { fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "rgba(255,255,255,0.62)" };
-  const housingSelectStyle: CSSProperties = { ...controlStyle, width: "100%", minWidth: 0, minHeight: 46, borderRadius: 12, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.04)", backgroundColor: "rgba(255,255,255,0.04)", outline: "none", appearance: "none", WebkitAppearance: "none", MozAppearance: "none" };
+  const housingSelectStyle: CSSProperties = { ...controlStyle, width: "100%", minWidth: 0, minHeight: 46, borderRadius: 12, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.04)", backgroundColor: "rgba(255,255,255,0.04)", outline: "none", colorScheme: "dark", appearance: "none", WebkitAppearance: "none", MozAppearance: "none" };
+  const housingOptionStyle: CSSProperties = { backgroundColor: "#1f2937", color: "#ffffff" };
+  const housingOptgroupStyle: CSSProperties = { backgroundColor: "#111827", color: "#eaf0ff" };
 
   const miniTableWrap: CSSProperties = {
     overflowX: "auto",
@@ -752,27 +754,27 @@ export default function GestionarAnexo() {
                       disabled={busy || loadingViviendas}
                       style={housingSelectStyle}
                     >
-                      <option value="">
+                      <option value="" style={housingOptionStyle}>
                         {loadingViviendas ? "Cargando viviendas…" : "Seleccionar vivienda…"}
                       </option>
 
-                      <optgroup label="DISPONIBLE">
+                      <optgroup label="DISPONIBLE" style={housingOptgroupStyle}>
                         {Array.isArray(viviendasElegibles) &&
                           viviendasElegibles
                             .filter((v: any) => up(v?.estado) === "DISPONIBLE")
                             .map((v: any) => (
-                              <option key={String(v?._id)} value={String(v?._id)}>
+                              <option key={String(v?._id)} value={String(v?._id)} style={housingOptionStyle}>
                                 {safe(v?.codigo || v?.nombre || v?.direccion || prettyId(v?._id))}
                               </option>
                             ))}
                       </optgroup>
 
-                      <optgroup label="A_DESOCUPARSE">
+                      <optgroup label="A_DESOCUPARSE" style={housingOptgroupStyle}>
                         {Array.isArray(viviendasElegibles) &&
                           viviendasElegibles
                             .filter((v: any) => up(v?.estado) === "A_DESOCUPARSE")
                             .map((v: any) => (
-                              <option key={String(v?._id)} value={String(v?._id)}>
+                              <option key={String(v?._id)} value={String(v?._id)} style={housingOptionStyle}>
                                 {safe(v?.codigo || v?.nombre || v?.direccion || prettyId(v?._id))}
                               </option>
                             ))}
