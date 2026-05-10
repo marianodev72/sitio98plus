@@ -15,6 +15,8 @@ function linkStyle({ isActive }: { isActive: boolean }) {
     alignItems: "center",
     minHeight: 40,
     boxSizing: "border-box",
+    whiteSpace: "nowrap",
+    maxWidth: "100%",
   } as const;
 }
 
@@ -36,13 +38,15 @@ export default function AdminLayout() {
         minHeight: "100vh",
         background: "#0b1220",
         color: "#eaf0ff",
+        overflowX: "hidden",
+        boxSizing: "border-box",
       }}
     >
       <header
         style={{
           background: "rgba(255,255,255,0.05)",
           borderBottom: "1px solid rgba(255,255,255,0.12)",
-          padding: "12px 16px",
+          padding: "clamp(10px, 2vw, 16px)",
           position: "sticky",
           top: 0,
           zIndex: 5,
@@ -55,9 +59,10 @@ export default function AdminLayout() {
             justifyContent: "space-between",
             gap: 12,
             flexWrap: "wrap",
+            minWidth: 0,
           }}
         >
-          <div>
+          <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 18, fontWeight: 900, color: "#ffffff" }}>Panel ADMIN</div>
             <div style={{ fontSize: 12, color: "rgba(255,255,255,0.78)" }}>
               {user?.apellido} {user?.nombre} — <b>{String(user?.role || "")}</b>
@@ -96,7 +101,7 @@ export default function AdminLayout() {
           </div>
         </div>
 
-        <nav style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <nav style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap", overflowX: "auto", paddingBottom: 4, maxWidth: "100%" }}>
           <NavLink to="." end style={linkStyle}>
             Dashboard
           </NavLink>
@@ -121,7 +126,7 @@ export default function AdminLayout() {
         </nav>
       </header>
 
-      <main style={{ padding: 16 }}>
+      <main style={{ padding: "clamp(12px, 2vw, 16px)", minWidth: 0, boxSizing: "border-box" }}>
         <Outlet />
       </main>
     </div>

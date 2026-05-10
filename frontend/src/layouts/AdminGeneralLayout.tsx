@@ -33,6 +33,8 @@ function linkStyle({ isActive }: { isActive: boolean }) {
     alignItems: "center",
     justifyContent: "center",
     minHeight: 44,
+    whiteSpace: "nowrap",
+    maxWidth: "100%",
   } as const;
 }
 
@@ -60,7 +62,7 @@ export default function AdminGeneralLayout() {
           boxShadow: "0 10px 28px rgba(0,0,0,0.28)",
         }}
       >
-        <div style={{ ...shellStyle, maxWidth: 1440, padding: "18px 20px 16px" }}>
+        <div style={{ ...shellStyle, maxWidth: 1440, padding: "clamp(12px, 2vw, 20px)" }}>
           <div
             style={{
               display: "flex",
@@ -70,7 +72,7 @@ export default function AdminGeneralLayout() {
               flexWrap: "wrap",
             }}
           >
-            <div style={{ minWidth: 280 }}>
+            <div style={{ minWidth: 0, flex: "1 1 260px" }}>
               <div
                 style={{
                   fontSize: 13,
@@ -98,6 +100,8 @@ export default function AdminGeneralLayout() {
                 gap: 10,
                 flexWrap: "wrap",
                 alignItems: "center",
+                minWidth: 0,
+                maxWidth: "100%",
               }}
             >
               <button
@@ -126,6 +130,9 @@ export default function AdminGeneralLayout() {
               display: "flex",
               gap: 10,
               flexWrap: "wrap",
+              overflowX: "auto",
+              paddingBottom: 4,
+              maxWidth: "100%",
             }}
           >
             <NavLink to="." end style={linkStyle}>
@@ -168,7 +175,7 @@ export default function AdminGeneralLayout() {
         </div>
       </header>
 
-      <main style={{ ...shellStyle, maxWidth: 1440, padding: "24px 20px 32px" }}>
+      <main style={{ ...shellStyle, maxWidth: 1440, padding: "clamp(16px, 2vw, 24px) clamp(12px, 2vw, 20px) 32px" }}>
         <div style={cardStyle}>
           <Outlet />
         </div>
