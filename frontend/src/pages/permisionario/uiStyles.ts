@@ -2,13 +2,18 @@
 export const pageStyle = {
   background: "#0b1220",
   minHeight: "100vh",
-  padding: 20,
+  padding: "clamp(12px, 2vw, 20px)",
   color: "#e5e7eb",
+  overflowX: "hidden" as const,
+  boxSizing: "border-box" as const,
 };
 
 export const shellStyle = {
+  width: "100%",
   maxWidth: 1100,
   margin: "0 auto",
+  minWidth: 0,
+  boxSizing: "border-box" as const,
 };
 
 export const heroStyle = {
@@ -17,7 +22,7 @@ export const heroStyle = {
 
 export const titleStyle = {
   margin: 0,
-  fontSize: 30,
+  fontSize: "clamp(22px, 3vw, 30px)",
   fontWeight: 800,
   letterSpacing: -0.4,
   color: "#ffffff",
@@ -36,15 +41,19 @@ export const cardStyle = {
   background: "rgba(255,255,255,0.07)",
   border: "1px solid rgba(255,255,255,0.14)",
   borderRadius: 16,
-  padding: 18,
+  padding: "clamp(12px, 2vw, 18px)",
   boxShadow: "0 10px 30px rgba(0,0,0,0.18)",
+  minWidth: 0,
+  boxSizing: "border-box" as const,
 };
 
 export const softCardStyle = {
   background: "rgba(255,255,255,0.05)",
   border: "1px solid rgba(255,255,255,0.12)",
   borderRadius: 14,
-  padding: 14,
+  padding: "clamp(12px, 2vw, 14px)",
+  minWidth: 0,
+  boxSizing: "border-box" as const,
 };
 
 export const sectionTitleStyle = {
@@ -92,6 +101,7 @@ export const primaryButtonStyle = {
   color: "#ffffff",
   fontWeight: 700,
   cursor: "pointer",
+  maxWidth: "100%",
 };
 
 export const secondaryButtonStyle = {
@@ -102,6 +112,7 @@ export const secondaryButtonStyle = {
   color: "#ffffff",
   fontWeight: 600,
   cursor: "pointer",
+  maxWidth: "100%",
 };
 
 export const successButtonStyle = {
@@ -112,6 +123,7 @@ export const successButtonStyle = {
   color: "#ffffff",
   fontWeight: 800,
   cursor: "pointer",
+  maxWidth: "100%",
 };
 
 export const moduleButtonStyle = {
@@ -124,6 +136,7 @@ export const moduleButtonStyle = {
   color: "#ffffff",
   fontWeight: 700,
   cursor: "pointer",
+  maxWidth: "100%",
 };
 
 export const modulesGridStyle = {
