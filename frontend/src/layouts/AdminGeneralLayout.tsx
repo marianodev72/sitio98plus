@@ -52,7 +52,16 @@ export default function AdminGeneralLayout() {
 
   return (
     <div style={pageStyle}>
+      <style>{`
+        @media (max-width: 640px) {
+          .admin-general-layout-header {
+            position: static !important;
+          }
+        }
+      `}</style>
+
       <header
+        className="admin-general-layout-header"
         style={{
           position: "sticky",
           top: 0,
