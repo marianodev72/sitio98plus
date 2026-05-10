@@ -63,6 +63,8 @@ export default function PermisionarioLayout() {
     color: "#ffffff",
     fontWeight: 600,
     cursor: "pointer",
+    maxWidth: "100%",
+    whiteSpace: "nowrap" as const,
   });
 
   return (
@@ -71,12 +73,14 @@ export default function PermisionarioLayout() {
         minHeight: "100vh",
         background: "#0b1220",
         color: "#e5e7eb",
+        overflowX: "hidden",
+        boxSizing: "border-box",
       }}
     >
       <header
         style={{
           borderBottom: "1px solid rgba(255,255,255,0.08)",
-          padding: "16px 20px",
+          padding: "clamp(12px, 2vw, 20px)",
           background: "rgba(11,18,32,0.85)",
           backdropFilter: "blur(6px)",
         }}
@@ -84,7 +88,10 @@ export default function PermisionarioLayout() {
         <div
           style={{
             maxWidth: 1200,
+            width: "100%",
             margin: "0 auto",
+            minWidth: 0,
+            boxSizing: "border-box",
           }}
         >
           {/* TOP BAR */}
@@ -95,9 +102,10 @@ export default function PermisionarioLayout() {
               alignItems: "center",
               gap: 12,
               flexWrap: "wrap",
+              minWidth: 0,
             }}
           >
-            <div>
+            <div style={{ minWidth: 0 }}>
               <div
                 style={{
                   fontSize: 20,
@@ -126,7 +134,7 @@ export default function PermisionarioLayout() {
               </div>
             </div>
 
-            <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", maxWidth: "100%" }}>
               <button
                 style={navButton()}
                 onClick={() => navigate(-1)}
@@ -154,6 +162,9 @@ export default function PermisionarioLayout() {
               display: "flex",
               gap: 8,
               flexWrap: "wrap",
+              overflowX: "auto",
+              paddingBottom: 4,
+              maxWidth: "100%",
             }}
           >
             <button
@@ -203,7 +214,7 @@ export default function PermisionarioLayout() {
         </div>
       </header>
 
-      <main style={{ padding: 20 }}>
+      <main style={{ padding: "clamp(12px, 2vw, 20px)", minWidth: 0, boxSizing: "border-box" }}>
         <Outlet />
       </main>
     </div>

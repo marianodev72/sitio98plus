@@ -12,16 +12,19 @@ const pageStyle: CSSProperties = {
   minHeight: "100vh",
   background: "#0b1220",
   color: "#ffffff",
+  overflowX: "hidden",
+  boxSizing: "border-box",
 };
 
 const headerStyle: CSSProperties = {
   background: "rgba(255,255,255,0.05)",
   borderBottom: "1px solid rgba(255,255,255,0.12)",
-  padding: "12px 16px",
+  padding: "clamp(10px, 2vw, 16px)",
   position: "sticky",
   top: 0,
   zIndex: 5,
   backdropFilter: "blur(6px)",
+  boxSizing: "border-box",
 };
 
 const titleStyle: CSSProperties = {
@@ -43,6 +46,7 @@ const neutralButtonStyle: CSSProperties = {
   padding: "10px 14px",
   fontWeight: 600,
   cursor: "pointer",
+  maxWidth: "100%",
 };
 
 const primaryButtonStyle: CSSProperties = {
@@ -53,10 +57,13 @@ const primaryButtonStyle: CSSProperties = {
   padding: "10px 14px",
   fontWeight: 800,
   cursor: "pointer",
+  maxWidth: "100%",
 };
 
 const mainStyle: CSSProperties = {
-  padding: 16,
+  padding: "clamp(12px, 2vw, 16px)",
+  minWidth: 0,
+  boxSizing: "border-box",
 };
 
 const deniedStyle: CSSProperties = {
@@ -103,16 +110,17 @@ export default function PostulanteLayout() {
             alignItems: "center",
             gap: 12,
             flexWrap: "wrap",
+            minWidth: 0,
           }}
         >
-          <div>
+          <div style={{ minWidth: 0 }}>
             <div style={titleStyle}>Panel POSTULANTE</div>
             <div style={subtitleStyle}>
               {user?.apellido} {user?.nombre} — <b style={{ color: "#F8FAFC" }}>{role}</b>
             </div>
           </div>
 
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", maxWidth: "100%" }}>
             <button style={neutralButtonStyle} onClick={() => navigate(-1)}>
               Volver
             </button>
@@ -123,7 +131,7 @@ export default function PostulanteLayout() {
         </div>
 
         {/* Accesos rápidos */}
-        <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap", overflowX: "auto", paddingBottom: 4, maxWidth: "100%" }}>
           <button style={neutralButtonStyle} onClick={() => navigate(".")}>
             Inicio
           </button>
