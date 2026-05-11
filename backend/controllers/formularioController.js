@@ -506,7 +506,79 @@ origen = {
   }
 }
 
-    return res.json(stripAdjuntoRutas({ anexo: stripEstadoInstitucionalIfNeeded(user, anexo.toObject ? anexo.toObject() : anexo), origen }));
+    const anexoObj = anexo.toObject ? anexo.toObject() : anexo;
+
+    if (codigoUp === "ANEXO_11" && anexoObj && typeof anexoObj === "object") {
+      const d = anexoObj.datos && typeof anexoObj.datos === "object" ? anexoObj.datos : {};
+      const iv = Array.isArray(anexoObj.intervinientes) ? anexoObj.intervinientes : [];
+      const ambitoUp = up(d?.ambito || "");
+      const promotorRolUp = up(d?.promotorRol || d?.promotorTipo || "");
+      const puedeUsarUsuarioComoPermisionario =
+        ambitoUp !== "ESPACIO_COMUN" && promotorRolUp === "PERMISIONARIO";
+      const intervinientePermisionario = iv.find(
+        (x) => up(x?.rol) === "PERMISIONARIO" && isObjectId(x?.userId)
+      );
+      const viviendaId =
+        (isObjectId(d?.viviendaId) && d.viviendaId) ||
+        (isObjectId(anexoObj?.vivienda) && anexoObj.vivienda) ||
+        null;
+      const viviendaDoc =
+        Vivienda && viviendaId
+          ? await Vivienda.findById(viviendaId).select("ocupacionActual").lean()
+          : null;
+
+      let permisionarioUid = null;
+      let fuente = "";
+
+      if (isObjectId(d?.conformidadPermisionario?.usuario)) {
+        permisionarioUid = d.conformidadPermisionario.usuario;
+        fuente = "datos.conformidadPermisionario.usuario";
+      } else if (isObjectId(d?.permisionarioId)) {
+        permisionarioUid = d.permisionarioId;
+        fuente = "datos.permisionarioId";
+      } else if (intervinientePermisionario) {
+        permisionarioUid = intervinientePermisionario.userId;
+        fuente = "intervinientes.PERMISIONARIO";
+      } else if (isObjectId(viviendaDoc?.ocupacionActual?.permisionario)) {
+        permisionarioUid = viviendaDoc.ocupacionActual.permisionario;
+        fuente = "vivienda.ocupacionActual.permisionario";
+      } else if (puedeUsarUsuarioComoPermisionario && isObjectId(anexoObj?.usuario)) {
+        permisionarioUid = anexoObj.usuario;
+        fuente = "anexo.usuario";
+      }
+
+      let nombre = permisionarioUid ? await getNombreApellidoSafe(permisionarioUid) : "";
+
+      if (!nombre) {
+        const textoSeguro = (...vals) =>
+          vals
+            .map((v) => (typeof v === "string" || typeof v === "number" ? String(v).trim() : ""))
+            .find((v) => v && !isObjectId(v)) || "";
+        const textual =
+          textoSeguro(d?.permisionarioNombre, d?.postulanteLabel, d?.postulanteNombre, d?.permisionario);
+
+        if (textual) {
+          nombre = textual;
+          fuente = "datos.textual";
+        } else if (ambitoUp === "ESPACIO_COMUN") {
+          nombre = "Espacio común del barrio";
+          fuente = "fallback.espacioComun";
+        } else if (viviendaDoc && !viviendaDoc?.ocupacionActual?.permisionario) {
+          nombre = "Vivienda en reparación";
+          fuente = "fallback.viviendaReparacion";
+        } else {
+          nombre = "Permisionario no identificado";
+          fuente = "fallback.noIdentificado";
+        }
+      }
+
+      anexoObj._resolved = {
+        ...(anexoObj._resolved || {}),
+        permisionario: { nombre, fuente },
+      };
+    }
+
+    return res.json(stripAdjuntoRutas({ anexo: stripEstadoInstitucionalIfNeeded(user, anexoObj), origen }));
   } catch (e) {
     console.error("[getById] Error:", e);
     return genericDenied(res);
