@@ -1,6 +1,6 @@
 // frontend/src/pages/permisionario/inspector/GestionarAnexoInspector.tsx
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { http } from "../../../api/http";
 import { useAuth } from "../../../auth/useAuth";
@@ -193,12 +193,48 @@ export default function GestionarAnexoInspector() {
   if (codigo === "ANEXO_03") {
     const estado = up(anexo.estado);
     const puedeEnviar = estado === "BORRADOR";
+    const buttonStyle: CSSProperties = {
+      padding: "10px 14px",
+      borderRadius: 10,
+      border: "1px solid rgba(255,255,255,0.16)",
+      background: "rgba(255,255,255,0.04)",
+      color: "#ffffff",
+      fontSize: 12,
+      fontWeight: 700,
+      cursor: busy ? "wait" : "pointer",
+    };
+    const primaryButtonStyle: CSSProperties = {
+      ...buttonStyle,
+      border: "none",
+      background: "#16a34a",
+      fontWeight: 800,
+    };
+    const alertErrorStyle: CSSProperties = {
+      marginTop: 10,
+      padding: 12,
+      border: "1px solid rgba(239,68,68,0.35)",
+      borderRadius: 12,
+      background: "rgba(127,29,29,0.24)",
+      color: "#fecaca",
+      fontSize: 13,
+      lineHeight: 1.45,
+    };
+    const alertSuccessStyle: CSSProperties = {
+      marginTop: 10,
+      padding: 12,
+      border: "1px solid rgba(34,197,94,0.34)",
+      borderRadius: 12,
+      background: "rgba(20,83,45,0.22)",
+      color: "#bbf7d0",
+      fontSize: 13,
+      lineHeight: 1.45,
+    };
 
     return (
       <div style={{ padding: 24 }}>
         <button
           onClick={() => navigate("/app/permisionario/mi-barrio-inspector")}
-          style={{ marginBottom: 12 }}
+          style={{ ...buttonStyle, marginBottom: 12 }}
           disabled={busy}
         >
           Volver
@@ -207,27 +243,13 @@ export default function GestionarAnexoInspector() {
         <h2>Gestión — ANEXO_03</h2>
 
         {err && (
-          <div
-            style={{
-              marginTop: 10,
-              padding: 10,
-              border: "1px solid #f44336",
-              background: "#ffebee",
-            }}
-          >
+          <div style={alertErrorStyle}>
             {err}
           </div>
         )}
 
         {infoMsg && !err && (
-          <div
-            style={{
-              marginTop: 10,
-              padding: 10,
-              border: "1px solid #4caf50",
-              background: "#e8f5e9",
-            }}
-          >
+          <div style={alertSuccessStyle}>
             {infoMsg}
           </div>
         )}
@@ -267,14 +289,18 @@ export default function GestionarAnexoInspector() {
             flexWrap: "wrap",
           }}
         >
-          <button onClick={cargar} disabled={busy}>
+          <button onClick={cargar} disabled={busy} style={buttonStyle}>
             Recargar
           </button>
 
           <button
             onClick={enviarAnexo03}
             disabled={busy || !puedeEnviar}
-            style={{ fontWeight: 700 }}
+            style={{
+              ...primaryButtonStyle,
+              opacity: busy || !puedeEnviar ? 0.65 : 1,
+              cursor: busy || !puedeEnviar ? "not-allowed" : "pointer",
+            }}
             title={
               puedeEnviar
                 ? "Enviar formulario ANEXO_03 (BORRADOR → ENVIADO)"
