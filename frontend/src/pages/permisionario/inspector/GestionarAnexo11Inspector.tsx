@@ -35,6 +35,11 @@ function clean(v: unknown) {
   return typeof v === "string" ? v.trim() : "";
 }
 
+function cleanDisplayName(v: unknown) {
+  const s = typeof v === "string" ? v.trim() : "";
+  return s && !/^[0-9a-fA-F]{24}$/.test(s) ? s : "";
+}
+
 function getDatos(anexo: Anexo) {
   return anexo?.datos && typeof anexo.datos === "object" ? anexo.datos : {};
 }
@@ -42,11 +47,12 @@ function getDatos(anexo: Anexo) {
 function getPermisionarioNombre(anexo: Anexo) {
   const d = getDatos(anexo);
   return (
-    d?.permisionarioNombre ||
-    d?.postulanteLabel ||
-    d?.postulanteNombre ||
-    anexo?.usuario?.nombre ||
-    "—"
+    cleanDisplayName((anexo as any)?._resolved?.permisionario?.nombre) ||
+    cleanDisplayName(d?.permisionarioNombre) ||
+    cleanDisplayName(d?.postulanteLabel) ||
+    cleanDisplayName(d?.postulanteNombre) ||
+    cleanDisplayName(d?.permisionario) ||
+    (up(d?.ambito) === "ESPACIO_COMUN" ? "Espacio común del barrio" : "—")
   );
 }
 
