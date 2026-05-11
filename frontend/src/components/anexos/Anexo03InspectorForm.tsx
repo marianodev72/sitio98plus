@@ -206,26 +206,205 @@ function Anexo03InspectorForm({
   const est = datos.estadoSistemas || {};
 
   const disabled = !!readOnly;
+  const esAnexo03 = anexoCodigo === "03";
 
   const blockStyle: React.CSSProperties = {
-    border: "1px solid #ddd",
-    borderRadius: 10,
-    padding: 12,
+    border: esAnexo03 ? "1px solid rgba(255,255,255,0.12)" : "1px solid #ddd",
+    borderRadius: esAnexo03 ? 16 : 10,
+    padding: esAnexo03 ? 16 : 12,
     marginBottom: 14,
-    background: "#fafafa",
+    background: esAnexo03 ? "rgba(255,255,255,0.05)" : "#fafafa",
+    color: esAnexo03 ? "#ffffff" : undefined,
+    boxShadow: esAnexo03 ? "0 10px 30px rgba(0,0,0,0.18)" : undefined,
+    minWidth: 0,
+    boxSizing: "border-box",
   };
 
   const labelStyle: React.CSSProperties = {
-    fontWeight: 600,
-    fontSize: 13,
+    fontWeight: esAnexo03 ? 800 : 600,
+    fontSize: esAnexo03 ? 11 : 13,
     display: "block",
-    marginBottom: 4,
+    marginBottom: esAnexo03 ? 6 : 4,
+    textTransform: esAnexo03 ? "uppercase" : undefined,
+    letterSpacing: esAnexo03 ? "0.08em" : undefined,
+    color: esAnexo03 ? "rgba(255,255,255,0.62)" : undefined,
   };
 
   const smallHelp: React.CSSProperties = {
     fontSize: 11,
-    opacity: 0.7,
+    opacity: esAnexo03 ? 1 : 0.7,
+    color: esAnexo03 ? "rgba(255,255,255,0.62)" : undefined,
+    lineHeight: 1.5,
   };
+
+  const rootStyle: React.CSSProperties = {
+    display: "grid",
+    gap: esAnexo03 ? 14 : 12,
+    color: esAnexo03 ? "rgba(255,255,255,0.90)" : undefined,
+  };
+
+  const gridStyle: React.CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: esAnexo03 ? "repeat(auto-fit, minmax(220px, 1fr))" : "1fr 1fr",
+    gap: esAnexo03 ? 12 : 8,
+    minWidth: 0,
+  };
+
+  const twoColumnGridStyle: React.CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: esAnexo03 ? "repeat(auto-fit, minmax(220px, 1fr))" : "2fr 1fr",
+    gap: esAnexo03 ? 12 : 8,
+    alignItems: "center",
+    minWidth: 0,
+  };
+
+  const optionGridStyle: React.CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: esAnexo03 ? "minmax(0, 1fr) minmax(130px, 180px)" : "2fr 120px",
+    alignItems: "center",
+    gap: esAnexo03 ? 10 : undefined,
+    rowGap: esAnexo03 ? 10 : 6,
+    minWidth: 0,
+  };
+
+  const medidoresGridStyle: React.CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: esAnexo03 ? "repeat(auto-fit, minmax(160px, 1fr))" : "repeat(4, minmax(0, 1fr))",
+    gap: esAnexo03 ? 12 : 8,
+    minWidth: 0,
+  };
+
+  const wideFieldStyle: React.CSSProperties = {
+    gridColumn: esAnexo03 ? "1 / -1" : "1 / span 2",
+  };
+
+  const controlStyle: React.CSSProperties = esAnexo03
+    ? {
+        width: "100%",
+        minHeight: 42,
+        padding: "10px 12px",
+        borderRadius: 12,
+        border: "1px solid rgba(255,255,255,0.14)",
+        background: "rgba(255,255,255,0.04)",
+        color: "#ffffff",
+        boxSizing: "border-box",
+        outline: "none",
+      }
+    : { width: "100%" };
+
+  const readOnlyControlStyle: React.CSSProperties = esAnexo03
+    ? {
+        ...controlStyle,
+        background: "rgba(255,255,255,0.025)",
+        color: "rgba(255,255,255,0.72)",
+        cursor: "not-allowed",
+      }
+    : { width: "100%", background: "#eee" };
+
+  const selectStyle: React.CSSProperties = esAnexo03
+    ? {
+        ...controlStyle,
+        colorScheme: "dark",
+      }
+    : { width: "100%" };
+
+  const optionStyle: React.CSSProperties | undefined = esAnexo03
+    ? { backgroundColor: "#111827", color: "#ffffff" }
+    : undefined;
+
+  const textareaStyle: React.CSSProperties = esAnexo03
+    ? { ...controlStyle, resize: "vertical", lineHeight: 1.5 }
+    : { width: "100%", resize: "vertical" };
+
+  const tableWrapStyle: React.CSSProperties = esAnexo03
+    ? {
+        overflowX: "auto",
+        border: "1px solid rgba(255,255,255,0.12)",
+        borderRadius: 14,
+        background: "rgba(255,255,255,0.03)",
+      }
+    : {};
+
+  const tableStyle: React.CSSProperties = {
+    width: "100%",
+    minWidth: esAnexo03 ? 520 : undefined,
+    borderCollapse: "collapse",
+    fontSize: 12,
+  };
+
+  const thStyle: React.CSSProperties = {
+    border: esAnexo03 ? "1px solid rgba(255,255,255,0.12)" : "1px solid #ccc",
+    padding: esAnexo03 ? 8 : 4,
+    color: esAnexo03 ? "rgba(255,255,255,0.76)" : undefined,
+    background: esAnexo03 ? "rgba(255,255,255,0.04)" : undefined,
+  };
+
+  const tdStyle: React.CSSProperties = {
+    border: esAnexo03 ? "1px solid rgba(255,255,255,0.10)" : "1px solid #ccc",
+    padding: esAnexo03 ? 8 : 4,
+    color: esAnexo03 ? "rgba(255,255,255,0.88)" : undefined,
+  };
+
+  const secondaryButtonStyle: React.CSSProperties = esAnexo03
+    ? {
+        padding: "10px 14px",
+        borderRadius: 10,
+        border: "1px solid rgba(255,255,255,0.16)",
+        background: "rgba(255,255,255,0.04)",
+        color: "#ffffff",
+        fontSize: 12,
+        fontWeight: 700,
+        cursor: "pointer",
+      }
+    : { fontSize: 12, marginTop: 4 };
+
+  const dangerButtonStyle: React.CSSProperties = esAnexo03
+    ? {
+        ...secondaryButtonStyle,
+        alignSelf: "flex-start",
+        border: "1px solid rgba(239,68,68,0.32)",
+        color: "#fecaca",
+      }
+    : { alignSelf: "flex-start", padding: "4px 8px", fontSize: 11 };
+
+  const actionBarStyle: React.CSSProperties = esAnexo03
+    ? {
+        position: "sticky",
+        bottom: 0,
+        padding: 12,
+        border: "1px solid rgba(255,255,255,0.14)",
+        borderRadius: 14,
+        background: "rgba(15,23,42,0.96)",
+        display: "flex",
+        gap: 10,
+        alignItems: "center",
+        justifyContent: "space-between",
+        flexWrap: "wrap",
+      }
+    : {
+        position: "sticky",
+        bottom: 0,
+        padding: 12,
+        border: "1px solid #ddd",
+        borderRadius: 10,
+        background: "#fff",
+        display: "flex",
+        gap: 10,
+        alignItems: "center",
+        justifyContent: "space-between",
+      };
+
+  const primaryButtonStyle: React.CSSProperties = esAnexo03
+    ? {
+        padding: "10px 14px",
+        borderRadius: 10,
+        border: "none",
+        background: "#16a34a",
+        color: "#ffffff",
+        fontWeight: 800,
+        cursor: "pointer",
+      }
+    : { fontWeight: 700, padding: "8px 12px" };
 
   const tituloActa =
     tipoActa === "ENTREGA"
@@ -266,7 +445,7 @@ function Anexo03InspectorForm({
   }
 
   return (
-    <div style={{ display: "grid", gap: 12 }}>
+    <div style={rootStyle}>
       {/* ENCABEZADO – datos generales */}
       <div style={blockStyle}>
         <div style={{ textAlign: "center", marginBottom: 8 }}>
@@ -282,13 +461,7 @@ function Anexo03InspectorForm({
           </div>
         </div>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: 8,
-          }}
-        >
+        <div style={gridStyle}>
           <div>
             <label style={labelStyle}>Permisionario</label>
             <input
@@ -296,7 +469,7 @@ function Anexo03InspectorForm({
               value={datos.permisionarioNombre || ""}
               disabled={disabled}
               onChange={(e) => setField("permisionarioNombre", e.target.value)}
-              style={{ width: "100%" }}
+              style={controlStyle}
             />
           </div>
           <div>
@@ -306,18 +479,18 @@ function Anexo03InspectorForm({
               value={datos.unidadHabitacional || ""}
               disabled={true}
               readOnly
-              style={{ width: "100%", background: "#eee" }}
+              style={readOnlyControlStyle}
             />
           </div>
 
-          <div style={{ gridColumn: "1 / span 2" }}>
+          <div style={wideFieldStyle}>
             <label style={labelStyle}>Dirección unidad habitacional</label>
             <input
               type="text"
               value={datos.direccion || ""}
               disabled={disabled}
               onChange={(e) => setField("direccion", e.target.value)}
-              style={{ width: "100%" }}
+              style={controlStyle}
             />
           </div>
 
@@ -328,7 +501,7 @@ function Anexo03InspectorForm({
               value={datos.localidad || ""}
               disabled={disabled}
               onChange={(e) => setField("localidad", e.target.value)}
-              style={{ width: "100%" }}
+              style={controlStyle}
             />
           </div>
           <div>
@@ -338,18 +511,18 @@ function Anexo03InspectorForm({
               value={datos.provincia || ""}
               disabled={disabled}
               onChange={(e) => setField("provincia", e.target.value)}
-              style={{ width: "100%" }}
+              style={controlStyle}
             />
           </div>
 
-          <div style={{ gridColumn: "1 / span 2" }}>
+          <div style={wideFieldStyle}>
             <label style={labelStyle}>Inspector</label>
             <input
               type="text"
               value={datos.inspectorNombre || ""}
               disabled={true}
               readOnly
-              style={{ width: "100%", background: "#eee" }}
+              style={readOnlyControlStyle}
             />
           </div>
         </div>
@@ -382,7 +555,7 @@ function Anexo03InspectorForm({
                   setField("proximoDestinoPermisionario", e.target.value)
                 }
                 style={{
-                  width: "100%",
+                  ...controlStyle,
                   marginTop: 4,
                   marginBottom: 4,
                 }}
@@ -396,7 +569,7 @@ function Anexo03InspectorForm({
                   setField("telefonoPermisionario", e.target.value)
                 }
                 style={{
-                  width: "100%",
+                  ...controlStyle,
                   marginTop: 4,
                 }}
               />
@@ -435,14 +608,7 @@ function Anexo03InspectorForm({
         <h4 style={{ margin: "0 0 6px 0" }}>1. Material</h4>
         <p style={smallHelp}>Seleccione SI / NO según corresponda.</p>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "2fr 120px",
-            alignItems: "center",
-            rowGap: 6,
-          }}
-        >
+        <div style={optionGridStyle}>
           {[
             ["Llaves de las puertas de entrada al edificio", "llavesEdificio"],
             ["Llaves de las puertas de entrada a la vivienda", "llavesVivienda"],
@@ -466,11 +632,11 @@ function Anexo03InspectorForm({
                       up<SiNo>(e.target.value as SiNo) as SiNo
                     )
                   }
-                  style={{ width: "100%" }}
+                  style={selectStyle}
                 >
-                  <option value="">(Seleccionar)</option>
-                  <option value="SI">SI</option>
-                  <option value="NO">NO</option>
+                  <option value="" style={optionStyle}>(Seleccionar)</option>
+                  <option value="SI" style={optionStyle}>SI</option>
+                  <option value="NO" style={optionStyle}>NO</option>
                 </select>
               </React.Fragment>
             );
@@ -482,14 +648,7 @@ function Anexo03InspectorForm({
       <div style={blockStyle}>
         <h4 style={{ margin: "0 0 6px 0" }}>2. Documentación</h4>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "2fr 120px",
-            alignItems: "center",
-            rowGap: 6,
-          }}
-        >
+        <div style={optionGridStyle}>
           {[
             [
               "Copia del Reglamento de Viviendas Fiscales de la Armada",
@@ -512,11 +671,11 @@ function Anexo03InspectorForm({
                   onChange={(e) =>
                     setDocField(k, up<SiNo>(e.target.value as SiNo) as SiNo)
                   }
-                  style={{ width: "100%" }}
+                  style={selectStyle}
                 >
-                  <option value="">(Seleccionar)</option>
-                  <option value="SI">SI</option>
-                  <option value="NO">NO</option>
+                  <option value="" style={optionStyle}>(Seleccionar)</option>
+                  <option value="SI" style={optionStyle}>SI</option>
+                  <option value="NO" style={optionStyle}>NO</option>
                 </select>
               </React.Fragment>
             );
@@ -527,13 +686,7 @@ function Anexo03InspectorForm({
       {/* 3. LECTURA MEDIDOR */}
       <div style={blockStyle}>
         <h4 style={{ margin: "0 0 6px 0" }}>3. Lectura medidor</h4>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-            gap: 8,
-          }}
-        >
+        <div style={medidoresGridStyle}>
           <label>
             <span style={labelStyle}>Gas (m³)</span>
             <input
@@ -541,7 +694,7 @@ function Anexo03InspectorForm({
               value={med.gas_m3 || ""}
               disabled={disabled}
               onChange={(e) => setMedidorField("gas_m3", e.target.value)}
-              style={{ width: "100%" }}
+              style={controlStyle}
             />
           </label>
           <label>
@@ -551,7 +704,7 @@ function Anexo03InspectorForm({
               value={med.agua_m3 || ""}
               disabled={disabled}
               onChange={(e) => setMedidorField("agua_m3", e.target.value)}
-              style={{ width: "100%" }}
+              style={controlStyle}
             />
           </label>
           <label>
@@ -561,7 +714,7 @@ function Anexo03InspectorForm({
               value={med.luz_kws || ""}
               disabled={disabled}
               onChange={(e) => setMedidorField("luz_kws", e.target.value)}
-              style={{ width: "100%" }}
+              style={controlStyle}
             />
           </label>
           <label>
@@ -571,7 +724,7 @@ function Anexo03InspectorForm({
               value={med.telefono_pulsos || ""}
               disabled={disabled}
               onChange={(e) => setMedidorField("telefono_pulsos", e.target.value)}
-              style={{ width: "100%" }}
+              style={controlStyle}
             />
           </label>
         </div>
@@ -584,26 +737,21 @@ function Anexo03InspectorForm({
           Circular lo que corresponda: MB (Muy Bueno) – B (Bueno) – R (Regular) – M (Malo).
         </p>
 
-        <table
-          style={{
-            width: "100%",
-            borderCollapse: "collapse",
-            fontSize: 12,
-          }}
-        >
-          <thead>
-            <tr>
-              <th style={{ border: "1px solid #ccc", padding: 4, textAlign: "left" }}>
-                Elemento
-              </th>
-              <th style={{ border: "1px solid #ccc", padding: 4 }}>MB</th>
-              <th style={{ border: "1px solid #ccc", padding: 4 }}>B</th>
-              <th style={{ border: "1px solid #ccc", padding: 4 }}>R</th>
-              <th style={{ border: "1px solid #ccc", padding: 4 }}>M</th>
-            </tr>
-          </thead>
-          <tbody>
-            {[
+        <div style={tableWrapStyle}>
+          <table style={tableStyle}>
+            <thead>
+              <tr>
+                <th style={{ ...thStyle, textAlign: "left" }}>
+                  Elemento
+                </th>
+                <th style={thStyle}>MB</th>
+                <th style={thStyle}>B</th>
+                <th style={thStyle}>R</th>
+                <th style={thStyle}>M</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[
               ["Agua", "agua"],
               ["Cloacas", "cloacas"],
               ["Electricidad", "electricidad"],
@@ -636,13 +784,12 @@ function Anexo03InspectorForm({
 
               return (
                 <tr key={key}>
-                  <td style={{ border: "1px solid #ccc", padding: 4 }}>{label}</td>
+                  <td style={tdStyle}>{label}</td>
                   {["MB", "B", "R", "M"].map((opt) => (
                     <td
                       key={opt}
                       style={{
-                        border: "1px solid #ccc",
-                        padding: 4,
+                        ...tdStyle,
                         textAlign: "center",
                       }}
                     >
@@ -658,8 +805,9 @@ function Anexo03InspectorForm({
                 </tr>
               );
             })}
-          </tbody>
-        </table>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* NOVEDADES – lista dinámica */}
@@ -670,20 +818,20 @@ function Anexo03InspectorForm({
         </p>
 
         {novedadesLista.map((nov, idx) => (
-          <div key={idx} style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+          <div key={idx} style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: esAnexo03 ? "wrap" : undefined }}>
             <textarea
               value={nov}
               disabled={disabled}
               onChange={(e) => setNovedadItem(idx, e.target.value)}
               rows={3}
-              style={{ width: "100%", resize: "vertical" }}
+              style={textareaStyle}
               placeholder={`Novedad ${idx + 1}`}
             />
             {!disabled && novedadesLista.length > 1 && (
               <button
                 type="button"
                 onClick={() => removeNovedad(idx)}
-                style={{ alignSelf: "flex-start", padding: "4px 8px", fontSize: 11 }}
+                style={dangerButtonStyle}
               >
                 Eliminar
               </button>
@@ -692,7 +840,7 @@ function Anexo03InspectorForm({
         ))}
 
         {!disabled && (
-          <button type="button" onClick={addNovedad} style={{ fontSize: 12, marginTop: 4 }}>
+          <button type="button" onClick={addNovedad} style={secondaryButtonStyle}>
             + Agregar novedad
           </button>
         )}
@@ -708,7 +856,7 @@ function Anexo03InspectorForm({
           necesaria para restituir la vivienda a las condiciones reglamentarias.
         </p>
 
-        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 8, alignItems: "center" }}>
+        <div style={twoColumnGridStyle}>
           <div>
             <label style={labelStyle}>Lugar</label>
             <input
@@ -716,7 +864,7 @@ function Anexo03InspectorForm({
               value={datos.lugarFirma || ""}
               disabled={disabled}
               onChange={(e) => setField("lugarFirma", e.target.value)}
-              style={{ width: "100%" }}
+              style={controlStyle}
             />
           </div>
           <div>
@@ -726,7 +874,7 @@ function Anexo03InspectorForm({
               value={datos.fechaFirma || ""}
               disabled={disabled}
               onChange={(e) => setField("fechaFirma", e.target.value)}
-              style={{ width: "100%" }}
+              style={controlStyle}
             />
           </div>
         </div>
@@ -734,11 +882,12 @@ function Anexo03InspectorForm({
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+            gridTemplateColumns: esAnexo03 ? "repeat(auto-fit, minmax(180px, 1fr))" : "repeat(3, minmax(0, 1fr))",
             gap: 12,
             marginTop: 16,
             fontSize: 11,
             textAlign: "center",
+            color: esAnexo03 ? "rgba(255,255,255,0.72)" : undefined,
           }}
         >
           <div>
@@ -762,18 +911,7 @@ function Anexo03InspectorForm({
       {/* ✅ ACCIONES (opcional): Enviar */}
       {onEnviar && !disabled && (
         <div
-          style={{
-            position: "sticky",
-            bottom: 0,
-            padding: 12,
-            border: "1px solid #ddd",
-            borderRadius: 10,
-            background: "#fff",
-            display: "flex",
-            gap: 10,
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
+          style={actionBarStyle}
         >
           <div style={{ fontSize: 12, opacity: 0.8 }}>
             {!canEnviarComputed && validarAntesDeEnviar ? (
@@ -789,7 +927,7 @@ function Anexo03InspectorForm({
             type="button"
             onClick={handleEnviar}
             disabled={enviando || !canEnviarComputed}
-            style={{ fontWeight: 700, padding: "8px 12px" }}
+            style={primaryButtonStyle}
             title={
               !canEnviarComputed && validarAntesDeEnviar
                 ? "Faltan datos mínimos para enviar"
