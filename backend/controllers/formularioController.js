@@ -2807,12 +2807,52 @@ function renderAnexo11Pdf(
     return `${fecha} — ${obs}`;
   }
 
-  function drawFirmaDigitalBlock(titulo, nombre, rol, detalle, x, y) {
-    const boxW = 155;
-    const boxH = 58;
+  const firmaBoxW = 155;
+  const firmaPad = 8;
+  const firmaGap = 4;
+
+  function measureFirmaDigitalBlock(titulo, nombre, rol, detalle) {
+    const contentW = firmaBoxW - firmaPad * 2;
+    const tituloTxt = safeText(titulo);
+    const nombreTxt = `Nombre: ${safeText(nombre)}`;
+    const rolTxt = `Rol: ${safeText(rol)}`;
+    const detalleTxt = safeText(detalle);
+
+    const titleH = doc
+      .font("Helvetica-Bold")
+      .fontSize(9)
+      .heightOfString(tituloTxt, { width: contentW });
+    const nombreH = doc
+      .font("Helvetica")
+      .fontSize(9)
+      .heightOfString(nombreTxt, { width: contentW });
+    const rolH = doc
+      .font("Helvetica")
+      .fontSize(9)
+      .heightOfString(rolTxt, { width: contentW });
+    const detalleH = doc
+      .font("Helvetica-Oblique")
+      .fontSize(8)
+      .heightOfString(detalleTxt, { width: contentW });
+
+    return Math.max(
+      58,
+      firmaPad * 2 + titleH + nombreH + rolH + detalleH + firmaGap * 3
+    );
+  }
+
+  function drawFirmaDigitalBlock(titulo, nombre, rol, detalle, x, y, boxH) {
+    const contentX = x + firmaPad;
+    const contentW = firmaBoxW - firmaPad * 2;
+    let cursorY = y + firmaPad;
+
+    const tituloTxt = safeText(titulo);
+    const nombreTxt = `Nombre: ${safeText(nombre)}`;
+    const rolTxt = `Rol: ${safeText(rol)}`;
+    const detalleTxt = safeText(detalle);
 
     doc
-      .roundedRect(x, y, boxW, boxH, 6)
+      .roundedRect(x, y, firmaBoxW, boxH, 6)
       .lineWidth(0.8)
       .strokeColor("#999")
       .stroke();
@@ -2821,30 +2861,45 @@ function renderAnexo11Pdf(
       .font("Helvetica-Bold")
       .fontSize(9)
       .fillColor("black")
-      .text(titulo, x + 8, y + 8, {
-        width: boxW - 16,
+      .text(tituloTxt, contentX, cursorY, {
+        width: contentW,
         align: "left",
       });
+    cursorY += doc
+      .font("Helvetica-Bold")
+      .fontSize(9)
+      .heightOfString(tituloTxt, { width: contentW }) + firmaGap;
 
     doc
       .font("Helvetica")
       .fontSize(9)
-      .text(`Nombre: ${safeText(nombre)}`, x + 8, y + 22, {
-        width: boxW - 16,
+      .fillColor("black")
+      .text(nombreTxt, contentX, cursorY, {
+        width: contentW,
       });
+    cursorY += doc
+      .font("Helvetica")
+      .fontSize(9)
+      .heightOfString(nombreTxt, { width: contentW }) + firmaGap;
 
     doc
       .font("Helvetica")
       .fontSize(9)
-      .text(`Rol: ${safeText(rol)}`, x + 8, y + 34, {
-        width: boxW - 16,
+      .fillColor("black")
+      .text(rolTxt, contentX, cursorY, {
+        width: contentW,
       });
+    cursorY += doc
+      .font("Helvetica")
+      .fontSize(9)
+      .heightOfString(rolTxt, { width: contentW }) + firmaGap;
 
     doc
       .font("Helvetica-Oblique")
       .fontSize(8)
-      .text(safeText(detalle), x + 8, y + 46, {
-        width: boxW - 16,
+      .fillColor("black")
+      .text(detalleTxt, contentX, cursorY, {
+        width: contentW,
       });
   }
 
@@ -2955,40 +3010,54 @@ function renderAnexo11Pdf(
   bloqueTexto("Observaciones administrativas:", obsAdmin || "—");
 
   // Actuaciones resumidas
-  ensureSpace(12);
+  const firmaCards = [
+    {
+      titulo: "PERMISIONARIO",
+      nombre: permNombreAct,
+      rol: permRolAct,
+      detalle: permLineaExtra,
+      x: LEFT,
+    },
+    {
+      titulo: "INSPECTOR DE BARRIO",
+      nombre: inspNombreAct,
+      rol: inspRolAct,
+      detalle: inspLineaExtra,
+      x: LEFT + 165,
+    },
+    {
+      titulo: "ADMIN GENERAL",
+      nombre: adminNombreAct,
+      rol: adminRolAct,
+      detalle: adminLineaExtra,
+      x: LEFT + 330,
+    },
+  ];
+  const maxFirmaCardHeight = Math.max(
+    ...firmaCards.map((card) =>
+      measureFirmaDigitalBlock(card.titulo, card.nombre, card.rol, card.detalle)
+    )
+  );
+
+  ensureSpace(Math.ceil((maxFirmaCardHeight + 42) / 14));
   doc.font("Helvetica-Bold").fontSize(11).text("ACTUACIONES / CONSTANCIA DIGITAL:");
   doc.moveDown(0.4);
 
   const yStartFirmas = doc.y;
 
-  drawFirmaDigitalBlock(
-    "PERMISIONARIO",
-    permNombreAct,
-    permRolAct,
-    permLineaExtra,
-    LEFT,
-    yStartFirmas
-  );
+  firmaCards.forEach((card) => {
+    drawFirmaDigitalBlock(
+      card.titulo,
+      card.nombre,
+      card.rol,
+      card.detalle,
+      card.x,
+      yStartFirmas,
+      maxFirmaCardHeight
+    );
+  });
 
-  drawFirmaDigitalBlock(
-    "INSPECTOR DE BARRIO",
-    inspNombreAct,
-    inspRolAct,
-    inspLineaExtra,
-    LEFT + 165,
-    yStartFirmas
-  );
-
-  drawFirmaDigitalBlock(
-    "ADMIN GENERAL",
-    adminNombreAct,
-    adminRolAct,
-    adminLineaExtra,
-    LEFT + 330,
-    yStartFirmas
-  );
-
-  doc.y = yStartFirmas + 72;
+  doc.y = yStartFirmas + maxFirmaCardHeight + 14;
 
   // Historial específico ANEXO_11
   ensureSpace(10);
