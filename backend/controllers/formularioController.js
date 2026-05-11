@@ -1731,13 +1731,12 @@ function renderAnexo02Pdf(
   const adminOK = Boolean(adminStored?.ok || adminFallback);
   const adminFecha = fmtDateTime(adminStored?.fecha || adminFallback?.fecha);
   const adminNombre = String(signers?.adminNombre || "").trim();
-  const adminUsuarioFallback = adminFallback?.realizadoPor ? String(adminFallback.realizadoPor) : "";
 
   const postLine1 = postOK && postFecha ? postFecha : "Pendiente";
   const postLine2 = postNombre ? postNombre : "";
 
   const adminLine1 = adminOK && adminFecha ? adminFecha : "Pendiente";
-  const adminLine2 = adminNombre || (adminUsuarioFallback ? `Usuario: ${adminUsuarioFallback}` : "");
+  const adminLine2 = adminNombre || (adminFallback ? "ADMIN GENERAL" : "");
 
   const colLeftX = LEFT;
   const colRightX = 330;
@@ -3557,9 +3556,22 @@ if (codigoUp === "ANEXO_02") {
     anexo?.datos?.postulanteId ||
     null;
 
+  const adminHistFallback = !anexo?.datos?.conformidadAdminGeneral && up(anexo?.estado) === "CERRADO"
+    ? [...(Array.isArray(anexo?.historialEstados) ? anexo.historialEstados : [])]
+        .reverse()
+        .find((h) => {
+          const obs = up(h?.observacion);
+          return (
+            up(h?.estadoNuevo) === "CERRADO" &&
+            (obs.includes("ADMIN_GENERAL") || obs.includes("ADMIN GENERAL") || obs.includes("ADMIN"))
+          );
+        })
+    : null;
+
   const adminUid =
     anexo?.datos?.conformidadAdminGeneral?.usuario ||
     anexo?.conformidadAdminGeneral?.usuario ||
+    adminHistFallback?.realizadoPor ||
     null;
 
   const postulanteNombre = await getNombreApellidoSafe(postUid);
