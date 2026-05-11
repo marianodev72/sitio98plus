@@ -2599,6 +2599,7 @@ function renderAnexo11Pdf(
     d.permisionarioNombre ||
     d.postulanteNombre ||
     d.permisionario ||
+    signers?.permisionario?.nombre ||
     "";
 
   const prioridad = d.prioridadInspector || d.prioridad || "";
@@ -3196,7 +3197,7 @@ function renderAnexo11Pdf(
       ensureSpace(3);
       const fechaTxt = h?.fecha ? fmtDateTime(h.fecha) : "—";
       const actorTxt = prettyActorName(
-        h?.actor || h?.realizadoPor || h?.usuario,
+        h?.nombre || h?.actor || h?.realizadoPor || h?.usuario,
         "Sistema"
       );
       const tipoTxt = safeText(h?.tipo || "REGISTRO");
@@ -3693,6 +3694,100 @@ if (codigoUp === "ANEXO_02") {
         permisionario: { nombre: permNombre, fecha: permFecha },
         inspector: { nombre: inspNombre, fecha: inspFecha },
         admin: { nombre: adminNombre, fecha: adminFecha },
+      };
+    }
+
+    // ─────────────────────────────
+    // Firmantes ANEXO_11 (solo lectura para PDF)
+    if (codigoUp === "ANEXO_11") {
+      const d = anexo.datos || {};
+      const iv = Array.isArray(anexo.intervinientes) ? anexo.intervinientes : [];
+      const hist = Array.isArray(anexo.historialEstados)
+        ? anexo.historialEstados
+        : [];
+
+      const findInterviniente = (rol) =>
+        iv.find((x) => up(x?.rol) === rol && isObjectId(x?.userId))?.userId ||
+        null;
+
+      const cierreAdminHist = [...hist].reverse().find((h) => {
+        const obs = up(h?.observacion);
+        return (
+          up(h?.estadoNuevo) === "CERRADO" &&
+          (obs.includes("ADMIN_GENERAL") ||
+            obs.includes("ADMIN GENERAL") ||
+            obs.includes("ADMIN"))
+        );
+      });
+
+      const ambitoUp = up(d?.ambito || "");
+      const promotorRolUp = up(d?.promotorRol || d?.promotorTipo || "");
+      const puedeUsarUsuarioComoPermisionario =
+        ambitoUp !== "ESPACIO_COMUN" && promotorRolUp === "PERMISIONARIO";
+
+      const permUid =
+        (isObjectId(d?.conformidadPermisionario?.usuario) &&
+          d.conformidadPermisionario.usuario) ||
+        (isObjectId(d?.permisionarioId) && d.permisionarioId) ||
+        findInterviniente("PERMISIONARIO") ||
+        (isObjectId(vivienda?.ocupacionActual?.permisionario) &&
+          vivienda.ocupacionActual.permisionario) ||
+        (puedeUsarUsuarioComoPermisionario &&
+          isObjectId(anexo?.usuario) &&
+          anexo.usuario) ||
+        null;
+
+      const inspUid =
+        (isObjectId(d?.conformidadInspector?.usuario) &&
+          d.conformidadInspector.usuario) ||
+        findInterviniente("INSPECTOR") ||
+        null;
+
+      const adminUid =
+        (isObjectId(d?.cerradoPorAdminGeneral) &&
+          d.cerradoPorAdminGeneral) ||
+        (isObjectId(cierreAdminHist?.realizadoPor) &&
+          cierreAdminHist.realizadoPor) ||
+        null;
+
+      const permNombre = await getNombreApellidoSafe(permUid);
+      const inspNombre = await getNombreApellidoSafe(inspUid);
+      const adminNombre = await getNombreApellidoSafe(adminUid);
+
+      const permNombreFallback =
+        d?.permisionarioNombre ||
+        d?.postulanteNombre ||
+        (ambitoUp === "ESPACIO_COMUN"
+          ? "Espacio común del barrio"
+          : !permUid && vivienda && !vivienda?.ocupacionActual?.permisionario
+          ? "Vivienda en reparación"
+          : "Permisionario no identificado");
+
+      signers11 = {
+        permisionario: {
+          nombre: permNombre || permNombreFallback,
+          fecha: d?.conformidadPermisionario?.fecha || null,
+          rol: "PERMISIONARIO",
+        },
+        inspector: {
+          nombre: inspNombre || d?.inspectorNombre || "Inspector de barrio",
+          fecha:
+            d?.conformidadInspector?.fecha ||
+            d?.fechaFinalizacionInspector ||
+            null,
+          rol: "INSPECTOR",
+        },
+        admin: {
+          nombre:
+            adminNombre ||
+            d?.cerradoPorAdminGeneralNombre ||
+            "Jefe órgano administrador",
+          fecha:
+            d?.fechaCierreAdminGeneral ||
+            d?.devueltoAInspector?.fecha ||
+            null,
+          rol: "ADMIN_GENERAL",
+        },
       };
     }
 
