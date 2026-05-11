@@ -240,7 +240,12 @@ export default function Anexo11ResumenRegistro({
   const vivienda = d.viviendaLabel || d.unidadHabitacional || d.casa || "—";
   const barrio = d.viviendaBarrio || d.inspectorBarrio || "—";
 
-  const permisionario = d.permisionarioNombre || "—";
+  const permisionario =
+    d.permisionarioNombre ||
+    d.postulanteLabel ||
+    d.postulanteNombre ||
+    d.permisionario ||
+    (up(d.ambito) === "ESPACIO_COMUN" ? "Espacio común del barrio" : "—");
   const solicitud = d.solicitudDetalle || d.detallePedido || "—";
   const fechaSolicitud = d.fechaSolicitud ? fmtDate(d.fechaSolicitud) : "—";
 
