@@ -241,10 +241,11 @@ export default function Anexo11ResumenRegistro({
   const barrio = d.viviendaBarrio || d.inspectorBarrio || "—";
 
   const permisionario =
-    d.permisionarioNombre ||
-    d.postulanteLabel ||
-    d.postulanteNombre ||
-    d.permisionario ||
+    prettyActor((anexo as any)?._resolved?.permisionario?.nombre, "") ||
+    prettyActor(d.permisionarioNombre, "") ||
+    prettyActor(d.postulanteLabel, "") ||
+    prettyActor(d.postulanteNombre, "") ||
+    prettyActor(d.permisionario, "") ||
     (up(d.ambito) === "ESPACIO_COMUN" ? "Espacio común del barrio" : "—");
   const solicitud = d.solicitudDetalle || d.detallePedido || "—";
   const fechaSolicitud = d.fechaSolicitud ? fmtDate(d.fechaSolicitud) : "—";
