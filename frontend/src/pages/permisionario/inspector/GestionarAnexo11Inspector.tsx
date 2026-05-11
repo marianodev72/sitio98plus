@@ -1,6 +1,6 @@
 // frontend/src/pages/permisionario/inspector/GestionarAnexo11Inspector.tsx
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
 import { http } from "../../../api/http";
 import Anexo11ResumenRegistro from "../../../components/anexos/Anexo11ResumenRegistro";
@@ -170,6 +170,174 @@ export default function GestionarAnexo11Inspector({
       visitasCount: visitas.length,
     };
   }, [anexo, datos, decisionInspector, fechaProgramadaObra]);
+
+  const pageStyle: CSSProperties = {
+    padding: "clamp(14px, 2.5vw, 24px)",
+    color: "#E5E7EB",
+    width: "100%",
+    maxWidth: "100%",
+    boxSizing: "border-box",
+    overflowX: "hidden",
+  };
+
+  const titleStyle: CSSProperties = {
+    marginTop: 0,
+    marginBottom: 14,
+    color: "#F8FAFC",
+  };
+
+  const buttonStyle: CSSProperties = {
+    padding: "10px 14px",
+    borderRadius: 10,
+    border: "1px solid rgba(255,255,255,0.14)",
+    background: "rgba(255,255,255,0.05)",
+    color: "#ffffff",
+    fontSize: 13,
+    fontWeight: 700,
+    cursor: busy ? "wait" : "pointer",
+  };
+
+  const primaryButtonStyle: CSSProperties = {
+    ...buttonStyle,
+    border: "1px solid rgba(34,197,94,0.32)",
+    background: "rgba(22,163,74,0.22)",
+    fontWeight: 800,
+  };
+
+  const pdfLinkStyle: CSSProperties = {
+    ...buttonStyle,
+    display: "inline-flex",
+    alignItems: "center",
+    textDecoration: "none",
+  };
+
+  const alertErrorStyle: CSSProperties = {
+    marginTop: 10,
+    marginBottom: 12,
+    padding: 12,
+    borderRadius: 12,
+    border: "1px solid rgba(239,68,68,0.35)",
+    background: "rgba(127,29,29,0.24)",
+    color: "#fecaca",
+    fontSize: 13,
+    lineHeight: 1.45,
+  };
+
+  const alertSuccessStyle: CSSProperties = {
+    marginTop: 10,
+    marginBottom: 12,
+    padding: 12,
+    borderRadius: 12,
+    border: "1px solid rgba(34,197,94,0.34)",
+    background: "rgba(20,83,45,0.22)",
+    color: "#bbf7d0",
+    fontSize: 13,
+    lineHeight: 1.45,
+  };
+
+  const noticeStyle: CSSProperties = {
+    marginBottom: 16,
+    padding: 12,
+    border: "1px solid rgba(255,255,255,0.14)",
+    background: "rgba(255,255,255,0.05)",
+    borderRadius: 14,
+    color: "rgba(255,255,255,0.84)",
+    fontSize: 13,
+    lineHeight: 1.45,
+  };
+
+  const summaryStyle: CSSProperties = {
+    marginBottom: 16,
+    padding: 14,
+    borderRadius: 14,
+    border: "1px solid rgba(255,255,255,0.10)",
+    background: "rgba(255,255,255,0.04)",
+    color: "rgba(255,255,255,0.88)",
+    fontSize: 13,
+    lineHeight: 1.6,
+    minWidth: 0,
+  };
+
+  const actionRowStyle: CSSProperties = {
+    marginTop: 12,
+    marginBottom: 16,
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    alignItems: "center",
+  };
+
+  const actionGridStyle: CSSProperties = {
+    display: "grid",
+    gap: 16,
+    gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+    minWidth: 0,
+  };
+
+  const actionCardStyle: CSSProperties = {
+    border: "1px solid rgba(255,255,255,0.12)",
+    borderRadius: 16,
+    padding: 14,
+    background: "rgba(255,255,255,0.05)",
+    boxShadow: "0 10px 30px rgba(0,0,0,0.18)",
+    minWidth: 0,
+    boxSizing: "border-box",
+  };
+
+  const sectionTitleStyle: CSSProperties = {
+    marginTop: 0,
+    marginBottom: 12,
+    color: "#F8FAFC",
+    fontSize: 16,
+  };
+
+  const fieldWrapStyle: CSSProperties = {
+    marginBottom: 10,
+  };
+
+  const labelStyle: CSSProperties = {
+    display: "block",
+    marginBottom: 6,
+    color: "rgba(255,255,255,0.62)",
+    fontSize: 11,
+    fontWeight: 800,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+  };
+
+  const controlStyle: CSSProperties = {
+    width: "100%",
+    minHeight: 42,
+    padding: "10px 12px",
+    borderRadius: 12,
+    border: "1px solid rgba(255,255,255,0.14)",
+    background: "rgba(255,255,255,0.04)",
+    color: "#ffffff",
+    boxSizing: "border-box",
+    outline: "none",
+  };
+
+  const selectStyle: CSSProperties = {
+    ...controlStyle,
+    colorScheme: "dark",
+  };
+
+  const optionStyle: CSSProperties = {
+    backgroundColor: "#111827",
+    color: "#ffffff",
+  };
+
+  const textareaStyle: CSSProperties = {
+    ...controlStyle,
+    resize: "vertical",
+    lineHeight: 1.5,
+  };
+
+  const unavailableTextStyle: CSSProperties = {
+    fontSize: 13,
+    color: "rgba(255,255,255,0.72)",
+    lineHeight: 1.45,
+  };
 
   function buildHistorialEntry(texto: string) {
     return {
@@ -423,26 +591,20 @@ export default function GestionarAnexo11Inspector({
   }
 
   return (
-    <div style={{ padding: 24 }}>
+    <div style={pageStyle}>
       <button
         onClick={() => navigate("/app/permisionario/mi-barrio-inspector/gestiones")}
-        style={{ marginBottom: 12 }}
+        style={{ ...buttonStyle, marginBottom: 12 }}
         disabled={busy}
       >
         Volver
       </button>
 
-      <h2>Gestión — ANEXO_11</h2>
+      <h2 style={titleStyle}>Gestión — ANEXO_11</h2>
 
       {err && (
         <div
-          style={{
-            marginTop: 10,
-            marginBottom: 12,
-            padding: 10,
-            border: "1px solid #f44336",
-            background: "#ffebee",
-          }}
+          style={alertErrorStyle}
         >
           {err}
         </div>
@@ -450,19 +612,13 @@ export default function GestionarAnexo11Inspector({
 
       {infoMsg && !err && (
         <div
-          style={{
-            marginTop: 10,
-            marginBottom: 12,
-            padding: 10,
-            border: "1px solid #4caf50",
-            background: "#e8f5e9",
-          }}
+          style={alertSuccessStyle}
         >
           {infoMsg}
         </div>
       )}
 
-      <div style={{ fontSize: 13, lineHeight: 1.5, marginBottom: 16 }}>
+      <div style={summaryStyle}>
         <div>
           <b>Estado:</b> {safe(anexo.estado)}
           {estadoInstitucional ? ` / ${estadoInstitucional}` : ""}
@@ -487,16 +643,9 @@ export default function GestionarAnexo11Inspector({
       <Anexo11ResumenRegistro anexo={anexo} mostrarAdmin />
 
       <div
-        style={{
-          marginTop: 12,
-          marginBottom: 16,
-          display: "flex",
-          gap: 8,
-          flexWrap: "wrap",
-          alignItems: "center",
-        }}
+        style={actionRowStyle}
       >
-        <button onClick={recargar} disabled={busy}>
+        <button onClick={recargar} disabled={busy} style={buttonStyle}>
           {busy ? "Procesando…" : "Recargar"}
         </button>
 
@@ -504,15 +653,7 @@ export default function GestionarAnexo11Inspector({
           href={`/api/formularios/${anexo._id}/pdf`}
           target="_blank"
           rel="noreferrer"
-          style={{
-            display: "inline-block",
-            padding: "6px 10px",
-            border: "1px solid #999",
-            borderRadius: 4,
-            background: "#fff",
-            color: "#000",
-            textDecoration: "none",
-          }}
+          style={pdfLinkStyle}
         >
           PDF
         </a>
@@ -520,69 +661,52 @@ export default function GestionarAnexo11Inspector({
 
       {acciones.cerradoPorAdmin && (
         <div
-          style={{
-            marginBottom: 16,
-            padding: 10,
-            border: "1px solid #999",
-            background: "#f5f5f5",
-            borderRadius: 8,
-          }}
+          style={noticeStyle}
         >
           Este anexo fue cerrado por ADMIN GENERAL y ya no admite nuevas acciones del inspector.
         </div>
       )}
 
       <div
-        style={{
-          display: "grid",
-          gap: 16,
-          gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-        }}
+        style={actionGridStyle}
       >
-        <div
-          style={{
-            border: "1px solid #ddd",
-            borderRadius: 10,
-            padding: 12,
-            background: "#fafafa",
-          }}
-        >
-          <h3 style={{ marginTop: 0 }}>Programar visita</h3>
+        <div style={actionCardStyle}>
+          <h3 style={sectionTitleStyle}>Programar visita</h3>
 
           {acciones.canProgramarVisita ? (
             <>
-              <div style={{ marginBottom: 8 }}>
-                <label style={{ display: "block", marginBottom: 4 }}>
+              <div style={fieldWrapStyle}>
+                <label style={labelStyle}>
                   Fecha programada
                 </label>
                 <input
                   type="datetime-local"
                   value={fechaProgramada}
                   onChange={(e) => setFechaProgramada(e.target.value)}
-                  style={{ width: "100%" }}
+                  style={controlStyle}
                   disabled={busy}
                 />
               </div>
 
-              <div style={{ marginBottom: 8 }}>
-                <label style={{ display: "block", marginBottom: 4 }}>
+              <div style={fieldWrapStyle}>
+                <label style={labelStyle}>
                   Observación
                 </label>
                 <textarea
                   value={observacionVisita}
                   onChange={(e) => setObservacionVisita(e.target.value)}
                   rows={4}
-                  style={{ width: "100%" }}
+                  style={textareaStyle}
                   disabled={busy}
                 />
               </div>
 
-              <button onClick={programarVisita} disabled={busy}>
+              <button onClick={programarVisita} disabled={busy} style={primaryButtonStyle}>
                 Guardar visita
               </button>
             </>
           ) : (
-            <div style={{ fontSize: 13 }}>
+            <div style={unavailableTextStyle}>
               {acciones.cerradoPorAdmin
                 ? "Este anexo fue cerrado por ADMIN GENERAL."
                 : "Este anexo aún no admite acciones para su estado actual."}
@@ -590,82 +714,75 @@ export default function GestionarAnexo11Inspector({
           )}
         </div>
 
-        <div
-          style={{
-            border: "1px solid #ddd",
-            borderRadius: 10,
-            padding: 12,
-            background: "#fafafa",
-          }}
-        >
-          <h3 style={{ marginTop: 0 }}>Resolución inspectiva</h3>
+        <div style={actionCardStyle}>
+          <h3 style={sectionTitleStyle}>Resolución inspectiva</h3>
 
           {acciones.canResolver ? (
             <>
-              <div style={{ marginBottom: 8 }}>
-                <label style={{ display: "block", marginBottom: 4 }}>
+              <div style={fieldWrapStyle}>
+                <label style={labelStyle}>
                   Decisión
                 </label>
                 <select
                   value={decisionInspector}
                   onChange={(e) => setDecisionInspector(e.target.value)}
-                  style={{ width: "100%" }}
+                  style={selectStyle}
                   disabled={busy}
                 >
-                  <option value="">Seleccionar</option>
-                  <option value="APROBADO">APROBADO</option>
-                  <option value="RECHAZADO">RECHAZADO</option>
-                  <option value="OBSERVADO">OBSERVADO</option>
+                  <option value="" style={optionStyle}>Seleccionar</option>
+                  <option value="APROBADO" style={optionStyle}>APROBADO</option>
+                  <option value="RECHAZADO" style={optionStyle}>RECHAZADO</option>
+                  <option value="OBSERVADO" style={optionStyle}>OBSERVADO</option>
                 </select>
               </div>
 
-              <div style={{ marginBottom: 8 }}>
-                <label style={{ display: "block", marginBottom: 4 }}>
+              <div style={fieldWrapStyle}>
+                <label style={labelStyle}>
                   Prioridad
                 </label>
                 <input
                   type="text"
                   value={prioridadInspector}
                   onChange={(e) => setPrioridadInspector(e.target.value)}
-                  style={{ width: "100%" }}
+                  style={controlStyle}
                   disabled={busy}
                 />
               </div>
 
               {up(decisionInspector) === "RECHAZADO" && (
-                <div style={{ marginBottom: 8 }}>
-                  <label style={{ display: "block", marginBottom: 4 }}>
+                <div style={fieldWrapStyle}>
+                  <label style={labelStyle}>
                     Motivo de rechazo
                   </label>
                   <textarea
                     value={motivoRechazo}
                     onChange={(e) => setMotivoRechazo(e.target.value)}
                     rows={3}
-                    style={{ width: "100%" }}
+                    style={textareaStyle}
                     disabled={busy}
                   />
                 </div>
               )}
 
-              <div style={{ marginBottom: 8 }}>
-                <label style={{ display: "block", marginBottom: 4 }}>
+              <div style={fieldWrapStyle}>
+                <label style={labelStyle}>
                   Observaciones inspector
                 </label>
                 <textarea
                   value={observacionesInspector}
                   onChange={(e) => setObservacionesInspector(e.target.value)}
                   rows={4}
-                  style={{ width: "100%" }}
+                  style={textareaStyle}
                   disabled={busy}
                 />
               </div>
 
-              <button onClick={registrarResolucion} disabled={busy}>
+              <button onClick={registrarResolucion} disabled={busy} style={primaryButtonStyle}>
                 Guardar resolución
               </button>
             </>
           ) : (
-            <div style={{ fontSize: 13 }}>
+            <div style={unavailableTextStyle}>
               {acciones.cerradoPorAdmin
                 ? "Este anexo fue cerrado por ADMIN GENERAL."
                 : "Este anexo aún no admite acciones para su estado actual."}
@@ -673,63 +790,56 @@ export default function GestionarAnexo11Inspector({
           )}
         </div>
 
-        <div
-          style={{
-            border: "1px solid #ddd",
-            borderRadius: 10,
-            padding: 12,
-            background: "#fafafa",
-          }}
-        >
-          <h3 style={{ marginTop: 0 }}>Programar obra</h3>
+        <div style={actionCardStyle}>
+          <h3 style={sectionTitleStyle}>Programar obra</h3>
 
           {acciones.canProgramarObra ? (
             <>
-              <div style={{ marginBottom: 8 }}>
-                <label style={{ display: "block", marginBottom: 4 }}>
+              <div style={fieldWrapStyle}>
+                <label style={labelStyle}>
                   Fecha visita / obra
                 </label>
                 <input
                   type="datetime-local"
                   value={fechaProgramadaObra}
                   onChange={(e) => setFechaProgramadaObra(e.target.value)}
-                  style={{ width: "100%" }}
+                  style={controlStyle}
                   disabled={busy}
                 />
               </div>
 
-              <div style={{ marginBottom: 8 }}>
-                <label style={{ display: "block", marginBottom: 4 }}>
+              <div style={fieldWrapStyle}>
+                <label style={labelStyle}>
                   Responsable
                 </label>
                 <input
                   type="text"
                   value={responsableTrabajo}
                   onChange={(e) => setResponsableTrabajo(e.target.value)}
-                  style={{ width: "100%" }}
+                  style={controlStyle}
                   disabled={busy}
                 />
               </div>
 
-              <div style={{ marginBottom: 8 }}>
-                <label style={{ display: "block", marginBottom: 4 }}>
+              <div style={fieldWrapStyle}>
+                <label style={labelStyle}>
                   Descripción técnica
                 </label>
                 <textarea
                   value={descripcionTecnicaObra}
                   onChange={(e) => setDescripcionTecnicaObra(e.target.value)}
                   rows={4}
-                  style={{ width: "100%" }}
+                  style={textareaStyle}
                   disabled={busy}
                 />
               </div>
 
-              <button onClick={programarObra} disabled={busy}>
+              <button onClick={programarObra} disabled={busy} style={primaryButtonStyle}>
                 Guardar programación de obra
               </button>
             </>
           ) : (
-            <div style={{ fontSize: 13 }}>
+            <div style={unavailableTextStyle}>
               {acciones.cerradoPorAdmin
                 ? "Este anexo fue cerrado por ADMIN GENERAL."
                 : "Este anexo aún no admite acciones para su estado actual."}
@@ -737,50 +847,43 @@ export default function GestionarAnexo11Inspector({
           )}
         </div>
 
-        <div
-          style={{
-            border: "1px solid #ddd",
-            borderRadius: 10,
-            padding: 12,
-            background: "#fafafa",
-          }}
-        >
-          <h3 style={{ marginTop: 0 }}>Final de obra</h3>
+        <div style={actionCardStyle}>
+          <h3 style={sectionTitleStyle}>Final de obra</h3>
 
           {acciones.canFinalizarObra ? (
             <>
-              <div style={{ marginBottom: 8 }}>
-                <label style={{ display: "block", marginBottom: 4 }}>
+              <div style={fieldWrapStyle}>
+                <label style={labelStyle}>
                   Fecha finalización
                 </label>
                 <input
                   type="datetime-local"
                   value={fechaFinalizacionInspector}
                   onChange={(e) => setFechaFinalizacionInspector(e.target.value)}
-                  style={{ width: "100%" }}
+                  style={controlStyle}
                   disabled={busy}
                 />
               </div>
 
-              <div style={{ marginBottom: 8 }}>
-                <label style={{ display: "block", marginBottom: 4 }}>
+              <div style={fieldWrapStyle}>
+                <label style={labelStyle}>
                   Observación final inspector
                 </label>
                 <textarea
                   value={observacionFinalInspector}
                   onChange={(e) => setObservacionFinalInspector(e.target.value)}
                   rows={4}
-                  style={{ width: "100%" }}
+                  style={textareaStyle}
                   disabled={busy}
                 />
               </div>
 
-              <button onClick={finalizarObra} disabled={busy}>
+              <button onClick={finalizarObra} disabled={busy} style={primaryButtonStyle}>
                 Registrar final de obra
               </button>
             </>
           ) : (
-            <div style={{ fontSize: 13 }}>
+            <div style={unavailableTextStyle}>
               {acciones.cerradoPorAdmin
                 ? "Este anexo fue cerrado por ADMIN GENERAL."
                 : "Este anexo aún no admite acciones para su estado actual."}
