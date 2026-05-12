@@ -2717,8 +2717,66 @@ function renderAnexo11Pdf(
     ? d.observacionesAdminGeneralHistorial
     : [];
 
+  const ANEXO_11_TIME_ZONE = "America/Argentina/Buenos_Aires";
+  const ANEXO_11_DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+  function fmtAnexo11Date(v) {
+    try {
+      if (!v) return "—";
+      const raw = typeof v === "string" ? v.trim() : "";
+      if (ANEXO_11_DATE_ONLY_RE.test(raw)) {
+        const [yyyy, mm, dd] = raw.split("-");
+        return `${dd}/${mm}/${yyyy}`;
+      }
+
+      const date = new Date(v);
+      if (Number.isNaN(date.getTime())) return "—";
+      return date.toLocaleDateString("es-AR", {
+        timeZone: ANEXO_11_TIME_ZONE,
+      });
+    } catch {
+      return "—";
+    }
+  }
+
+  function fmtAnexo11DateTime(v) {
+    try {
+      if (!v) return "—";
+      const raw = typeof v === "string" ? v.trim() : "";
+      if (ANEXO_11_DATE_ONLY_RE.test(raw)) return fmtAnexo11Date(raw);
+
+      const date = new Date(v);
+      if (Number.isNaN(date.getTime())) return "—";
+      return date.toLocaleString("es-AR", {
+        timeZone: ANEXO_11_TIME_ZONE,
+        hour12: false,
+      });
+    } catch {
+      return "—";
+    }
+  }
+
+  function toAnexo11Timestamp(v) {
+    try {
+      if (!v) return 0;
+      const raw = typeof v === "string" ? v.trim() : "";
+      if (ANEXO_11_DATE_ONLY_RE.test(raw)) {
+        const [yyyy, mm, dd] = raw.split("-").map(Number);
+        return Date.UTC(yyyy, mm - 1, dd, 3, 0, 0);
+      }
+
+      const date = new Date(v);
+      const time = date.getTime();
+      return Number.isNaN(time) ? 0 : time;
+    } catch {
+      return 0;
+    }
+  }
+
+  const fmtDateTime = fmtAnexo11DateTime;
+
   const fechaDoc = anexo?.createdAt || new Date();
-  const fechaDocTxt = fmtDate(fechaDoc);
+  const fechaDocTxt = fmtAnexo11DateTime(fechaDoc);
 
   const signerPerm = signers.permisionario || {};
   const signerInsp = signers.inspector || {};
@@ -2762,8 +2820,8 @@ function renderAnexo11Pdf(
   function getLastFechaFromArray(arr) {
     if (!Array.isArray(arr) || arr.length === 0) return "";
     const sorted = [...arr].sort((a, b) => {
-      const ta = a?.fecha ? new Date(a.fecha).getTime() : 0;
-      const tb = b?.fecha ? new Date(b.fecha).getTime() : 0;
+      const ta = toAnexo11Timestamp(a?.fecha);
+      const tb = toAnexo11Timestamp(b?.fecha);
       return tb - ta;
     });
     return sorted[0]?.fecha || "";
@@ -3223,8 +3281,8 @@ function renderAnexo11Pdf(
   }
 
   items.sort((a, b) => {
-    const ta = a?.fecha ? new Date(a.fecha).getTime() : 0;
-    const tb = b?.fecha ? new Date(b.fecha).getTime() : 0;
+    const ta = toAnexo11Timestamp(a?.fecha);
+    const tb = toAnexo11Timestamp(b?.fecha);
     return ta - tb;
   });
 
