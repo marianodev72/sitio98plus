@@ -512,18 +512,57 @@ export default function AdminStats() {
   const [year, setYear] = useState<number>(currentYear);
   const [data, setData] = useState<any>(null);
   const [emittedLabel, setEmittedLabel] = useState<string>("");
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
   useEffect(() => {
-    http.get("/stats/barrios").then((r) => setBarrios(r.data || []));
+    let alive = true;
+
+    http
+      .get("/stats/barrios")
+      .then((r) => {
+        if (alive) setBarrios(r.data || []);
+      })
+      .catch((err) => {
+        console.error("[STATS] Error cargando barrios", err);
+        if (alive) setErrorMsg("No se pudieron cargar los barrios disponibles.");
+      });
+
+    return () => {
+      alive = false;
+    };
   }, []);
 
   useEffect(() => {
+    let alive = true;
     const url =
       barrio === "TODOS"
         ? "/stats/resumen"
         : `/stats/barrio/${encodeURIComponent(barrio)}`;
 
-    http.get(url, { params: { year } }).then((r) => setData(r.data));
+    setLoading(true);
+    setErrorMsg("");
+    setData(null);
+
+    http
+      .get(url, { params: { year } })
+      .then((r) => {
+        if (alive) setData(r.data);
+      })
+      .catch((err) => {
+        console.error("[STATS] Error cargando resumen", err);
+        if (alive) {
+          setData(null);
+          setErrorMsg("No se pudieron cargar las estadísticas. Reintentá más tarde.");
+        }
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+
+    return () => {
+      alive = false;
+    };
   }, [barrio, year]);
 
   useEffect(() => {
@@ -545,6 +584,13 @@ export default function AdminStats() {
     }
     return years;
   }, [currentYear]);
+
+  const barriosSeleccionables = useMemo(
+    () => barrios.filter((b) => normalizeKey(b) !== "OTROS"),
+    [barrios]
+  );
+
+  const hayBarriosAgrupados = barrios.some((b) => normalizeKey(b) === "OTROS");
 
   const charts = useMemo(() => {
     if (!data) return null;
@@ -678,6 +724,24 @@ const optionStyle: React.CSSProperties = {
   backgroundColor: "#1f2937",
   color: "#ffffff",
 };
+
+const infoBoxStyle: React.CSSProperties = {
+  marginTop: 12,
+  border: "1px solid rgba(255,255,255,0.14)",
+  borderRadius: 12,
+  padding: "12px 14px",
+  background: "rgba(255,255,255,0.05)",
+  color: "rgba(255,255,255,0.86)",
+  lineHeight: 1.45,
+};
+
+const errorBoxStyle: React.CSSProperties = {
+  ...infoBoxStyle,
+  border: "1px solid rgba(239,68,68,0.35)",
+  background: "rgba(127,29,29,0.22)",
+  color: "#fecaca",
+};
+
 function onDownloadBoardCSV() {
   const blocks = [
     {
@@ -908,6 +972,8 @@ function onDownloadBoardPDF() {
 
     <div class="note">
       Documento institucional de uso interno. Para guardarlo como PDF, use la opción “Guardar como PDF” del diálogo de impresión.
+      Stock actual de viviendas: estado, dormitorios y hacinamiento reflejan información vigente al momento de emisión.
+      Métricas del año seleccionado: flujo ANEXO_01 → ANEXO_02 y ANEXO_11 se calculan por año estadístico.
     </div>
   </body>
 </html>`;
@@ -980,7 +1046,7 @@ lineHeight: 1.45,
   <option value="TODOS" style={optionStyle}>
     Todos
   </option>
-  {barrios.map((b) => (
+  {barriosSeleccionables.map((b) => (
     <option key={b} value={b} style={optionStyle}>
       {b}
     </option>
@@ -1001,13 +1067,23 @@ lineHeight: 1.45,
 </select>
 
             <span style={{ fontSize: 15, opacity: 0.82, color: "rgba(255,255,255,0.84)" }}>{emittedLabel}</span>
+            {hayBarriosAgrupados ? (
+              <span style={{ fontSize: 13, opacity: 0.74, color: "rgba(255,255,255,0.78)" }}>
+                OTROS agrupa barrios con baja frecuencia y no se usa como filtro directo.
+              </span>
+            ) : null}
           </div>
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
   <button
     type="button"
     onClick={onDownloadBoardPDF}
-    style={actionBtnStyle}
+    disabled={!data || loading}
+    style={{
+      ...actionBtnStyle,
+      opacity: !data || loading ? 0.56 : 1,
+      cursor: !data || loading ? "not-allowed" : "pointer",
+    }}
     title="Abre una vista imprimible para guardar como PDF"
   >
     Descargar informe (PDF)
@@ -1016,7 +1092,12 @@ lineHeight: 1.45,
   <button
     type="button"
     onClick={onDownloadBoardCSV}
-    style={actionBtnStyle}
+    disabled={!data || loading}
+    style={{
+      ...actionBtnStyle,
+      opacity: !data || loading ? 0.56 : 1,
+      cursor: !data || loading ? "not-allowed" : "pointer",
+    }}
     title="Descarga el tablero consolidado en CSV"
   >
     Descargar tablero (CSV)
@@ -1025,7 +1106,23 @@ lineHeight: 1.45,
         </div>
       </div>
 
+      {errorMsg ? <div style={errorBoxStyle}>{errorMsg}</div> : null}
+
+      {loading ? (
+        <div style={infoBoxStyle}>Cargando estadísticas institucionales...</div>
+      ) : null}
+
+      {data ? (
+        <>
       <SectionLabel>VISIÓN EJECUTIVA</SectionLabel>
+
+      <div style={infoBoxStyle}>
+        <strong>Stock actual de viviendas:</strong> viviendas, estados, dormitorios y
+        hacinamiento reflejan la información vigente al momento de emisión.
+        <br />
+        <strong>Métricas del año seleccionado:</strong> flujo ANEXO_01 → ANEXO_02 y
+        ANEXO_11 se calculan por año estadístico.
+      </div>
 
       {/* KPIs */}
       <div
@@ -1274,6 +1371,8 @@ lineHeight: 1.45,
           </Card>
         ))}
       </div>
+        </>
+      ) : null}
     </div>
   );
 }
