@@ -25,6 +25,7 @@ export interface Anexo08Datos {
   gradoPermisionario?: string;
   inspectorNombre?: string;
 
+  lugar?: string;
   lugarInspeccion?: string;
   fechaInspeccion?: string; // yyyy-mm-dd
 
@@ -134,7 +135,7 @@ function Anexo08InspectorForm({
 
     const permisionario = String(datos.permisionarioNombre || "").trim();
     const inspector = String(datos.inspectorNombre || "").trim();
-    const lugar = String(datos.lugarFirma || datos.lugarInspeccion || "").trim();
+    const lugar = String(datos.lugarFirma || datos.lugarInspeccion || datos.lugar || "").trim();
     const fecha = String(datos.fechaFirma || datos.fechaInspeccion || "").trim();
 
     return !!permisionario && !!inspector && !!lugar && !!fecha;
@@ -359,7 +360,7 @@ function Anexo08InspectorForm({
             <label style={labelStyle}>Lugar de inspección</label>
             <input
               type="text"
-              value={safe(datos.lugarInspeccion || datos.lugarFirma)}
+              value={safe(datos.lugarInspeccion || datos.lugarFirma || datos.lugar)}
               disabled={disabled}
               onChange={(e) => setField("lugarInspeccion", e.target.value)}
               style={inputStyle}
@@ -586,7 +587,7 @@ function Anexo08InspectorForm({
             <label style={labelStyle}>Lugar</label>
             <input
               type="text"
-              value={safe(datos.lugarFirma || datos.lugarInspeccion)}
+              value={safe(datos.lugarFirma || datos.lugarInspeccion || datos.lugar)}
               disabled={disabled}
               onChange={(e) => setField("lugarFirma", e.target.value)}
               style={inputStyle}
