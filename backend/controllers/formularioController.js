@@ -4819,6 +4819,138 @@ async function getMisAnexos(req, res) {
       { codigo: "ANEXO_02", "datos.postulanteId": user._id },
     ];
 
+    const hydrateResolvedPermisionarioAnexo11 = async (docs) => {
+      const arr = Array.isArray(docs) ? docs : [];
+      const anexos11 = arr.filter((a) => up(a?.codigo) === "ANEXO_11");
+      if (!anexos11.length) return arr;
+
+      const textoSeguro = (...vals) =>
+        vals
+          .map((v) => (typeof v === "string" || typeof v === "number" ? String(v).trim() : ""))
+          .find((v) => v && !isObjectId(v)) || "";
+
+      const getIntervinientePermisionario = (a) => {
+        const iv = Array.isArray(a?.intervinientes) ? a.intervinientes : [];
+        return iv.find((x) => up(x?.rol) === "PERMISIONARIO" && isObjectId(x?.userId))?.userId || null;
+      };
+
+      const viviendaIds = [
+        ...new Set(
+          anexos11
+            .map((a) => a?.datos?.viviendaId || a?.vivienda)
+            .filter((id) => isObjectId(id))
+            .map(String)
+        ),
+      ];
+
+      const viviendas =
+        Vivienda && viviendaIds.length
+          ? await Vivienda.find({ _id: { $in: viviendaIds } })
+              .select("ocupacionActual")
+              .lean()
+          : [];
+      const viviendaMap = new Map(viviendas.map((v) => [String(v._id), v]));
+
+      const userIds = new Set();
+      for (const a of anexos11) {
+        const d = a?.datos || {};
+        const ambitoUp = up(d?.ambito || "");
+        const promotorRolUp = up(d?.promotorRol || d?.promotorTipo || "");
+        const puedeUsarUsuarioComoPermisionario =
+          ambitoUp !== "ESPACIO_COMUN" && promotorRolUp === "PERMISIONARIO";
+        const viviendaId = d?.viviendaId || a?.vivienda;
+        const viviendaDoc = viviendaId ? viviendaMap.get(String(viviendaId)) : null;
+        const anexoUsuario = a?.usuario?._id || a?.usuario;
+        const candidatos = [
+          d?.conformidadPermisionario?.usuario,
+          d?.permisionarioId,
+          getIntervinientePermisionario(a),
+          viviendaDoc?.ocupacionActual?.permisionario,
+          puedeUsarUsuarioComoPermisionario ? anexoUsuario : null,
+        ];
+
+        candidatos.filter((id) => isObjectId(id)).forEach((id) => userIds.add(String(id)));
+      }
+
+      const usuarios =
+        User && userIds.size
+          ? await User.find({ _id: { $in: [...userIds] } })
+              .select("nombre apellido email")
+              .lean()
+          : [];
+      const userMap = new Map(
+        usuarios.map((u) => [
+          String(u._id),
+          `${String(u.apellido || "").trim()} ${String(u.nombre || "").trim()}`.trim() ||
+            String(u.email || "").trim(),
+        ])
+      );
+
+      return arr.map((a) => {
+        if (up(a?.codigo) !== "ANEXO_11") return a;
+
+        const d = a?.datos || {};
+        const ambitoUp = up(d?.ambito || "");
+        const promotorRolUp = up(d?.promotorRol || d?.promotorTipo || "");
+        const puedeUsarUsuarioComoPermisionario =
+          ambitoUp !== "ESPACIO_COMUN" && promotorRolUp === "PERMISIONARIO";
+        const viviendaId = d?.viviendaId || a?.vivienda;
+        const viviendaDoc = viviendaId ? viviendaMap.get(String(viviendaId)) : null;
+        const anexoUsuario = a?.usuario?._id || a?.usuario;
+        const candidatos = [
+          { id: d?.conformidadPermisionario?.usuario, fuente: "datos.conformidadPermisionario.usuario" },
+          { id: d?.permisionarioId, fuente: "datos.permisionarioId" },
+          { id: getIntervinientePermisionario(a), fuente: "intervinientes.PERMISIONARIO" },
+          { id: viviendaDoc?.ocupacionActual?.permisionario, fuente: "vivienda.ocupacionActual.permisionario" },
+          { id: puedeUsarUsuarioComoPermisionario ? anexoUsuario : null, fuente: "anexo.usuario" },
+        ];
+
+        let nombre = "";
+        let fuente = "";
+
+        for (const candidato of candidatos) {
+          if (!isObjectId(candidato.id)) continue;
+          const resolved = userMap.get(String(candidato.id)) || "";
+          if (resolved) {
+            nombre = resolved;
+            fuente = candidato.fuente;
+            break;
+          }
+        }
+
+        if (!nombre) {
+          const textual = textoSeguro(
+            d?.permisionarioNombre,
+            d?.postulanteLabel,
+            d?.postulanteNombre,
+            d?.permisionario
+          );
+
+          if (textual) {
+            nombre = textual;
+            fuente = "datos.textual";
+          } else if (ambitoUp === "ESPACIO_COMUN") {
+            nombre = "Espacio común del barrio";
+            fuente = "fallback.espacioComun";
+          } else if (viviendaDoc && !viviendaDoc?.ocupacionActual?.permisionario) {
+            nombre = "Vivienda en reparación";
+            fuente = "fallback.viviendaReparacion";
+          } else {
+            nombre = "Permisionario no identificado";
+            fuente = "fallback.noIdentificado";
+          }
+        }
+
+        return {
+          ...a,
+          _resolved: {
+            ...(a?._resolved || {}),
+            permisionario: { nombre, fuente },
+          },
+        };
+      });
+    };
+
     // ─────────────────────────────
     // POSTULANTE
     // ─────────────────────────────
@@ -4909,8 +5041,9 @@ if (String(req.query?.codigo || "").toUpperCase() === "ANEXO_02") {
         .lean();
 
       const anexosHidratados = await hydrateViviendaCodigo(anexos);
+      const anexosResolved = await hydrateResolvedPermisionarioAnexo11(anexosHidratados);
 
-      return res.json(stripAdjuntoRutas({ anexos: anexosHidratados }));
+      return res.json(stripAdjuntoRutas({ anexos: anexosResolved }));
     }
 
     // ─────────────────────────────
@@ -4925,8 +5058,9 @@ if (String(req.query?.codigo || "").toUpperCase() === "ANEXO_02") {
       .lean();
 
     const anexosHidratados = await hydrateViviendaCodigo(anexos);
+    const anexosResolved = await hydrateResolvedPermisionarioAnexo11(anexosHidratados);
 
-    return res.json(stripAdjuntoRutas({ anexos: anexosHidratados }));
+    return res.json(stripAdjuntoRutas({ anexos: anexosResolved }));
   } catch (e) {
     console.error("[getMisAnexos] Error:", e);
     return genericDenied(res);
