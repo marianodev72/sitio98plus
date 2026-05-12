@@ -2211,9 +2211,10 @@ function renderAnexo08Pdf(doc, anexo, vivienda, signers = {}, historial = []) {
   };
 
   const conformidadTxt = (conf, signer, fallback) => {
-    if (!conf?.ok) return "Pendiente";
-    const fecha = fmtDateTime(conf?.fecha) || "Fecha no registrada";
-    return `${nombreInstitucional(signer, fallback)} — ${fecha}`;
+    const fecha = fmtDateTime(conf?.fecha) || fmtDateTime(signer?.fecha) || "";
+    const tieneRegistro = Boolean(conf?.ok || fecha);
+    if (!tieneRegistro) return "Pendiente";
+    return `${nombreInstitucional(signer, fallback)} — ${fecha || "Fecha no registrada"}`;
   };
 
   const confInspector = conformidadTxt(
