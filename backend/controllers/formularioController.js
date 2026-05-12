@@ -1096,7 +1096,7 @@ async function buildHistorialIntervencionesAnexo08(anexo) {
         usersMap[String(u._id)] =
           `${String(u.apellido || "").trim()} ${String(u.nombre || "").trim()}`.trim() ||
           String(u.email || "").trim() ||
-          String(u._id);
+          "Usuario";
       });
     }
 
@@ -2066,8 +2066,27 @@ function renderAnexo08Pdf(doc, anexo, vivienda, signers = {}, historial = []) {
     telefono: r?.telefono || "",
   });
 
-  const rep1 = rep(d.representante1);
-  const rep2 = rep(d.representante2);
+  const hasRep = (r) =>
+    Object.values(r || {}).some((v) => String(v || "").trim());
+
+  const repDesdeHistorial = (key) => {
+    const hist = Array.isArray(d.intervencionesInspectorHistorial)
+      ? d.intervencionesInspectorHistorial
+      : [];
+
+    for (let i = hist.length - 1; i >= 0; i -= 1) {
+      const item = hist[i]?.cambios?.[key];
+      const parsed = rep(item);
+      if (hasRep(parsed)) return parsed;
+    }
+
+    return {};
+  };
+
+  const rep1Datos = rep(d.representante1);
+  const rep2Datos = rep(d.representante2);
+  const rep1 = hasRep(rep1Datos) ? rep1Datos : repDesdeHistorial("representante1");
+  const rep2 = hasRep(rep2Datos) ? rep2Datos : repDesdeHistorial("representante2");
 
   const unidad =
     d.unidadHabitacional ||
@@ -2093,14 +2112,15 @@ function renderAnexo08Pdf(doc, anexo, vivienda, signers = {}, historial = []) {
   const fechaFirma = d.fechaFirma || d.fechaInspeccion || "—";
 
   const permisionario =
+    signers?.permisionario?.nombre ||
     d.permisionarioNombre ||
     d.postulanteNombre ||
-    "—";
+    "Permisionario no identificado";
 
   const inspector =
-    d.inspectorNombre ||
     signers?.inspector?.nombre ||
-    "—";
+    d.inspectorNombre ||
+    "Inspector de barrio";
 
   const numero =
     d.numero ||
@@ -2185,17 +2205,34 @@ function renderAnexo08Pdf(doc, anexo, vivienda, signers = {}, historial = []) {
 
   doc.moveDown(0.8);
 
-  const confInspector = d.conformidadInspector?.ok
-    ? `${fmtDateTime(d.conformidadInspector?.fecha)}`
-    : "Pendiente";
+  const nombreInstitucional = (signer, fallback) => {
+    const nombre = String(signer?.nombre || "").trim();
+    return nombre && !isObjectId(nombre) ? nombre : fallback;
+  };
 
-  const confPerm = d.conformidadPermisionario?.ok
-    ? `${fmtDateTime(d.conformidadPermisionario?.fecha)}`
-    : "Pendiente";
+  const conformidadTxt = (conf, signer, fallback) => {
+    if (!conf?.ok) return "Pendiente";
+    const fecha = fmtDateTime(conf?.fecha) || "Fecha no registrada";
+    return `${nombreInstitucional(signer, fallback)} — ${fecha}`;
+  };
 
-  const confAdmin = d.conformidadAdminGeneral?.ok
-    ? `${fmtDateTime(d.conformidadAdminGeneral?.fecha)}`
-    : "Pendiente";
+  const confInspector = conformidadTxt(
+    d.conformidadInspector,
+    signers?.inspector,
+    "Inspector de barrio"
+  );
+
+  const confPerm = conformidadTxt(
+    d.conformidadPermisionario,
+    signers?.permisionario,
+    "Permisionario"
+  );
+
+  const confAdmin = conformidadTxt(
+    d.conformidadAdminGeneral,
+    signers?.admin,
+    "ADMIN GENERAL"
+  );
 
   bloqueTitulo("CONFORMIDADES");
   lineaDato("Inspector", confInspector);
@@ -3851,6 +3888,105 @@ if (codigoUp === "ANEXO_02") {
         permisionario: { nombre: permNombre, fecha: permFecha },
         inspector: { nombre: inspNombre, fecha: inspFecha },
         admin: { nombre: adminNombre, fecha: adminFecha },
+      };
+    }
+
+    // ─────────────────────────────
+    // Firmantes ANEXO_08 (solo lectura para PDF)
+    if (codigoUp === "ANEXO_08") {
+      const d = anexo.datos || {};
+      const iv = Array.isArray(anexo.intervinientes) ? anexo.intervinientes : [];
+      const hist = Array.isArray(anexo.historialEstados)
+        ? anexo.historialEstados
+        : [];
+
+      const findInterviniente = (rol) =>
+        iv.find((x) => up(x?.rol) === rol && isObjectId(x?.userId))?.userId ||
+        null;
+
+      const cierreAdminHist = [...hist].reverse().find((h) => {
+        const obs = up(h?.observacion);
+        return (
+          up(h?.estadoNuevo) === "CERRADO" &&
+          (obs.includes("ADMIN_GENERAL") ||
+            obs.includes("ADMIN GENERAL") ||
+            obs.includes("ADMIN"))
+        );
+      });
+
+      const textoSeguro = (...vals) =>
+        vals
+          .map((v) =>
+            typeof v === "string" || typeof v === "number"
+              ? String(v).trim()
+              : ""
+          )
+          .find((v) => v && !isObjectId(v)) || "";
+
+      const permUid =
+        (isObjectId(d?.conformidadPermisionario?.usuario) &&
+          d.conformidadPermisionario.usuario) ||
+        (isObjectId(d?.permisionarioId) && d.permisionarioId) ||
+        (isObjectId(d?.postulanteId) && d.postulanteId) ||
+        findInterviniente("PERMISIONARIO") ||
+        (isObjectId(vivienda?.ocupacionActual?.permisionario) &&
+          vivienda.ocupacionActual.permisionario) ||
+        null;
+
+      const inspUid =
+        (isObjectId(d?.conformidadInspector?.usuario) &&
+          d.conformidadInspector.usuario) ||
+        (isObjectId(d?.ultimaActualizacionInspector?.usuario) &&
+          d.ultimaActualizacionInspector.usuario) ||
+        findInterviniente("INSPECTOR") ||
+        (isObjectId(anexo?.usuario) && anexo.usuario) ||
+        null;
+
+      const adminUid =
+        (isObjectId(d?.conformidadAdminGeneral?.usuario) &&
+          d.conformidadAdminGeneral.usuario) ||
+        (isObjectId(cierreAdminHist?.realizadoPor) &&
+          cierreAdminHist.realizadoPor) ||
+        null;
+
+      const permNombre = await getNombreApellidoSafe(permUid);
+      const inspNombre = await getNombreApellidoSafe(inspUid);
+      const adminNombre = await getNombreApellidoSafe(adminUid);
+
+      signers08 = {
+        permisionario: {
+          nombre:
+            permNombre ||
+            textoSeguro(
+              d?.permisionarioNombre,
+              d?.postulanteLabel,
+              d?.postulanteNombre,
+              d?.permisionario
+            ) ||
+            "Permisionario no identificado",
+          fecha: d?.conformidadPermisionario?.fecha || null,
+          rol: "PERMISIONARIO",
+        },
+        inspector: {
+          nombre:
+            inspNombre ||
+            textoSeguro(d?.inspectorNombre, d?.inspector) ||
+            "Inspector de barrio",
+          fecha:
+            d?.conformidadInspector?.fecha ||
+            d?.ultimaActualizacionInspector?.fecha ||
+            anexo?.createdAt ||
+            null,
+          rol: "INSPECTOR",
+        },
+        admin: {
+          nombre:
+            adminNombre ||
+            textoSeguro(d?.cerradoPorAdminGeneralNombre) ||
+            "ADMIN GENERAL",
+          fecha: d?.conformidadAdminGeneral?.fecha || cierreAdminHist?.fecha || null,
+          rol: "ADMIN_GENERAL",
+        },
       };
     }
 
