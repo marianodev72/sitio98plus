@@ -81,6 +81,8 @@ async function updateByInspector(ctx) {
       "fechaInspeccion",
       "reparacionesArmada",
       "reparacionesPermisionario",
+      "representante1",
+      "representante2",
       "observacionesInspector",
       "lugarFirma",
       "fechaFirma"
