@@ -4468,9 +4468,19 @@ if (codigo === "ANEXO_03") {
 
       // Inspector datos
       if (!datos.inspectorNombre) {
-        datos.inspectorNombre = `${String(user.apellido || "").trim()} ${String(
-          user.nombre || ""
-        ).trim()}`.trim();
+        let inspectorApellido = String(user.apellido || "").trim();
+        let inspectorNombreSolo = String(user.nombre || "").trim();
+
+        if (!`${inspectorApellido} ${inspectorNombreSolo}`.trim() && User && isObjectId(user._id)) {
+          const inspectorUser = await User.findById(user._id)
+            .select("nombre apellido")
+            .lean();
+          inspectorApellido = String(inspectorUser?.apellido || "").trim();
+          inspectorNombreSolo = String(inspectorUser?.nombre || "").trim();
+        }
+
+        const inspectorNombre = `${inspectorApellido} ${inspectorNombreSolo}`.trim();
+        datos.inspectorNombre = inspectorNombre || "Inspector";
       }
       if (!datos.inspectorBarrio) {
         datos.inspectorBarrio = barrioInspector || anexo03.barrio || "";
