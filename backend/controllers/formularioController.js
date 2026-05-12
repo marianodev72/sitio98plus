@@ -2042,11 +2042,15 @@ function renderAnexo08Pdf(doc, anexo, vivienda, signers = {}, historial = []) {
   };
 
   const lista = (items) => {
-    if (!Array.isArray(items) || !items.length) {
+    const cleanItems = Array.isArray(items)
+      ? items.map((x) => String(x || "").trim()).filter(Boolean)
+      : [];
+
+    if (!cleanItems.length) {
       doc.font("Helvetica").fontSize(10).text("—", LEFT, doc.y);
       return;
     }
-    items.forEach((x, i) => {
+    cleanItems.forEach((x, i) => {
       doc.font("Helvetica").fontSize(10).text(`${i + 1}. ${tVal(x)}`, LEFT, doc.y, {
         width: WIDTH,
         align: "left",
@@ -2083,6 +2087,10 @@ function renderAnexo08Pdf(doc, anexo, vivienda, signers = {}, historial = []) {
     "—";
 
   const provincia = d.provincia || "—";
+  const lugarInspeccion = d.lugarInspeccion || d.lugar || localidad || "—";
+  const fechaInspeccion = d.fechaInspeccion || "—";
+  const lugarFirma = d.lugarFirma || lugarInspeccion;
+  const fechaFirma = d.fechaFirma || d.fechaInspeccion || "—";
 
   const permisionario =
     d.permisionarioNombre ||
@@ -2118,10 +2126,10 @@ function renderAnexo08Pdf(doc, anexo, vivienda, signers = {}, historial = []) {
   lineaDato("Localidad", localidad);
   lineaDato("Provincia", provincia);
   lineaDato("Grado del permisionario", d.gradoPermisionario || "—");
-  lineaDato("Lugar de inspección", d.lugarInspeccion || d.lugar || "—");
-  lineaDato("Fecha de inspección", d.fechaInspeccion || "—");
-  lineaDato("Lugar de firma", d.lugarFirma || "—");
-  lineaDato("Fecha de firma", d.fechaFirma || "—");
+  lineaDato("Lugar de inspección", lugarInspeccion);
+  lineaDato("Fecha de inspección", fechaInspeccion);
+  lineaDato("Lugar de firma", lugarFirma);
+  lineaDato("Fecha de firma", fechaFirma);
 
   bloqueTitulo("REPARACIONES A CARGO DE LA ARMADA");
   lista(d.reparacionesArmada);
@@ -2131,6 +2139,16 @@ function renderAnexo08Pdf(doc, anexo, vivienda, signers = {}, historial = []) {
 
   bloqueTitulo("OBSERVACIONES DEL INSPECTOR");
   bloqueTexto(d.observacionesInspector);
+
+  if (String(d.observacionesPermisionario || "").trim()) {
+    bloqueTitulo("OBSERVACIONES DEL PERMISIONARIO");
+    bloqueTexto(d.observacionesPermisionario);
+  }
+
+  if (String(d.observacionesAdminGeneral || "").trim()) {
+    bloqueTitulo("OBSERVACIONES ADMIN_GENERAL");
+    bloqueTexto(d.observacionesAdminGeneral);
+  }
 
   bloqueTitulo("REPRESENTANTE 1");
   lineaDato("Apellido y nombres", rep1.apellidoNombres || "—");
@@ -2181,8 +2199,17 @@ function renderAnexo08Pdf(doc, anexo, vivienda, signers = {}, historial = []) {
 
   bloqueTitulo("CONFORMIDADES");
   lineaDato("Inspector", confInspector);
+  if (String(d.conformidadInspector?.observacion || "").trim()) {
+    lineaDato("Observación inspector", d.conformidadInspector.observacion);
+  }
   lineaDato("Permisionario", confPerm);
+  if (String(d.conformidadPermisionario?.observacion || "").trim()) {
+    lineaDato("Observación permisionario", d.conformidadPermisionario.observacion);
+  }
   lineaDato("Admin General", confAdmin);
+  if (String(d.conformidadAdminGeneral?.observacion || "").trim()) {
+    lineaDato("Observación admin general", d.conformidadAdminGeneral.observacion);
+  }
 }
 // ─────────────────────────────
 // ✅ PDF ANEXO_09
