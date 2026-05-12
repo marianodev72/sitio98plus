@@ -27,6 +27,11 @@ function safe(v: unknown) {
   return v === null || v === undefined || v === "" ? "—" : String(v);
 }
 
+function cleanDisplayName(v: unknown) {
+  const s = typeof v === "string" ? v.trim() : "";
+  return s && !/^[0-9a-fA-F]{24}$/.test(s) ? s : "";
+}
+
 // Mostrar vivienda/unidad de forma amable
 function viviendaLabel(a: AnexoInspector): string {
   const d = a.datos || {};
@@ -67,15 +72,24 @@ function viviendaLabel(a: AnexoInspector): string {
 
 function permisionarioLabel(a: AnexoInspector): string {
   const d = a.datos || {};
+  const anyA: any = a as any;
 
   // 1) Si viene en datos (casos ANEXO_11 y algunos legacy)
-  const posibles = [d.apellidoNombres, d.permisionarioNombre, d.postulanteNombre];
+  const posibles = [
+    anyA?._resolved?.permisionario?.nombre,
+    d.apellidoNombres,
+    d.permisionarioNombre,
+    d.postulanteLabel,
+    d.postulanteNombre,
+    d.permisionario,
+  ];
   for (const v of posibles) {
-    if (typeof v === "string" && v.trim()) return v.trim();
+    const nombre = cleanDisplayName(v);
+    if (nombre) return nombre;
   }
 
   // 2) Si viene usuario populado (caso endpoint /anexo/ANEXO_02)
-  const u: any = (a as any).usuario;
+  const u: any = anyA.usuario;
   if (u && typeof u === "object") {
     const ap = typeof u.apellido === "string" ? u.apellido.trim() : "";
     const nom = typeof u.nombre === "string" ? u.nombre.trim() : "";
