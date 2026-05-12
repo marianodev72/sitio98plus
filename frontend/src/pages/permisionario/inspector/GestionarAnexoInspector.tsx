@@ -388,28 +388,84 @@ if (codigo === "ANEXO_09") {
   if (codigo === "ANEXO_08") {
     const estado = up(anexo.estado);
     const puedeEditar08 = estado === "BORRADOR" || estado === "ENVIADO";
+    const pageStyle: CSSProperties = {
+      padding: "clamp(16px, 3vw, 28px)",
+      display: "grid",
+      gap: 14,
+      width: "100%",
+      minWidth: 0,
+      boxSizing: "border-box",
+    };
+    const buttonStyle: CSSProperties = {
+      border: "1px solid rgba(255,255,255,0.14)",
+      borderRadius: 12,
+      background: "rgba(255,255,255,0.08)",
+      color: "#f8fafc",
+      fontWeight: 800,
+      padding: "10px 14px",
+      cursor: busy ? "wait" : "pointer",
+    };
+    const titleStyle: CSSProperties = {
+      color: "#f8fafc",
+      fontSize: 22,
+      fontWeight: 800,
+      margin: 0,
+    };
+    const alertErrorStyle: CSSProperties = {
+      padding: 12,
+      border: "1px solid rgba(239,68,68,0.35)",
+      borderRadius: 12,
+      background: "rgba(127,29,29,0.24)",
+      color: "#fecaca",
+      fontSize: 13,
+      lineHeight: 1.45,
+    };
+    const alertSuccessStyle: CSSProperties = {
+      padding: 12,
+      border: "1px solid rgba(34,197,94,0.34)",
+      borderRadius: 12,
+      background: "rgba(20,83,45,0.22)",
+      color: "#bbf7d0",
+      fontSize: 13,
+      lineHeight: 1.45,
+    };
+    const headerPanelStyle: CSSProperties = {
+      border: "1px solid rgba(255,255,255,0.12)",
+      borderRadius: 16,
+      background: "rgba(255,255,255,0.05)",
+      boxShadow: "0 18px 48px rgba(0,0,0,0.22)",
+      padding: 16,
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 12,
+      alignItems: "center",
+      justifyContent: "space-between",
+      minWidth: 0,
+    };
+    const actionBarStyle: CSSProperties = {
+      ...headerPanelStyle,
+      justifyContent: "flex-end",
+      padding: 12,
+      boxShadow: "0 12px 32px rgba(0,0,0,0.18)",
+    };
 
     return (
-      <div style={{ padding: 24 }}>
+      <div style={pageStyle}>
+        <div style={headerPanelStyle}>
         <button
           onClick={() => navigate("/app/permisionario/mi-barrio-inspector")}
-          style={{ marginBottom: 12 }}
+          style={buttonStyle}
           disabled={busy}
         >
           Volver
         </button>
 
-        <h2>Gestión — ANEXO_08</h2>
+        <h2 style={titleStyle}>Gestión — ANEXO_08</h2>
+        </div>
 
         {err && (
           <div
-            style={{
-              marginTop: 10,
-              marginBottom: 12,
-              padding: 10,
-              border: "1px solid #f44336",
-              background: "#ffebee",
-            }}
+            style={alertErrorStyle}
           >
             {err}
           </div>
@@ -417,13 +473,7 @@ if (codigo === "ANEXO_09") {
 
         {infoMsg && !err && (
           <div
-            style={{
-              marginTop: 10,
-              marginBottom: 12,
-              padding: 10,
-              border: "1px solid #4caf50",
-              background: "#e8f5e9",
-            }}
+            style={alertSuccessStyle}
           >
             {infoMsg}
           </div>
@@ -471,15 +521,8 @@ if (codigo === "ANEXO_09") {
           enviarLabel="Guardar / enviar ANEXO_08"
         />
 
-        <div
-          style={{
-            marginTop: 10,
-            display: "flex",
-            gap: 10,
-            flexWrap: "wrap",
-          }}
-        >
-          <button onClick={cargar} disabled={busy}>
+        <div style={actionBarStyle}>
+          <button onClick={cargar} disabled={busy} style={buttonStyle}>
             Recargar
           </button>
         </div>
