@@ -146,22 +146,126 @@ function Anexo08InspectorForm({
   }
 
   const blockStyle: React.CSSProperties = {
-    border: "1px solid #ddd",
-    borderRadius: 10,
-    padding: 12,
+    border: "1px solid rgba(255,255,255,0.12)",
+    borderRadius: 16,
+    padding: 16,
     marginBottom: 14,
-    background: "#fafafa",
+    background: "rgba(255,255,255,0.05)",
+    boxShadow: "0 18px 48px rgba(0,0,0,0.2)",
+    color: "#f8fafc",
+    minWidth: 0,
   };
 
   const labelStyle: React.CSSProperties = {
-    fontWeight: 600,
-    fontSize: 13,
+    color: "rgba(226,232,240,0.72)",
+    fontSize: 11,
+    fontWeight: 700,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
     display: "block",
-    marginBottom: 4,
+    marginBottom: 6,
+  };
+
+  const headingStyle: React.CSSProperties = {
+    color: "#f8fafc",
+    fontSize: 14,
+    fontWeight: 800,
+    letterSpacing: "0.02em",
+    margin: "0 0 10px 0",
+  };
+
+  const inputStyle: React.CSSProperties = {
+    width: "100%",
+    boxSizing: "border-box",
+    border: "1px solid rgba(255,255,255,0.14)",
+    borderRadius: 12,
+    background: "rgba(15,23,42,0.72)",
+    color: "#f8fafc",
+    padding: "10px 12px",
+    minWidth: 0,
+    outline: "none",
+    colorScheme: "dark",
+  };
+
+  const readOnlyInputStyle: React.CSSProperties = {
+    ...inputStyle,
+    background: "rgba(255,255,255,0.06)",
+    color: "rgba(226,232,240,0.82)",
+  };
+
+  const textareaStyle: React.CSSProperties = {
+    ...inputStyle,
+    resize: "vertical",
+    lineHeight: 1.45,
+  };
+
+  const fieldGridStyle: React.CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+    gap: 12,
+    minWidth: 0,
+  };
+
+  const fullSpanStyle: React.CSSProperties = {
+    gridColumn: "1 / -1",
+    minWidth: 0,
+  };
+
+  const listRowStyle: React.CSSProperties = {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 10,
+    minWidth: 0,
+  };
+
+  const secondaryButtonStyle: React.CSSProperties = {
+    border: "1px solid rgba(255,255,255,0.14)",
+    borderRadius: 12,
+    background: "rgba(255,255,255,0.08)",
+    color: "#f8fafc",
+    fontWeight: 700,
+    padding: "9px 12px",
+    cursor: "pointer",
+  };
+
+  const dangerButtonStyle: React.CSSProperties = {
+    ...secondaryButtonStyle,
+    borderColor: "rgba(248,113,113,0.35)",
+    color: "#fecaca",
+  };
+
+  const submitBarStyle: React.CSSProperties = {
+    position: "sticky",
+    bottom: 0,
+    padding: 14,
+    border: "1px solid rgba(255,255,255,0.12)",
+    borderRadius: 16,
+    background: "rgba(15,23,42,0.94)",
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 12,
+    alignItems: "center",
+    justifyContent: "space-between",
+    boxShadow: "0 -14px 32px rgba(0,0,0,0.28)",
+  };
+
+  const submitHintStyle: React.CSSProperties = {
+    color: "rgba(226,232,240,0.74)",
+    fontSize: 12,
+    minWidth: 220,
+    flex: "1 1 260px",
+  };
+
+  const submitButtonStyle: React.CSSProperties = {
+    ...secondaryButtonStyle,
+    background: "linear-gradient(135deg, rgba(37,99,235,0.95), rgba(14,165,233,0.9))",
+    borderColor: "rgba(125,211,252,0.36)",
+    padding: "10px 16px",
   };
 
   return (
-    <div style={{ display: "grid", gap: 12 }}>
+    <div style={{ display: "grid", gap: 12, width: "100%", minWidth: 0 }}>
       <div style={blockStyle}>
         <div style={{ textAlign: "center", marginBottom: 10 }}>
           <div style={{ fontSize: 12 }}>R.G-6-002 PÚBLICO</div>
@@ -171,13 +275,7 @@ function Anexo08InspectorForm({
           </div>
         </div>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: 8,
-          }}
-        >
+        <div style={fieldGridStyle}>
           <div>
             <label style={labelStyle}>Permisionario</label>
             <input
@@ -185,7 +283,7 @@ function Anexo08InspectorForm({
               value={safe(datos.permisionarioNombre)}
               disabled
               readOnly
-              style={{ width: "100%", background: "#eee" }}
+              style={readOnlyInputStyle}
             />
           </div>
 
@@ -196,7 +294,7 @@ function Anexo08InspectorForm({
               value={safe(datos.gradoPermisionario)}
               disabled={disabled}
               onChange={(e) => setField("gradoPermisionario", e.target.value)}
-              style={{ width: "100%" }}
+              style={inputStyle}
             />
           </div>
 
@@ -209,7 +307,7 @@ function Anexo08InspectorForm({
               )}
               disabled
               readOnly
-              style={{ width: "100%", background: "#eee" }}
+              style={readOnlyInputStyle}
             />
           </div>
 
@@ -220,18 +318,18 @@ function Anexo08InspectorForm({
               value={safe(datos.inspectorNombre)}
               disabled
               readOnly
-              style={{ width: "100%", background: "#eee" }}
+              style={readOnlyInputStyle}
             />
           </div>
 
-          <div style={{ gridColumn: "1 / span 2" }}>
+          <div style={fullSpanStyle}>
             <label style={labelStyle}>Dirección</label>
             <input
               type="text"
               value={safe(datos.direccion)}
               disabled
               readOnly
-              style={{ width: "100%", background: "#eee" }}
+              style={readOnlyInputStyle}
             />
           </div>
 
@@ -242,7 +340,7 @@ function Anexo08InspectorForm({
               value={safe(datos.localidad)}
               disabled
               readOnly
-              style={{ width: "100%", background: "#eee" }}
+              style={readOnlyInputStyle}
             />
           </div>
 
@@ -253,7 +351,7 @@ function Anexo08InspectorForm({
               value={safe(datos.provincia)}
               disabled
               readOnly
-              style={{ width: "100%", background: "#eee" }}
+              style={readOnlyInputStyle}
             />
           </div>
 
@@ -264,7 +362,7 @@ function Anexo08InspectorForm({
               value={safe(datos.lugarInspeccion || datos.lugarFirma)}
               disabled={disabled}
               onChange={(e) => setField("lugarInspeccion", e.target.value)}
-              style={{ width: "100%" }}
+              style={inputStyle}
             />
           </div>
 
@@ -275,19 +373,19 @@ function Anexo08InspectorForm({
               value={safe(datos.fechaInspeccion || datos.fechaFirma)}
               disabled={disabled}
               onChange={(e) => setField("fechaInspeccion", e.target.value)}
-              style={{ width: "100%" }}
+              style={inputStyle}
             />
           </div>
         </div>
       </div>
 
       <div style={blockStyle}>
-        <h4 style={{ margin: "0 0 6px 0" }}>
+        <h4 style={headingStyle}>
           1. Reparaciones y/o mantenimientos a cargo de la Alcaldía
         </h4>
 
         {reparacionesArmada.map((item, idx) => (
-          <div key={idx} style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+          <div key={idx} style={listRowStyle}>
             <textarea
               value={item}
               disabled={disabled}
@@ -295,13 +393,14 @@ function Anexo08InspectorForm({
                 setListaItem("reparacionesArmada", idx, e.target.value)
               }
               rows={3}
-              style={{ width: "100%", resize: "vertical" }}
+              style={{ ...textareaStyle, flex: "1 1 260px" }}
               placeholder={`Punto 1 - Ítem ${idx + 1}`}
             />
             {!disabled && reparacionesArmada.length > 1 && (
               <button
                 type="button"
                 onClick={() => removeListaItem("reparacionesArmada", idx)}
+                style={dangerButtonStyle}
               >
                 Eliminar
               </button>
@@ -310,19 +409,23 @@ function Anexo08InspectorForm({
         ))}
 
         {!disabled && (
-          <button type="button" onClick={() => addListaItem("reparacionesArmada")}>
+          <button
+            type="button"
+            onClick={() => addListaItem("reparacionesArmada")}
+            style={secondaryButtonStyle}
+          >
             + Agregar ítem
           </button>
         )}
       </div>
 
       <div style={blockStyle}>
-        <h4 style={{ margin: "0 0 6px 0" }}>
+        <h4 style={headingStyle}>
           2. Reparaciones y/o mantenimientos a cargo del Permisionario
         </h4>
 
         {reparacionesPermisionario.map((item, idx) => (
-          <div key={idx} style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+          <div key={idx} style={listRowStyle}>
             <textarea
               value={item}
               disabled={disabled}
@@ -330,7 +433,7 @@ function Anexo08InspectorForm({
                 setListaItem("reparacionesPermisionario", idx, e.target.value)
               }
               rows={3}
-              style={{ width: "100%", resize: "vertical" }}
+              style={{ ...textareaStyle, flex: "1 1 260px" }}
               placeholder={`Punto 2 - Ítem ${idx + 1}`}
             />
             {!disabled && reparacionesPermisionario.length > 1 && (
@@ -339,6 +442,7 @@ function Anexo08InspectorForm({
                 onClick={() =>
                   removeListaItem("reparacionesPermisionario", idx)
                 }
+                style={dangerButtonStyle}
               >
                 Eliminar
               </button>
@@ -350,6 +454,7 @@ function Anexo08InspectorForm({
           <button
             type="button"
             onClick={() => addListaItem("reparacionesPermisionario")}
+            style={secondaryButtonStyle}
           >
             + Agregar ítem
           </button>
@@ -357,23 +462,17 @@ function Anexo08InspectorForm({
       </div>
 
       <div style={blockStyle}>
-        <h4 style={{ margin: "0 0 10px 0" }}>Representantes del permisionario</h4>
+        <h4 style={headingStyle}>Representantes del permisionario</h4>
 
         {[["Representante I", "representante1"], ["Representante II", "representante2"]].map(
           ([title, repKey]) => {
             const rep = repKey === "representante1" ? rep1 : rep2;
             return (
               <div key={repKey} style={{ marginBottom: 16 }}>
-                <div style={{ fontWeight: 700, marginBottom: 8 }}>{title}</div>
+                <div style={{ color: "#f8fafc", fontWeight: 800, marginBottom: 10 }}>{title}</div>
 
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: 8,
-                  }}
-                >
-                  <div style={{ gridColumn: "1 / span 2" }}>
+                <div style={fieldGridStyle}>
+                  <div style={fullSpanStyle}>
                     <label style={labelStyle}>Apellido y nombres</label>
                     <input
                       type="text"
@@ -386,7 +485,7 @@ function Anexo08InspectorForm({
                           e.target.value
                         )
                       }
-                      style={{ width: "100%" }}
+                      style={inputStyle}
                     />
                   </div>
 
@@ -403,7 +502,7 @@ function Anexo08InspectorForm({
                           e.target.value
                         )
                       }
-                      style={{ width: "100%" }}
+                      style={inputStyle}
                     />
                   </div>
 
@@ -420,7 +519,7 @@ function Anexo08InspectorForm({
                           e.target.value
                         )
                       }
-                      style={{ width: "100%" }}
+                      style={inputStyle}
                     />
                   </div>
 
@@ -437,7 +536,7 @@ function Anexo08InspectorForm({
                           e.target.value
                         )
                       }
-                      style={{ width: "100%" }}
+                      style={inputStyle}
                     />
                   </div>
 
@@ -454,7 +553,7 @@ function Anexo08InspectorForm({
                           e.target.value
                         )
                       }
-                      style={{ width: "100%" }}
+                      style={inputStyle}
                     />
                   </div>
                 </div>
@@ -465,21 +564,22 @@ function Anexo08InspectorForm({
       </div>
 
       <div style={blockStyle}>
-        <h4 style={{ margin: "0 0 6px 0" }}>Observaciones del inspector</h4>
+        <h4 style={headingStyle}>Observaciones del inspector</h4>
         <textarea
           rows={5}
           value={safe(datos.observacionesInspector)}
           disabled={disabled}
           onChange={(e) => setField("observacionesInspector", e.target.value)}
-          style={{ width: "100%", resize: "vertical" }}
+          style={textareaStyle}
         />
 
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "2fr 1fr",
-            gap: 8,
+            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+            gap: 12,
             marginTop: 12,
+            minWidth: 0,
           }}
         >
           <div>
@@ -489,7 +589,7 @@ function Anexo08InspectorForm({
               value={safe(datos.lugarFirma || datos.lugarInspeccion)}
               disabled={disabled}
               onChange={(e) => setField("lugarFirma", e.target.value)}
-              style={{ width: "100%" }}
+              style={inputStyle}
             />
           </div>
 
@@ -500,28 +600,15 @@ function Anexo08InspectorForm({
               value={safe(datos.fechaFirma || datos.fechaInspeccion)}
               disabled={disabled}
               onChange={(e) => setField("fechaFirma", e.target.value)}
-              style={{ width: "100%" }}
+              style={inputStyle}
             />
           </div>
         </div>
       </div>
 
       {onEnviar && !disabled && (
-        <div
-          style={{
-            position: "sticky",
-            bottom: 0,
-            padding: 12,
-            border: "1px solid #ddd",
-            borderRadius: 10,
-            background: "#fff",
-            display: "flex",
-            gap: 10,
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <div style={{ fontSize: 12, opacity: 0.8 }}>
+        <div style={submitBarStyle}>
+          <div style={submitHintStyle}>
             {!canEnviarComputed && validarAntesDeEnviar ? (
               <span>
                 Completá al menos <b>Permisionario</b>, <b>Inspector</b>, <b>Lugar</b> y <b>Fecha</b>.
@@ -535,7 +622,11 @@ function Anexo08InspectorForm({
             type="button"
             onClick={handleEnviar}
             disabled={enviando || !canEnviarComputed}
-            style={{ fontWeight: 700, padding: "8px 12px" }}
+            style={{
+              ...submitButtonStyle,
+              cursor: enviando || !canEnviarComputed ? "not-allowed" : "pointer",
+              opacity: enviando || !canEnviarComputed ? 0.58 : 1,
+            }}
           >
             {enviando ? "Enviando…" : enviarLabel}
           </button>
