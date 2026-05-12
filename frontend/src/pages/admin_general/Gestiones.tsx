@@ -36,6 +36,8 @@ type Anexo = {
 
 type Panel = "PERMISIONARIOS" | "ALOJADOS";
 
+const TODOS_CODIGOS = "TODOS";
+
 const ANEXOS_PERMISIONARIO = [
   "ANEXO_01",
   "ANEXO_02",
@@ -55,6 +57,16 @@ const ANEXOS_ALOJADO = [
   "ANEXO_25",
   "ANEXO_26",
   "ANEXO_28",
+];
+
+const ESTADOS_FILTRO = [
+  "BORRADOR",
+  "ENVIADO",
+  "EN_REVISION",
+  "APROBADO",
+  "RECHAZADO",
+  "CERRADO",
+  "ASIGNADO",
 ];
 
 function safe(v: unknown) {
@@ -131,7 +143,10 @@ export default function Gestiones() {
     [panel]
   );
 
-  const [codigo, setCodigo] = useState<string>(ANEXOS_PERMISIONARIO[0]);
+  const [codigo, setCodigo] = useState<string>(TODOS_CODIGOS);
+  const [estadoFiltro, setEstadoFiltro] = useState("");
+  const [barrioFiltro, setBarrioFiltro] = useState("");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [items, setItems] = useState<Anexo[]>([]);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
@@ -141,9 +156,7 @@ export default function Gestiones() {
   const esAdmin = myRole === "ADMIN" || myRole === "ADMIN_GENERAL";
 
   useEffect(() => {
-    const first =
-      panel === "PERMISIONARIOS" ? ANEXOS_PERMISIONARIO[0] : ANEXOS_ALOJADO[0];
-    setCodigo(first);
+    setCodigo(TODOS_CODIGOS);
   }, [panel]);
 
   async function cargarLista() {
@@ -155,7 +168,16 @@ export default function Gestiones() {
       if (!codigo) return;
 
       if (esAdmin) {
-        const res = await http.get(`/formularios/anexo/${codigo}`);
+        const params: Record<string, string | number> = {
+          sortDir,
+          limit: 50,
+          page: 1,
+        };
+
+        if (estadoFiltro) params.estado = estadoFiltro;
+        if (barrioFiltro.trim()) params.barrio = barrioFiltro.trim();
+
+        const res = await http.get(`/formularios/anexo/${codigo}`, { params });
         setItems(Array.isArray(res.data?.anexos) ? res.data.anexos : []);
       } else {
         const res = await http.get(`/formularios/mios`, { params: { codigo } });
@@ -203,7 +225,7 @@ export default function Gestiones() {
   useEffect(() => {
     cargarLista();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [codigo, esAdmin]);
+  }, [codigo, estadoFiltro, barrioFiltro, sortDir, esAdmin]);
 
   const thStyle: CSSProperties = {
     textAlign: "left",
@@ -242,6 +264,7 @@ const selectStyle: CSSProperties = {
   MozAppearance: "none",
   backgroundColor: "rgba(255,255,255,0.04)",
   color: "#ffffff",
+  colorScheme: "dark",
 };
 
 const optionStyle: CSSProperties = {
@@ -301,12 +324,56 @@ const optionStyle: CSSProperties = {
   disabled={loading}
   style={selectStyle}
 >
+  <option value={TODOS_CODIGOS} style={optionStyle}>
+    Todos
+  </option>
   {anexosDisponibles.map((c) => (
     <option key={c} value={c} style={optionStyle}>
       {c}
     </option>
   ))}
 </select>
+
+              <select
+                value={estadoFiltro}
+                onChange={(e) => setEstadoFiltro(e.target.value)}
+                disabled={loading}
+                style={selectStyle}
+                aria-label="Estado"
+              >
+                <option value="" style={optionStyle}>
+                  Todos los estados
+                </option>
+                {ESTADOS_FILTRO.map((estado) => (
+                  <option key={estado} value={estado} style={optionStyle}>
+                    {estado}
+                  </option>
+                ))}
+              </select>
+
+              <input
+                value={barrioFiltro}
+                onChange={(e) => setBarrioFiltro(e.target.value)}
+                disabled={loading}
+                placeholder="Barrio"
+                style={{ ...controlStyle, minWidth: 180 }}
+                aria-label="Barrio"
+              />
+
+              <select
+                value={sortDir}
+                onChange={(e) => setSortDir(e.target.value === "asc" ? "asc" : "desc")}
+                disabled={loading}
+                style={selectStyle}
+                aria-label="Orden por fecha"
+              >
+                <option value="desc" style={optionStyle}>
+                  Mas recientes primero
+                </option>
+                <option value="asc" style={optionStyle}>
+                  Mas antiguos primero
+                </option>
+              </select>
 
               <button onClick={cargarLista} disabled={loading} style={primaryButtonStyle}>
                 {loading ? "Cargando…" : "Actualizar"}

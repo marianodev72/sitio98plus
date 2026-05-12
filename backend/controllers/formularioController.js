@@ -4941,6 +4941,7 @@ console.log("[listarPorCodigo] user:", req.user);
     if (!user || !user.role) return genericDenied(res);
 
     const codigo = up(req.params.codigo);
+    const listarTodos = codigo === "TODOS";
 
 // ✅ ADMIN / ADMIN_GENERAL: ven todo
 const isAdmin = role === "ADMIN" || role === "ADMIN_GENERAL";
@@ -4956,7 +4957,7 @@ if (!isAdmin && !(isInspector && codigo === "ANEXO_02")) {
   return genericDenied(res);
 }
 
-    const filter = { codigo };
+    const filter = listarTodos ? {} : { codigo };
 
 // ✅ Inspector queda limitado SIEMPRE a su barrio asignado
 if (isInspector) {
@@ -4965,15 +4966,63 @@ if (isInspector) {
   filter.barrio = barrio;
 }
 
-const anexos = await FormSubmission.find(filter)
-  .populate("usuario", "nombre apellido email role")
-  .sort({ createdAt: -1 })
-  .lean();
+    const estado = up(req.query?.estado);
+    if (estado) filter.estado = estado;
+
+    const barrioFiltro = String(req.query?.barrio || "").trim();
+    if (barrioFiltro) {
+      const escapeRegex = (v) => String(v).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const barrioRegex = new RegExp(escapeRegex(barrioFiltro), "i");
+      const barrioOr = [
+        { barrio: barrioRegex },
+        { "datos.barrio": barrioRegex },
+        { "datos.barrioAsignado": barrioRegex },
+        { "datos.viviendaBarrio": barrioRegex },
+        { "datos.inspectorBarrio": barrioRegex },
+        { "datos.localidad": barrioRegex },
+        { "datos.unidadHabitacional": barrioRegex },
+      ];
+      if (Vivienda) {
+        const viviendasBarrio = await Vivienda.find({ barrio: barrioRegex }).select("_id").lean();
+        const viviendaIds = viviendasBarrio.map((v) => v._id).filter(Boolean);
+        const viviendaIdStrings = viviendaIds.map(String);
+        if (viviendaIds.length) {
+          barrioOr.push(
+            { vivienda: { $in: viviendaIds } },
+            { "datos.viviendaId": { $in: [...viviendaIds, ...viviendaIdStrings] } }
+          );
+        }
+      }
+      filter.$or = barrioOr;
+    }
+
+    const sortDir = String(req.query?.sortDir || "desc").toLowerCase() === "asc" ? 1 : -1;
+    const pageRaw = Number.parseInt(String(req.query?.page || "1"), 10);
+    const page = Number.isFinite(pageRaw) && pageRaw > 0 ? pageRaw : 1;
+    const limitRaw = Number.parseInt(String(req.query?.limit || "50"), 10);
+    const limit = Math.min(Math.max(Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 50, 1), 100);
+    const shouldPaginate = listarTodos || req.query?.limit || req.query?.page;
+
+    let query = FormSubmission.find(filter)
+      .populate("usuario", "nombre apellido email role")
+      .sort({ updatedAt: sortDir, createdAt: sortDir, _id: sortDir })
+      .lean();
+
+    if (shouldPaginate) {
+      query = query.skip((page - 1) * limit).limit(limit);
+    }
+
+const anexos = await query;
 
     // ✅ Solo para ANEXO_02: agregamos viviendaCodigo sin romper formato
     if (codigo === "ANEXO_02") {
       const anexosHidratados = await hydrateViviendaCodigo(anexos);
       return res.json(stripAdjuntoRutas({ anexos: anexosHidratados }));
+    }
+
+    if (listarTodos) {
+      const anexosHidratados = await hydrateViviendaCodigo(anexos);
+      return res.json(stripAdjuntoRutas({ anexos: anexosHidratados.map((a) => stripEstadoInstitucionalIfNeeded(user, a)) }));
     }
 
     return res.json(stripAdjuntoRutas({ anexos: Array.isArray(anexos) ? anexos.map((a) => stripEstadoInstitucionalIfNeeded(user, a?.toObject ? a.toObject() : a)) : anexos }));
