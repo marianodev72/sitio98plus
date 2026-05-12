@@ -4,12 +4,14 @@ const router = express.Router();
 const { authRequired } = require("../middleware/auth");
 const {
   getResumenStats,
+  getFormularioStats,
   getStatsBarrios,
   getStatsPorBarrio,
 } = require("../controllers/statsController");
 
 router.get("/resumen", authRequired, getResumenStats);
 router.get("/barrios", authRequired, getStatsBarrios);
+router.get("/formularios", authRequired, getFormularioStats);
 router.get("/barrio/:barrio", authRequired, getStatsPorBarrio);
 
 router.use((req, res) => {

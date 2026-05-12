@@ -69,6 +69,50 @@ const ORG_HEADER = "BASE NAVAL USHUAIA - DEPARTAMENTO ALCALDIA";
 const ORG_SUBHEADER =
   "Estadísticas Institucionales – ORGANO ADMINISTRADOR VVFFZN98";
 
+const FORMULARIO_CODIGOS = [
+  "ANEXO_01",
+  "ANEXO_02",
+  "ANEXO_03",
+  "ANEXO_04",
+  "ANEXO_07",
+  "ANEXO_08",
+  "ANEXO_09",
+  "ANEXO_10",
+  "ANEXO_11",
+  "ANEXO_21",
+  "ANEXO_22",
+  "ANEXO_23",
+  "ANEXO_24",
+  "ANEXO_25",
+  "ANEXO_26",
+  "ANEXO_28",
+];
+
+const FORMULARIO_ESTADOS = [
+  "BORRADOR",
+  "ENVIADO",
+  "EN_REVISION",
+  "APROBADO",
+  "RECHAZADO",
+  "CERRADO",
+  "ASIGNADO",
+];
+
+const MONTH_LABELS = [
+  "Ene",
+  "Feb",
+  "Mar",
+  "Abr",
+  "May",
+  "Jun",
+  "Jul",
+  "Ago",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dic",
+];
+
 function safeFile(s: string) {
   return String(s || "grafico")
     .replace(/[\\/:*?"<>|]/g, "-")
@@ -83,6 +127,13 @@ function escapeXml(s: string) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&apos;");
+}
+
+function fmtDateTime(v?: string) {
+  if (!v) return "—";
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("es-AR");
 }
 
 /* ================= UI BLOQUES (INSTITUCIONAL) ================= */
@@ -503,6 +554,72 @@ function PieChart({
   );
 }
 
+function BarChart({
+  data,
+  maxRows = 12,
+  preserveOrder = false,
+}: {
+  data: { label: string; value: number }[];
+  maxRows?: number;
+  preserveOrder?: boolean;
+}) {
+  const baseRows = [...(data || [])].filter((d) => Number(d.value || 0) > 0);
+  const rows = (preserveOrder
+    ? baseRows
+    : baseRows.sort((a, b) => Number(b.value || 0) - Number(a.value || 0))
+  ).slice(0, maxRows);
+  const max = rows.reduce((acc, row) => Math.max(acc, Number(row.value || 0)), 0);
+
+  if (!rows.length) {
+    return <div style={{ color: "rgba(255,255,255,0.72)" }}>Sin datos.</div>;
+  }
+
+  return (
+    <div style={{ display: "grid", gap: 10 }}>
+      {rows.map((row, i) => {
+        const pct = max > 0 ? Math.max(4, Math.round((Number(row.value || 0) / max) * 100)) : 0;
+        return (
+          <div key={`${row.label}-${i}`} style={{ minWidth: 0 }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 10,
+                color: "rgba(255,255,255,0.86)",
+                fontSize: 13,
+                fontWeight: 800,
+              }}
+            >
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {row.label}
+              </span>
+              <span>{row.value}</span>
+            </div>
+            <div
+              style={{
+                marginTop: 6,
+                height: 10,
+                borderRadius: 999,
+                background: "rgba(255,255,255,0.08)",
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  width: `${pct}%`,
+                  height: "100%",
+                  borderRadius: 999,
+                  background: pickColor(row.label, i),
+                }}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 /* ================= PAGE ================= */
 
 export default function AdminStats() {
@@ -514,6 +631,11 @@ export default function AdminStats() {
   const [emittedLabel, setEmittedLabel] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [docStats, setDocStats] = useState<any>(null);
+  const [docLoading, setDocLoading] = useState(false);
+  const [docErrorMsg, setDocErrorMsg] = useState("");
+  const [docCodigoFiltro, setDocCodigoFiltro] = useState("TODOS");
+  const [docEstadoFiltro, setDocEstadoFiltro] = useState("TODOS");
 
   useEffect(() => {
     let alive = true;
@@ -575,6 +697,39 @@ export default function AdminStats() {
     )} • Año estadístico: ${year}`;
     setEmittedLabel(txt);
   }, [barrio, year]);
+
+  useEffect(() => {
+    let alive = true;
+    const params: Record<string, string | number> = { year };
+
+    if (barrio !== "TODOS") params.barrio = barrio;
+    if (docCodigoFiltro !== "TODOS") params.codigo = docCodigoFiltro;
+    if (docEstadoFiltro !== "TODOS") params.estado = docEstadoFiltro;
+
+    setDocLoading(true);
+    setDocErrorMsg("");
+    setDocStats(null);
+
+    http
+      .get("/stats/formularios", { params })
+      .then((r) => {
+        if (alive) setDocStats(r.data);
+      })
+      .catch((err) => {
+        console.error("[STATS] Error cargando gestión documental", err);
+        if (alive) {
+          setDocStats(null);
+          setDocErrorMsg("No se pudieron cargar las métricas de gestión documental.");
+        }
+      })
+      .finally(() => {
+        if (alive) setDocLoading(false);
+      });
+
+    return () => {
+      alive = false;
+    };
+  }, [barrio, year, docCodigoFiltro, docEstadoFiltro]);
 
   const availableYears = useMemo(() => {
     const startYear = 2024;
@@ -689,6 +844,27 @@ export default function AdminStats() {
     value: x.cantidad,
   }));
 
+  const docPorTipoRows = (docStats?.porTipo || []).map((x: any) => ({
+    label: x._id || "SIN_TIPO",
+    value: Number(x.cantidad || 0),
+  }));
+
+  const docPorEstadoRows = (docStats?.porEstado || []).map((x: any) => ({
+    label: x._id || "SIN_ESTADO",
+    value: Number(x.cantidad || 0),
+  }));
+
+  const docMensualRows = (docStats?.evolucionMensual || []).map((x: any) => ({
+    label: MONTH_LABELS[(Number(x.mes || 0) || 1) - 1] || String(x.mes || ""),
+    value: Number(x.cantidad || 0),
+  }));
+
+  const docTipoEstadoRows = docStats?.tipoEstado || [];
+  const docRecientes = docStats?.recientes || [];
+  const docTotal = Number(docStats?.total || 0);
+  const docTiposActivos = docPorTipoRows.filter((x) => x.value > 0).length;
+  const docEstadosActivos = docPorEstadoRows.filter((x) => x.value > 0).length;
+
 const reportBaseName = `estadisticas_${safeFile(
   barrio === "TODOS" ? "todos" : barrio
 )}_${year}`;
@@ -740,6 +916,38 @@ const errorBoxStyle: React.CSSProperties = {
   border: "1px solid rgba(239,68,68,0.35)",
   background: "rgba(127,29,29,0.22)",
   color: "#fecaca",
+};
+
+const tableWrapStyle: React.CSSProperties = {
+  overflowX: "auto",
+  border: "1px solid rgba(255,255,255,0.12)",
+  borderRadius: 12,
+  background: "rgba(255,255,255,0.04)",
+};
+
+const tableStyle: React.CSSProperties = {
+  width: "100%",
+  minWidth: 720,
+  borderCollapse: "collapse",
+};
+
+const thStyle: React.CSSProperties = {
+  padding: "10px 12px",
+  textAlign: "left",
+  fontSize: 12,
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+  color: "rgba(255,255,255,0.70)",
+  borderBottom: "1px solid rgba(255,255,255,0.12)",
+  background: "rgba(255,255,255,0.04)",
+  whiteSpace: "nowrap",
+};
+
+const tdStyle: React.CSSProperties = {
+  padding: "10px 12px",
+  borderBottom: "1px solid rgba(255,255,255,0.08)",
+  color: "#ffffff",
+  verticalAlign: "top",
 };
 
 function onDownloadBoardCSV() {
@@ -1240,6 +1448,225 @@ lineHeight: 1.45,
           </Card>
         </div>
       </div>
+
+      <SectionLabel>GESTIÓN DOCUMENTAL</SectionLabel>
+
+      <div style={infoBoxStyle}>
+        Métricas reales de formularios y anexos sobre FormSubmission. Se calculan por
+        año de creación y respetan los filtros visibles; no modifican documentos.
+      </div>
+
+      <div
+        style={{
+          marginTop: 10,
+          border: "1px solid rgba(255,255,255,0.14)",
+          borderRadius: 14,
+          padding: 18,
+          background: "rgba(255,255,255,0.05)",
+          backdropFilter: "blur(6px)",
+        }}
+      >
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+          <span style={{ fontWeight: 900, color: "#ffffff" }}>Tipo:</span>
+          <select
+            value={docCodigoFiltro}
+            onChange={(e) => setDocCodigoFiltro(e.target.value)}
+            style={selectStyle}
+            disabled={docLoading}
+          >
+            <option value="TODOS" style={optionStyle}>
+              Todos los anexos
+            </option>
+            {FORMULARIO_CODIGOS.map((codigo) => (
+              <option key={codigo} value={codigo} style={optionStyle}>
+                {codigo}
+              </option>
+            ))}
+          </select>
+
+          <span style={{ fontWeight: 900, color: "#ffffff" }}>Estado:</span>
+          <select
+            value={docEstadoFiltro}
+            onChange={(e) => setDocEstadoFiltro(e.target.value)}
+            style={selectStyle}
+            disabled={docLoading}
+          >
+            <option value="TODOS" style={optionStyle}>
+              Todos los estados
+            </option>
+            {FORMULARIO_ESTADOS.map((estado) => (
+              <option key={estado} value={estado} style={optionStyle}>
+                {estado}
+              </option>
+            ))}
+          </select>
+
+          <span style={{ fontSize: 13, color: "rgba(255,255,255,0.72)" }}>
+            Año {year}
+            {barrio === "TODOS" ? " · Todos los barrios" : ` · Barrio ${barrio}`}
+          </span>
+        </div>
+      </div>
+
+      {docErrorMsg ? <div style={errorBoxStyle}>{docErrorMsg}</div> : null}
+
+      {docLoading ? (
+        <div style={infoBoxStyle}>Cargando gestión documental...</div>
+      ) : null}
+
+      {docStats ? (
+        <>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+              gap: 12,
+              marginTop: 12,
+            }}
+          >
+            <KpiCard
+              title="Formularios del año"
+              value={docTotal}
+              accent="#8E24AA"
+              subtitle="Total según filtros"
+            />
+            <KpiCard
+              title="Tipos con actividad"
+              value={docTiposActivos}
+              accent="#1E88E5"
+              subtitle="Anexos con registros"
+            />
+            <KpiCard
+              title="Estados presentes"
+              value={docEstadosActivos}
+              accent="#43A047"
+              subtitle="Estados en el período"
+            />
+            <KpiCard
+              title="Actividad reciente"
+              value={docRecientes.length}
+              accent="#FB8C00"
+              subtitle="Últimos movimientos listados"
+            />
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+              gap: 12,
+              marginTop: 16,
+            }}
+          >
+            <Card
+              title="Formularios por tipo de anexo"
+              subtitle="Comparativa por código de anexo en el año seleccionado."
+            >
+              <BarChart data={docPorTipoRows} />
+            </Card>
+
+            <Card
+              title="Formularios por estado"
+              subtitle="Distribución por estado administrativo actual."
+            >
+              <BarChart data={docPorEstadoRows} />
+            </Card>
+
+            <Card
+              title="Evolución mensual"
+              subtitle="Formularios creados por mes en el año seleccionado."
+            >
+              <BarChart data={docMensualRows} maxRows={12} preserveOrder />
+            </Card>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+              gap: 12,
+              marginTop: 16,
+            }}
+          >
+            <Card
+              title="Matriz tipo + estado"
+              subtitle="Cantidad de formularios agrupados por anexo y estado."
+            >
+              <div style={tableWrapStyle}>
+                <table style={tableStyle}>
+                  <thead>
+                    <tr>
+                      <th style={thStyle}>Tipo</th>
+                      <th style={thStyle}>Estado</th>
+                      <th style={thStyle}>Cantidad</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {docTipoEstadoRows.length ? (
+                      docTipoEstadoRows.map((row: any, i: number) => (
+                        <tr key={`${row.codigo}-${row.estado}-${i}`}>
+                          <td style={tdStyle}>{row.codigo || "SIN_TIPO"}</td>
+                          <td style={tdStyle}>{row.estado || "SIN_ESTADO"}</td>
+                          <td style={tdStyle}>{Number(row.cantidad || 0)}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td style={tdStyle} colSpan={3}>
+                          Sin datos.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+
+            <Card
+              title="Actividad reciente"
+              subtitle="Últimos formularios actualizados dentro de los filtros aplicados."
+            >
+              <div style={tableWrapStyle}>
+                <table style={{ ...tableStyle, minWidth: 860 }}>
+                  <thead>
+                    <tr>
+                      <th style={thStyle}>Fecha</th>
+                      <th style={thStyle}>Tipo</th>
+                      <th style={thStyle}>Estado</th>
+                      <th style={thStyle}>Barrio</th>
+                      <th style={thStyle}>Vivienda</th>
+                      <th style={thStyle}>Persona</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {docRecientes.length ? (
+                      docRecientes.map((row: any) => (
+                        <tr key={row._id}>
+                          <td style={tdStyle}>{fmtDateTime(row.updatedAt || row.createdAt)}</td>
+                          <td style={tdStyle}>{row.codigo || "SIN_TIPO"}</td>
+                          <td style={tdStyle}>
+                            {row.estado || "SIN_ESTADO"}
+                            {row.estadoInstitucional ? ` / ${row.estadoInstitucional}` : ""}
+                          </td>
+                          <td style={tdStyle}>{row.barrio || "SIN_BARRIO"}</td>
+                          <td style={tdStyle}>{row.vivienda || "—"}</td>
+                          <td style={tdStyle}>{row.persona || "—"}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td style={tdStyle} colSpan={6}>
+                          Sin actividad reciente para los filtros aplicados.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </div>
+        </>
+      ) : null}
 
       <SectionLabel>OPERACIÓN Y MANTENIMIENTO</SectionLabel>
 

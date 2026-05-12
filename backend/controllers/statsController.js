@@ -82,6 +82,248 @@ function csvEscape(v) {
   return s;
 }
 
+function formularioBarrioPipeline(match, barrio = "") {
+  const pipeline = [
+    { $match: match },
+    {
+      $lookup: {
+        from: "viviendas",
+        localField: "vivienda",
+        foreignField: "_id",
+        as: "viviendaObj",
+      },
+    },
+    {
+      $unwind: {
+        path: "$viviendaObj",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+    {
+      $addFields: {
+        barrioResolved: {
+          $ifNull: [
+            "$barrio",
+            {
+              $ifNull: [
+                "$datos.viviendaBarrio",
+                {
+                  $ifNull: [
+                    "$datos.barrio",
+                    {
+                      $ifNull: [
+                        "$datos.barrioAsignado",
+                        {
+                          $ifNull: [
+                            "$datos.inspectorBarrio",
+                            {
+                              $ifNull: [
+                                "$datos.localidad",
+                                {
+                                  $ifNull: ["$viviendaObj.barrio", "SIN_BARRIO"],
+                                },
+                              ],
+                            },
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    },
+  ];
+
+  const barrioFiltro = String(barrio || "").trim();
+  if (barrioFiltro && up(barrioFiltro) !== "TODOS" && up(barrioFiltro) !== "OTROS") {
+    pipeline.push({ $match: { barrioResolved: barrioFiltro } });
+  }
+
+  return pipeline;
+}
+
+function monthRows(rows) {
+  const map = new Map((rows || []).map((r) => [Number(r._id), Number(r.cantidad || 0)]));
+  return Array.from({ length: 12 }, (_, i) => ({
+    mes: i + 1,
+    cantidad: map.get(i + 1) || 0,
+  }));
+}
+
+function recientePersonaLabel(item) {
+  const d = item?.datos || {};
+  const usuario = item?.usuarioObj || {};
+  const fromDatos =
+    d.apellidoNombres ||
+    d.permisionarioNombre ||
+    d.postulanteLabel ||
+    d.postulanteNombre ||
+    d.titularNombre ||
+    d.inspectorNombre ||
+    "";
+  const fromUser = `${usuario.apellido || ""} ${usuario.nombre || ""}`.trim();
+  return String(fromDatos || fromUser || usuario.email || "—").trim();
+}
+
+function recienteViviendaLabel(item) {
+  const d = item?.datos || {};
+  return String(
+    d.viviendaCodigo ||
+      d.viviendaLabel ||
+      d.unidadHabitacional ||
+      d.casa ||
+      item?.viviendaObj?.codigo ||
+      "—"
+  ).trim();
+}
+
+async function buildFormularioDocumentalStats(req) {
+  const year = getRequestedYear(req);
+  const desde = new Date(year, 0, 1);
+  const hasta = new Date(year + 1, 0, 1);
+  const codigo = up(req.query?.codigo);
+  const estado = up(req.query?.estado);
+  const barrio = String(req.query?.barrio || "").trim();
+
+  const match = {
+    createdAt: { $gte: desde, $lt: hasta },
+  };
+
+  if (codigo && codigo !== "TODOS") match.codigo = codigo;
+  if (estado && estado !== "TODOS") match.estado = estado;
+
+  const basePipeline = formularioBarrioPipeline(match, barrio);
+
+  const [stats] = await FormSubmission.aggregate([
+    ...basePipeline,
+    {
+      $facet: {
+        total: [{ $count: "cantidad" }],
+        porTipo: [
+          { $group: { _id: "$codigo", cantidad: { $sum: 1 } } },
+          { $sort: { cantidad: -1, _id: 1 } },
+        ],
+        porEstado: [
+          {
+            $group: {
+              _id: { $ifNull: ["$estado", "SIN_ESTADO"] },
+              cantidad: { $sum: 1 },
+            },
+          },
+          { $sort: { cantidad: -1, _id: 1 } },
+        ],
+        tipoEstado: [
+          {
+            $group: {
+              _id: {
+                codigo: "$codigo",
+                estado: { $ifNull: ["$estado", "SIN_ESTADO"] },
+              },
+              cantidad: { $sum: 1 },
+            },
+          },
+          { $sort: { "_id.codigo": 1, "_id.estado": 1 } },
+        ],
+        evolucionMensual: [
+          {
+            $group: {
+              _id: { $month: "$createdAt" },
+              cantidad: { $sum: 1 },
+            },
+          },
+          { $sort: { _id: 1 } },
+        ],
+        recientes: [
+          { $sort: { updatedAt: -1, createdAt: -1, _id: -1 } },
+          { $limit: 15 },
+          {
+            $lookup: {
+              from: "users",
+              localField: "usuario",
+              foreignField: "_id",
+              as: "usuarioObj",
+            },
+          },
+          {
+            $unwind: {
+              path: "$usuarioObj",
+              preserveNullAndEmptyArrays: true,
+            },
+          },
+          {
+            $project: {
+              _id: 1,
+              codigo: 1,
+              estado: 1,
+              estadoInstitucional: 1,
+              createdAt: 1,
+              updatedAt: 1,
+              barrioResolved: 1,
+              datos: {
+                apellidoNombres: "$datos.apellidoNombres",
+                permisionarioNombre: "$datos.permisionarioNombre",
+                postulanteLabel: "$datos.postulanteLabel",
+                postulanteNombre: "$datos.postulanteNombre",
+                titularNombre: "$datos.titularNombre",
+                inspectorNombre: "$datos.inspectorNombre",
+                viviendaCodigo: "$datos.viviendaCodigo",
+                viviendaLabel: "$datos.viviendaLabel",
+                unidadHabitacional: "$datos.unidadHabitacional",
+                casa: "$datos.casa",
+              },
+              "viviendaObj.codigo": 1,
+              "usuarioObj.nombre": 1,
+              "usuarioObj.apellido": 1,
+              "usuarioObj.email": 1,
+            },
+          },
+        ],
+      },
+    },
+  ]);
+
+  const recientes = (stats?.recientes || []).map((item) => ({
+    _id: String(item._id),
+    codigo: item.codigo || "SIN_TIPO",
+    estado: item.estado || "SIN_ESTADO",
+    estadoInstitucional: item.estadoInstitucional || null,
+    barrio: item.barrioResolved || "SIN_BARRIO",
+    vivienda: recienteViviendaLabel(item),
+    persona: recientePersonaLabel(item),
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+  }));
+
+  return {
+    year,
+    filtros: {
+      barrio: barrio || "TODOS",
+      codigo: codigo || "TODOS",
+      estado: estado || "TODOS",
+    },
+    total: Number(stats?.total?.[0]?.cantidad || 0),
+    porTipo: (stats?.porTipo || []).map((x) => ({
+      _id: x._id || "SIN_TIPO",
+      cantidad: Number(x.cantidad || 0),
+    })),
+    porEstado: (stats?.porEstado || []).map((x) => ({
+      _id: x._id || "SIN_ESTADO",
+      cantidad: Number(x.cantidad || 0),
+    })),
+    tipoEstado: (stats?.tipoEstado || []).map((x) => ({
+      codigo: x?._id?.codigo || "SIN_TIPO",
+      estado: x?._id?.estado || "SIN_ESTADO",
+      cantidad: Number(x.cantidad || 0),
+    })),
+    evolucionMensual: monthRows(stats?.evolucionMensual),
+    recientes,
+  };
+}
+
 /* ================= ANEXO_11 STATS ================= */
 
 async function buildAnexo11Stats(matchExtra = {}, year = new Date().getFullYear()) {
@@ -442,6 +684,17 @@ exports.getStatsPorBarrio = async (req, res) => {
     return res.json(data);
   } catch (e) {
     console.error("[STATS] barrio", e);
+    return deny(res);
+  }
+};
+
+exports.getFormularioStats = async (req, res) => {
+  try {
+    if (!isAdminGeneral(req)) return deny(res);
+    const data = await buildFormularioDocumentalStats(req);
+    return res.json(data);
+  } catch (e) {
+    console.error("[STATS] formularios", e);
     return deny(res);
   }
 };
