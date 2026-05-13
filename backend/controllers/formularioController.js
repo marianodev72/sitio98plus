@@ -4439,7 +4439,7 @@ async function crearAnexo(req, res) {
       // JEFE puede crear:
       // - ANEXO_11 (institucional, espacios comunes)
       // - ANEXO_04 (trámite personal como PERMISIONARIO)
-      if (codigo !== "ANEXO_11" && codigo !== "ANEXO_04")
+      if (codigo !== "ANEXO_11" && codigo !== "ANEXO_04" && codigo !== "ANEXO_01")
         return genericDenied(res);
     }
 

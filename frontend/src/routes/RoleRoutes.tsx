@@ -173,6 +173,18 @@ export default function RoleRoutes() {
 
           <Route path="anexos" element={<MisAnexosPermisionario />} />
           <Route path="anexos/:id" element={<VerAnexoPermisionario />} />
+          <Route
+            path="anexo-01-cambio-vivienda"
+            element={
+              <Anexo01Institucional
+                defaultTipoSolicitud="CAMBIO_VIVIENDA"
+                lockTipoSolicitud
+                returnTo="/app/permisionario/anexos"
+                submitSuccessTo="/app/permisionario/anexos"
+                subtituloContextual="Solicitud de cambio de vivienda para Permisionario. Se reutiliza el circuito documental ANEXO_01 existente."
+              />
+            }
+          />
 
           <Route path="mis-datos" element={<MisDatosDeclarados />} />
           <Route

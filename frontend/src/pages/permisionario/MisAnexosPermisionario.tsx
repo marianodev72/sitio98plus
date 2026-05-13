@@ -413,6 +413,35 @@ return (
               flexWrap: "wrap",
             }}
           >
+            <div>
+              <h3 style={{ ...sectionTitleStyle, margin: 0 }}>
+                ANEXO 01 - Solicitud de cambio de vivienda
+              </h3>
+              <p style={{ ...noteStyle, marginTop: 10, marginBottom: 0 }}>
+                IniciÃ¡ el circuito documental de postulaciÃ³n para cambio de vivienda fiscal.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => navigate("/app/permisionario/anexo-01-cambio-vivienda")}
+              style={successButtonStyle}
+            >
+              Iniciar ANEXO 01
+            </button>
+          </div>
+        </section>
+
+        <section style={cardStyle}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 12,
+              flexWrap: "wrap",
+            }}
+          >
             <h3 style={{ ...sectionTitleStyle, margin: 0 }}>
               ANEXO 04 – Aviso de ausencia prolongada
             </h3>

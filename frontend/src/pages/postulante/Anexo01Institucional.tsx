@@ -36,6 +36,15 @@ type Representante = {
   telefono: string;
 };
 
+type TipoSolicitud = "INSCRIPCION" | "CAMBIO_VIVIENDA" | "";
+
+type Anexo01InstitucionalProps = {
+  defaultTipoSolicitud?: TipoSolicitud;
+  lockTipoSolicitud?: boolean;
+  returnTo?: string;
+  submitSuccessTo?: string;
+  subtituloContextual?: string;
+};
 
 const pageStyle: CSSProperties = {
   maxWidth: 1020,
@@ -249,7 +258,13 @@ function options00a99() {
   return arr;
 }
 
-export default function Anexo01Institucional() {
+export default function Anexo01Institucional({
+  defaultTipoSolicitud = "",
+  lockTipoSolicitud = false,
+  returnTo = "/app/postulante",
+  submitSuccessTo = "/app/postulante",
+  subtituloContextual,
+}: Anexo01InstitucionalProps = {}) {
   const navigate = useNavigate();
 
   // Encabezado (Lugar y fecha / Autoridad de Asignación)
@@ -259,9 +274,8 @@ export default function Anexo01Institucional() {
   const [zonaNaval, setZonaNaval] = useState(""); // 00-99
 
   // Opciones de inscripción (marcar con X una)
-  const [tipoSolicitud, setTipoSolicitud] = useState<
-    "INSCRIPCION" | "CAMBIO_VIVIENDA" | ""
-  >("");
+  const [tipoSolicitud, setTipoSolicitud] =
+    useState<TipoSolicitud>(defaultTipoSolicitud);
 
   // Punto 1 (conozco y acepto reglamento)
   const [aceptaReglamento, setAceptaReglamento] = useState(false);
@@ -559,7 +573,7 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
       });
 
       setOk(resp.data?.message || "Formulario enviado.");
-      navigate("/app/postulante", { replace: true });
+      navigate(submitSuccessTo, { replace: true });
     } catch (e: any) {
   console.error("[ANEXO_01] error real:", e);
 
@@ -587,6 +601,12 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
         </div>
         <div style={small}>DECLARACIÓN JURADA DE POSTULACIÓN</div>
       </div>
+
+      {subtituloContextual && (
+        <div style={{ ...cardStyle, marginBottom: 14, color: "#CBD5E1" }}>
+          {subtituloContextual}
+        </div>
+      )}
 
       {err && (
         <div
@@ -704,6 +724,7 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
             >
               <input
                 type="radio"
+                disabled={lockTipoSolicitud}
                 checked={tipoSolicitud === "INSCRIPCION"}
                 onChange={() => setTipoSolicitud("INSCRIPCION")}
               />
@@ -722,12 +743,19 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
             >
               <input
                 type="radio"
+                disabled={lockTipoSolicitud}
                 checked={tipoSolicitud === "CAMBIO_VIVIENDA"}
                 onChange={() => setTipoSolicitud("CAMBIO_VIVIENDA")}
               />
               Solicito mi inscripción como postulante para CAMBIO DE VIVIENDA.
             </label>
           </div>
+
+          {lockTipoSolicitud && (
+            <div style={{ marginTop: 10, ...small }}>
+              Tipo de solicitud fijado por el circuito institucional del rol actual.
+            </div>
+          )}
         </Box>
 
         <Box>
@@ -1598,7 +1626,7 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
 
         <div style={{ borderTop: "1px solid rgba(255,255,255,0.12)", marginTop: 14, paddingTop: 12 }}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
-            <button type="button" style={neutralButtonStyle} onClick={() => navigate("/app/postulante")}>
+            <button type="button" style={neutralButtonStyle} onClick={() => navigate(returnTo)}>
               Cancelar
             </button>
 
