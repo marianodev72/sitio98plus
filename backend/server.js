@@ -183,6 +183,7 @@ const adminRoutes = safeRequire("adminRoutes", "./routes/adminRoutes");
 const templateRoutes = safeRequire("templateRoutes", "./routes/templateRoutes");
 const viviendaRoutes = safeRequire("viviendaRoutes", "./routes/viviendaRoutes");
 const statsRoutes = safeRequire("statsRoutes", "./routes/statsRoutes");
+const dashboardRoutes = safeRequire("dashboardRoutes", "./routes/dashboardRoutes");
 const usersRoutes = safeRequire("usersRoutes", "./routes/users");
 
 // -------------------------
@@ -212,6 +213,7 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/viviendas", viviendaRoutes);
 app.use("/api/users", usersRoutes);
 app.use("/api/stats", statsRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 
 // -------------------------
 app.use("/uploads", (_req, res) => res.status(404).end());
