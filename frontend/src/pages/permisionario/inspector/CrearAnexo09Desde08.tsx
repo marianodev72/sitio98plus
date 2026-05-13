@@ -1,5 +1,5 @@
 // frontend/src/components/CrearAnexo09Desde08.tsx
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { http } from "../../../api/http";
 import { useAuth } from "../../../auth/useAuth";
@@ -31,6 +31,138 @@ function fmtDate(v?: string) {
 function safe(v: unknown) {
   return v === null || v === undefined || v === "" ? "—" : String(v);
 }
+
+const pageStyle: CSSProperties = {
+  padding: "clamp(16px, 3vw, 28px)",
+  display: "grid",
+  gap: 14,
+  width: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+  color: "#f8fafc",
+};
+
+const headerPanelStyle: CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.12)",
+  borderRadius: 16,
+  background: "rgba(255,255,255,0.05)",
+  boxShadow: "0 18px 48px rgba(0,0,0,0.22)",
+  padding: 16,
+  display: "grid",
+  gap: 8,
+  minWidth: 0,
+};
+
+const eyebrowStyle: CSSProperties = {
+  margin: 0,
+  color: "rgba(255,255,255,0.58)",
+  fontSize: 11,
+  fontWeight: 800,
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+};
+
+const titleStyle: CSSProperties = {
+  margin: 0,
+  color: "#f8fafc",
+  fontSize: "clamp(20px, 3vw, 28px)",
+  fontWeight: 850,
+  lineHeight: 1.18,
+};
+
+const subtitleStyle: CSSProperties = {
+  margin: 0,
+  color: "rgba(255,255,255,0.70)",
+  fontSize: 13,
+  lineHeight: 1.5,
+};
+
+const cardStyle: CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.12)",
+  borderRadius: 16,
+  background: "rgba(255,255,255,0.05)",
+  boxShadow: "0 16px 42px rgba(0,0,0,0.20)",
+  padding: 16,
+  minWidth: 0,
+  boxSizing: "border-box",
+};
+
+const metaGridStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+  gap: 10,
+};
+
+const metaItemStyle: CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.10)",
+  borderRadius: 12,
+  background: "rgba(255,255,255,0.04)",
+  padding: 12,
+  minWidth: 0,
+};
+
+const metaLabelStyle: CSSProperties = {
+  display: "block",
+  marginBottom: 4,
+  color: "rgba(255,255,255,0.56)",
+  fontSize: 10,
+  fontWeight: 800,
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+};
+
+const metaValueStyle: CSSProperties = {
+  color: "#f8fafc",
+  fontSize: 13,
+  lineHeight: 1.4,
+  overflowWrap: "anywhere",
+};
+
+const actionBarStyle: CSSProperties = {
+  ...cardStyle,
+  padding: 12,
+  display: "flex",
+  gap: 10,
+  flexWrap: "wrap",
+  justifyContent: "flex-end",
+  alignItems: "center",
+};
+
+const buttonStyle: CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.14)",
+  borderRadius: 12,
+  background: "rgba(255,255,255,0.08)",
+  color: "#f8fafc",
+  fontWeight: 800,
+  padding: "10px 14px",
+  cursor: "pointer",
+};
+
+const primaryButtonStyle: CSSProperties = {
+  ...buttonStyle,
+  border: "none",
+  background: "#16a34a",
+};
+
+const alertSuccessStyle: CSSProperties = {
+  padding: 12,
+  border: "1px solid rgba(34,197,94,0.34)",
+  borderRadius: 12,
+  background: "rgba(20,83,45,0.22)",
+  color: "#bbf7d0",
+  fontSize: 13,
+  lineHeight: 1.45,
+};
+
+const alertErrorStyle: CSSProperties = {
+  padding: 12,
+  border: "1px solid rgba(239,68,68,0.35)",
+  borderRadius: 12,
+  background: "rgba(127,29,29,0.24)",
+  color: "#fecaca",
+  fontSize: 13,
+  lineHeight: 1.45,
+};
 
 export default function CrearAnexo09Desde08() {
   const { id } = useParams<{ id: string }>(); // id del ANEXO_08
@@ -164,15 +296,20 @@ export default function CrearAnexo09Desde08() {
   }
 
   if (loading) {
-    return <div style={{ padding: 24 }}>Cargando…</div>;
+    return (
+      <div style={pageStyle}>
+        <div style={cardStyle}>Cargando...</div>
+      </div>
+    );
   }
 
   if (error) {
     return (
-      <div style={{ padding: 24 }}>
-        <div style={{ marginBottom: 12, color: "crimson" }}>{error}</div>
+      <div style={pageStyle}>
+        <div style={alertErrorStyle}>{error}</div>
         <button
           onClick={() => navigate("/app/permisionario/mi-barrio/gestiones")}
+          style={buttonStyle}
         >
           Volver
         </button>
@@ -182,10 +319,11 @@ export default function CrearAnexo09Desde08() {
 
   if (!anexo08) {
     return (
-      <div style={{ padding: 24 }}>
-        <p>No se encontraron datos del ANEXO_08.</p>
+      <div style={pageStyle}>
+        <div style={cardStyle}>No se encontraron datos del ANEXO_08.</div>
         <button
           onClick={() => navigate("/app/permisionario/mi-barrio/gestiones")}
+          style={buttonStyle}
         >
           Volver
         </button>
@@ -194,52 +332,49 @@ export default function CrearAnexo09Desde08() {
   }
 
   return (
-    <div style={{ padding: 24 }}>
-      <h2>Acta de entrega de vivienda fiscal (ANEXO 09)</h2>
+    <div style={pageStyle}>
+      <div style={headerPanelStyle}>
+        <p style={eyebrowStyle}>Gestiones / ANEXO_09</p>
+        <h2 style={titleStyle}>Acta de entrega de vivienda fiscal</h2>
+        <p style={subtitleStyle}>
+          Generacion institucional desde ANEXO_08 cerrado para remitir al
+          Permisionario.
+        </p>
+      </div>
 
       {msg ? (
-        <div
-          style={{
-            marginBottom: 12,
-            padding: 10,
-            border: "1px solid #4caf50",
-            background: "#e8f5e9",
-          }}
-        >
+        <div style={alertSuccessStyle}>
           {msg}
         </div>
       ) : null}
 
-      <div
-        style={{
-          border: "1px solid #ddd",
-          borderRadius: 8,
-          padding: 10,
-          marginBottom: 16,
-          background: "#f7f7f7",
-          fontSize: 13,
-        }}
-      >
-        <div>
-          <b>Anexo origen (ANEXO_08):</b> {anexo08._id}
+      <div style={cardStyle}>
+        <div style={metaGridStyle}>
+          <div style={metaItemStyle}>
+            <span style={metaLabelStyle}>Anexo origen</span>
+            <span style={metaValueStyle}>{anexo08._id}</span>
+          </div>
+          <div style={metaItemStyle}>
+            <span style={metaLabelStyle}>Estado</span>
+            <span style={metaValueStyle}>{safe(anexo08.estado)}</span>
+          </div>
+          <div style={metaItemStyle}>
+            <span style={metaLabelStyle}>Creado</span>
+            <span style={metaValueStyle}>{fmtDate(anexo08.createdAt)}</span>
+          </div>
+          <div style={metaItemStyle}>
+            <span style={metaLabelStyle}>Actualizado</span>
+            <span style={metaValueStyle}>{fmtDate(anexo08.updatedAt)}</span>
+          </div>
         </div>
-        <div>
-          <b>Estado:</b> {safe(anexo08.estado)}
-        </div>
-        <div>
-          <b>Creado:</b> {fmtDate(anexo08.createdAt)}
-        </div>
-        <div>
-          <b>Actualizado:</b> {fmtDate(anexo08.updatedAt)}
-        </div>
-        <div style={{ marginTop: 6, fontStyle: "italic" }}>
+        <div style={{ ...subtitleStyle, marginTop: 12 }}>
           Este ANEXO_09 se encadena al ANEXO_08 cerrado para la vivienda
           inspeccionada. Será enviado al Permisionario para su conformidad y
           luego a ADMIN_GENERAL para cierre del trámite.
         </div>
       </div>
 
-      <div style={{ marginBottom: 16 }}>
+      <div>
         <Anexo03InspectorForm
           value={datos}
           onChange={setDatos}
@@ -248,10 +383,15 @@ export default function CrearAnexo09Desde08() {
         />
       </div>
 
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      <div style={actionBarStyle}>
         <button
           onClick={() => navigate("/app/permisionario/mi-barrio/gestiones")}
           disabled={busy}
+          style={{
+            ...buttonStyle,
+            opacity: busy ? 0.65 : 1,
+            cursor: busy ? "not-allowed" : "pointer",
+          }}
         >
           Cancelar / Volver
         </button>
@@ -259,7 +399,11 @@ export default function CrearAnexo09Desde08() {
         <button
           disabled={busy}
           onClick={enviarAnexo09}
-          style={{ fontWeight: 700 }}
+          style={{
+            ...primaryButtonStyle,
+            opacity: busy ? 0.65 : 1,
+            cursor: busy ? "wait" : "pointer",
+          }}
         >
           Enviar ANEXO 09 al Permisionario
         </button>

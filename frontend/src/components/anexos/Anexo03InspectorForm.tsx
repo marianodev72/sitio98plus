@@ -207,78 +207,80 @@ function Anexo03InspectorForm({
 
   const disabled = !!readOnly;
   const esAnexo03 = anexoCodigo === "03";
+  const esAnexo09 = anexoCodigo === "09";
+  const esVisualInstitucional = esAnexo03 || esAnexo09;
 
   const blockStyle: React.CSSProperties = {
-    border: esAnexo03 ? "1px solid rgba(255,255,255,0.12)" : "1px solid #ddd",
-    borderRadius: esAnexo03 ? 16 : 10,
-    padding: esAnexo03 ? 16 : 12,
+    border: esVisualInstitucional ? "1px solid rgba(255,255,255,0.12)" : "1px solid #ddd",
+    borderRadius: esVisualInstitucional ? 16 : 10,
+    padding: esVisualInstitucional ? 16 : 12,
     marginBottom: 14,
-    background: esAnexo03 ? "rgba(255,255,255,0.05)" : "#fafafa",
-    color: esAnexo03 ? "#ffffff" : undefined,
-    boxShadow: esAnexo03 ? "0 10px 30px rgba(0,0,0,0.18)" : undefined,
+    background: esVisualInstitucional ? "rgba(255,255,255,0.05)" : "#fafafa",
+    color: esVisualInstitucional ? "#ffffff" : undefined,
+    boxShadow: esVisualInstitucional ? "0 10px 30px rgba(0,0,0,0.18)" : undefined,
     minWidth: 0,
     boxSizing: "border-box",
   };
 
   const labelStyle: React.CSSProperties = {
-    fontWeight: esAnexo03 ? 800 : 600,
-    fontSize: esAnexo03 ? 11 : 13,
+    fontWeight: esVisualInstitucional ? 800 : 600,
+    fontSize: esVisualInstitucional ? 11 : 13,
     display: "block",
-    marginBottom: esAnexo03 ? 6 : 4,
-    textTransform: esAnexo03 ? "uppercase" : undefined,
-    letterSpacing: esAnexo03 ? "0.08em" : undefined,
-    color: esAnexo03 ? "rgba(255,255,255,0.62)" : undefined,
+    marginBottom: esVisualInstitucional ? 6 : 4,
+    textTransform: esVisualInstitucional ? "uppercase" : undefined,
+    letterSpacing: esVisualInstitucional ? "0.08em" : undefined,
+    color: esVisualInstitucional ? "rgba(255,255,255,0.62)" : undefined,
   };
 
   const smallHelp: React.CSSProperties = {
     fontSize: 11,
-    opacity: esAnexo03 ? 1 : 0.7,
-    color: esAnexo03 ? "rgba(255,255,255,0.62)" : undefined,
+    opacity: esVisualInstitucional ? 1 : 0.7,
+    color: esVisualInstitucional ? "rgba(255,255,255,0.62)" : undefined,
     lineHeight: 1.5,
   };
 
   const rootStyle: React.CSSProperties = {
     display: "grid",
-    gap: esAnexo03 ? 14 : 12,
-    color: esAnexo03 ? "rgba(255,255,255,0.90)" : undefined,
+    gap: esVisualInstitucional ? 14 : 12,
+    color: esVisualInstitucional ? "rgba(255,255,255,0.90)" : undefined,
   };
 
   const gridStyle: React.CSSProperties = {
     display: "grid",
-    gridTemplateColumns: esAnexo03 ? "repeat(auto-fit, minmax(220px, 1fr))" : "1fr 1fr",
-    gap: esAnexo03 ? 12 : 8,
+    gridTemplateColumns: esVisualInstitucional ? "repeat(auto-fit, minmax(220px, 1fr))" : "1fr 1fr",
+    gap: esVisualInstitucional ? 12 : 8,
     minWidth: 0,
   };
 
   const twoColumnGridStyle: React.CSSProperties = {
     display: "grid",
-    gridTemplateColumns: esAnexo03 ? "repeat(auto-fit, minmax(220px, 1fr))" : "2fr 1fr",
-    gap: esAnexo03 ? 12 : 8,
+    gridTemplateColumns: esVisualInstitucional ? "repeat(auto-fit, minmax(220px, 1fr))" : "2fr 1fr",
+    gap: esVisualInstitucional ? 12 : 8,
     alignItems: "center",
     minWidth: 0,
   };
 
   const optionGridStyle: React.CSSProperties = {
     display: "grid",
-    gridTemplateColumns: esAnexo03 ? "minmax(0, 1fr) minmax(130px, 180px)" : "2fr 120px",
+    gridTemplateColumns: esVisualInstitucional ? "minmax(0, 1fr) minmax(130px, 180px)" : "2fr 120px",
     alignItems: "center",
-    gap: esAnexo03 ? 10 : undefined,
-    rowGap: esAnexo03 ? 10 : 6,
+    gap: esVisualInstitucional ? 10 : undefined,
+    rowGap: esVisualInstitucional ? 10 : 6,
     minWidth: 0,
   };
 
   const medidoresGridStyle: React.CSSProperties = {
     display: "grid",
-    gridTemplateColumns: esAnexo03 ? "repeat(auto-fit, minmax(160px, 1fr))" : "repeat(4, minmax(0, 1fr))",
-    gap: esAnexo03 ? 12 : 8,
+    gridTemplateColumns: esVisualInstitucional ? "repeat(auto-fit, minmax(160px, 1fr))" : "repeat(4, minmax(0, 1fr))",
+    gap: esVisualInstitucional ? 12 : 8,
     minWidth: 0,
   };
 
   const wideFieldStyle: React.CSSProperties = {
-    gridColumn: esAnexo03 ? "1 / -1" : "1 / span 2",
+    gridColumn: esVisualInstitucional ? "1 / -1" : "1 / span 2",
   };
 
-  const controlStyle: React.CSSProperties = esAnexo03
+  const controlStyle: React.CSSProperties = esVisualInstitucional
     ? {
         width: "100%",
         minHeight: 42,
@@ -292,7 +294,7 @@ function Anexo03InspectorForm({
       }
     : { width: "100%" };
 
-  const readOnlyControlStyle: React.CSSProperties = esAnexo03
+  const readOnlyControlStyle: React.CSSProperties = esVisualInstitucional
     ? {
         ...controlStyle,
         background: "rgba(255,255,255,0.025)",
@@ -301,22 +303,22 @@ function Anexo03InspectorForm({
       }
     : { width: "100%", background: "#eee" };
 
-  const selectStyle: React.CSSProperties = esAnexo03
+  const selectStyle: React.CSSProperties = esVisualInstitucional
     ? {
         ...controlStyle,
         colorScheme: "dark",
       }
     : { width: "100%" };
 
-  const optionStyle: React.CSSProperties | undefined = esAnexo03
+  const optionStyle: React.CSSProperties | undefined = esVisualInstitucional
     ? { backgroundColor: "#111827", color: "#ffffff" }
     : undefined;
 
-  const textareaStyle: React.CSSProperties = esAnexo03
+  const textareaStyle: React.CSSProperties = esVisualInstitucional
     ? { ...controlStyle, resize: "vertical", lineHeight: 1.5 }
     : { width: "100%", resize: "vertical" };
 
-  const tableWrapStyle: React.CSSProperties = esAnexo03
+  const tableWrapStyle: React.CSSProperties = esVisualInstitucional
     ? {
         overflowX: "auto",
         border: "1px solid rgba(255,255,255,0.12)",
@@ -327,25 +329,25 @@ function Anexo03InspectorForm({
 
   const tableStyle: React.CSSProperties = {
     width: "100%",
-    minWidth: esAnexo03 ? 520 : undefined,
+    minWidth: esVisualInstitucional ? 520 : undefined,
     borderCollapse: "collapse",
     fontSize: 12,
   };
 
   const thStyle: React.CSSProperties = {
-    border: esAnexo03 ? "1px solid rgba(255,255,255,0.12)" : "1px solid #ccc",
-    padding: esAnexo03 ? 8 : 4,
-    color: esAnexo03 ? "rgba(255,255,255,0.76)" : undefined,
-    background: esAnexo03 ? "rgba(255,255,255,0.04)" : undefined,
+    border: esVisualInstitucional ? "1px solid rgba(255,255,255,0.12)" : "1px solid #ccc",
+    padding: esVisualInstitucional ? 8 : 4,
+    color: esVisualInstitucional ? "rgba(255,255,255,0.76)" : undefined,
+    background: esVisualInstitucional ? "rgba(255,255,255,0.04)" : undefined,
   };
 
   const tdStyle: React.CSSProperties = {
-    border: esAnexo03 ? "1px solid rgba(255,255,255,0.10)" : "1px solid #ccc",
-    padding: esAnexo03 ? 8 : 4,
-    color: esAnexo03 ? "rgba(255,255,255,0.88)" : undefined,
+    border: esVisualInstitucional ? "1px solid rgba(255,255,255,0.10)" : "1px solid #ccc",
+    padding: esVisualInstitucional ? 8 : 4,
+    color: esVisualInstitucional ? "rgba(255,255,255,0.88)" : undefined,
   };
 
-  const secondaryButtonStyle: React.CSSProperties = esAnexo03
+  const secondaryButtonStyle: React.CSSProperties = esVisualInstitucional
     ? {
         padding: "10px 14px",
         borderRadius: 10,
@@ -358,7 +360,7 @@ function Anexo03InspectorForm({
       }
     : { fontSize: 12, marginTop: 4 };
 
-  const dangerButtonStyle: React.CSSProperties = esAnexo03
+  const dangerButtonStyle: React.CSSProperties = esVisualInstitucional
     ? {
         ...secondaryButtonStyle,
         alignSelf: "flex-start",
@@ -367,7 +369,7 @@ function Anexo03InspectorForm({
       }
     : { alignSelf: "flex-start", padding: "4px 8px", fontSize: 11 };
 
-  const actionBarStyle: React.CSSProperties = esAnexo03
+  const actionBarStyle: React.CSSProperties = esVisualInstitucional
     ? {
         position: "sticky",
         bottom: 0,
@@ -394,7 +396,7 @@ function Anexo03InspectorForm({
         justifyContent: "space-between",
       };
 
-  const primaryButtonStyle: React.CSSProperties = esAnexo03
+  const primaryButtonStyle: React.CSSProperties = esVisualInstitucional
     ? {
         padding: "10px 14px",
         borderRadius: 10,
@@ -410,8 +412,6 @@ function Anexo03InspectorForm({
     tipoActa === "ENTREGA"
       ? "ACTA DE ENTREGA DE VIVIENDA FISCAL DE LA ARMADA"
       : "ACTA DE RECEPCIÓN DE VIVIENDA FISCAL DE LA ARMADA";
-
-  const esAnexo09 = anexoCodigo === "09";
 
   // ✅ Validación mínima (no bloquea si validarAntesDeEnviar=false)
   const canEnviarComputed = useMemo(() => {
@@ -818,7 +818,7 @@ function Anexo03InspectorForm({
         </p>
 
         {novedadesLista.map((nov, idx) => (
-          <div key={idx} style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: esAnexo03 ? "wrap" : undefined }}>
+          <div key={idx} style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: esVisualInstitucional ? "wrap" : undefined }}>
             <textarea
               value={nov}
               disabled={disabled}
@@ -882,12 +882,12 @@ function Anexo03InspectorForm({
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: esAnexo03 ? "repeat(auto-fit, minmax(180px, 1fr))" : "repeat(3, minmax(0, 1fr))",
+            gridTemplateColumns: esVisualInstitucional ? "repeat(auto-fit, minmax(180px, 1fr))" : "repeat(3, minmax(0, 1fr))",
             gap: 12,
             marginTop: 16,
             fontSize: 11,
             textAlign: "center",
-            color: esAnexo03 ? "rgba(255,255,255,0.72)" : undefined,
+            color: esVisualInstitucional ? "rgba(255,255,255,0.72)" : undefined,
           }}
         >
           <div>

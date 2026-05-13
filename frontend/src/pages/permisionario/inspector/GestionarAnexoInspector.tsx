@@ -5,6 +5,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { http } from "../../../api/http";
 import { useAuth } from "../../../auth/useAuth";
 import Anexo04Vista from "../../../components/anexos/Anexo04Vista";
+import AnexoViewer from "../../../components/anexos/AnexoViewer";
 import Anexo03InspectorForm, {
   type Anexo03Datos,
 } from "../../../components/anexos/Anexo03InspectorForm";
@@ -365,21 +366,126 @@ export default function GestionarAnexoInspector() {
 // ✅ Nuevo soporte explícito para ANEXO_09
 
 if (codigo === "ANEXO_09") {
+  const pageStyle: CSSProperties = {
+    padding: "clamp(16px, 3vw, 28px)",
+    display: "grid",
+    gap: 14,
+    width: "100%",
+    minWidth: 0,
+    boxSizing: "border-box",
+  };
+  const buttonStyle: CSSProperties = {
+    border: "1px solid rgba(255,255,255,0.14)",
+    borderRadius: 12,
+    background: "rgba(255,255,255,0.08)",
+    color: "#f8fafc",
+    fontWeight: 800,
+    padding: "10px 14px",
+    cursor: "pointer",
+  };
+  const headerPanelStyle: CSSProperties = {
+    border: "1px solid rgba(255,255,255,0.12)",
+    borderRadius: 16,
+    background: "rgba(255,255,255,0.05)",
+    boxShadow: "0 18px 48px rgba(0,0,0,0.22)",
+    padding: 16,
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 12,
+    alignItems: "center",
+    justifyContent: "space-between",
+    minWidth: 0,
+  };
+  const titleStyle: CSSProperties = {
+    color: "#f8fafc",
+    fontSize: 22,
+    fontWeight: 850,
+    margin: 0,
+  };
+  const subtitleStyle: CSSProperties = {
+    color: "rgba(255,255,255,0.68)",
+    fontSize: 13,
+    lineHeight: 1.5,
+    marginTop: 6,
+  };
+  const cardStyle: CSSProperties = {
+    border: "1px solid rgba(255,255,255,0.12)",
+    borderRadius: 16,
+    background: "rgba(255,255,255,0.05)",
+    boxShadow: "0 16px 42px rgba(0,0,0,0.20)",
+    padding: 16,
+    minWidth: 0,
+    boxSizing: "border-box",
+  };
+  const metaGridStyle: CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+    gap: 10,
+  };
+  const metaItemStyle: CSSProperties = {
+    border: "1px solid rgba(255,255,255,0.10)",
+    borderRadius: 12,
+    background: "rgba(255,255,255,0.04)",
+    padding: 12,
+    minWidth: 0,
+  };
+  const metaLabelStyle: CSSProperties = {
+    display: "block",
+    marginBottom: 4,
+    color: "rgba(255,255,255,0.56)",
+    fontSize: 10,
+    fontWeight: 800,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+  };
+  const metaValueStyle: CSSProperties = {
+    color: "#f8fafc",
+    fontSize: 13,
+    lineHeight: 1.4,
+    overflowWrap: "anywhere",
+  };
+
   return (
-    <div style={{ padding: 24 }}>
-      <button
-        onClick={() => navigate("/app/permisionario/mi-barrio-inspector/gestiones")}
-        style={{ marginBottom: 12 }}
-      >
-        Volver
-      </button>
+    <div style={pageStyle}>
+      <div style={headerPanelStyle}>
+        <button
+          onClick={() => navigate("/app/permisionario/mi-barrio-inspector/gestiones")}
+          style={buttonStyle}
+        >
+          Volver
+        </button>
 
-      <h2>Gestión — ANEXO_09</h2>
+        <div style={{ minWidth: 0, flex: "1 1 240px" }}>
+          <h2 style={titleStyle}>Gestion - ANEXO_09</h2>
+          <div style={subtitleStyle}>
+            Acta de entrega de vivienda fiscal en modo consulta institucional.
+          </div>
+        </div>
+      </div>
 
-      <div style={{ marginTop: 12 }}>
-        <pre style={{ fontSize: 12 }}>
-          {JSON.stringify(anexo.datos, null, 2)}
-        </pre>
+      <div style={cardStyle}>
+        <div style={metaGridStyle}>
+          <div style={metaItemStyle}>
+            <span style={metaLabelStyle}>Estado</span>
+            <span style={metaValueStyle}>{safe(anexo.estado)}</span>
+          </div>
+          <div style={metaItemStyle}>
+            <span style={metaLabelStyle}>Estado institucional</span>
+            <span style={metaValueStyle}>{safe(anexo.estadoInstitucional)}</span>
+          </div>
+          <div style={metaItemStyle}>
+            <span style={metaLabelStyle}>Creado</span>
+            <span style={metaValueStyle}>{safe(anexo.createdAt)}</span>
+          </div>
+          <div style={metaItemStyle}>
+            <span style={metaLabelStyle}>Actualizado</span>
+            <span style={metaValueStyle}>{safe(anexo.updatedAt)}</span>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ minWidth: 0 }}>
+        <AnexoViewer codigo={anexo.codigo} datos={anexo.datos || {}} />
       </div>
     </div>
   );
