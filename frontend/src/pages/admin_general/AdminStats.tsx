@@ -818,8 +818,25 @@ export default function AdminStats() {
     return `${((value / total) * 100).toFixed(1)}%`;
   };
   const hac = data?.hacColor || [];
-  const rojo =
-    hac.find((x: any) => normalizeKey(x._id) === "ROJO")?.cantidad ?? 0;
+  const hacCantidad = (color: string) =>
+    Number(hac.find((x: any) => normalizeKey(x._id) === color)?.cantidad ?? 0);
+  const verde = hacCantidad("VERDE");
+  const amarillo = hacCantidad("AMARILLO");
+  const rojo = hacCantidad("ROJO");
+  const hacTotal = hac.reduce(
+    (acc: number, item: any) => acc + Number(item.cantidad || 0),
+    0
+  );
+  const pctHacinamiento = (value: number) => {
+    const total = Number(hacTotal || vTotal || 0);
+    if (!total) return "0.0%";
+    return `${((value / total) * 100).toFixed(1)}%`;
+  };
+  const hacSemaforos = [
+    { title: "Hacinamiento VERDE", value: verde, accent: "#43A047" },
+    { title: "Hacinamiento AMARILLO", value: amarillo, accent: "#FBC02D" },
+    { title: "Hacinamiento ROJO", value: rojo, accent: "#E53935" },
+  ];
   const pt = data?.pedidosTrabajo || [];
   const pedidosTotal = pt.reduce(
     (a: number, b: any) => a + (b.cantidad || 0),
@@ -976,7 +993,9 @@ function onDownloadBoardCSV() {
         { label: "Viviendas Totales", value: vTotal },
         { label: "Ocupadas", value: ocupadas },
         { label: "Disponibles", value: disponibles },
-        { label: "Hacinamiento ROJO", value: rojo },
+        { label: "Hacinamiento VERDE", value: `${verde} (${pctHacinamiento(verde)})` },
+        { label: "Hacinamiento AMARILLO", value: `${amarillo} (${pctHacinamiento(amarillo)})` },
+        { label: "Hacinamiento ROJO", value: `${rojo} (${pctHacinamiento(rojo)})` },
         { label: "Pedidos de Trabajo (ANEXO_11)", value: a11Presentados || pedidosTotal },
       ],
     },
@@ -1065,7 +1084,9 @@ function onDownloadBoardPDF() {
         ["Viviendas Totales", vTotal],
         ["Ocupadas", ocupadas],
         ["Disponibles", disponibles],
-        ["Hacinamiento ROJO", rojo],
+        ["Hacinamiento VERDE", `${verde} (${pctHacinamiento(verde)})`],
+        ["Hacinamiento AMARILLO", `${amarillo} (${pctHacinamiento(amarillo)})`],
+        ["Hacinamiento ROJO", `${rojo} (${pctHacinamiento(rojo)})`],
         ["Pedidos de Trabajo (ANEXO_11)", a11Presentados || pedidosTotal],
       ],
     },
@@ -1383,12 +1404,15 @@ lineHeight: 1.45,
             subtitle={`${pctViviendas(otrosEstados)} del total`}
           />
         ) : null}
-        <KpiCard
-          title="Hacinamiento ROJO"
-          value={rojo}
-          accent="#E53935"
-          subtitle="Crítico"
-        />
+        {hacSemaforos.map((item) => (
+          <KpiCard
+            key={item.title}
+            title={item.title}
+            value={item.value}
+            accent={item.accent}
+            subtitle={`${pctHacinamiento(item.value)} del total evaluado`}
+          />
+        ))}
         <KpiCard
           title="Pedidos de Trabajo (ANEXO_11)"
           value={a11Presentados || pedidosTotal}

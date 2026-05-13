@@ -550,16 +550,26 @@ function hacinamientoPipelineBase(matchExtra = {}) {
     {
       $addFields: {
         habitantes: {
-          $cond: [
-            { $gt: [{ $ifNull: ["$md.datos.cantidadAdultos", 0] }, 0] },
-            {
-              $add: [
-                "$md.datos.cantidadAdultos",
-                { $ifNull: ["$md.datos.cantidadHijos", 0] },
+          $let: {
+            vars: {
+              adultos: { $ifNull: ["$md.datos.cantidadAdultos", 0] },
+              hijos: { $ifNull: ["$md.datos.cantidadHijos", 0] },
+              convivientes: "$md.datos.convivientes",
+            },
+            in: {
+              $cond: [
+                { $gt: [{ $add: ["$$adultos", "$$hijos"] }, 0] },
+                { $add: ["$$adultos", "$$hijos"] },
+                {
+                  $cond: [
+                    { $isArray: "$$convivientes" },
+                    { $add: [1, { $size: "$$convivientes" }] },
+                    { $ifNull: ["$cantidadHabitantes", 1] },
+                  ],
+                },
               ],
             },
-            { $ifNull: ["$cantidadHabitantes", 1] },
-          ],
+          },
         },
       },
     },
