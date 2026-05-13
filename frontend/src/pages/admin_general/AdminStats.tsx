@@ -795,10 +795,28 @@ export default function AdminStats() {
   // KPI helpers
   const vTotal = data?.viviendas?.total ?? data?.viviendas ?? 0;
   const est = data?.viviendasPorEstado || [];
-  const ocupadas =
-    est.find((x: any) => normalizeKey(x._id) === "OCUPADA")?.cantidad ?? 0;
-  const disponibles =
-    est.find((x: any) => normalizeKey(x._id) === "DISPONIBLE")?.cantidad ?? 0;
+  const estadoCantidad = (estado: string) =>
+    Number(est.find((x: any) => normalizeKey(x._id) === estado)?.cantidad ?? 0);
+  const ocupadas = estadoCantidad("OCUPADA");
+  const disponibles = estadoCantidad("DISPONIBLE");
+  const reservadas = estadoCantidad("RESERVADA");
+  const reparacion = estadoCantidad("REPARACION");
+  const estadosHabitacionalesVisibles = [
+    { title: "Disponibles", value: disponibles, accent: "#1E88E5" },
+    { title: "Ocupadas", value: ocupadas, accent: "#43A047" },
+    { title: "Reservadas", value: reservadas, accent: "#8E24AA" },
+    { title: "Reparación", value: reparacion, accent: "#FB8C00" },
+  ];
+  const sumaEstadosVisibles = estadosHabitacionalesVisibles.reduce(
+    (acc, item) => acc + item.value,
+    0
+  );
+  const otrosEstados = Math.max(0, Number(vTotal || 0) - sumaEstadosVisibles);
+  const pctViviendas = (value: number) => {
+    const total = Number(vTotal || 0);
+    if (!total) return "0.0%";
+    return `${((value / total) * 100).toFixed(1)}%`;
+  };
   const hac = data?.hacColor || [];
   const rojo =
     hac.find((x: any) => normalizeKey(x._id) === "ROJO")?.cantidad ?? 0;
@@ -1348,12 +1366,23 @@ lineHeight: 1.45,
           accent="#111"
           subtitle={scopeLabel}
         />
-        <KpiCard
-          title="Ocupadas / Disponibles"
-          value={`${ocupadas} / ${disponibles}`}
-          accent="#1E88E5"
-          subtitle="Resumen por estado"
-        />
+        {estadosHabitacionalesVisibles.map((item) => (
+          <KpiCard
+            key={item.title}
+            title={item.title}
+            value={item.value}
+            accent={item.accent}
+            subtitle={`${pctViviendas(item.value)} del total`}
+          />
+        ))}
+        {otrosEstados > 0 ? (
+          <KpiCard
+            title="Otros estados"
+            value={otrosEstados}
+            accent="#9E9E9E"
+            subtitle={`${pctViviendas(otrosEstados)} del total`}
+          />
+        ) : null}
         <KpiCard
           title="Hacinamiento ROJO"
           value={rojo}
