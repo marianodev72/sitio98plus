@@ -1404,21 +1404,26 @@ lineHeight: 1.45,
             subtitle={`${pctViviendas(otrosEstados)} del total`}
           />
         ) : null}
-        {hacSemaforos.map((item) => (
-          <KpiCard
-            key={item.title}
-            title={item.title}
-            value={item.value}
-            accent={item.accent}
-            subtitle={`${pctHacinamiento(item.value)} del total evaluado`}
-          />
-        ))}
-        <KpiCard
-          title="Pedidos de Trabajo (ANEXO_11)"
-          value={a11Presentados || pedidosTotal}
-          accent="#8E24AA"
-          subtitle="Presentados"
-        />
+        <div
+          style={{
+            gridColumn: "1 / -1",
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 320px))",
+            gap: 12,
+            justifyContent: "center",
+            width: "100%",
+          }}
+        >
+          {hacSemaforos.map((item) => (
+            <KpiCard
+              key={item.title}
+              title={item.title}
+              value={item.value}
+              accent={item.accent}
+              subtitle={`${pctHacinamiento(item.value)} del total evaluado`}
+            />
+          ))}
+        </div>
       </div>
 
       <SectionLabel>FLUJO DE TRAMITACIÓN</SectionLabel>
