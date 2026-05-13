@@ -1,5 +1,6 @@
 // frontend/src/pages/permisionario/VerAnexoPermisionario.tsx
 import AnexoViewer from "../../components/anexos/AnexoViewer";
+import Anexo03InspectorForm from "../../components/anexos/Anexo03InspectorForm";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { http } from "../../api/http";
@@ -998,6 +999,20 @@ if (codigo === "ANEXO_07") {
 
             <section style={cardStyle}>
               <h3 style={{ ...sectionTitleStyle, marginTop: 0 }}>
+                Formulario de entrega completo
+              </h3>
+              <Anexo03InspectorForm
+                value={d}
+                onChange={() => undefined}
+                readOnly
+                anexoCodigo="09"
+                tipoActa="ENTREGA"
+                validarAntesDeEnviar={false}
+              />
+            </section>
+
+            <section style={cardStyle}>
+              <h3 style={{ ...sectionTitleStyle, marginTop: 0 }}>
                 Identificación de la vivienda
               </h3>
 
@@ -1014,9 +1029,9 @@ if (codigo === "ANEXO_07") {
               <h3 style={{ ...sectionTitleStyle, marginTop: 0 }}>Acto de entrega</h3>
 
               <div style={infoGridStyle}>
-                <div style={softCardStyle}><div style={{ fontSize: 12, color: "rgba(255,255,255,0.62)", marginBottom: 6 }}>Lugar</div><div style={{ fontSize: 16, fontWeight: 700, color: "#ffffff" }}>{safe(d.lugarEntrega || d.lugarFirma)}</div></div>
+                <div style={softCardStyle}><div style={{ fontSize: 12, color: "rgba(255,255,255,0.62)", marginBottom: 6 }}>Lugar</div><div style={{ fontSize: 16, fontWeight: 700, color: "#ffffff" }}>{safe(d.lugarEntrega || d.lugarFirma || d.lugar)}</div></div>
                 <div style={softCardStyle}><div style={{ fontSize: 12, color: "rgba(255,255,255,0.62)", marginBottom: 6 }}>Fecha</div><div style={{ fontSize: 16, fontWeight: 700, color: "#ffffff" }}>{safe(d.fechaEntrega || d.fechaFirma)}</div></div>
-                <div style={softCardStyle}><div style={{ fontSize: 12, color: "rgba(255,255,255,0.62)", marginBottom: 6 }}>Hora</div><div style={{ fontSize: 16, fontWeight: 700, color: "#ffffff" }}>{safe(d.horaEntrega)}</div></div>
+                <div style={softCardStyle}><div style={{ fontSize: 12, color: "rgba(255,255,255,0.62)", marginBottom: 6 }}>Hora</div><div style={{ fontSize: 16, fontWeight: 700, color: "#ffffff" }}>{safe(d.horaEntrega || d.horaFirma)}</div></div>
               </div>
             </section>
 

@@ -15,6 +15,7 @@ type Anexo = {
   updatedAt?: string;
   datos?: any;
   vivienda?: string;
+  barrio?: string;
 };
 
 function up(v: unknown) {
@@ -30,6 +31,23 @@ function fmtDate(v?: string) {
 
 function safe(v: unknown) {
   return v === null || v === undefined || v === "" ? "—" : String(v);
+}
+
+function sameText(a: unknown, b: unknown) {
+  return String(a || "").trim().toUpperCase() === String(b || "").trim().toUpperCase();
+}
+
+function localDateInputValue(date = new Date()) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function localTimeInputValue(date = new Date()) {
+  const h = String(date.getHours()).padStart(2, "0");
+  const m = String(date.getMinutes()).padStart(2, "0");
+  return `${h}:${m}`;
 }
 
 const pageStyle: CSSProperties = {
@@ -224,8 +242,18 @@ export default function CrearAnexo09Desde08() {
         (typeof d.direccion === "string" && d.direccion.trim()) ||
         "";
 
-      const localidadFromForm =
+      const barrioFromForm =
+        (typeof d.barrio === "string" && d.barrio.trim()) ||
+        (typeof d.viviendaBarrio === "string" && d.viviendaBarrio.trim()) ||
+        (typeof a.barrio === "string" && a.barrio.trim()) ||
+        "";
+
+      const localidadRaw =
         (typeof d.localidad === "string" && d.localidad.trim()) || "";
+      const localidadFromForm =
+        localidadRaw && !sameText(localidadRaw, barrioFromForm)
+          ? localidadRaw
+          : "";
 
       const provinciaFromForm =
         (typeof d.provincia === "string" && d.provincia.trim()) || "";
@@ -236,12 +264,16 @@ export default function CrearAnexo09Desde08() {
         unidadHabitacional:
           unidadHabitacionalFromForm || prev.unidadHabitacional,
         direccion: direccionFromForm || prev.direccion,
+        barrio: barrioFromForm || prev.barrio,
         localidad: localidadFromForm || prev.localidad,
         provincia: provinciaFromForm || prev.provincia,
         inspectorNombre:
           (prev.inspectorNombre && prev.inspectorNombre.trim()) ||
           inspectorNombreDefault ||
-          prev.inspectorNombre,
+          prev.inspectorNombre ||
+          "Inspector",
+        fechaFirma: prev.fechaFirma || localDateInputValue(),
+        horaFirma: prev.horaFirma || localTimeInputValue(),
       }));
     } catch (e) {
       console.error("[ANEXO_09] Error cargando ANEXO_08", e);

@@ -1121,6 +1121,13 @@ function ViewAnexo09({ datos }: { datos: any }) {
   const provincia = datos?.provincia || "—";
   const inspector = datos?.inspectorNombre || datos?.inspector || "—";
 
+  const barrio = datos?.barrio || datos?.viviendaBarrio || "—";
+  const lugarFirma = datos?.lugarFirma || datos?.lugarEntrega || datos?.lugar || "—";
+  const fechaFirma = datos?.fechaFirma || datos?.fechaEntrega || "—";
+  const horaFirma = datos?.horaFirma || datos?.horaEntrega || "—";
+  const proximoDestino = datos?.proximoDestinoPermisionario || "—";
+  const telefonoPermisionario = datos?.telefonoPermisionario || "—";
+
   const material = datos?.material || {};
   const docu = datos?.documentacion || {};
   const med = datos?.medidores || {};
@@ -1339,6 +1346,11 @@ function ViewAnexo09({ datos }: { datos: any }) {
           </div>
 
           <div style={styles.field}>
+            <span style={styles.label}>Barrio</span>
+            <span style={styles.value}>{safe(barrio)}</span>
+          </div>
+
+          <div style={styles.field}>
             <span style={styles.label}>Unidad habitacional</span>
             <span style={styles.value}>{safe(unidad)}</span>
           </div>
@@ -1356,6 +1368,23 @@ function ViewAnexo09({ datos }: { datos: any }) {
           <div style={styles.field}>
             <span style={styles.label}>Provincia</span>
             <span style={styles.value}>{safe(provincia)}</span>
+          </div>
+
+          <div style={styles.field}>
+            <span style={styles.label}>Lugar / fecha / hora</span>
+            <span style={styles.value}>
+              {safe(lugarFirma)} - {safe(fechaFirma)} - {safe(horaFirma)}
+            </span>
+          </div>
+
+          <div style={styles.field}>
+            <span style={styles.label}>Proximo destino</span>
+            <span style={styles.value}>{safe(proximoDestino)}</span>
+          </div>
+
+          <div style={styles.field}>
+            <span style={styles.label}>Telefono</span>
+            <span style={styles.value}>{safe(telefonoPermisionario)}</span>
           </div>
         </div>
       </section>

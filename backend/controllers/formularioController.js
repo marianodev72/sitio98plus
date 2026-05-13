@@ -4779,13 +4779,21 @@ if (codigo === "ANEXO_03") {
         return genericDenied(res);
 
       const d8 = anexo08.datos || {};
+      const barrioVivienda = String(
+        d8.barrio || d8.viviendaBarrio || anexo08.barrio || v.barrio || ""
+      ).trim();
+      const localidadSolicitada = String(datos.localidad || d8.localidad || "").trim();
 
       // Vivienda / ubicación
       datos.viviendaId = d8.viviendaId || anexo08.vivienda || datos.viviendaId;
       datos.unidadHabitacional = d8.unidadHabitacional || v.codigo || datos.unidadHabitacional;
       datos.direccionUnidad =
         d8.direccionUnidad || d8.direccion || v.direccion || datos.direccionUnidad;
-      datos.localidad = d8.localidad || v.barrio || datos.localidad;
+      if (!datos.barrio) datos.barrio = barrioVivienda;
+      datos.localidad =
+        localidadSolicitada && (!barrioVivienda || up(localidadSolicitada) !== up(barrioVivienda))
+          ? localidadSolicitada
+          : "";
       datos.provincia = d8.provincia || datos.provincia;
 
       // Permisionario saliente
@@ -4819,19 +4827,52 @@ if (codigo === "ANEXO_03") {
 
       // Inspector datos
       if (!datos.inspectorNombre) {
-        datos.inspectorNombre = `${String(user.apellido || "").trim()} ${String(
+        let inspectorNombre = `${String(user.apellido || "").trim()} ${String(
           user.nombre || ""
         ).trim()}`.trim();
+        if (!inspectorNombre && User && isObjectId(user._id)) {
+          const inspectorCompleto = await User.findById(user._id)
+            .select("nombre apellido")
+            .lean();
+          inspectorNombre = `${String(inspectorCompleto?.apellido || "").trim()} ${String(
+            inspectorCompleto?.nombre || ""
+          ).trim()}`.trim();
+        }
+        datos.inspectorNombre = inspectorNombre || "Inspector";
       }
       if (!datos.inspectorBarrio) {
         datos.inspectorBarrio = barrioInspector || anexo08.barrio || "";
       }
 
       // Fecha / lugar de entrega
-      datos.fechaEntrega = new Date();
-      if (!datos.lugar) {
-        datos.lugar = datos.localidad || datos.provincia || "";
+      const fechaEntrega = new Date();
+      datos.fechaEntrega = fechaEntrega;
+      if (!datos.fechaFirma) {
+        const fechaParts = new Intl.DateTimeFormat("en-CA", {
+          timeZone: "America/Argentina/Buenos_Aires",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        })
+          .formatToParts(fechaEntrega)
+          .reduce((acc, p) => ({ ...acc, [p.type]: p.value }), {});
+        datos.fechaFirma = `${fechaParts.year}-${fechaParts.month}-${fechaParts.day}`;
       }
+      if (!datos.horaFirma) {
+        const horaParts = new Intl.DateTimeFormat("es-AR", {
+          timeZone: "America/Argentina/Buenos_Aires",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        })
+          .formatToParts(fechaEntrega)
+          .reduce((acc, p) => ({ ...acc, [p.type]: p.value }), {});
+        datos.horaFirma = `${horaParts.hour}:${horaParts.minute}`;
+      }
+      if (!datos.lugar) {
+        datos.lugar = datos.lugarFirma || datos.localidad || datos.provincia || "";
+      }
+      if (!datos.lugarFirma && datos.lugar) datos.lugarFirma = datos.lugar;
 
       // Conformidad / actuación del inspector al crear
       datos.conformidadInspector = {
@@ -6730,10 +6771,14 @@ function sanitizeDatosAnexo09(prevDatos, nextDatos) {
     "unidadHabitacional",
     "direccionUnidad",
     "direccion",
+    "barrio",
     "localidad",
     "provincia",
     "lugar",
+    "lugarFirma",
     "fechaEntrega",
+    "fechaFirma",
+    "horaFirma",
 
     "permisionarioNombre",
     "gradoPermisionario",
@@ -6744,6 +6789,8 @@ function sanitizeDatosAnexo09(prevDatos, nextDatos) {
     "observacionesPermisionario",
     "observacionesAdminGeneral",
 
+    "proximoDestinoPermisionario",
+    "telefonoPermisionario",
     "novedadesTexto",
   ];
 
@@ -6752,9 +6799,13 @@ function sanitizeDatosAnexo09(prevDatos, nextDatos) {
   // normalizar strings
   out.unidadHabitacional = asTrimStr(out.unidadHabitacional, 200);
   out.direccionUnidad = asTrimStr(out.direccionUnidad || out.direccion, 300);
+  out.barrio = asTrimStr(out.barrio, 120);
   out.localidad = asTrimStr(out.localidad, 120);
   out.provincia = asTrimStr(out.provincia, 120);
   out.lugar = asTrimStr(out.lugar, 200);
+  out.lugarFirma = asTrimStr(out.lugarFirma, 200);
+  out.fechaFirma = asTrimStr(out.fechaFirma, 40);
+  out.horaFirma = asTrimStr(out.horaFirma, 20);
 
   out.permisionarioNombre = asTrimStr(out.permisionarioNombre, 200);
   out.gradoPermisionario = asTrimStr(out.gradoPermisionario, 50);
@@ -6765,6 +6816,8 @@ function sanitizeDatosAnexo09(prevDatos, nextDatos) {
   out.observacionesPermisionario = asTrimStr(out.observacionesPermisionario, 5000);
   out.observacionesAdminGeneral = asTrimStr(out.observacionesAdminGeneral, 8000);
 
+  out.proximoDestinoPermisionario = asTrimStr(out.proximoDestinoPermisionario, 300);
+  out.telefonoPermisionario = asTrimStr(out.telefonoPermisionario, 80);
   out.novedadesTexto = asTrimStr(out.novedadesTexto, 12000);
 
   // fechaEntrega: aceptamos Date, ISO, o string simple

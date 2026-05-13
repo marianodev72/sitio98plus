@@ -9,6 +9,7 @@ export interface Anexo03Datos {
   permisionarioNombre?: string;
   unidadHabitacional?: string;
   direccion?: string;
+  barrio?: string;
   localidad?: string;
   provincia?: string;
   inspectorNombre?: string;
@@ -77,6 +78,10 @@ export interface Anexo03Datos {
 
   lugarFirma?: string;
   fechaFirma?: string; // yyyy-mm-dd
+  horaFirma?: string; // HH:mm
+  lugar?: string;
+  fechaEntrega?: string | Date;
+  horaEntrega?: string;
 }
 
 interface Props {
@@ -100,6 +105,20 @@ interface Props {
 
 function up<T extends string>(v: T | undefined | null): T | "" {
   return (v || "").toUpperCase().trim() as T | "";
+}
+
+function dateInputValue(v: unknown): string {
+  if (!v) return "";
+  const raw = String(v);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return "";
+
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 function Anexo03InspectorForm({
@@ -209,6 +228,10 @@ function Anexo03InspectorForm({
   const esAnexo03 = anexoCodigo === "03";
   const esAnexo09 = anexoCodigo === "09";
   const esVisualInstitucional = esAnexo03 || esAnexo09;
+  const lugarFirmaValue = datos.lugarFirma || (esAnexo09 ? datos.lugar || "" : "");
+  const fechaFirmaValue =
+    datos.fechaFirma || (esAnexo09 ? dateInputValue(datos.fechaEntrega) : "");
+  const horaFirmaValue = datos.horaFirma || (esAnexo09 ? datos.horaEntrega || "" : "");
 
   const blockStyle: React.CSSProperties = {
     border: esVisualInstitucional ? "1px solid rgba(255,255,255,0.12)" : "1px solid #ddd",
@@ -423,13 +446,13 @@ function Anexo03InspectorForm({
     const i = String(datos.inspectorNombre || "").trim();
 
     // Recomendado: exigir lugar y fecha de firma para que “enviar” tenga sentido institucional
-    const lugar = String(datos.lugarFirma || "").trim();
-    const fecha = String(datos.fechaFirma || "").trim();
+    const lugar = String(lugarFirmaValue || "").trim();
+    const fecha = String(fechaFirmaValue || "").trim();
 
     // unidadHabitacional suele venir bloqueada y puede estar vacía si el parent no hidrató.
     // Entonces no la exigimos estrictamente.
     return !!p && !!i && !!lugar && !!fecha && (u.length >= 0);
-  }, [canEnviar, validarAntesDeEnviar, datos]);
+  }, [canEnviar, validarAntesDeEnviar, datos, lugarFirmaValue, fechaFirmaValue]);
 
   const textoEnviarDefault =
     enviarLabel ||
@@ -493,6 +516,19 @@ function Anexo03InspectorForm({
               style={controlStyle}
             />
           </div>
+
+          {esAnexo09 && (
+            <div>
+              <label style={labelStyle}>Barrio</label>
+              <input
+                type="text"
+                value={datos.barrio || ""}
+                disabled={true}
+                readOnly
+                style={readOnlyControlStyle}
+              />
+            </div>
+          )}
 
           <div>
             <label style={labelStyle}>Localidad</label>
@@ -861,7 +897,7 @@ function Anexo03InspectorForm({
             <label style={labelStyle}>Lugar</label>
             <input
               type="text"
-              value={datos.lugarFirma || ""}
+              value={lugarFirmaValue}
               disabled={disabled}
               onChange={(e) => setField("lugarFirma", e.target.value)}
               style={controlStyle}
@@ -871,12 +907,24 @@ function Anexo03InspectorForm({
             <label style={labelStyle}>Fecha</label>
             <input
               type="date"
-              value={datos.fechaFirma || ""}
+              value={fechaFirmaValue}
               disabled={disabled}
               onChange={(e) => setField("fechaFirma", e.target.value)}
               style={controlStyle}
             />
           </div>
+          {esAnexo09 && (
+            <div>
+              <label style={labelStyle}>Hora</label>
+              <input
+                type="time"
+                value={horaFirmaValue}
+                disabled={disabled}
+                onChange={(e) => setField("horaFirma", e.target.value)}
+                style={controlStyle}
+              />
+            </div>
+          )}
         </div>
 
         <div
