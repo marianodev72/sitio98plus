@@ -1210,7 +1210,7 @@ async function buildHistorialIntervencionesAnexo09(anexo) {
         usersMap[String(u._id)] =
           `${String(u.apellido || "").trim()} ${String(u.nombre || "").trim()}`.trim() ||
           String(u.email || "").trim() ||
-          String(u._id);
+          "Usuario";
       });
     }
 
@@ -2277,12 +2277,40 @@ function renderAnexo09Pdf(
   const signerInsp = signers.inspector || {};
   const signerAdmin = signers.admin || {};
 
+  const ANEXO_09_TIME_ZONE = "America/Argentina/Buenos_Aires";
+  const ANEXO_09_DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+  function fmtAnexo09DateTime(v) {
+    try {
+      if (!v) return "";
+      const raw = typeof v === "string" ? v.trim() : "";
+      if (ANEXO_09_DATE_ONLY_RE.test(raw)) {
+        const [yyyy, mm, dd] = raw.split("-");
+        return `${dd}/${mm}/${yyyy}`;
+      }
+
+      const date = new Date(v);
+      if (Number.isNaN(date.getTime())) return "";
+      return date.toLocaleString("es-AR", {
+        timeZone: ANEXO_09_TIME_ZONE,
+        hour12: false,
+      });
+    } catch {
+      return "";
+    }
+  }
+
+  const safeHumanName = (value, fallback = "Usuario") => {
+    const s = String(value || "").trim();
+    return s && !isObjectId(s) ? s : fallback;
+  };
+
   const permNombre = signerPerm.nombre || permBase || "";
-  const permFechaTxt = signerPerm.fecha ? fmtDateTime(signerPerm.fecha) : "";
+  const permFechaTxt = fmtAnexo09DateTime(signerPerm.fecha);
   const inspNombre = signerInsp.nombre || inspectorNombreBase || "";
-  const inspFechaTxt = signerInsp.fecha ? fmtDateTime(signerInsp.fecha) : "";
+  const inspFechaTxt = fmtAnexo09DateTime(signerInsp.fecha);
   const adminNombre = signerAdmin.nombre || "";
-  const adminFechaTxt = signerAdmin.fecha ? fmtDateTime(signerAdmin.fecha) : "";
+  const adminFechaTxt = fmtAnexo09DateTime(signerAdmin.fecha);
 
   // Extras para ACTUACIONES (texto "Conforme / Revisión / Cierre" + fecha y hora)
   const permLineaExtra = permFechaTxt ? ` — Conforme: ${permFechaTxt}` : "";
@@ -2604,7 +2632,7 @@ function renderAnexo09Pdf(
   const lugar = d.lugar || localidad || "";
   const fechaEntrega =
     d.fechaEntrega || anexo.createdAt || new Date().toISOString();
-  const fechaEntregaTxt = fmtDateTime(fechaEntrega);
+  const fechaEntregaTxt = fmtAnexo09DateTime(fechaEntrega);
 
   doc
     .font("Helvetica")
@@ -2699,8 +2727,98 @@ function renderAnexo09Pdf(
   actLinea("Inspector de barrio", inspNombre, inspLineaExtra);
   actLinea("Jefe órgano administrador", adminNombre, adminLineaExtra);
 
-  // Historial de intervenciones al pie (mismo helper que ANEXO_03)
-  drawHistorialIntervenciones(doc, historial);
+  doc.moveDown(0.8);
+  doc.font("Helvetica-Bold").fontSize(11).text("CONFORMIDADES");
+  doc.moveDown(0.4);
+
+  const nombreInstitucional = (signer, fallback) =>
+    safeHumanName(signer?.nombre, fallback);
+
+  const conformidadTxt = (conf, signer, fallback, rol) => {
+    const fecha = fmtAnexo09DateTime(conf?.fecha || signer?.fecha);
+    const tieneRegistro = Boolean(conf?.ok || fecha);
+    if (!tieneRegistro) return "Pendiente";
+
+    const estado = conf?.ok === false ? " - Sin conformidad" : "";
+    return `${nombreInstitucional(signer, fallback)} (${rol}) - ${
+      fecha || "Fecha no registrada"
+    }${estado}`;
+  };
+
+  const conformidadObs = (...values) =>
+    values.map((v) => String(v || "").trim()).find(Boolean) || "";
+
+  lineaDato(
+    "Inspector",
+    conformidadTxt(d.conformidadInspector, signerInsp, "Inspector", "INSPECTOR")
+  );
+  const obsInspector = conformidadObs(
+    d.conformidadInspector?.observacion,
+    d.observacionesInspector
+  );
+  if (obsInspector) lineaDato("Observacion inspector", obsInspector);
+
+  lineaDato(
+    "Permisionario",
+    conformidadTxt(
+      d.conformidadPermisionario,
+      signerPerm,
+      "Permisionario",
+      "PERMISIONARIO"
+    )
+  );
+  const obsPermisionario = conformidadObs(
+    d.conformidadPermisionario?.observacion,
+    d.observacionesPermisionario
+  );
+  if (obsPermisionario) lineaDato("Observacion permisionario", obsPermisionario);
+
+  lineaDato(
+    "Admin General",
+    conformidadTxt(
+      d.conformidadAdminGeneral,
+      signerAdmin,
+      "Administrador General",
+      "ADMIN_GENERAL"
+    )
+  );
+  const obsAdmin = conformidadObs(
+    d.conformidadAdminGeneral?.observacion,
+    d.observacionCritica,
+    d.observacionesAdminGeneral
+  );
+  if (obsAdmin) lineaDato("Observacion admin general", obsAdmin);
+
+  const drawHistorialAnexo09 = (itemsHistorial = []) => {
+    if (!Array.isArray(itemsHistorial) || !itemsHistorial.length) return;
+
+    const bottomSafeHist = doc.page.height - doc.page.margins.bottom - 80;
+    if (doc.y > bottomSafeHist) doc.addPage();
+
+    doc.moveDown(0.8);
+    doc.font("Helvetica-Bold").fontSize(8).text("Historial de intervenciones", LEFT, doc.y, {
+      width: WIDTH,
+      align: "left",
+    });
+
+    doc.moveDown(0.2);
+    doc.font("Helvetica").fontSize(7);
+
+    itemsHistorial.forEach((h) => {
+      const fechaTxt = fmtAnexo09DateTime(h.fecha) || "Fecha no registrada";
+      const nombre = safeHumanName(h.nombre, "Usuario");
+      const rol = h.rol ? ` (${h.rol})` : "";
+      const accion = h.accion ? ` - ${h.accion}` : "";
+      const detalle = h.detalle ? ` - ${h.detalle}` : "";
+
+      doc.text(`- ${fechaTxt} - ${nombre}${rol}${accion}${detalle}`, LEFT, doc.y, {
+        width: WIDTH,
+        align: "left",
+      });
+    });
+  };
+
+  drawHistorialAnexo09(historial);
 }
 // ─────────────────────────────
 // ✅ PDF ANEXO_11 — FORMULARIO DE PEDIDO DE TRABAJO
@@ -4119,12 +4237,133 @@ if (codigoUp === "ANEXO_02") {
   renderAnexo08Pdf(doc, anexo, vivienda, signers08, historial08);
 } else if (codigoUp === "ANEXO_09") {
   // ✅ O2: El PDF NO consume datos crudos. Pasamos por presenter/hydrate (DTO) antes de renderizar.
-  const dto09 = sanitizeDatosAnexo09({}, anexo.datos || {});
+  const d09Raw = safePlainObject(anexo.datos) ? anexo.datos : {};
+  let vivienda09 = vivienda;
+  if (!vivienda09 && Vivienda && isObjectId(anexo?.vivienda)) {
+    vivienda09 = await Vivienda.findById(anexo.vivienda).lean();
+  }
+
+  const intervinientes09 = Array.isArray(anexo.intervinientes)
+    ? anexo.intervinientes
+    : [];
+  const historialEstados09 = Array.isArray(anexo.historialEstados)
+    ? anexo.historialEstados
+    : [];
+
+  const findInterviniente09 = (rol) =>
+    intervinientes09.find((x) => up(x?.rol) === rol && isObjectId(x?.userId))
+      ?.userId || null;
+
+  const cierreAdminHist09 = [...historialEstados09].reverse().find((h) => {
+    const obs = up(h?.observacion);
+    return (
+      up(h?.estadoNuevo) === "CERRADO" &&
+      (obs.includes("ADMIN_GENERAL") ||
+        obs.includes("ADMIN GENERAL") ||
+        obs.includes("ADMIN"))
+    );
+  });
+
+  const textoSeguro09 = (...vals) =>
+    vals
+      .map((v) =>
+        typeof v === "string" || typeof v === "number"
+          ? String(v).trim()
+          : ""
+      )
+      .find((v) => v && !isObjectId(v)) || "";
+
+  const permUid09 =
+    (isObjectId(d09Raw?.conformidadPermisionario?.usuario) &&
+      d09Raw.conformidadPermisionario.usuario) ||
+    (isObjectId(d09Raw?.permisionarioId) && d09Raw.permisionarioId) ||
+    (isObjectId(d09Raw?.postulanteId) && d09Raw.postulanteId) ||
+    findInterviniente09("PERMISIONARIO") ||
+    (isObjectId(vivienda09?.ocupacionActual?.permisionario) &&
+      vivienda09.ocupacionActual.permisionario) ||
+    null;
+
+  const inspUid09 =
+    (isObjectId(d09Raw?.conformidadInspector?.usuario) &&
+      d09Raw.conformidadInspector.usuario) ||
+    findInterviniente09("INSPECTOR") ||
+    (isObjectId(anexo?.usuario) && anexo.usuario) ||
+    null;
+
+  const adminUid09 =
+    (isObjectId(d09Raw?.conformidadAdminGeneral?.usuario) &&
+      d09Raw.conformidadAdminGeneral.usuario) ||
+    (isObjectId(cierreAdminHist09?.realizadoPor) &&
+      cierreAdminHist09.realizadoPor) ||
+    null;
+
+  const permNombre09 = await getNombreApellidoSafe(permUid09);
+  const inspNombre09 = await getNombreApellidoSafe(inspUid09);
+  const adminNombre09 = await getNombreApellidoSafe(adminUid09);
+
+  signers09 = {
+    permisionario: {
+      nombre:
+        permNombre09 ||
+        textoSeguro09(
+          d09Raw?.permisionarioNombre,
+          d09Raw?.postulanteLabel,
+          d09Raw?.postulanteNombre,
+          d09Raw?.permisionario
+        ) ||
+        "Permisionario",
+      fecha: d09Raw?.conformidadPermisionario?.fecha || null,
+      rol: "PERMISIONARIO",
+    },
+    inspector: {
+      nombre:
+        inspNombre09 ||
+        textoSeguro09(d09Raw?.inspectorNombre, d09Raw?.inspector) ||
+        "Inspector",
+      fecha: d09Raw?.conformidadInspector?.fecha || anexo?.createdAt || null,
+      rol: "INSPECTOR",
+    },
+    admin: {
+      nombre:
+        adminNombre09 ||
+        textoSeguro09(
+          d09Raw?.cerradoPorAdminGeneralNombre,
+          d09Raw?.adminGeneralNombre
+        ) ||
+        "Administrador General",
+      fecha:
+        d09Raw?.conformidadAdminGeneral?.fecha ||
+        cierreAdminHist09?.fecha ||
+        null,
+      rol: "ADMIN_GENERAL",
+    },
+  };
+
+  const dto09 = sanitizeDatosAnexo09({}, d09Raw);
+
+  ["conformidadInspector", "conformidadPermisionario", "conformidadAdminGeneral"].forEach(
+    (key) => {
+      if (safePlainObject(d09Raw?.[key])) dto09[key] = d09Raw[key];
+    }
+  );
+
+  [
+    "observacionCritica",
+    "proximoDestinoPermisionario",
+    "telefonoPermisionario",
+    "lugarFirma",
+    "fechaFirma",
+  ].forEach((key) => {
+    if (typeof d09Raw?.[key] === "string") dto09[key] = d09Raw[key];
+  });
+
+  dto09.lugar = dto09.lugar || dto09.lugarFirma || "";
+  dto09.fechaEntrega = dto09.fechaEntrega || dto09.fechaFirma || "";
   // completamos campos “en claro” desde vivienda (sin exponer ObjectId)
-  dto09.unidadHabitacional = dto09.unidadHabitacional || vivienda?.codigo || "";
+  dto09.unidadHabitacional = dto09.unidadHabitacional || vivienda09?.codigo || "";
   dto09.direccionUnidad =
-    dto09.direccionUnidad || dto09.direccion || vivienda?.direccion || "";
-  dto09.localidad = dto09.localidad || vivienda?.barrio || "";
+    dto09.direccionUnidad || dto09.direccion || vivienda09?.direccion || "";
+  dto09.localidad = dto09.localidad || vivienda09?.barrio || "";
   // leyenda institucional (no operativa)
   dto09.leyendaInstitucional =
     String(anexo.estadoInstitucional || "").trim() === "CON_NOVEDADES"
