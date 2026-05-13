@@ -2,7 +2,7 @@
 
 const Vivienda = require("../models/vivienda");
 const { FormSubmission } = require("../models/FormSubmission");
-const User = require("../models/user");
+const { User } = require("../models/user");
 const Mensaje = require("../models/Mensaje");
 const { Mantenimiento } = require("../models/Mantenimiento");
 
