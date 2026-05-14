@@ -1,0 +1,4 @@
+codigo,dependencia,lugar,sector,tipo,numero,clase,capacidad,generoPermitido,localidad,provincia,observaciones,activo
+BNU-AP-CAM-011,Base Naval Ushuaia,Anexo Península,,Camarote,11,C02,2,MASCULINO,Ushuaia,Tierra del Fuego,,SI
+BNU-AP-CAM-012,Base Naval Ushuaia,Anexo Península,Ala Norte,Camarote,12,C01,1,FEMENINO,Ushuaia,Tierra del Fuego,,SI
+BNU-SOL-001,Base Naval Ushuaia,Sollado Principal,,Sollado,1,CUSO,24,SIN_RESTRICCION,Ushuaia,Tierra del Fuego,Unidad colectiva,SI

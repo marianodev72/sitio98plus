@@ -185,6 +185,10 @@ const viviendaRoutes = safeRequire("viviendaRoutes", "./routes/viviendaRoutes");
 const statsRoutes = safeRequire("statsRoutes", "./routes/statsRoutes");
 const dashboardRoutes = safeRequire("dashboardRoutes", "./routes/dashboardRoutes");
 const usersRoutes = safeRequire("usersRoutes", "./routes/users");
+const alojamientosNavalesRoutes = safeRequire(
+  "alojamientosNavalesRoutes",
+  "./modules/alojamientos/routes/alojamientosNavalesRoutes"
+);
 
 // -------------------------
 // Health
@@ -214,6 +218,7 @@ app.use("/api/viviendas", viviendaRoutes);
 app.use("/api/users", usersRoutes);
 app.use("/api/stats", statsRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/alojamientos-navales", alojamientosNavalesRoutes);
 
 // -------------------------
 app.use("/uploads", (_req, res) => res.status(404).end());
