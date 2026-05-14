@@ -2,17 +2,16 @@
   "intervalMs": 6000,
   "transitionMs": 600,
   "images": [
-    { "src": "/assets/institucional/carrusel/carrusel-1.png", "alt": "Imagen institucional 1" },
-    { "src": "/assets/institucional/carrusel/carrusel-2.png", "alt": "Imagen institucional 2" },
-    { "src": "/assets/institucional/carrusel/carrusel-3.jpg", "alt": "Imagen institucional 3" },
-    { "src": "/assets/institucional/carrusel/carrusel-4.jpg", "alt": "Imagen institucional 1" },
-    { "src": "/assets/institucional/carrusel/carrusel-5.jpg", "alt": "Imagen institucional 2" },
-    { "src": "/assets/institucional/carrusel/carrusel-6.jpg", "alt": "Imagen institucional 3" },
-    { "src": "/assets/institucional/carrusel/carrusel-7.jpg", "alt": "Imagen institucional 2" },
-    { "src": "/assets/institucional/carrusel/carrusel-8.jpg", "alt": "Imagen institucional 3" },
-    { "src": "/assets/institucional/carrusel/carrusel-9.jpg", "alt": "Imagen institucional 1" },
-    { "src": "/assets/institucional/carrusel/carrusel-10.jpg", "alt": "Imagen institucional 2" },
-    { "src": "/assets/institucional/carrusel/carrusel-11.png", "alt": "Imagen institucional 3" }
+    { "src": "/assets/institucional/carrusel/carrusel-1-v2.webp", "alt": "Imagen institucional 1" },
+    { "src": "/assets/institucional/carrusel/carrusel-2-v2.webp", "alt": "Imagen institucional 2" },
+    { "src": "/assets/institucional/carrusel/carrusel-3-v2.webp", "alt": "Imagen institucional 3" },
+    { "src": "/assets/institucional/carrusel/carrusel-4-v2.webp", "alt": "Imagen institucional 1" },
+    { "src": "/assets/institucional/carrusel/carrusel-5-v2.webp", "alt": "Imagen institucional 2" },
+    { "src": "/assets/institucional/carrusel/carrusel-6-v2.webp", "alt": "Imagen institucional 3" },
+    { "src": "/assets/institucional/carrusel/carrusel-7-v2.webp", "alt": "Imagen institucional 2" },
+    { "src": "/assets/institucional/carrusel/carrusel-8-v2.webp", "alt": "Imagen institucional 3" },
+    { "src": "/assets/institucional/carrusel/carrusel-9-v2.webp", "alt": "Imagen institucional 1" },
+    { "src": "/assets/institucional/carrusel/carrusel-10-v2.webp", "alt": "Imagen institucional 2" }
 
 
   ]
