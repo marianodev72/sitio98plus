@@ -159,6 +159,9 @@ export default function AdminGeneralLayout() {
             <NavLink to="viviendas" style={linkStyle}>
               Viviendas
             </NavLink>
+            <NavLink to="alojamientos" style={linkStyle}>
+              Alojamientos
+            </NavLink>
             <NavLink to="liquidaciones" style={linkStyle}>
               Liquidaciones
             </NavLink>

@@ -28,6 +28,8 @@ import AuditoriaInstitucionalPage from "../pages/admin_general/AuditoriaInstituc
 import LiquidacionesAdminConsulta from "../components/LiquidacionesAdminConsulta";
 import LiquidacionesAdminResumen from "../components/LiquidacionesAdminResumen";
 import PerfilAdminGeneral from "../pages/admin_general/Perfil";
+import AlojamientosInventario from "../pages/alojamientos/AlojamientosInventario";
+import AlojamientoDetalle from "../pages/alojamientos/AlojamientoDetalle";
 
 /* Admin */
 import AdminDashboard from "../pages/admin/AdminDashboard";
@@ -273,6 +275,15 @@ export default function RoleRoutes() {
           <Route path="estadisticas" element={<EstadisticasAdminGeneral />} />
           <Route path="registros" element={<RegistrosAdminGeneral />} />
           <Route path="viviendas" element={<ViviendasAdminGeneral />} />
+          <Route
+            path="alojamientos"
+            element={<AlojamientosInventario basePath="/app/admin-general/alojamientos" />}
+          />
+          <Route
+            path="alojamientos/inventario"
+            element={<AlojamientosInventario basePath="/app/admin-general/alojamientos" />}
+          />
+          <Route path="alojamientos/:id" element={<AlojamientoDetalle />} />
           <Route path="gestiones" element={<GestionesAdminGeneral />} />
           <Route path="gestiones/:id" element={<GestionarAnexo />} />
           <Route path="mensajeria" element={<MensajeriaAdminGeneral />} />
@@ -290,6 +301,15 @@ export default function RoleRoutes() {
           <Route index element={<AdminDashboard />} />
           <Route path="usuarios" element={<UsuariosAdmin />} />
           <Route path="viviendas" element={<ViviendasAdmin />} />
+          <Route
+            path="alojamientos"
+            element={<AlojamientosInventario basePath="/app/admin/alojamientos" />}
+          />
+          <Route
+            path="alojamientos/inventario"
+            element={<AlojamientosInventario basePath="/app/admin/alojamientos" />}
+          />
+          <Route path="alojamientos/:id" element={<AlojamientoDetalle />} />
           <Route path="gestiones" element={<GestionesAdmin />} />
           <Route path="mensajeria" element={<MensajeriaAdmin />} />
           <Route path="liquidaciones" element={<LiquidacionesAdmin />} />
