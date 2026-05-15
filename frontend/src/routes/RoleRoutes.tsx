@@ -10,6 +10,7 @@ import AdminGeneralLayout from "../layouts/AdminGeneralLayout";
 import AdminLayout from "../layouts/AdminLayout";
 import PermisionarioLayout from "../layouts/PermisionarioLayout";
 import InspectorLayout from "../layouts/InspectorLayout";
+import AlojadoLayout from "../layouts/AlojadoLayout";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 
 /* Admin General */
@@ -85,6 +86,8 @@ import VerAnexo from "../pages/postulante/VerAnexo";
 import NuevaPostulacion from "../pages/postulante/NuevaPostulacion";
 import Anexo01Institucional from "../pages/postulante/Anexo01Institucional";
 
+/* ALOJADO */
+import AlojadoDashboard from "../pages/alojado/Dashboard";
 
 /* Canonical */
 import { panelPathForUser } from "./panelPathForUser";
@@ -167,6 +170,12 @@ export default function RoleRoutes() {
   {/* fallback interno del postulante */}
   <Route path="*" element={<GenericUnavailable />} />
 </Route>
+
+        {/* ALOJADO */}
+        <Route path="alojado" element={<AlojadoLayout />}>
+          <Route index element={<AlojadoDashboard />} />
+          <Route path="*" element={<GenericUnavailable />} />
+        </Route>
 
 
         {/* PERMISIONARIO */}

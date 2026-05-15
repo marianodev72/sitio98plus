@@ -19,6 +19,7 @@ function hasPerm(user: any, permiso: string) {
  * - PERMISIONARIO + INSPECTOR -> /app/permisionario/mi-barrio-inspector
  * - PERMISIONARIO + JEFE_DE_BARRIO -> /app/permisionario/mi-barrio-jefe
  * - PERMISIONARIO -> /app/permisionario
+ * - ALOJADO -> /app/alojado
  * - POSTULANTE -> /app/postulante
  * - Default -> /app
  */
@@ -27,6 +28,7 @@ export function panelPathForUser(user: any) {
 
   if (role === "ADMIN_GENERAL") return "/app/admin-general";
   if (role === "ADMIN") return "/app/admin";
+  if (role === "ALOJADO") return "/app/alojado";
 
   if (role === "PERMISIONARIO") {
     if (hasPerm(user, "INSPECTOR")) return "/app/permisionario/mi-barrio-inspector";
@@ -35,6 +37,7 @@ export function panelPathForUser(user: any) {
   }
 
   if (role === "POSTULANTE") return "/app/postulante";
+  if (user?.alojamientoAsignado) return "/app/alojado";
 
   // Fail-closed y sin inventar rutas
   return "/app";
