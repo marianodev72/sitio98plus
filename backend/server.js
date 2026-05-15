@@ -189,6 +189,10 @@ const alojamientosNavalesRoutes = safeRequire(
   "alojamientosNavalesRoutes",
   "./modules/alojamientos/routes/alojamientosNavalesRoutes"
 );
+const alojamientosDashboardRoutes = safeRequire(
+  "alojamientosDashboardRoutes",
+  "./modules/alojamientos/routes/alojamientosDashboardRoutes"
+);
 
 // -------------------------
 // Health
@@ -219,6 +223,7 @@ app.use("/api/users", usersRoutes);
 app.use("/api/stats", statsRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/alojamientos-navales", alojamientosNavalesRoutes);
+app.use("/api/alojamientos-dashboard", alojamientosDashboardRoutes);
 
 // -------------------------
 app.use("/uploads", (_req, res) => res.status(404).end());

@@ -205,9 +205,14 @@ export default function AlojamientosInventario({ basePath }: Props) {
           <h1 style={titleStyle}>Alojamientos</h1>
           <p style={subtitleStyle}>Inventario administrativo read-only de Alojamientos Navales.</p>
         </div>
-        <button type="button" style={secondaryButtonStyle} onClick={cargar} disabled={loading}>
-          Actualizar
-        </button>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <button type="button" style={secondaryButtonStyle} onClick={() => navigate(`${basePath}/dashboard`)}>
+            Dashboard
+          </button>
+          <button type="button" style={secondaryButtonStyle} onClick={cargar} disabled={loading}>
+            Actualizar
+          </button>
+        </div>
       </div>
 
       <div

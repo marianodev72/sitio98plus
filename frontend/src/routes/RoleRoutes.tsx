@@ -30,6 +30,7 @@ import LiquidacionesAdminConsulta from "../components/LiquidacionesAdminConsulta
 import LiquidacionesAdminResumen from "../components/LiquidacionesAdminResumen";
 import PerfilAdminGeneral from "../pages/admin_general/Perfil";
 import AlojamientosInventario from "../pages/alojamientos/AlojamientosInventario";
+import AlojamientosDashboard from "../pages/alojamientos/AlojamientosDashboard";
 import AlojamientoDetalle from "../pages/alojamientos/AlojamientoDetalle";
 
 /* Admin */
@@ -292,6 +293,10 @@ export default function RoleRoutes() {
             path="alojamientos/inventario"
             element={<AlojamientosInventario basePath="/app/admin-general/alojamientos" />}
           />
+          <Route
+            path="alojamientos/dashboard"
+            element={<AlojamientosDashboard basePath="/app/admin-general/alojamientos" />}
+          />
           <Route path="alojamientos/:id" element={<AlojamientoDetalle />} />
           <Route path="gestiones" element={<GestionesAdminGeneral />} />
           <Route path="gestiones/:id" element={<GestionarAnexo />} />
@@ -317,6 +322,10 @@ export default function RoleRoutes() {
           <Route
             path="alojamientos/inventario"
             element={<AlojamientosInventario basePath="/app/admin/alojamientos" />}
+          />
+          <Route
+            path="alojamientos/dashboard"
+            element={<AlojamientosDashboard basePath="/app/admin/alojamientos" />}
           />
           <Route path="alojamientos/:id" element={<AlojamientoDetalle />} />
           <Route path="gestiones" element={<GestionesAdmin />} />
