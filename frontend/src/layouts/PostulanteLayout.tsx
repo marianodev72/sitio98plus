@@ -138,6 +138,9 @@ export default function PostulanteLayout() {
           <button style={neutralButtonStyle} onClick={() => navigate("mis-anexos")}>
             Mis anexos
           </button>
+          <button style={neutralButtonStyle} onClick={() => navigate("postulaciones")}>
+            Postulaciones
+          </button>
           <button style={primaryButtonStyle} onClick={() => navigate("anexo-01")}>
             Iniciar ANEXO_01
           </button>
