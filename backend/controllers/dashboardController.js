@@ -182,7 +182,12 @@ exports.getAdminGeneralDashboard = async (req, res) => {
       }),
       Mantenimiento.countDocuments({ isClosed: false }),
       Mantenimiento.countDocuments({ isClosed: false, adminDecision: "PENDIENTE" }),
-      User.countDocuments({ role: "PENDIENTE", archivado: { $ne: true } }),
+      User.countDocuments({
+        role: "POSTULANTE",
+        activo: false,
+        archivado: { $ne: true },
+        bloqueado: { $ne: true },
+      }),
       userId
         ? Mensaje.countDocuments({
             $or: [{ para: userId }, { destinatarios: userId }],

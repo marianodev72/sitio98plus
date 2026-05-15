@@ -52,10 +52,11 @@ export default function RegistrosAdminGeneral() {
     clearMessages();
 
     try {
-      // Listamos “pendientes” desde el listado institucional existente
+      // Pendiente oficial: POSTULANTE inactivo creado desde registro publico.
       const res = await http.get("/users/admin-list", {
         params: {
-          role: "PENDIENTE",
+          role: "POSTULANTE",
+          activo: "false",
           archivado: "false",
           sortBy: "apellido",
           sortDir: "asc",
@@ -81,10 +82,10 @@ export default function RegistrosAdminGeneral() {
     clearMessages();
 
     try {
-      // ✅ Promoción institucional: PENDIENTE -> POSTULANTE
-      await http.patch(`/users/${id}/role`, {
-        nuevoRol: "POSTULANTE",
-        observacion: "Aprobación de registro (ADMIN GENERAL)",
+      // Aprobacion institucional: mantiene role POSTULANTE y activa la cuenta.
+      await http.patch(`/users/${id}/activo`, {
+        activo: true,
+        observacion: "Aprobacion de registro publico (ADMIN GENERAL)",
       });
 
       setInfo("Registro aprobado.");
@@ -166,8 +167,8 @@ export default function RegistrosAdminGeneral() {
         <div style={heroStyle}>
           <h1 style={titleStyle}>Registros (pendientes)</h1>
           <p style={subtitleStyle}>
-            Aquí se visualizan usuarios con rol <b>PENDIENTE</b>. Aprobar los convierte en{" "}
-            <b>POSTULANTE</b>.
+            Aquí se visualizan usuarios <b>POSTULANTE</b> pendientes de activación.
+            Aprobar habilita la cuenta institucional.
           </p>
         </div>
 
