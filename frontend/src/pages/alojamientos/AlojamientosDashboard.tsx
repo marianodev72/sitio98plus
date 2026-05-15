@@ -39,6 +39,35 @@ type Props = {
   basePath: string;
 };
 
+const CLASES_OFICIALES = ["C01", "C02", "C03", "C04", "CUSO"];
+
+const GENEROS_OFICIALES = [
+  "MASCULINO",
+  "FEMENINO",
+  "SIN_RESTRICCION",
+  "NO_ESPECIFICADO",
+];
+
+const ALOJAMIENTO_ESTADOS = [
+  "DISPONIBLE",
+  "PARCIALMENTE_OCUPADO",
+  "OCUPADO",
+  "RESERVADO",
+  "MANTENIMIENTO",
+  "FUERA_SERVICIO",
+  "INHABILITADO",
+  "BAJA",
+];
+
+const PLAZA_ESTADOS = [
+  "LIBRE",
+  "RESERVADA",
+  "OCUPADA",
+  "MANTENIMIENTO",
+  "INHABILITADA",
+  "BAJA",
+];
+
 function up(value: unknown) {
   return String(value || "").toUpperCase().trim();
 }
@@ -58,11 +87,15 @@ function safe(value: unknown, fallback = "-") {
 }
 
 const cardStyle: CSSProperties = {
+  width: "100%",
+  maxWidth: "100%",
   minWidth: 0,
   padding: 14,
   borderRadius: 8,
   border: "1px solid rgba(255,255,255,0.12)",
   background: "rgba(255,255,255,0.045)",
+  boxSizing: "border-box",
+  overflow: "hidden",
 };
 
 const metricValueStyle: CSSProperties = {
@@ -94,7 +127,22 @@ const rowStyle: CSSProperties = {
   gap: 12,
   padding: "9px 0",
   borderBottom: "1px solid rgba(255,255,255,0.08)",
+  minWidth: 0,
 };
+
+function estadoTone(value: string): CSSProperties {
+  const s = up(value);
+  if (s === "DISPONIBLE" || s === "LIBRE") {
+    return { borderColor: "rgba(34,197,94,0.34)", color: "#bbf7d0" };
+  }
+  if (s === "OCUPADO" || s === "OCUPADA" || s === "INHABILITADO" || s === "INHABILITADA" || s === "BAJA") {
+    return { borderColor: "rgba(248,113,113,0.36)", color: "#fecaca" };
+  }
+  if (s === "PARCIALMENTE_OCUPADO" || s === "RESERVADO" || s === "RESERVADA" || s === "MANTENIMIENTO") {
+    return { borderColor: "rgba(251,191,36,0.36)", color: "#fde68a" };
+  }
+  return { borderColor: "rgba(148,163,184,0.32)", color: "#e5e7eb" };
+}
 
 function alertaTone(severidad: string): CSSProperties {
   const s = up(severidad);
@@ -103,16 +151,44 @@ function alertaTone(severidad: string): CSSProperties {
   return { borderColor: "rgba(148,163,184,0.32)", color: "#e5e7eb" };
 }
 
-function CountList({ rows, emptyText }: { rows: CountRow[]; emptyText: string }) {
-  if (!rows.length) {
+function normalizeRows(rows: CountRow[], keys: string[] = []) {
+  const map = new Map<string, number>();
+  (rows || []).forEach((row) => {
+    map.set(safe(row._id, "SIN_DATO"), n(row.count));
+  });
+
+  const normalized = keys.map((key) => ({ _id: key, count: map.get(key) || 0 }));
+  const extras = Array.from(map.entries())
+    .filter(([key]) => !keys.includes(key))
+    .map(([key, count]) => ({ _id: key, count }))
+    .sort((a, b) => a._id.localeCompare(b._id));
+
+  return [...normalized, ...extras];
+}
+
+function normalizeMap(data: Record<string, number>, keys: string[] = []) {
+  const source = data || {};
+  const rows = keys.map((key) => [key, n(source[key])] as [string, number]);
+  const extras = Object.entries(source)
+    .filter(([key]) => !keys.includes(key))
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => [key, n(value)] as [string, number]);
+
+  return [...rows, ...extras];
+}
+
+function CountList({ rows, emptyText, requiredKeys = [] }: { rows: CountRow[]; emptyText: string; requiredKeys?: string[] }) {
+  const normalizedRows = useMemo(() => normalizeRows(rows, requiredKeys), [rows, requiredKeys]);
+
+  if (!normalizedRows.length) {
     return <p style={{ ...subtitleStyle, margin: 0 }}>{emptyText}</p>;
   }
 
   return (
     <div>
-      {rows.map((row) => (
+      {normalizedRows.map((row) => (
         <div key={safe(row._id)} style={rowStyle}>
-          <span style={{ color: "rgba(255,255,255,0.86)", overflowWrap: "anywhere" }}>
+          <span style={{ color: "rgba(255,255,255,0.86)", overflowWrap: "anywhere", minWidth: 0 }}>
             {safe(row._id, "SIN_DATO")}
           </span>
           <strong style={{ color: "#ffffff" }}>{n(row.count)}</strong>
@@ -122,10 +198,10 @@ function CountList({ rows, emptyText }: { rows: CountRow[]; emptyText: string })
   );
 }
 
-function MapList({ data, emptyText }: { data: Record<string, number>; emptyText: string }) {
+function MapList({ data, emptyText, requiredKeys = [] }: { data: Record<string, number>; emptyText: string; requiredKeys?: string[] }) {
   const rows = useMemo(
-    () => Object.entries(data || {}).sort(([a], [b]) => a.localeCompare(b)),
-    [data]
+    () => normalizeMap(data, requiredKeys),
+    [data, requiredKeys]
   );
 
   if (!rows.length) {
@@ -136,7 +212,7 @@ function MapList({ data, emptyText }: { data: Record<string, number>; emptyText:
     <div>
       {rows.map(([key, value]) => (
         <div key={key} style={rowStyle}>
-          <span style={{ color: "rgba(255,255,255,0.86)" }}>{safe(key, "SIN_DATO")}</span>
+          <span style={{ ...badgeStyle, ...estadoTone(key) }}>{safe(key, "SIN_DATO")}</span>
           <strong style={{ color: "#ffffff" }}>{n(value)}</strong>
         </div>
       ))}
@@ -202,13 +278,13 @@ export default function AlojamientosDashboard({ basePath }: Props) {
   const alertas = Array.isArray(resumen?.alertas) ? resumen.alertas : [];
 
   return (
-    <div style={{ minWidth: 0 }}>
+    <div style={{ width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box", overflow: "hidden" }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-        <div>
+        <div style={{ minWidth: 0 }}>
           <h1 style={titleStyle}>Dashboard Alojamientos</h1>
           <p style={subtitleStyle}>Resumen operativo read-only del inventario naval.</p>
         </div>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", minWidth: 0 }}>
           <button type="button" style={secondaryButtonStyle} onClick={() => navigate(`${basePath}/inventario`)}>
             Inventario
           </button>
@@ -241,8 +317,12 @@ export default function AlojamientosDashboard({ basePath }: Props) {
             style={{
               marginTop: 18,
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+              gridTemplateColumns: "repeat(auto-fit, minmax(min(150px, 100%), 1fr))",
               gap: 12,
+              width: "100%",
+              maxWidth: "100%",
+              minWidth: 0,
+              boxSizing: "border-box",
             }}
           >
             <Metric label="Alojamientos" value={resumen.totalAlojamientos} />
@@ -256,23 +336,39 @@ export default function AlojamientosDashboard({ basePath }: Props) {
             style={{
               marginTop: 18,
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+              gridTemplateColumns: "repeat(auto-fit, minmax(min(260px, 100%), 1fr))",
               gap: 12,
+              width: "100%",
+              maxWidth: "100%",
+              minWidth: 0,
+              boxSizing: "border-box",
             }}
           >
             <section style={cardStyle}>
               <h2 style={sectionTitleStyle}>Alojamientos por estado</h2>
-              <MapList data={resumen.alojamientosPorEstado} emptyText="Sin estados registrados." />
+              <MapList
+                data={resumen.alojamientosPorEstado}
+                emptyText="Sin estados registrados."
+                requiredKeys={ALOJAMIENTO_ESTADOS}
+              />
             </section>
 
             <section style={cardStyle}>
               <h2 style={sectionTitleStyle}>Plazas por estado</h2>
-              <MapList data={resumen.plazasPorEstado} emptyText="Sin estados registrados." />
+              <MapList
+                data={resumen.plazasPorEstado}
+                emptyText="Sin estados registrados."
+                requiredKeys={PLAZA_ESTADOS}
+              />
             </section>
 
             <section style={cardStyle}>
               <h2 style={sectionTitleStyle}>Por clase</h2>
-              <CountList rows={resumen.distribucionPorClase || []} emptyText="Sin clases registradas." />
+              <CountList
+                rows={resumen.distribucionPorClase || []}
+                emptyText="Sin clases registradas."
+                requiredKeys={CLASES_OFICIALES}
+              />
             </section>
 
             <section style={cardStyle}>
@@ -280,6 +376,7 @@ export default function AlojamientosDashboard({ basePath }: Props) {
               <CountList
                 rows={resumen.distribucionPorGeneroPermitido || []}
                 emptyText="Sin restricciones registradas."
+                requiredKeys={GENEROS_OFICIALES}
               />
             </section>
           </div>
@@ -288,8 +385,12 @@ export default function AlojamientosDashboard({ basePath }: Props) {
             style={{
               marginTop: 18,
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+              gridTemplateColumns: "repeat(auto-fit, minmax(min(260px, 100%), 1fr))",
               gap: 12,
+              width: "100%",
+              maxWidth: "100%",
+              minWidth: 0,
+              boxSizing: "border-box",
             }}
           >
             <section style={cardStyle}>

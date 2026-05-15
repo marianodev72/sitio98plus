@@ -49,6 +49,7 @@ async function getResumen(req, res) {
       alojamientosGeneroNoEspecificado,
       alojamientosFueraServicio,
       alojamientosInhabilitados,
+      alojamientosSinPlazas,
       plazasMantenimiento,
       plazasInhabilitadas,
     ] = await Promise.all([
@@ -62,6 +63,13 @@ async function getResumen(req, res) {
       AlojamientoNaval.countDocuments({ generoPermitido: "NO_ESPECIFICADO", activo: true }),
       AlojamientoNaval.countDocuments({ estado: "FUERA_SERVICIO", activo: true }),
       AlojamientoNaval.countDocuments({ estado: "INHABILITADO", activo: true }),
+      AlojamientoNaval.countDocuments({
+        activo: true,
+        $or: [
+          { "ocupacionActual.plazasTotales": { $exists: false } },
+          { "ocupacionActual.plazasTotales": { $lte: 0 } },
+        ],
+      }),
       AlojamientoPlaza.countDocuments({ estado: "MANTENIMIENTO", activo: true }),
       AlojamientoPlaza.countDocuments({ estado: "INHABILITADA", activo: true }),
     ]);
@@ -99,6 +107,12 @@ async function getResumen(req, res) {
         severidad: plazasInhabilitadas > 0 ? "MEDIA" : "INFO",
         cantidad: plazasInhabilitadas,
         texto: "Plazas activas inhabilitadas",
+      },
+      {
+        codigo: "ALOJAMIENTOS_SIN_PLAZAS",
+        severidad: alojamientosSinPlazas > 0 ? "MEDIA" : "INFO",
+        cantidad: alojamientosSinPlazas,
+        texto: "Alojamientos activos sin plazas registradas",
       },
     ];
 
