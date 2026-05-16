@@ -11,13 +11,8 @@ const { puedeVerDocumento } = require("./alojamientoDocumentoVisibilityService")
 const { MAX_FILE_SIZE } = require("../../middleware/alojamientoDocumentoUpload");
 
 const CODIGO = "ANEXO_21";
-const STORAGE_ROOT = path.resolve(
-  process.cwd(),
-  "storage",
-  "alojamientos",
-  "documentos",
-  "anexo-21"
-);
+// Permite montar storage persistente en produccion/docker sin depender del cwd.
+const STORAGE_ROOT = resolveStorageRoot();
 const STORAGE_KEY_PREFIX = "anexo21";
 const CAMPOS_ADJUNTO = new Set(["fidofac", "indiceTitularidad"]);
 const MIME_TO_EXT = Object.freeze({
@@ -47,6 +42,16 @@ function campoValido(campo) {
 
 function deny(status = 404, code = "NO_DISPONIBLE") {
   return { ok: false, status, code };
+}
+
+function resolveStorageRoot() {
+  const configured = String(process.env.ALOJAMIENTOS_STORAGE_ROOT || "").trim();
+  if (configured) return path.resolve(configured);
+
+  return path.resolve(
+    __dirname,
+    "../../../../storage/alojamientos/documentos/anexo-21"
+  );
 }
 
 function getDatos(documento) {
@@ -97,6 +102,11 @@ function resolveStorageKey(storageKey) {
   return absPath;
 }
 
+async function ensureStorageWritable() {
+  await fs.promises.mkdir(STORAGE_ROOT, { recursive: true });
+  await fs.promises.access(STORAGE_ROOT, fs.constants.W_OK);
+}
+
 async function detectFileType(buffer) {
   const { fileTypeFromBuffer } = await import("file-type");
   return fileTypeFromBuffer(buffer);
@@ -145,6 +155,7 @@ async function subirAdjunto({ id, campo, file, user }) {
   const previous = getAdjuntos(documento)[campoNormalizado] || null;
 
   try {
+    await ensureStorageWritable();
     await fs.promises.mkdir(path.dirname(absPath), { recursive: true });
     await fs.promises.writeFile(absPath, file.buffer, { flag: "wx" });
 
