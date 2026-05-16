@@ -1,5 +1,11 @@
 const { hasPollutionKeys } = require("./alojamientoDocumentoValidator");
 
+const TIPOS_SOLICITUD = Object.freeze([
+  "INSCRIPCION_INICIAL",
+  "CAMBIO_ALOJAMIENTO",
+  "RECTIFICACION",
+]);
+
 const STRING_LIMITS = Object.freeze({
   lugar: 80,
   fechaLugar: 10,
@@ -73,6 +79,7 @@ const AGREGADOS_FIELDS = Object.freeze(["fidofac", "indiceTitularidad"]);
 const ALLOWED_ROOT_KEYS = new Set([
   ...Object.keys(STRING_LIMITS),
   ...BOOLEAN_FIELDS,
+  "tipoSolicitud",
   "aniosServicioRecibo",
   "representantes",
   "agregados",
@@ -122,6 +129,11 @@ function cleanAniosServicio(value) {
   const n = Number.parseInt(String(value), 10);
   if (!Number.isInteger(n) || n < 0 || n > 60) return "";
   return n;
+}
+
+function cleanTipoSolicitud(value) {
+  const clean = cleanString(value, 40).toUpperCase();
+  return TIPOS_SOLICITUD.includes(clean) ? clean : "";
 }
 
 function cleanRepresentante(input) {
@@ -186,6 +198,8 @@ function validateAnexo21Datos(input, options = {}) {
   }
 
   const value = {};
+  value.tipoSolicitud = cleanTipoSolicitud(datos.tipoSolicitud);
+
   for (const [field, limit] of Object.entries(STRING_LIMITS)) {
     if (field === "fechaLugar" || field === "fechaUltimoAscenso" || field === "fechaEstimadaTrasladoZona") {
       value[field] = cleanDate(datos[field]);
@@ -210,6 +224,7 @@ function validateAnexo21Datos(input, options = {}) {
   value.agregados = cleanAgregados(datos.agregados);
 
   if (requireComplete) {
+    if (!value.tipoSolicitud) errors.push("tipoSolicitud");
     pushRequiredStringErrors(value, errors);
 
     if (value.aniosServicioRecibo === "") errors.push("aniosServicioRecibo");

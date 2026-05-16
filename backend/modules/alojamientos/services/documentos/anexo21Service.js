@@ -3,8 +3,8 @@ const { agregarInterviniente, registrarCambioEstado, up } = require("./alojamien
 const { validateAnexo21Datos } = require("../../validators/documentos/anexo21Validator");
 
 const CODIGO = "ANEXO_21";
-const ESTADOS_BLOQUEANTES = ["BORRADOR", "ENVIADO", "EN_REVISION"];
 const CAMPOS_OFICIALES_ANEXO_21 = new Set([
+  "tipoSolicitud",
   "lugar",
   "fechaLugar",
   "autoridadAsignacion",
@@ -72,12 +72,16 @@ function mergePreservandoLegacy(actual, oficiales) {
   };
 }
 
-async function findSolicitudActiva(solicitanteId) {
+async function findBorradorMismoTipo(solicitanteId, tipoSolicitud) {
+  const tipo = up(tipoSolicitud);
+  if (!tipo) return null;
+
   return AlojamientoDocumento.findOne({
     codigo: CODIGO,
     solicitante: solicitanteId,
     activo: { $ne: false },
-    estado: { $in: ESTADOS_BLOQUEANTES },
+    estado: "BORRADOR",
+    "datos.tipoSolicitud": tipo,
   }).sort({ updatedAt: -1, createdAt: -1 });
 }
 
@@ -91,7 +95,7 @@ async function crearBorrador({ user, datos }) {
     return { ok: false, status: 400, code: "DATOS_INVALIDOS" };
   }
 
-  const existente = await findSolicitudActiva(user._id);
+  const existente = await findBorradorMismoTipo(user._id, validated.value.tipoSolicitud);
   if (existente) {
     return { ok: false, status: 409, code: "SOLICITUD_ACTIVA_EXISTENTE" };
   }

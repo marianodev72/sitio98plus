@@ -31,6 +31,7 @@ type Representante = {
 };
 
 type FormState = {
+  tipoSolicitud: string;
   lugar: string;
   fechaLugar: string;
   autoridadAsignacion: string;
@@ -73,6 +74,7 @@ const EMPTY_REPRESENTANTE: Representante = {
 };
 
 const EMPTY_FORM: FormState = {
+  tipoSolicitud: "",
   lugar: "",
   fechaLugar: "",
   autoridadAsignacion: "",
@@ -244,6 +246,7 @@ function datosToForm(datos: Record<string, unknown> | undefined, user: any): For
 
   return {
     ...initial,
+    tipoSolicitud: str(datos?.tipoSolicitud),
     lugar: str(datos?.lugar),
     fechaLugar: str(datos?.fechaLugar),
     autoridadAsignacion: str(datos?.autoridadAsignacion),
@@ -280,6 +283,7 @@ function datosToForm(datos: Record<string, unknown> | undefined, user: any): For
 
 function formToDatos(form: FormState) {
   return {
+    tipoSolicitud: form.tipoSolicitud,
     lugar: form.lugar,
     fechaLugar: form.fechaLugar,
     autoridadAsignacion: form.autoridadAsignacion,
@@ -316,6 +320,7 @@ function formToDatos(form: FormState) {
 
 function validarEnvio(form: FormState) {
   const requiredStrings: Array<keyof FormState> = [
+    "tipoSolicitud",
     "lugar",
     "fechaLugar",
     "autoridadAsignacion",
@@ -558,6 +563,20 @@ export default function PostulacionAlojamientoPlaceholder() {
         <div style={sectionStyle}>
           <h2 style={sectionTitleStyle}>Declaracion jurada de postulacion</h2>
           <div style={fieldGridStyle}>
+            <label style={labelStyle}>
+              Tipo de solicitud
+              <select
+                value={form.tipoSolicitud}
+                onChange={(e) => setField("tipoSolicitud", e.target.value)}
+                style={inputStyle}
+                disabled={!canEdit || busy}
+              >
+                <option value="">Seleccionar...</option>
+                <option value="INSCRIPCION_INICIAL">Inscripcion inicial</option>
+                <option value="CAMBIO_ALOJAMIENTO">Cambio de alojamiento</option>
+                <option value="RECTIFICACION">Rectificacion</option>
+              </select>
+            </label>
             <label style={labelStyle}>
               Lugar
               <input value={form.lugar} onChange={(e) => setField("lugar", e.target.value)} style={inputStyle} disabled={!canEdit || busy} maxLength={80} />
