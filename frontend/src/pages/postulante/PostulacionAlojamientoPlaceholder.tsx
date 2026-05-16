@@ -22,6 +22,19 @@ type Documento = {
   updatedAt?: string;
 };
 
+type AdjuntoCampo = "fidofac" | "indiceTitularidad";
+
+type AdjuntoMetadata = {
+  id?: string;
+  campo?: string;
+  nombreOriginal?: string;
+  mime?: string;
+  size?: number;
+  sha256?: string;
+  fechaSubida?: string;
+  subidoPor?: string;
+};
+
 type Representante = {
   apellidoNombres: string;
   grado: string;
@@ -185,6 +198,14 @@ const optionStyle: CSSProperties = {
   color: "#F8FAFC",
 };
 
+const dateInputStyle: CSSProperties = {
+  ...inputStyle,
+  background: "#111827",
+  color: "#F8FAFC",
+  border: "1px solid rgba(148,163,184,0.32)",
+  colorScheme: "dark",
+};
+
 const radioRowStyle: CSSProperties = {
   display: "flex",
   gap: 10,
@@ -217,6 +238,37 @@ function boolFromUnknown(value: unknown): boolean | null {
 
 function str(value: unknown) {
   return typeof value === "string" || typeof value === "number" ? String(value) : "";
+}
+
+function formatBytes(value: unknown) {
+  const size = typeof value === "number" ? value : Number(value || 0);
+  if (!Number.isFinite(size) || size <= 0) return "-";
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function formatFecha(value: unknown) {
+  if (!value) return "-";
+  const date = new Date(String(value));
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleString("es-AR");
+}
+
+function getAdjunto(documento: Documento | null, campo: AdjuntoCampo): AdjuntoMetadata | null {
+  const datos = documento?.datos && typeof documento.datos === "object" ? documento.datos : {};
+  const adjuntos = datos?.adjuntos && typeof datos.adjuntos === "object"
+    ? (datos.adjuntos as Record<string, unknown>)
+    : {};
+  const adjunto = adjuntos[campo];
+  return adjunto && typeof adjunto === "object" ? (adjunto as AdjuntoMetadata) : null;
+}
+
+function validarArchivo(file: File) {
+  const name = file.name.toLowerCase();
+  const extOk = name.endsWith(".pdf") || name.endsWith(".jpg") || name.endsWith(".jpeg");
+  if (!extOk) return false;
+  return file.size <= 2 * 1024 * 1024;
 }
 
 function normalizeRepresentantes(value: unknown): Representante[] {
@@ -421,6 +473,7 @@ export default function PostulacionAlojamientoPlaceholder() {
   const [form, setForm] = useState<FormState>(() => buildInitialForm(user));
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [busyAdjunto, setBusyAdjunto] = useState<AdjuntoCampo | "">("");
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
 
@@ -449,6 +502,14 @@ export default function PostulacionAlojamientoPlaceholder() {
     }));
   }
 
+  async function cargarDetalle(documentoId: string) {
+    const detailRes = await http.get(`/alojamientos-documentos/${documentoId}`);
+    const detail = detailRes.data?.documento || null;
+    setDocumento(detail);
+    setForm(datosToForm(detail?.datos, user));
+    return detail;
+  }
+
   async function cargar() {
     setLoading(true);
     setError("");
@@ -466,10 +527,7 @@ export default function PostulacionAlojamientoPlaceholder() {
         return;
       }
 
-      const detailRes = await http.get(`/alojamientos-documentos/${item._id}`);
-      const detail = detailRes.data?.documento || null;
-      setDocumento(detail);
-      setForm(datosToForm(detail?.datos, user));
+      await cargarDetalle(item._id);
     } catch {
       setDocumento(null);
       setError("No es posible acceder a la solicitud de alojamiento.");
@@ -498,6 +556,138 @@ export default function PostulacionAlojamientoPlaceholder() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function asegurarBorrador() {
+    if (documento?._id) return documento;
+
+    const payload = { datos: formToDatos(form) };
+    const res = await http.post("/alojamientos-documentos/anexo-21", payload);
+    const saved = res.data?.documento || null;
+    setDocumento(saved);
+    setForm(datosToForm(saved?.datos, user));
+    return saved;
+  }
+
+  async function subirAdjunto(campo: AdjuntoCampo, file: File | null) {
+    if (!file) return;
+    setError("");
+    setInfo("");
+
+    if (!validarArchivo(file)) {
+      setError("El archivo debe ser PDF o JPG/JPEG y no superar 2 MB.");
+      return;
+    }
+
+    setBusyAdjunto(campo);
+    try {
+      const doc = await asegurarBorrador();
+      if (!doc?._id) throw new Error("sin documento");
+
+      const fd = new FormData();
+      fd.append("archivo", file);
+      await http.post(`/alojamientos-documentos/anexo-21/${doc._id}/adjuntos/${campo}`, fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      await cargarDetalle(doc._id);
+      setInfo("Adjunto actualizado.");
+    } catch {
+      setError("No es posible procesar el adjunto.");
+    } finally {
+      setBusyAdjunto("");
+    }
+  }
+
+  async function eliminarAdjunto(campo: AdjuntoCampo) {
+    if (!documento?._id) return;
+
+    setBusyAdjunto(campo);
+    setError("");
+    setInfo("");
+
+    try {
+      await http.delete(`/alojamientos-documentos/anexo-21/${documento._id}/adjuntos/${campo}`);
+      await cargarDetalle(documento._id);
+      setInfo("Adjunto eliminado.");
+    } catch {
+      setError("No es posible procesar el adjunto.");
+    } finally {
+      setBusyAdjunto("");
+    }
+  }
+
+  function descargarAdjunto(campo: AdjuntoCampo) {
+    if (!documento?._id) return;
+    window.open(`/api/alojamientos-documentos/${documento._id}/adjuntos/${campo}`, "_blank", "noopener,noreferrer");
+  }
+
+  function renderAdjunto(campo: AdjuntoCampo, titulo: string) {
+    const adjunto = getAdjunto(documento, campo);
+    const disabled = busy || busyAdjunto === campo;
+
+    return (
+      <div style={{ ...cardStyle, marginTop: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+          <div>
+            <h3 style={{ ...sectionTitleStyle, fontSize: 14, marginBottom: 8 }}>{titulo}</h3>
+            {adjunto ? (
+              <div style={{ color: "rgba(255,255,255,0.76)", lineHeight: 1.6, fontSize: 13 }}>
+                <div>Archivo: <b>{safe(adjunto.nombreOriginal)}</b></div>
+                <div>Tamano: {formatBytes(adjunto.size)}</div>
+                <div>Tipo: {safe(adjunto.mime)}</div>
+                <div>Fecha: {formatFecha(adjunto.fechaSubida)}</div>
+              </div>
+            ) : (
+              <div style={{ color: "rgba(255,255,255,0.62)", fontSize: 13 }}>
+                Sin adjunto cargado.
+              </div>
+            )}
+          </div>
+
+          <div style={{ ...buttonRowStyle, marginTop: 0 }}>
+            {adjunto ? (
+              <button
+                type="button"
+                style={secondaryButtonStyle}
+                onClick={() => descargarAdjunto(campo)}
+                disabled={disabled}
+              >
+                Descargar
+              </button>
+            ) : null}
+
+            {isBorrador ? (
+              <>
+                <label style={{ ...secondaryButtonStyle, cursor: disabled ? "default" : "pointer" }}>
+                  Subir
+                  <input
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg"
+                    style={{ display: "none" }}
+                    disabled={disabled}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] || null;
+                      event.target.value = "";
+                      subirAdjunto(campo, file);
+                    }}
+                  />
+                </label>
+                {adjunto ? (
+                  <button
+                    type="button"
+                    style={secondaryButtonStyle}
+                    onClick={() => eliminarAdjunto(campo)}
+                    disabled={disabled}
+                  >
+                    Eliminar
+                  </button>
+                ) : null}
+              </>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    );
   }
 
   async function enviar() {
@@ -596,7 +786,7 @@ export default function PostulacionAlojamientoPlaceholder() {
             </label>
             <label style={labelStyle}>
               Fecha
-              <input type="date" value={form.fechaLugar} onChange={(e) => setField("fechaLugar", e.target.value)} style={inputStyle} disabled={!canEdit || busy} />
+              <input type="date" value={form.fechaLugar} onChange={(e) => setField("fechaLugar", e.target.value)} style={dateInputStyle} disabled={!canEdit || busy} />
             </label>
             <label style={labelStyle}>
               Autoridad de asignacion
@@ -625,7 +815,7 @@ export default function PostulacionAlojamientoPlaceholder() {
             <label style={labelStyle}>Destino futuro<input value={form.destinoFuturo} onChange={(e) => setField("destinoFuturo", e.target.value)} style={inputStyle} disabled={!canEdit || busy} maxLength={120} /></label>
             <label style={labelStyle}>Telefono actual<input value={form.telefonoActual} onChange={(e) => setField("telefonoActual", e.target.value)} style={inputStyle} disabled={!canEdit || busy} maxLength={40} /></label>
             <label style={labelStyle}>Telefono futuro<input value={form.telefonoFuturo} onChange={(e) => setField("telefonoFuturo", e.target.value)} style={inputStyle} disabled={!canEdit || busy} maxLength={40} /></label>
-            <label style={labelStyle}>Fecha ultimo ascenso<input type="date" value={form.fechaUltimoAscenso} onChange={(e) => setField("fechaUltimoAscenso", e.target.value)} style={inputStyle} disabled={!canEdit || busy} /></label>
+            <label style={labelStyle}>Fecha ultimo ascenso<input type="date" value={form.fechaUltimoAscenso} onChange={(e) => setField("fechaUltimoAscenso", e.target.value)} style={dateInputStyle} disabled={!canEdit || busy} /></label>
             <label style={labelStyle}>Anios de servicio segun recibo<input type="number" min={0} max={60} value={form.aniosServicioRecibo} onChange={(e) => setField("aniosServicioRecibo", e.target.value)} style={inputStyle} disabled={!canEdit || busy} /></label>
           </div>
         </div>
@@ -666,10 +856,12 @@ export default function PostulacionAlojamientoPlaceholder() {
           <div style={fieldGridStyle}>
             <BoolRadio label="Autorizo descuento de haberes" value={form.autorizaDescuentoHaberes} disabled={!canEdit || busy} onChange={(value) => setField("autorizaDescuentoHaberes", value)} />
             <BoolRadio label="Autorizo administracion de expensas" value={form.autorizaAdministracionExpensas} disabled={!canEdit || busy} onChange={(value) => setField("autorizaAdministracionExpensas", value)} />
-            <label style={labelStyle}>Fecha estimada de traslado a la zona<input type="date" value={form.fechaEstimadaTrasladoZona} onChange={(e) => setField("fechaEstimadaTrasladoZona", e.target.value)} style={inputStyle} disabled={!canEdit || busy} /></label>
+            <label style={labelStyle}>Fecha estimada de traslado a la zona<input type="date" value={form.fechaEstimadaTrasladoZona} onChange={(e) => setField("fechaEstimadaTrasladoZona", e.target.value)} style={dateInputStyle} disabled={!canEdit || busy} /></label>
             <BoolRadio label="Agregado: fotocopia autenticada FIDOFAC" value={form.agregados.fidofac} disabled={!canEdit || busy} onChange={(value) => setAgregado("fidofac", value)} />
             <BoolRadio label="Agregado: indice de titularidad" value={form.agregados.indiceTitularidad} disabled={!canEdit || busy} onChange={(value) => setAgregado("indiceTitularidad", value)} />
           </div>
+          {renderAdjunto("fidofac", "FIDOFAC")}
+          {renderAdjunto("indiceTitularidad", "Indice de titularidad")}
         </div>
 
         <div style={{ ...buttonRowStyle, marginTop: 18 }}>
