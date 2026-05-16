@@ -9,6 +9,9 @@ const {
   puedeVerDocumento,
   isAdminDocumento,
 } = require("../../services/documentos/alojamientoDocumentoVisibilityService");
+const {
+  sanitizeDatosDocumento,
+} = require("../../services/documentos/alojamientoDocumentoSanitizer");
 
 function up(value) {
   return String(value || "").toUpperCase().trim();
@@ -93,7 +96,7 @@ function toListItem(doc) {
 function toDetail(doc) {
   return {
     ...toListItem(doc),
-    datos: doc.datos && typeof doc.datos === "object" ? doc.datos : {},
+    datos: sanitizeDatosDocumento(doc.datos),
     historialEstados: Array.isArray(doc.historialEstados) ? doc.historialEstados : [],
     intervenciones: Array.isArray(doc.intervenciones) ? doc.intervenciones : [],
     conformidades: Array.isArray(doc.conformidades) ? doc.conformidades : [],

@@ -1,6 +1,7 @@
 const AlojamientoDocumento = require("../../models/AlojamientoDocumento");
 const { agregarInterviniente, registrarCambioEstado, up } = require("./alojamientoDocumentoStateService");
 const { validateAnexo21Datos } = require("../../validators/documentos/anexo21Validator");
+const { sanitizeDatosDocumento } = require("./alojamientoDocumentoSanitizer");
 
 const CODIGO = "ANEXO_21";
 const CAMPOS_OFICIALES_ANEXO_21 = new Set([
@@ -50,7 +51,7 @@ function toResponse(documento) {
     codigo: doc.codigo,
     estado: doc.estado,
     estadoInstitucional: doc.estadoInstitucional || null,
-    datos: doc.datos && typeof doc.datos === "object" ? doc.datos : {},
+    datos: sanitizeDatosDocumento(doc.datos),
     historialEstados: Array.isArray(doc.historialEstados) ? doc.historialEstados : [],
     intervinientes: Array.isArray(doc.intervinientes) ? doc.intervinientes : [],
     solicitante: doc.solicitante || null,
