@@ -172,6 +172,19 @@ const inputStyle: CSSProperties = {
   outline: "none",
 };
 
+const selectStyle: CSSProperties = {
+  ...inputStyle,
+  background: "#111827",
+  color: "#F8FAFC",
+  border: "1px solid rgba(148,163,184,0.32)",
+  colorScheme: "dark",
+};
+
+const optionStyle: CSSProperties = {
+  background: "#111827",
+  color: "#F8FAFC",
+};
+
 const radioRowStyle: CSSProperties = {
   display: "flex",
   gap: 10,
@@ -568,13 +581,13 @@ export default function PostulacionAlojamientoPlaceholder() {
               <select
                 value={form.tipoSolicitud}
                 onChange={(e) => setField("tipoSolicitud", e.target.value)}
-                style={inputStyle}
+                style={selectStyle}
                 disabled={!canEdit || busy}
               >
-                <option value="">Seleccionar...</option>
-                <option value="INSCRIPCION_INICIAL">Inscripcion inicial</option>
-                <option value="CAMBIO_ALOJAMIENTO">Cambio de alojamiento</option>
-                <option value="RECTIFICACION">Rectificacion</option>
+                <option value="" style={optionStyle}>Seleccionar...</option>
+                <option value="INSCRIPCION_INICIAL" style={optionStyle}>Inscripcion inicial</option>
+                <option value="CAMBIO_ALOJAMIENTO" style={optionStyle}>Cambio de alojamiento</option>
+                <option value="RECTIFICACION" style={optionStyle}>Rectificacion</option>
               </select>
             </label>
             <label style={labelStyle}>
