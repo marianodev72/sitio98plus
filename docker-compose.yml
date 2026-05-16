@@ -1,16 +1,37 @@
-version: "3.8"
-
 services:
-  minio:
-    image: quay.io/minio/minio
-    container_name: minio
+  api:
+    build:
+      context: ./backend
+    container_name: sitio98_api
     restart: unless-stopped
-    ports:
-      - "9000:9000"   # API S3 compatible
-      - "9001:9001"   # Consola web
+    env_file:
+      - ./backend/.env
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-    command: server /data --console-address ":9001"
+      - ALOJAMIENTOS_STORAGE_ROOT=/DATA/storage/sitio98plus/alojamientos/documentos/anexo-21
+    expose:
+      - "3000"
     volumes:
-      - ./minio-data:/data
+      - uploads:/app/uploads
+      - uploads_private:/app/uploads_private
+      - /DATA/storage/sitio98plus/alojamientos:/DATA/storage/sitio98plus/alojamientos
+    networks:
+      - app_net
+
+  web:
+    build:
+      context: ./frontend
+    container_name: sitio98_web
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "127.0.0.1:8080:80"
+    networks:
+      - app_net
+
+networks:
+  app_net:
+
+volumes:
+  uploads:
+  uploads_private:

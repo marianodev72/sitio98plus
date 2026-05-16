@@ -3,5 +3,13 @@ npm-debug.log
 Dockerfile
 docker-compose.yml
 .git
+.gitignore
 .env
+.env.*
 dist
+coverage
+*.log
+uploads
+uploads_private
+.DS_Store
+Thumbs.db
