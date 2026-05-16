@@ -1,9 +1,82 @@
 const { hasPollutionKeys } = require("./alojamientoDocumentoValidator");
 
-const MAX_DEPTH = 6;
-const MAX_KEYS = 80;
-const MAX_ARRAY_ITEMS = 50;
-const MAX_STRING_LENGTH = 2000;
+const STRING_LIMITS = Object.freeze({
+  lugar: 80,
+  fechaLugar: 10,
+  autoridadAsignacion: 120,
+  zonaNaval: 20,
+  organismoAdministrador: 160,
+  mr: 40,
+  afiliadoIOSFA: 40,
+  gradoEscalafon: 80,
+  apellido: 80,
+  nombres: 100,
+  destinoActual: 120,
+  destinoFuturo: 120,
+  telefonoActual: 40,
+  telefonoFuturo: 40,
+  fechaUltimoAscenso: 10,
+  oficioProblemasSocioeconomicos: 80,
+  fechaEstimadaTrasladoZona: 10,
+});
+
+const BOOLEAN_FIELDS = Object.freeze([
+  "aceptaCondicionesReglamento",
+  "agregaFidofac",
+  "tieneProblemasSocioeconomicos",
+  "declaradoIneptoDGPN",
+  "agregaIndiceTitularidad",
+  "aceptaDecisionRepresentante",
+  "autorizaDescuentoHaberes",
+  "autorizaAdministracionExpensas",
+]);
+
+const REQUIRED_STRING_FIELDS = Object.freeze([
+  "lugar",
+  "fechaLugar",
+  "autoridadAsignacion",
+  "zonaNaval",
+  "organismoAdministrador",
+  "mr",
+  "afiliadoIOSFA",
+  "gradoEscalafon",
+  "apellido",
+  "nombres",
+  "destinoActual",
+  "telefonoActual",
+  "fechaUltimoAscenso",
+]);
+
+const REQUIRED_BOOLEAN_TRUE_FIELDS = Object.freeze([
+  "aceptaCondicionesReglamento",
+  "autorizaDescuentoHaberes",
+  "autorizaAdministracionExpensas",
+]);
+
+const REQUIRED_BOOLEAN_FIELDS = Object.freeze([
+  "agregaFidofac",
+  "tieneProblemasSocioeconomicos",
+  "declaradoIneptoDGPN",
+  "agregaIndiceTitularidad",
+]);
+
+const REPRESENTANTE_STRING_LIMITS = Object.freeze({
+  apellidoNombres: 120,
+  grado: 60,
+  mr: 40,
+  destino: 120,
+  telefono: 40,
+});
+
+const AGREGADOS_FIELDS = Object.freeze(["fidofac", "indiceTitularidad"]);
+
+const ALLOWED_ROOT_KEYS = new Set([
+  ...Object.keys(STRING_LIMITS),
+  ...BOOLEAN_FIELDS,
+  "aniosServicioRecibo",
+  "representantes",
+  "agregados",
+]);
 
 function escapeHTML(input) {
   return String(input ?? "")
@@ -12,45 +85,6 @@ function escapeHTML(input) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#x27;");
-}
-
-function sanitizeValue(value, depth = 0) {
-  if (depth > MAX_DEPTH) return null;
-
-  if (value === null || value === undefined) return null;
-
-  if (typeof value === "string") {
-    const trimmed = value.trim().slice(0, MAX_STRING_LENGTH);
-    return escapeHTML(trimmed);
-  }
-
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? value : null;
-  }
-
-  if (typeof value === "boolean") return value;
-
-  if (Array.isArray(value)) {
-    return value.slice(0, MAX_ARRAY_ITEMS).map((item) => sanitizeValue(item, depth + 1));
-  }
-
-  if (typeof value === "object") {
-    if (hasPollutionKeys(value)) return null;
-
-    const out = {};
-    const keys = Object.keys(value).slice(0, MAX_KEYS);
-
-    for (const key of keys) {
-      const cleanKey = String(key || "").trim();
-      if (!cleanKey || cleanKey.length > 80) continue;
-      const cleanValue = sanitizeValue(value[key], depth + 1);
-      if (cleanValue !== undefined) out[cleanKey] = cleanValue;
-    }
-
-    return out;
-  }
-
-  return null;
 }
 
 function parseDatos(input) {
@@ -68,7 +102,71 @@ function parseDatos(input) {
   return input && typeof input === "object" ? input : null;
 }
 
-function validateAnexo21Datos(input) {
+function cleanString(value, max) {
+  if (value === undefined || value === null) return "";
+  return escapeHTML(String(value).trim().slice(0, max));
+}
+
+function cleanOptionalBoolean(value) {
+  return typeof value === "boolean" ? value : null;
+}
+
+function cleanDate(value) {
+  const clean = cleanString(value, 10);
+  if (!clean) return "";
+  return /^\d{4}-\d{2}-\d{2}$/.test(clean) ? clean : "";
+}
+
+function cleanAniosServicio(value) {
+  if (value === undefined || value === null || value === "") return "";
+  const n = Number.parseInt(String(value), 10);
+  if (!Number.isInteger(n) || n < 0 || n > 60) return "";
+  return n;
+}
+
+function cleanRepresentante(input) {
+  const source = input && typeof input === "object" && !Array.isArray(input) ? input : {};
+  const out = {};
+  for (const [key, limit] of Object.entries(REPRESENTANTE_STRING_LIMITS)) {
+    out[key] = cleanString(source[key], limit);
+  }
+  return out;
+}
+
+function cleanAgregados(input) {
+  const source = input && typeof input === "object" && !Array.isArray(input) ? input : {};
+  return {
+    fidofac: cleanOptionalBoolean(source.fidofac),
+    indiceTitularidad: cleanOptionalBoolean(source.indiceTitularidad),
+  };
+}
+
+function hasUnknownKeys(datos) {
+  return Object.keys(datos).some((key) => !ALLOWED_ROOT_KEYS.has(key));
+}
+
+function pushRequiredStringErrors(value, errors) {
+  for (const field of REQUIRED_STRING_FIELDS) {
+    if (!String(value[field] || "").trim()) errors.push(field);
+  }
+}
+
+function pushRequiredBooleanErrors(value, errors) {
+  for (const field of REQUIRED_BOOLEAN_FIELDS) {
+    if (typeof value[field] !== "boolean") errors.push(field);
+  }
+
+  for (const field of REQUIRED_BOOLEAN_TRUE_FIELDS) {
+    if (value[field] !== true) errors.push(field);
+  }
+
+  for (const field of AGREGADOS_FIELDS) {
+    if (typeof value.agregados?.[field] !== "boolean") errors.push(`agregados.${field}`);
+  }
+}
+
+function validateAnexo21Datos(input, options = {}) {
+  const { requireComplete = false, rejectUnknown = true } = options;
   const datos = parseDatos(input);
   const errors = [];
 
@@ -82,9 +180,44 @@ function validateAnexo21Datos(input) {
     return { ok: false, errors, value: {} };
   }
 
-  const value = sanitizeValue(datos);
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    errors.push("datos invalidos");
+  if (rejectUnknown && hasUnknownKeys(datos)) {
+    errors.push("datos contienen campos no permitidos");
+    return { ok: false, errors, value: {} };
+  }
+
+  const value = {};
+  for (const [field, limit] of Object.entries(STRING_LIMITS)) {
+    if (field === "fechaLugar" || field === "fechaUltimoAscenso" || field === "fechaEstimadaTrasladoZona") {
+      value[field] = cleanDate(datos[field]);
+    } else {
+      value[field] = cleanString(datos[field], limit);
+    }
+  }
+
+  for (const field of BOOLEAN_FIELDS) {
+    value[field] = cleanOptionalBoolean(datos[field]);
+  }
+
+  value.aniosServicioRecibo = cleanAniosServicio(datos.aniosServicioRecibo);
+  value.representantes = Array.isArray(datos.representantes)
+    ? datos.representantes.slice(0, 2).map(cleanRepresentante)
+    : [cleanRepresentante(), cleanRepresentante()];
+
+  while (value.representantes.length < 2) {
+    value.representantes.push(cleanRepresentante());
+  }
+
+  value.agregados = cleanAgregados(datos.agregados);
+
+  if (requireComplete) {
+    pushRequiredStringErrors(value, errors);
+
+    if (value.aniosServicioRecibo === "") errors.push("aniosServicioRecibo");
+    pushRequiredBooleanErrors(value, errors);
+
+    if (value.tieneProblemasSocioeconomicos === true && !value.oficioProblemasSocioeconomicos) {
+      errors.push("oficioProblemasSocioeconomicos");
+    }
   }
 
   return {

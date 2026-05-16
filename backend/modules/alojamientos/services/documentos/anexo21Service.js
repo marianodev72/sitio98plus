@@ -4,6 +4,36 @@ const { validateAnexo21Datos } = require("../../validators/documentos/anexo21Val
 
 const CODIGO = "ANEXO_21";
 const ESTADOS_BLOQUEANTES = ["BORRADOR", "ENVIADO", "EN_REVISION"];
+const CAMPOS_OFICIALES_ANEXO_21 = new Set([
+  "lugar",
+  "fechaLugar",
+  "autoridadAsignacion",
+  "zonaNaval",
+  "organismoAdministrador",
+  "mr",
+  "afiliadoIOSFA",
+  "gradoEscalafon",
+  "apellido",
+  "nombres",
+  "destinoActual",
+  "destinoFuturo",
+  "telefonoActual",
+  "telefonoFuturo",
+  "fechaUltimoAscenso",
+  "aniosServicioRecibo",
+  "aceptaCondicionesReglamento",
+  "agregaFidofac",
+  "tieneProblemasSocioeconomicos",
+  "oficioProblemasSocioeconomicos",
+  "declaradoIneptoDGPN",
+  "agregaIndiceTitularidad",
+  "representantes",
+  "aceptaDecisionRepresentante",
+  "autorizaDescuentoHaberes",
+  "autorizaAdministracionExpensas",
+  "fechaEstimadaTrasladoZona",
+  "agregados",
+]);
 
 function isPostulante(user) {
   return up(user?.role) === "POSTULANTE";
@@ -29,6 +59,19 @@ function toResponse(documento) {
   };
 }
 
+function mergePreservandoLegacy(actual, oficiales) {
+  const base = actual && typeof actual === "object" && !Array.isArray(actual) ? { ...actual } : {};
+
+  for (const key of CAMPOS_OFICIALES_ANEXO_21) {
+    delete base[key];
+  }
+
+  return {
+    ...base,
+    ...oficiales,
+  };
+}
+
 async function findSolicitudActiva(solicitanteId) {
   return AlojamientoDocumento.findOne({
     codigo: CODIGO,
@@ -43,7 +86,7 @@ async function crearBorrador({ user, datos }) {
     return { ok: false, status: 404, code: "NO_AUTORIZADO" };
   }
 
-  const validated = validateAnexo21Datos(datos);
+  const validated = validateAnexo21Datos(datos, { requireComplete: false, rejectUnknown: true });
   if (!validated.ok) {
     return { ok: false, status: 400, code: "DATOS_INVALIDOS" };
   }
@@ -74,7 +117,7 @@ async function actualizarBorrador({ id, user, datos }) {
     return { ok: false, status: 404, code: "NO_AUTORIZADO" };
   }
 
-  const validated = validateAnexo21Datos(datos);
+  const validated = validateAnexo21Datos(datos, { requireComplete: false, rejectUnknown: true });
   if (!validated.ok) {
     return { ok: false, status: 400, code: "DATOS_INVALIDOS" };
   }
@@ -87,7 +130,7 @@ async function actualizarBorrador({ id, user, datos }) {
     return { ok: false, status: 404, code: "NO_DISPONIBLE" };
   }
 
-  documento.datos = validated.value;
+  documento.datos = mergePreservandoLegacy(documento.datos, validated.value);
   documento.actualizadoPor = user._id;
   documento.markModified("datos");
   await documento.save();
@@ -107,6 +150,17 @@ async function enviarBorrador({ id, user }) {
   if (!isOwner(documento, user) || up(documento.estado) !== "BORRADOR") {
     return { ok: false, status: 404, code: "NO_DISPONIBLE" };
   }
+
+  const validated = validateAnexo21Datos(documento.datos, {
+    requireComplete: true,
+    rejectUnknown: false,
+  });
+  if (!validated.ok) {
+    return { ok: false, status: 400, code: "DATOS_INVALIDOS" };
+  }
+
+  documento.datos = mergePreservandoLegacy(documento.datos, validated.value);
+  documento.markModified("datos");
 
   const transition = registrarCambioEstado(documento, {
     estadoNuevo: "ENVIADO",
