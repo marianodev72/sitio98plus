@@ -480,6 +480,7 @@ export default function PostulacionAlojamientoPlaceholder() {
   const estado = useMemo(() => up(documento?.estado), [documento?.estado]);
   const isBorrador = estado === "BORRADOR";
   const isEnviado = estado === "ENVIADO";
+  const isAdjuntoBusy = Boolean(busyAdjunto);
   const canEdit = !documento || isBorrador;
 
   function setField<K extends keyof FormState>(field: K, value: FormState[K]) {
@@ -537,6 +538,7 @@ export default function PostulacionAlojamientoPlaceholder() {
   }
 
   async function guardar() {
+    if (isAdjuntoBusy) return;
     setBusy(true);
     setError("");
     setInfo("");
@@ -560,6 +562,7 @@ export default function PostulacionAlojamientoPlaceholder() {
 
   async function asegurarBorrador() {
     if (documento?._id) return documento;
+    if (documento && !isBorrador) throw new Error("documento no editable");
 
     const payload = { datos: formToDatos(form) };
     const res = await http.post("/alojamientos-documentos/anexo-21", payload);
@@ -571,6 +574,12 @@ export default function PostulacionAlojamientoPlaceholder() {
 
   async function subirAdjunto(campo: AdjuntoCampo, file: File | null) {
     if (!file) return;
+    if (isAdjuntoBusy) return;
+    if (documento && !isBorrador) {
+      setInfo("");
+      setError("No es posible procesar el adjunto.");
+      return;
+    }
     setError("");
     setInfo("");
 
@@ -600,6 +609,7 @@ export default function PostulacionAlojamientoPlaceholder() {
 
   async function eliminarAdjunto(campo: AdjuntoCampo) {
     if (!documento?._id) return;
+    if (!isBorrador || isAdjuntoBusy) return;
 
     setBusyAdjunto(campo);
     setError("");
@@ -623,7 +633,7 @@ export default function PostulacionAlojamientoPlaceholder() {
 
   function renderAdjunto(campo: AdjuntoCampo, titulo: string) {
     const adjunto = getAdjunto(documento, campo);
-    const disabled = busy || busyAdjunto === campo;
+    const disabled = busy || isAdjuntoBusy;
 
     return (
       <div style={{ ...cardStyle, marginTop: 12 }}>
@@ -692,6 +702,7 @@ export default function PostulacionAlojamientoPlaceholder() {
 
   async function enviar() {
     if (!documento?._id) return;
+    if (isAdjuntoBusy) return;
     if (!validarEnvio(form)) {
       setError("Complete los campos obligatorios antes de enviar.");
       setInfo("");
@@ -869,19 +880,19 @@ export default function PostulacionAlojamientoPlaceholder() {
             type="button"
             style={secondaryButtonStyle}
             onClick={() => navigate("/app/postulante/postulaciones")}
-            disabled={busy}
+            disabled={busy || isAdjuntoBusy}
           >
             Volver a postulaciones
           </button>
 
           {canEdit ? (
-            <button type="button" style={primaryButtonStyle} onClick={guardar} disabled={busy}>
+            <button type="button" style={primaryButtonStyle} onClick={guardar} disabled={busy || isAdjuntoBusy}>
               {documento ? "Guardar borrador" : "Iniciar solicitud"}
             </button>
           ) : null}
 
           {isBorrador ? (
-            <button type="button" style={successButtonStyle} onClick={enviar} disabled={busy}>
+            <button type="button" style={successButtonStyle} onClick={enviar} disabled={busy || isAdjuntoBusy}>
               Enviar solicitud
             </button>
           ) : null}
