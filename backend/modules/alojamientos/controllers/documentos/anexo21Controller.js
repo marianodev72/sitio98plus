@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 
 const anexo21Service = require("../../services/documentos/anexo21Service");
+const anexo21AdjuntoService = require("../../services/documentos/anexo21AdjuntoService");
 
 function deny(res) {
   return res.status(404).json({ message: "Recurso no disponible" });
@@ -81,8 +82,73 @@ async function enviar(req, res) {
   }
 }
 
+async function subirAdjunto(req, res) {
+  try {
+    const { id, campo } = req.params || {};
+    if (!isObjectId(id)) return deny(res);
+
+    const result = await anexo21AdjuntoService.subirAdjunto({
+      id,
+      campo,
+      file: req.file,
+      user: req.user,
+    });
+
+    if (!result?.ok) {
+      if (result?.status === 400) return badRequest(res);
+      return deny(res);
+    }
+
+    return res.status(result.status || 200).json({ ok: true, adjunto: result.adjunto });
+  } catch (err) {
+    console.error("[alojamientos-documentos][anexo21] subir adjunto error:", err?.message || "Error controlado");
+    return res.status(500).json({ message: "Error interno al procesar archivo" });
+  }
+}
+
+async function eliminarAdjunto(req, res) {
+  try {
+    const { id, campo } = req.params || {};
+    if (!isObjectId(id)) return deny(res);
+
+    const result = await anexo21AdjuntoService.eliminarAdjunto({
+      id,
+      campo,
+      user: req.user,
+    });
+
+    if (!result?.ok) return deny(res);
+    return res.status(result.status || 200).json({ ok: true });
+  } catch (err) {
+    console.error("[alojamientos-documentos][anexo21] eliminar adjunto error:", err?.message || "Error controlado");
+    return res.status(500).json({ message: "Error interno al procesar archivo" });
+  }
+}
+
+async function descargarAdjunto(req, res) {
+  try {
+    const { id, campo } = req.params || {};
+    if (!isObjectId(id)) return deny(res);
+
+    const result = await anexo21AdjuntoService.obtenerAdjuntoDescarga({
+      id,
+      campo,
+      user: req.user,
+    });
+
+    if (!result?.ok) return deny(res);
+    return anexo21AdjuntoService.streamAdjunto({ res, download: result });
+  } catch (err) {
+    console.error("[alojamientos-documentos][anexo21] descargar adjunto error:", err?.message || "Error controlado");
+    if (!res.headersSent) return res.status(500).json({ message: "Error interno al procesar archivo" });
+  }
+}
+
 module.exports = {
   crear,
   actualizar,
   enviar,
+  subirAdjunto,
+  eliminarAdjunto,
+  descargarAdjunto,
 };
