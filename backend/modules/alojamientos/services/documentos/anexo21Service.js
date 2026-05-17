@@ -14,6 +14,7 @@ const CAMPOS_OFICIALES_ANEXO_21 = new Set([
   "mr",
   "afiliadoIOSFA",
   "gradoEscalafon",
+  "genero",
   "apellido",
   "nombres",
   "destinoActual",

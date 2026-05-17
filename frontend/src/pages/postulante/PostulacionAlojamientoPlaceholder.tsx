@@ -609,7 +609,7 @@ export default function PostulacionAlojamientoPlaceholder() {
 
     try {
       const listRes = await http.get("/alojamientos-documentos", {
-        params: { codigo: "ANEXO_21", limit: 1 },
+        params: { codigo: "ANEXO_21", estado: "BORRADOR", limit: 1 },
       });
 
       const item = Array.isArray(listRes.data?.documentos) ? listRes.data.documentos[0] : null;
