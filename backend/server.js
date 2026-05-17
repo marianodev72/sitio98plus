@@ -201,6 +201,10 @@ const alojamientosDocumentosRoutes = safeRequire(
   "alojamientosDocumentosRoutes",
   "./modules/alojamientos/routes/alojamientosDocumentosRoutes"
 );
+const alojamientosPlazasRoutes = safeRequire(
+  "alojamientosPlazasRoutes",
+  "./modules/alojamientos/routes/alojamientosPlazasRoutes"
+);
 
 // -------------------------
 // Health
@@ -234,6 +238,7 @@ app.use("/api/alojamientos-navales", alojamientosNavalesRoutes);
 app.use("/api/alojamientos-dashboard", alojamientosDashboardRoutes);
 app.use("/api/alojamientos-asignaciones", alojamientosAsignacionesRoutes);
 app.use("/api/alojamientos-documentos", alojamientosDocumentosRoutes);
+app.use("/api/alojamientos-plazas", alojamientosPlazasRoutes);
 
 // -------------------------
 app.use("/uploads", (_req, res) => res.status(404).end());
