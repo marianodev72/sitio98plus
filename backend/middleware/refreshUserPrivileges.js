@@ -65,7 +65,7 @@ async function refreshUserPrivileges(req, res, next) {
     // Buscamos en BD con campos necesarios para seguridad.
     const dbUser = await User.findById(id)
      .select(
-       "_id role permisos activo bloqueado archivado barrioAsignado viviendaAsignada alojamientoAsignado tokenVersion"
+       "_id role permisos territoriosAlojamiento activo bloqueado archivado barrioAsignado viviendaAsignada alojamientoAsignado tokenVersion"
      )
      .lean();
 
@@ -103,6 +103,9 @@ async function refreshUserPrivileges(req, res, next) {
    id: String(dbUser._id), // alias compat
   role: dbUser.role,
   permisos: Array.isArray(dbUser.permisos) ? dbUser.permisos : [],
+  territoriosAlojamiento: Array.isArray(dbUser.territoriosAlojamiento)
+    ? dbUser.territoriosAlojamiento
+    : [],
   activo: dbUser.activo,
   tokenVersion: typeof dbUser.tokenVersion === "number" ? dbUser.tokenVersion : 0,
   barrioAsignado: dbUser.barrioAsignado || "",

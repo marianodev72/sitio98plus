@@ -74,6 +74,47 @@ async function obtenerPorId(req, res) {
   }
 }
 
+async function listarTerritorios(req, res) {
+  try {
+    if (!isAdminLike(req.user)) return deny(res);
+
+    const rows = await AlojamientoNaval.aggregate([
+      {
+        $match: {
+          activo: { $ne: false },
+          lugar: { $exists: true, $ne: "" },
+        },
+      },
+      {
+        $project: {
+          valor: { $trim: { input: "$lugar" } },
+        },
+      },
+      {
+        $match: {
+          valor: { $ne: "" },
+        },
+      },
+      {
+        $group: {
+          _id: "$valor",
+        },
+      },
+      {
+        $sort: {
+          _id: 1,
+        },
+      },
+    ]);
+
+    const territorios = rows.map((row) => ({ tipo: "LUGAR", valor: row._id }));
+    return res.json({ ok: true, total: territorios.length, territorios });
+  } catch (err) {
+    console.error("[alojamientos] listarTerritorios error:", err?.message || "Error controlado");
+    return res.status(500).json({ message: "Error interno al listar territorios" });
+  }
+}
+
 async function listarPlazas(req, res) {
   try {
     if (!isAdminLike(req.user)) return deny(res);
@@ -126,6 +167,7 @@ async function importarCsv(req, res) {
 
 module.exports = {
   listar,
+  listarTerritorios,
   obtenerPorId,
   listarPlazas,
   importarCsv,

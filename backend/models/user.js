@@ -22,11 +22,26 @@ const ESTADOS_HABITACIONALES = [
   "ALOJADO_ACTIVO",
 ];
 
-const PERMISOS = ["INSPECTOR", "JEFE_DE_BARRIO"];
+const PERMISOS = ["INSPECTOR", "JEFE_DE_BARRIO", "INSPECTOR_ALOJAMIENTOS"];
+const TERRITORIOS_ALOJAMIENTO_TIPOS = ["LUGAR"];
 
 function up(v) {
   return String(v || "").toUpperCase().trim();
 }
+
+const territorioAlojamientoSchema = new Schema(
+  {
+    tipo: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      enum: TERRITORIOS_ALOJAMIENTO_TIPOS,
+      required: true,
+    },
+    valor: { type: String, trim: true, required: true, maxlength: 200 },
+  },
+  { _id: false }
+);
 
 const userSchema = new Schema(
   {
@@ -61,6 +76,11 @@ const userSchema = new Schema(
 
     viviendaAsignada: { type: Schema.Types.ObjectId, ref: "Vivienda" },
     alojamientoAsignado: { type: Schema.Types.ObjectId, ref: "Alojamiento" },
+
+    territoriosAlojamiento: {
+      type: [territorioAlojamientoSchema],
+      default: [],
+    },
 
     permisos: {
       type: [String],

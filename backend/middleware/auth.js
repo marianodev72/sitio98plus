@@ -83,6 +83,9 @@ function signToken(user) {
   if (!PRIVATE_KEY) throw new Error("JWT private key no cargada.");
 
   const permisos = Array.isArray(user?.permisos) ? user.permisos : [];
+  const territoriosAlojamiento = Array.isArray(user?.territoriosAlojamiento)
+    ? user.territoriosAlojamiento
+    : [];
   const tokenVersion = typeof user?.tokenVersion === "number" ? user.tokenVersion : 0;
 
   // ✅ A5 Minimización: NO incluir PII en el JWT
@@ -92,6 +95,7 @@ function signToken(user) {
       _id: String(user._id),
       role: user.role,
       permisos,
+      territoriosAlojamiento,
       tokenVersion,
     },
   };
@@ -205,7 +209,7 @@ async function authRequired(req, res, next) {
 
     // ✅ Cargar desde DB lo necesario para estado + autorización + territorial (sin PII sensible)
     const dbUser = await User.findById(rawUser._id).select(
-      "_id role permisos activo bloqueado archivado tokenVersion barrioAsignado viviendaAsignada alojamientoAsignado"
+      "_id role permisos territoriosAlojamiento activo bloqueado archivado tokenVersion barrioAsignado viviendaAsignada alojamientoAsignado"
     );
 
     if (!dbUser) return res.status(401).json({ message: "No autenticado" });
@@ -230,6 +234,9 @@ async function authRequired(req, res, next) {
      id: String(dbUser._id), // alias compat
      role: dbUser.role,
      permisos: Array.isArray(dbUser.permisos) ? dbUser.permisos : [],
+     territoriosAlojamiento: Array.isArray(dbUser.territoriosAlojamiento)
+       ? dbUser.territoriosAlojamiento
+       : [],
      activo: dbUser.activo,
      tokenVersion: typeof dbUser.tokenVersion === "number" ? dbUser.tokenVersion : 0,
      barrioAsignado: dbUser.barrioAsignado || "",

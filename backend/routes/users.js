@@ -277,6 +277,16 @@ router.patch(
 );
 
 router.patch(
+  "/:id/territorios-alojamiento",
+  requireRole("ADMIN_GENERAL"),
+  audit("ADMIN_ASSIGN_ALOJAMIENTOS_TERRITORIES", {
+    targetType: "User",
+    metaAllowlist: ["params.id", "body.territoriosAlojamiento", "body.territorios"],
+  }),
+  usersController.asignarTerritoriosAlojamiento
+);
+
+router.patch(
   "/:id/vivienda",
   requireRole("ADMIN", "ADMIN_GENERAL"),
   audit("ADMIN_ASSIGN_VIVIENDA", {

@@ -47,11 +47,35 @@ function safeStr(v) {
   return String(v || "").trim();
 }
 
+const TERRITORIOS_ALOJAMIENTO_TIPOS = ["LUGAR"];
+
+function normalizarTerritoriosAlojamiento(value) {
+  if (!Array.isArray(value)) {
+    const err = new Error("Territorios invÃ¡lidos");
+    err.code = "TERRITORIOS_INVALIDOS";
+    throw err;
+  }
+
+  const unique = new Map();
+  for (const item of value) {
+    const tipo = up(item?.tipo);
+    const valor = safeStr(item?.valor);
+    if (!TERRITORIOS_ALOJAMIENTO_TIPOS.includes(tipo) || !valor) {
+      const err = new Error("Territorios invÃ¡lidos");
+      err.code = "TERRITORIOS_INVALIDOS";
+      throw err;
+    }
+    unique.set(`${tipo}:${valor.toUpperCase()}`, { tipo, valor });
+  }
+
+  return Array.from(unique.values());
+}
+
 // Roles base válidos
 const ROLES_BASE_VALIDOS = ["ADMIN_GENERAL", "ADMIN", "POSTULANTE", "PERMISIONARIO", "ALOJADO"];
 
 // Permisos válidos
-const PERMISOS_VALIDOS = ["INSPECTOR", "JEFE_DE_BARRIO"];
+const PERMISOS_VALIDOS = ["INSPECTOR", "JEFE_DE_BARRIO", "INSPECTOR_ALOJAMIENTOS"];
 
 /**
  * ✅ Allowlist institucional para lectura:
@@ -59,7 +83,7 @@ const PERMISOS_VALIDOS = ["INSPECTOR", "JEFE_DE_BARRIO"];
  * ❌ Excluye campos técnicos (passwordHash, loginEventos, adminEventos, tokenVersion, IPs, etc.) por defecto.
  */
 const ADMIN_READ_SELECT =
-  "_id nombre apellido email dni matricula telefono role permisos barrioAsignado estadoHabitacional activo bloqueado archivado archivadoAt viviendaAsignada alojamientoAsignado createdAt updatedAt";
+  "_id nombre apellido email dni matricula telefono role permisos barrioAsignado territoriosAlojamiento estadoHabitacional activo bloqueado archivado archivadoAt viviendaAsignada alojamientoAsignado createdAt updatedAt";
 
 // Legacy roles INSPECTOR/JEFE_DE_BARRIO (si quedaron como role)
 function normalizeLegacyRoleToPermisos(user) {
@@ -367,6 +391,47 @@ async function asignarBarrio(req, res) {
     return res.json({ message: "Barrio asignado" });
   } catch (err) {
     console.error("[USERS] Error asignarBarrio:", err);
+    return res.status(500).json({ message: "Error interno" });
+  }
+}
+
+/**
+ * PATCH /api/users/:id/territorios-alojamiento
+ * âœ… SOLO ADMIN_GENERAL (escritura)
+ */
+async function asignarTerritoriosAlojamiento(req, res) {
+  try {
+    if (!isAdminGeneral(req)) return deny(res);
+
+    const { id } = req.params;
+    const { territoriosAlojamiento, territorios, observacion } = req.body || {};
+    if (!mongoose.Types.ObjectId.isValid(id)) return deny(res);
+
+    const nextTerritorios = normalizarTerritoriosAlojamiento(
+      territoriosAlojamiento ?? territorios
+    );
+
+    const user = await User.findById(id).select("+adminEventos +tokenVersion");
+    if (!user) return deny(res);
+
+    user.territoriosAlojamiento = nextTerritorios;
+
+    registrarAdminEvento(
+      user,
+      req,
+      "ASIGNAR_TERRITORIOS_ALOJAMIENTO",
+      { territoriosAlojamiento: nextTerritorios },
+      observacion
+    );
+
+    bumpTokenVersion(user);
+    await user.save();
+    return res.json({ message: "Territorios de alojamiento asignados" });
+  } catch (err) {
+    if (err?.code === "TERRITORIOS_INVALIDOS") {
+      return res.status(400).json({ message: "Territorios invÃ¡lidos" });
+    }
+    console.error("[USERS] Error asignarTerritoriosAlojamiento:", err);
     return res.status(500).json({ message: "Error interno" });
   }
 }
@@ -769,6 +834,7 @@ module.exports = {
   cambiarRol,
   setPermisos,
   asignarBarrio,
+  asignarTerritoriosAlojamiento,
   asignarVivienda,
   cambiarActivo,
   resetPassword,

@@ -23,6 +23,7 @@ const upload = multer({
 router.use(authRequired, refreshUserPrivileges);
 
 router.get("/", controller.listar);
+router.get("/territorios", controller.listarTerritorios);
 router.get("/:id", controller.obtenerPorId);
 router.get("/:id/plazas", controller.listarPlazas);
 router.post("/import-csv", upload.single("archivo"), controller.importarCsv);
