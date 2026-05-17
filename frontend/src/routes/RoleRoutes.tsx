@@ -10,6 +10,7 @@ import AdminGeneralLayout from "../layouts/AdminGeneralLayout";
 import AdminLayout from "../layouts/AdminLayout";
 import PermisionarioLayout from "../layouts/PermisionarioLayout";
 import InspectorLayout from "../layouts/InspectorLayout";
+import AlojamientosInspectorLayout from "../layouts/AlojamientosInspectorLayout";
 import AlojadoLayout from "../layouts/AlojadoLayout";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 
@@ -33,6 +34,7 @@ import AlojamientosInventario from "../pages/alojamientos/AlojamientosInventario
 import AlojamientosDashboard from "../pages/alojamientos/AlojamientosDashboard";
 import AlojamientoDetalle from "../pages/alojamientos/AlojamientoDetalle";
 import AlojamientoDocumentoDetalle from "../pages/alojamientos/AlojamientoDocumentoDetalle";
+import AlojamientosInspectorDashboard from "../pages/alojamientos_inspector/AlojamientosInspectorDashboard";
 
 /* Admin */
 import AdminDashboard from "../pages/admin/AdminDashboard";
@@ -191,6 +193,11 @@ export default function RoleRoutes() {
           <Route path="*" element={<GenericUnavailable />} />
         </Route>
 
+        {/* INSPECTOR ALOJAMIENTOS */}
+        <Route path="alojamientos-inspector" element={<AlojamientosInspectorLayout />}>
+          <Route index element={<AlojamientosInspectorDashboard />} />
+          <Route path="*" element={<GenericUnavailable />} />
+        </Route>
 
         {/* PERMISIONARIO */}
         <Route path="permisionario" element={<PermisionarioLayout />}>
