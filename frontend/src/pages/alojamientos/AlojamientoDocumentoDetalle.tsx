@@ -7,6 +7,7 @@ import {
   cardStyle,
   heroStyle,
   pageStyle,
+  primaryButtonStyle,
   secondaryButtonStyle,
   shellStyle,
   softCardStyle,
@@ -36,6 +37,28 @@ type AlojamientoDocumento = {
   historialEstados?: Array<Record<string, any>>;
   intervenciones?: Array<Record<string, any>>;
   conformidades?: Array<Record<string, any>>;
+};
+
+type PlazaElegible = {
+  _id: string;
+  codigo: string;
+  numeroPlaza: number;
+  estado: string;
+  label: string;
+  disponible: boolean;
+  alojamiento?: {
+    _id?: string;
+    codigo?: string;
+    dependencia?: string;
+    lugar?: string;
+    sector?: string;
+    tipo?: string;
+    numero?: string;
+    clase?: string;
+    capacidad?: number;
+    generoPermitido?: string;
+    estado?: string;
+  };
 };
 
 function up(value: unknown) {
@@ -140,10 +163,34 @@ export default function AlojamientoDocumentoDetalle() {
   const [documento, setDocumento] = useState<AlojamientoDocumento | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
+  const [plazas, setPlazas] = useState<PlazaElegible[]>([]);
+  const [loadingPlazas, setLoadingPlazas] = useState(false);
+  const [plazaSeleccionada, setPlazaSeleccionada] = useState("");
+  const [infoMsg, setInfoMsg] = useState("");
+  const [plazasError, setPlazasError] = useState("");
 
   const allowed = roleAllowed(user?.role);
   const datos = documento?.datos || {};
   const adjuntos = useMemo(() => adjuntosFromDatos(datos), [datos]);
+  const puedePrepararAnexo22 =
+    up(documento?.codigo) === "ANEXO_21" && ["ENVIADO", "EN_REVISION"].includes(up(documento?.estado));
+
+  async function cargarPlazasElegibles() {
+    if (!allowed || !puedePrepararAnexo22) return;
+
+    setLoadingPlazas(true);
+    setPlazasError("");
+
+    try {
+      const res = await http.get("/alojamientos-plazas/elegibles-asignacion");
+      setPlazas(Array.isArray(res.data?.plazas) ? res.data.plazas : []);
+    } catch {
+      setPlazas([]);
+      setPlazasError("No es posible cargar plazas elegibles en este momento.");
+    } finally {
+      setLoadingPlazas(false);
+    }
+  }
 
   async function cargar() {
     if (!allowed || !id) return;
@@ -154,6 +201,8 @@ export default function AlojamientoDocumentoDetalle() {
     try {
       const res = await http.get(`/alojamientos-documentos/${id}`);
       setDocumento(res.data?.documento || null);
+      setPlazaSeleccionada("");
+      setInfoMsg("");
     } catch {
       setDocumento(null);
       setErrorMsg("No es posible acceder al documento de alojamiento.");
@@ -166,6 +215,14 @@ export default function AlojamientoDocumentoDetalle() {
     cargar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allowed, id]);
+
+  useEffect(() => {
+    setPlazas([]);
+    setPlazasError("");
+    setPlazaSeleccionada("");
+    if (puedePrepararAnexo22) cargarPlazasElegibles();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [puedePrepararAnexo22, documento?._id]);
 
   if (!allowed) {
     return (
@@ -209,6 +266,20 @@ export default function AlojamientoDocumentoDetalle() {
               }}
             >
               {errorMsg}
+            </div>
+          )}
+
+          {infoMsg && (
+            <div
+              style={{
+                ...softCardStyle,
+                marginTop: 16,
+                border: "1px solid rgba(59,130,246,0.30)",
+                background: "rgba(30,64,175,0.18)",
+                color: "#bfdbfe",
+              }}
+            >
+              {infoMsg}
             </div>
           )}
 
@@ -317,6 +388,98 @@ export default function AlojamientoDocumentoDetalle() {
                   </div>
                 )}
               </section>
+
+              {puedePrepararAnexo22 && (
+                <section style={{ ...softCardStyle, marginTop: 16 }}>
+                  <h3 style={{ marginTop: 0, color: "#ffffff" }}>Asignacion de plaza / ANEXO_22</h3>
+                  <p style={subtitleStyle}>
+                    Seleccion preliminar read-only para preparar el acta de asignacion. Esta etapa no crea
+                    documentos ni reserva plazas todavia.
+                  </p>
+
+                  {plazasError && (
+                    <div
+                      style={{
+                        marginBottom: 12,
+                        padding: 10,
+                        borderRadius: 10,
+                        border: "1px solid rgba(239,68,68,0.30)",
+                        background: "rgba(127,29,29,0.18)",
+                        color: "#fecaca",
+                      }}
+                    >
+                      {plazasError}
+                    </div>
+                  )}
+
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+                    <label style={{ display: "grid", gap: 6, flex: "1 1 360px", minWidth: 0 }}>
+                      <span style={labelStyle}>Plaza elegible</span>
+                      <select
+                        value={plazaSeleccionada}
+                        onChange={(e) => setPlazaSeleccionada(e.target.value)}
+                        disabled={loadingPlazas || plazas.length === 0}
+                        style={{
+                          width: "100%",
+                          minHeight: 44,
+                          padding: "10px 12px",
+                          borderRadius: 10,
+                          border: "1px solid rgba(255,255,255,0.14)",
+                          background: "rgba(255,255,255,0.04)",
+                          color: "#ffffff",
+                          colorScheme: "dark",
+                          boxSizing: "border-box",
+                        }}
+                      >
+                        <option value="" style={{ backgroundColor: "#111827", color: "#ffffff" }}>
+                          {loadingPlazas
+                            ? "Cargando plazas..."
+                            : plazas.length
+                            ? "Seleccionar plaza..."
+                            : "Sin plazas elegibles"}
+                        </option>
+                        {plazas.map((plaza) => (
+                          <option
+                            key={plaza._id}
+                            value={plaza._id}
+                            style={{ backgroundColor: "#111827", color: "#ffffff" }}
+                          >
+                            {plaza.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <button
+                      type="button"
+                      style={primaryButtonStyle}
+                      disabled={!plazaSeleccionada || loadingPlazas}
+                      onClick={() =>
+                        setInfoMsg(
+                          "Generacion de ANEXO_22 pendiente para la proxima etapa. No se realizaron cambios."
+                        )
+                      }
+                    >
+                      Generar ANEXO_22
+                    </button>
+
+                    <button
+                      type="button"
+                      style={secondaryButtonStyle}
+                      disabled={loadingPlazas}
+                      onClick={cargarPlazasElegibles}
+                    >
+                      Actualizar plazas
+                    </button>
+                  </div>
+
+                  {!loadingPlazas && plazas.length === 0 && !plazasError && (
+                    <p style={{ ...subtitleStyle, marginTop: 12 }}>
+                      No hay plazas elegibles disponibles para asignacion.
+                    </p>
+                  )}
+                </section>
+              )}
 
               <section style={{ ...softCardStyle, marginTop: 16 }}>
                 <h3 style={{ marginTop: 0, color: "#ffffff" }}>Historial</h3>
