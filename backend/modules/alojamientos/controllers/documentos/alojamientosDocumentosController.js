@@ -8,6 +8,8 @@ const {
 const {
   puedeVerDocumento,
   isAdminDocumento,
+  isInspectorAlojamientos,
+  buildFiltroTerritorialDocumento,
 } = require("../../services/documentos/alojamientoDocumentoVisibilityService");
 const {
   sanitizeDatosDocumento,
@@ -56,8 +58,17 @@ function buildBaseFilter(query = {}) {
   return filter;
 }
 
-function applyVisibilityFilter(filter, user) {
+async function applyVisibilityFilter(filter, user) {
   if (isAdminDocumento(user)) return filter;
+
+  if (isInspectorAlojamientos(user)) {
+    const territorialFilter = await buildFiltroTerritorialDocumento(user);
+    if (!territorialFilter) return null;
+    return {
+      ...filter,
+      $and: [territorialFilter],
+    };
+  }
 
   const userId = user?._id;
   if (!userId) return null;
@@ -112,7 +123,7 @@ async function listar(req, res) {
     const baseFilter = buildBaseFilter(req.query || {});
     if (!baseFilter) return deny(res);
 
-    const filter = applyVisibilityFilter(baseFilter, req.user);
+    const filter = await applyVisibilityFilter(baseFilter, req.user);
     if (!filter) return deny(res);
 
     const page = parsePositiveInt(req.query?.page, 1, 10000);
@@ -153,7 +164,9 @@ async function obtenerPorId(req, res) {
     const { id } = req.params || {};
     if (!isObjectId(id)) return deny(res);
 
-    const documento = await AlojamientoDocumento.findById(id).lean();
+    const documento = await AlojamientoDocumento.findById(id)
+      .populate({ path: "alojamiento", select: "lugar codigo dependencia sector tipo numero" })
+      .lean();
     if (!documento || documento.activo === false) return deny(res);
     if (!puedeVerDocumento(req.user, documento)) return deny(res);
 

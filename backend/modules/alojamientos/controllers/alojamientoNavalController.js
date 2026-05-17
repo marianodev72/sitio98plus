@@ -17,6 +17,47 @@ function isAdminLike(user) {
   return role === "ADMIN_GENERAL" || role === "ADMIN";
 }
 
+function hasPermiso(user, permiso) {
+  const list = Array.isArray(user?.permisos) ? user.permisos.map(up) : [];
+  return list.includes(up(permiso));
+}
+
+function getTerritoriosLugar(user) {
+  const list = Array.isArray(user?.territoriosAlojamiento)
+    ? user.territoriosAlojamiento
+    : [];
+
+  return Array.from(
+    new Set(
+      list
+        .filter((item) => up(item?.tipo) === "LUGAR")
+        .map((item) => String(item?.valor || "").trim())
+        .filter(Boolean)
+    )
+  );
+}
+
+function isInspectorAlojamientos(user) {
+  return hasPermiso(user, "INSPECTOR_ALOJAMIENTOS");
+}
+
+function escapeRegex(value) {
+  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function buildLugarFilter(lugares) {
+  return lugares.map((lugar) => new RegExp(`^${escapeRegex(lugar)}$`, "i"));
+}
+
+function puedeVerAlojamiento(user, alojamiento) {
+  if (isAdminLike(user)) return true;
+  if (!isInspectorAlojamientos(user)) return false;
+
+  const lugares = getTerritoriosLugar(user).map(up);
+  if (!lugares.length) return false;
+  return lugares.includes(up(alojamiento?.lugar));
+}
+
 function parseBoolQuery(value, defaultValue = false) {
   if (value === undefined || value === null || value === "") return defaultValue;
   return ["1", "true", "si", "yes"].includes(String(value).toLowerCase().trim());
@@ -24,7 +65,7 @@ function parseBoolQuery(value, defaultValue = false) {
 
 async function listar(req, res) {
   try {
-    if (!isAdminLike(req.user)) return deny(res);
+    if (!isAdminLike(req.user) && !isInspectorAlojamientos(req.user)) return deny(res);
 
     const filtro = {};
     const { dependencia, lugar, sector, tipo, clase, estado, generoPermitido, activo } =
@@ -38,6 +79,17 @@ async function listar(req, res) {
     if (estado) filtro.estado = up(estado);
     if (generoPermitido) filtro.generoPermitido = up(generoPermitido);
     if (activo !== undefined) filtro.activo = parseBoolQuery(activo, true);
+
+    if (isInspectorAlojamientos(req.user) && !isAdminLike(req.user)) {
+      const lugares = getTerritoriosLugar(req.user);
+      if (!lugares.length) {
+        return res.json({ ok: true, page: 1, limit: 50, total: 0, alojamientos: [] });
+      }
+      if (lugar && !lugares.map(up).includes(up(lugar))) {
+        return res.json({ ok: true, page: 1, limit: 50, total: 0, alojamientos: [] });
+      }
+      if (!lugar) filtro.lugar = { $in: buildLugarFilter(lugares) };
+    }
 
     const page = Math.max(Number.parseInt(req.query?.page || "1", 10), 1);
     const limit = Math.min(Math.max(Number.parseInt(req.query?.limit || "50", 10), 1), 200);
@@ -60,12 +112,13 @@ async function listar(req, res) {
 
 async function obtenerPorId(req, res) {
   try {
-    if (!isAdminLike(req.user)) return deny(res);
+    if (!isAdminLike(req.user) && !isInspectorAlojamientos(req.user)) return deny(res);
     const { id } = req.params;
     if (!mongoose.Types.ObjectId.isValid(id)) return deny(res);
 
     const alojamiento = await AlojamientoNaval.findById(id).lean();
     if (!alojamiento) return deny(res);
+    if (!puedeVerAlojamiento(req.user, alojamiento)) return deny(res);
 
     return res.json({ ok: true, alojamiento });
   } catch (err) {
@@ -117,12 +170,13 @@ async function listarTerritorios(req, res) {
 
 async function listarPlazas(req, res) {
   try {
-    if (!isAdminLike(req.user)) return deny(res);
+    if (!isAdminLike(req.user) && !isInspectorAlojamientos(req.user)) return deny(res);
     const { id } = req.params;
     if (!mongoose.Types.ObjectId.isValid(id)) return deny(res);
 
-    const alojamiento = await AlojamientoNaval.findById(id).select("_id codigo").lean();
+    const alojamiento = await AlojamientoNaval.findById(id).select("_id codigo lugar").lean();
     if (!alojamiento) return deny(res);
+    if (!puedeVerAlojamiento(req.user, alojamiento)) return deny(res);
 
     const plazas = await AlojamientoPlaza.find({ alojamiento: id })
       .sort({ numeroPlaza: 1 })
