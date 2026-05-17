@@ -561,6 +561,7 @@ export default function PostulacionAlojamientoPlaceholder() {
   const { user } = useAuth();
 
   const [documento, setDocumento] = useState<Documento | null>(null);
+  const [enviados, setEnviados] = useState<Documento[]>([]);
   const [form, setForm] = useState<FormState>(() => buildInitialForm(user));
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -608,11 +609,17 @@ export default function PostulacionAlojamientoPlaceholder() {
     setInfo("");
 
     try {
-      const listRes = await http.get("/alojamientos-documentos", {
+      const [listRes, enviadosRes] = await Promise.all([
+        http.get("/alojamientos-documentos", {
         params: { codigo: "ANEXO_21", estado: "BORRADOR", limit: 1 },
-      });
+        }),
+        http.get("/alojamientos-documentos", {
+          params: { codigo: "ANEXO_21", estado: "ENVIADO", limit: 10 },
+        }),
+      ]);
 
       const item = Array.isArray(listRes.data?.documentos) ? listRes.data.documentos[0] : null;
+      setEnviados(Array.isArray(enviadosRes.data?.documentos) ? enviadosRes.data.documentos : []);
       if (!item?._id) {
         setDocumento(null);
         setForm(buildInitialForm(user));
@@ -622,6 +629,7 @@ export default function PostulacionAlojamientoPlaceholder() {
       await cargarDetalle(item._id);
     } catch {
       setDocumento(null);
+      setEnviados([]);
       setError("No es posible acceder a la solicitud de alojamiento.");
     } finally {
       setLoading(false);
@@ -857,6 +865,32 @@ export default function PostulacionAlojamientoPlaceholder() {
         <div style={{ ...cardStyle, color: "#CBD5E1" }}>
           La solicitud fue enviada y se encuentra en revision institucional.
         </div>
+      ) : null}
+
+      {enviados.length > 0 ? (
+        <Box title="Solicitudes enviadas anteriores">
+          <div style={{ display: "grid", gap: 8 }}>
+            {enviados.map((item) => (
+              <div
+                key={item._id}
+                style={{
+                  border: "1px solid rgba(255,255,255,0.10)",
+                  background: "rgba(255,255,255,0.035)",
+                  padding: 10,
+                  color: "#CBD5E1",
+                  fontSize: 13,
+                }}
+              >
+                <div style={{ fontWeight: 800, color: "#F8FAFC" }}>
+                  {safe(item.codigo)} / {safe(item.estado)}
+                </div>
+                <div style={smallTextStyle}>
+                  Fecha: {formatFecha(item.createdAt)} / Identificador: {safe(item._id)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Box>
       ) : null}
 
       {error ? (
@@ -1128,7 +1162,7 @@ export default function PostulacionAlojamientoPlaceholder() {
             <div style={buttonRowStyle}>
               {canEdit ? (
                 <button type="button" style={primaryButtonStyle} onClick={guardar} disabled={busy || isAdjuntoBusy}>
-                  {documento ? "Guardar borrador" : "Iniciar solicitud"}
+                  {documento ? "Guardar borrador" : "Iniciar nueva solicitud"}
                 </button>
               ) : null}
 
