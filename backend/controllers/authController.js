@@ -191,6 +191,9 @@ function buildUserPayload(user) {
     _id: String(user._id),
     role: user.role,
     permisos,
+    territoriosAlojamiento: Array.isArray(user.territoriosAlojamiento)
+      ? user.territoriosAlojamiento
+      : [],
     activo: user.activo !== false,
     barrioAsignado: user.barrioAsignado || "",
     viviendaAsignada: user.viviendaAsignada ?? null,
