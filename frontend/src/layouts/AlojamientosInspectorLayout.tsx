@@ -30,6 +30,7 @@ export default function AlojamientosInspectorLayout() {
   const { user } = useAuth();
   const territorios = getTerritorios(user);
   const autorizado = Boolean(user && hasPerm(user, "INSPECTOR_ALOJAMIENTOS") && territorios.length > 0);
+  const basePath = "/app/permisionario/alojamientos-inspector";
 
   if (!autorizado) {
     return (
@@ -59,7 +60,7 @@ export default function AlojamientosInspectorLayout() {
           </div>
           <nav style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
             <NavLink
-              to="/app/alojamientos-inspector"
+              to={basePath}
               end
               style={({ isActive }) => ({
                 ...badgeStyle,
@@ -70,7 +71,7 @@ export default function AlojamientosInspectorLayout() {
               Inicio
             </NavLink>
             <NavLink
-              to="/app/alojamientos-inspector/inventario"
+              to={`${basePath}/inventario`}
               style={({ isActive }) => ({
                 ...badgeStyle,
                 textDecoration: "none",
@@ -80,7 +81,7 @@ export default function AlojamientosInspectorLayout() {
               Inventario
             </NavLink>
             <NavLink
-              to="/app/alojamientos-inspector/documentos"
+              to={`${basePath}/documentos`}
               style={({ isActive }) => ({
                 ...badgeStyle,
                 textDecoration: "none",

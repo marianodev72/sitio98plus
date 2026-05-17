@@ -142,6 +142,16 @@ function GenericUnavailable() {
   );
 }
 
+function RedirectAlojamientosInspectorLegacy() {
+  const location = useLocation();
+  const target = location.pathname.replace(
+    /^\/app\/alojamientos-inspector/,
+    "/app/permisionario/alojamientos-inspector"
+  );
+
+  return <Navigate to={`${target}${location.search}${location.hash}`} replace />;
+}
+
 export default function RoleRoutes() {
   const { user } = useAuth();
 
@@ -196,14 +206,8 @@ export default function RoleRoutes() {
           <Route path="*" element={<GenericUnavailable />} />
         </Route>
 
-        {/* INSPECTOR ALOJAMIENTOS */}
-        <Route path="alojamientos-inspector" element={<AlojamientosInspectorLayout />}>
-          <Route index element={<AlojamientosInspectorDashboard />} />
-          <Route path="inventario" element={<AlojamientosInspectorInventario />} />
-          <Route path="documentos" element={<AlojamientosInspectorDocumentos />} />
-          <Route path="documentos/:id" element={<AlojamientoDocumentoDetalleInspector />} />
-          <Route path="*" element={<GenericUnavailable />} />
-        </Route>
+        {/* INSPECTOR ALOJAMIENTOS (compatibilidad: módulo migrado bajo PERMISIONARIO) */}
+        <Route path="alojamientos-inspector/*" element={<RedirectAlojamientosInspectorLegacy />} />
 
         {/* PERMISIONARIO */}
         <Route path="permisionario" element={<PermisionarioLayout />}>
@@ -260,6 +264,18 @@ export default function RoleRoutes() {
           <Route path="novedades" element={<Novedades />} />
 
           <Route path="anexo-04/nuevo" element={<CrearAnexo04Permisionario />} />
+
+          {/* ============================
+              INSPECTOR ALOJAMIENTOS
+              Base: /app/permisionario/alojamientos-inspector
+              ============================ */}
+          <Route path="alojamientos-inspector" element={<AlojamientosInspectorLayout />}>
+            <Route index element={<AlojamientosInspectorDashboard />} />
+            <Route path="inventario" element={<AlojamientosInspectorInventario />} />
+            <Route path="documentos" element={<AlojamientosInspectorDocumentos />} />
+            <Route path="documentos/:id" element={<AlojamientoDocumentoDetalleInspector />} />
+            <Route path="*" element={<GenericUnavailable />} />
+          </Route>
 
           {/* Mi Barrio (entry genérico existente, se deja intacto) */}
           <Route path="mi-barrio-jefe" element={<MiBarrioJefe />} />

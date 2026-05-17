@@ -225,6 +225,7 @@ function SimpleTable({
 export default function AlojamientoDocumentoDetalleInspector() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const basePath = "/app/permisionario/alojamientos-inspector";
   const [documento, setDocumento] = useState<AlojamientoDocumento | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
@@ -279,7 +280,7 @@ export default function AlojamientoDocumentoDetalleInspector() {
         </div>
         <button
           type="button"
-          onClick={() => navigate("/app/alojamientos-inspector/documentos")}
+          onClick={() => navigate(`${basePath}/documentos`)}
           style={{ ...badgeStyle, minHeight: 36, cursor: "pointer" }}
         >
           Volver

@@ -28,6 +28,7 @@ export default function AlojamientosInspectorDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const territorios = getTerritorios(user);
+  const basePath = "/app/permisionario/alojamientos-inspector";
 
   return (
     <section style={cardStyle}>
@@ -64,7 +65,7 @@ export default function AlojamientosInspectorDashboard() {
         <div style={modulesGridStyle}>
           <button
             type="button"
-            onClick={() => navigate("/app/alojamientos-inspector/inventario")}
+            onClick={() => navigate(`${basePath}/inventario`)}
             style={moduleButtonStyle}
           >
             Inventario
@@ -72,7 +73,7 @@ export default function AlojamientosInspectorDashboard() {
           </button>
           <button
             type="button"
-            onClick={() => navigate("/app/alojamientos-inspector/documentos")}
+            onClick={() => navigate(`${basePath}/documentos`)}
             style={moduleButtonStyle}
           >
             Documentos

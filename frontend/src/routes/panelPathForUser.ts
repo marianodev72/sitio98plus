@@ -16,7 +16,7 @@ function hasPerm(user: any, permiso: string) {
  * Reglas:
  * - ADMIN_GENERAL -> /app/admin-general
  * - ADMIN -> /app/admin
- * - PERMISIONARIO + INSPECTOR_ALOJAMIENTOS -> /app/alojamientos-inspector
+ * - PERMISIONARIO + INSPECTOR_ALOJAMIENTOS -> /app/permisionario
  * - PERMISIONARIO + INSPECTOR -> /app/permisionario/mi-barrio-inspector
  * - PERMISIONARIO + JEFE_DE_BARRIO -> /app/permisionario/mi-barrio-jefe
  * - PERMISIONARIO -> /app/permisionario
@@ -32,7 +32,7 @@ export function panelPathForUser(user: any) {
   if (role === "ALOJADO") return "/app/alojado";
 
   if (role === "PERMISIONARIO") {
-    if (hasPerm(user, "INSPECTOR_ALOJAMIENTOS")) return "/app/alojamientos-inspector";
+    if (hasPerm(user, "INSPECTOR_ALOJAMIENTOS")) return "/app/permisionario";
     if (hasPerm(user, "INSPECTOR")) return "/app/permisionario/mi-barrio-inspector";
     if (hasPerm(user, "JEFE_DE_BARRIO")) return "/app/permisionario/mi-barrio-jefe";
     return "/app/permisionario";

@@ -32,6 +32,7 @@ export default function PermisionarioLayout() {
 
   const esInspector = hasPermiso(user, "INSPECTOR");
   const esJefeBarrio = hasPermiso(user, "JEFE_DE_BARRIO");
+  const esInspectorAlojamientos = hasPermiso(user, "INSPECTOR_ALOJAMIENTOS");
 
   if (esInspector && esJefeBarrio) {
     return (
@@ -131,6 +132,10 @@ export default function PermisionarioLayout() {
                 {esJefeBarrio && (
                   <span style={{ marginLeft: 8 }}>(JEFE DE BARRIO)</span>
                 )}
+
+                {esInspectorAlojamientos && (
+                  <span style={{ marginLeft: 8 }}>(INSPECTOR ALOJAMIENTOS)</span>
+                )}
               </div>
             </div>
 
@@ -208,6 +213,12 @@ export default function PermisionarioLayout() {
             {esJefeBarrio && (
               <button style={navButton()} onClick={() => navigate("mi-barrio-jefe")}>
                 Mi Barrio (Jefe)
+              </button>
+            )}
+
+            {esInspectorAlojamientos && (
+              <button style={navButton()} onClick={() => navigate("alojamientos-inspector")}>
+                Alojamientos (Inspector)
               </button>
             )}
           </div>

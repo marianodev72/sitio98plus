@@ -129,6 +129,7 @@ const tdStyle: CSSProperties = {
 
 export default function AlojamientosInspectorDocumentos() {
   const navigate = useNavigate();
+  const basePath = "/app/permisionario/alojamientos-inspector";
   const [items, setItems] = useState<AlojamientoDocumento[]>([]);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
@@ -292,7 +293,7 @@ export default function AlojamientosInspectorDocumentos() {
                 <td style={tdStyle}>
                   <button
                     type="button"
-                    onClick={() => navigate(`/app/alojamientos-inspector/documentos/${doc._id}`)}
+                    onClick={() => navigate(`${basePath}/documentos/${doc._id}`)}
                     style={{ ...badgeStyle, cursor: "pointer" }}
                   >
                     Ver detalle
