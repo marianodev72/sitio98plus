@@ -471,51 +471,60 @@ function formToDatos(form: FormState) {
   };
 }
 
-function validarEnvio(form: FormState) {
-  const requiredStrings: Array<keyof FormState> = [
-    "tipoSolicitud",
-    "lugar",
-    "fechaLugar",
-    "autoridadAsignacion",
-    "zonaNaval",
-    "organismoAdministrador",
-    "mr",
-    "afiliadoIOSFA",
-    "gradoEscalafon",
-    "genero",
-    "apellido",
-    "nombres",
-    "destinoActual",
-    "telefonoActual",
-    "fechaUltimoAscenso",
-    "aniosServicioRecibo",
-  ];
+const REQUIRED_STRING_FIELDS: Array<{ field: keyof FormState; label: string }> = [
+  { field: "tipoSolicitud", label: "Tipo de solicitud" },
+  { field: "lugar", label: "Lugar" },
+  { field: "fechaLugar", label: "Fecha del lugar" },
+  { field: "autoridadAsignacion", label: "Autoridad de Asignacion" },
+  { field: "zonaNaval", label: "Zona Naval" },
+  { field: "organismoAdministrador", label: "Organismo Administrador" },
+  { field: "mr", label: "M.R." },
+  { field: "afiliadoIOSFA", label: "Afiliado IOSFA" },
+  { field: "gradoEscalafon", label: "Grado / Escalafon" },
+  { field: "genero", label: "Genero" },
+  { field: "apellido", label: "Apellido" },
+  { field: "nombres", label: "Nombres" },
+  { field: "destinoActual", label: "Destino actual" },
+  { field: "telefonoActual", label: "Telefono actual" },
+  { field: "fechaUltimoAscenso", label: "Fecha ultimo ascenso" },
+  { field: "aniosServicioRecibo", label: "Anos de servicio" },
+];
 
-  for (const field of requiredStrings) {
-    if (!String(form[field] || "").trim()) return false;
+function obtenerCamposFaltantes(form: FormState) {
+  const faltantes: string[] = [];
+
+  for (const item of REQUIRED_STRING_FIELDS) {
+    if (!String(form[item.field] || "").trim()) faltantes.push(item.label);
   }
 
-  if (form.aceptaCondicionesReglamento !== true) return false;
-  if (form.autorizaDescuentoHaberes !== true) return false;
-  if (form.autorizaAdministracionExpensas !== true) return false;
+  if (form.aceptaCondicionesReglamento !== true) faltantes.push("Aceptacion de condiciones del reglamento");
+  if (form.autorizaDescuentoHaberes !== true) faltantes.push("Autorizacion de descuento de haberes");
+  if (form.autorizaAdministracionExpensas !== true) faltantes.push("Autorizacion de administracion de expensas");
 
-  const radios = [
-    form.agregaFidofac,
-    form.agregaReciboHaberes,
-    form.tieneProblemasSocioeconomicos,
-    form.declaradoIneptoDGPN,
-    form.agregaIndiceTitularidad,
-    form.agregados.fidofac,
-    form.agregados.reciboHaberes,
-    form.agregados.indiceTitularidad,
+  const radios: Array<{ value: boolean | null; label: string }> = [
+    { value: form.agregaFidofac, label: "SI/NO agrega FIDOFAC" },
+    { value: form.agregaReciboHaberes, label: "SI/NO agrega Recibo de Haberes" },
+    { value: form.tieneProblemasSocioeconomicos, label: "SI/NO problemas socioeconomicos" },
+    { value: form.declaradoIneptoDGPN, label: "SI/NO declarado INEPTO DGPN" },
+    { value: form.agregaIndiceTitularidad, label: "SI/NO agrega indice de titularidad" },
+    { value: form.agregados.fidofac, label: "Agregados: FIDOFAC" },
+    { value: form.agregados.reciboHaberes, label: "Agregados: Recibo de Haberes" },
+    { value: form.agregados.indiceTitularidad, label: "Agregados: Indice de titularidad" },
   ];
 
-  if (radios.some((value) => typeof value !== "boolean")) return false;
+  for (const item of radios) {
+    if (typeof item.value !== "boolean") faltantes.push(item.label);
+  }
+
   if (form.tieneProblemasSocioeconomicos === true && !form.oficioProblemasSocioeconomicos.trim()) {
-    return false;
+    faltantes.push("Oficio por problemas socioeconomicos");
   }
 
-  return true;
+  return faltantes;
+}
+
+function validarEnvio(form: FormState) {
+  return obtenerCamposFaltantes(form).length === 0;
 }
 
 const MENSAJE_VALIDACION_ENVIO =
@@ -571,6 +580,7 @@ export default function PostulacionAlojamientoPlaceholder() {
   const [busyAdjunto, setBusyAdjunto] = useState<AdjuntoCampo | "">("");
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
+  const [camposFaltantes, setCamposFaltantes] = useState<string[]>([]);
   const feedbackRef = useRef<HTMLDivElement | null>(null);
 
   const estado = useMemo(() => up(documento?.estado), [documento?.estado]);
@@ -801,7 +811,9 @@ export default function PostulacionAlojamientoPlaceholder() {
 
   async function enviar() {
     if (isAdjuntoBusy) return;
-    if (!validarEnvio(form)) {
+    const faltantes = obtenerCamposFaltantes(form);
+    if (faltantes.length > 0) {
+      setCamposFaltantes(faltantes);
       setError(MENSAJE_VALIDACION_ENVIO);
       setInfo("");
       window.setTimeout(() => feedbackRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 0);
@@ -811,6 +823,7 @@ export default function PostulacionAlojamientoPlaceholder() {
     setBusy(true);
     setError("");
     setInfo("");
+    setCamposFaltantes([]);
 
     try {
       const payload = { datos: formToDatos(form) };
@@ -860,6 +873,7 @@ export default function PostulacionAlojamientoPlaceholder() {
       await http.post(`/alojamientos-documentos/anexo-21/${documento._id}/anular`);
       setDocumento(null);
       setForm(buildInitialForm(user));
+      setCamposFaltantes([]);
       setInfo("Borrador anulado. Puede iniciar una nueva solicitud en blanco.");
     } catch {
       setError("No es posible anular el borrador en este momento.");
@@ -963,6 +977,13 @@ export default function PostulacionAlojamientoPlaceholder() {
           }}
         >
           {error}
+          {camposFaltantes.length > 0 ? (
+            <ul style={{ margin: "8px 0 0", paddingLeft: 18 }}>
+              {camposFaltantes.map((campo) => (
+                <li key={campo}>{campo}</li>
+              ))}
+            </ul>
+          ) : null}
         </div>
       ) : null}
 
