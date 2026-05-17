@@ -12,12 +12,18 @@ type Usuario = {
   role?: string; // rol base
   permisos?: string[];
   barrioAsignado?: string;
+  territoriosAlojamiento?: TerritorioAlojamiento[];
   activo?: boolean;
   archivado?: boolean;
 };
 
+type TerritorioAlojamiento = {
+  tipo: "LUGAR";
+  valor: string;
+};
+
 const ROLES_BASE = ["POSTULANTE", "PERMISIONARIO", "ALOJADO", "ADMIN", "ADMIN_GENERAL"] as const;
-const PERMISOS_VALIDOS = ["INSPECTOR", "JEFE_DE_BARRIO"] as const;
+const PERMISOS_VALIDOS = ["INSPECTOR", "JEFE_DE_BARRIO", "INSPECTOR_ALOJAMIENTOS"] as const;
 
 type SortKey =
   | "apellido"
@@ -45,6 +51,19 @@ function isInspectorLike(permisos?: string[]) {
   return list.includes("INSPECTOR") || list.includes("JEFE_DE_BARRIO");
 }
 
+function hasInspectorAlojamientos(permisos?: string[]) {
+  const list = Array.isArray(permisos) ? permisos.map(up) : [];
+  return list.includes("INSPECTOR_ALOJAMIENTOS");
+}
+
+function territorioKey(t: TerritorioAlojamiento) {
+  return `${up(t?.tipo)}:${String(t?.valor || "").trim()}`;
+}
+
+function territorioLabel(t: TerritorioAlojamiento) {
+  return `${t.tipo} - ${t.valor}`;
+}
+
 export default function UsuariosAdminGeneral() {
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,9 +85,12 @@ export default function UsuariosAdminGeneral() {
   // barrios disponibles para combo
   const [barrios, setBarrios] = useState<string[]>([]);
   const [loadingBarrios, setLoadingBarrios] = useState(false);
+  const [territoriosAlojamiento, setTerritoriosAlojamiento] = useState<TerritorioAlojamiento[]>([]);
+  const [loadingTerritoriosAlojamiento, setLoadingTerritoriosAlojamiento] = useState(false);
 
   // draft barrio por usuario (edición local)
   const [barrioDraft, setBarrioDraft] = useState<Record<string, string>>({});
+  const [territorioAlojamientoDraft, setTerritorioAlojamientoDraft] = useState<Record<string, string[]>>({});
 
   const { user, refresh } = useAuth();
   const myId = String(user?._id || "");
@@ -89,6 +111,23 @@ export default function UsuariosAdminGeneral() {
       setBarrios([]);
     } finally {
       setLoadingBarrios(false);
+    }
+  }
+
+  async function cargarTerritoriosAlojamiento() {
+    try {
+      setLoadingTerritoriosAlojamiento(true);
+      const res = await http.get("/alojamientos-navales/territorios");
+      const list = Array.isArray(res.data?.territorios)
+        ? (res.data.territorios as TerritorioAlojamiento[])
+        : [];
+      setTerritoriosAlojamiento(
+        list.filter((t) => up(t?.tipo) === "LUGAR" && String(t?.valor || "").trim())
+      );
+    } catch {
+      setTerritoriosAlojamiento([]);
+    } finally {
+      setLoadingTerritoriosAlojamiento(false);
     }
   }
 
@@ -118,6 +157,21 @@ export default function UsuariosAdminGeneral() {
         const next = { ...curr };
         list.forEach((u) => {
           if (next[u._id] === undefined) next[u._id] = String(u.barrioAsignado || "");
+        });
+        return next;
+      });
+
+      setTerritorioAlojamientoDraft((curr) => {
+        const next = { ...curr };
+        list.forEach((u) => {
+          if (next[u._id] === undefined) {
+            const asignados = Array.isArray(u.territoriosAlojamiento)
+              ? u.territoriosAlojamiento
+              : [];
+            next[u._id] = asignados
+              .filter((t) => up(t?.tipo) === "LUGAR" && String(t?.valor || "").trim())
+              .map((t) => territorioKey({ tipo: "LUGAR", valor: String(t.valor || "").trim() }));
+          }
         });
         return next;
       });
@@ -185,6 +239,25 @@ export default function UsuariosAdminGeneral() {
       await refreshIfSelf(userId);
     } catch {
       setError("No se pudo asignar el barrio. Si el problema persiste, contacte al administrador.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function guardarTerritoriosAlojamiento(userId: string) {
+    clearMessages();
+    const selected = territorioAlojamientoDraft[userId] || [];
+    const selectedSet = new Set(selected);
+    const territorios = territoriosAlojamiento.filter((t) => selectedSet.has(territorioKey(t)));
+
+    setBusyId(userId);
+    try {
+      await http.patch(`/users/${userId}/territorios-alojamiento`, { territorios });
+      setInfo("Territorios de Alojamientos asignados correctamente.");
+      await cargar();
+      await refreshIfSelf(userId);
+    } catch {
+      setError("No se pudieron asignar los territorios de Alojamientos. Si el problema persiste, contacte al administrador.");
     } finally {
       setBusyId(null);
     }
@@ -300,6 +373,7 @@ export default function UsuariosAdminGeneral() {
 
   useEffect(() => {
     cargarBarrios();
+    cargarTerritoriosAlojamiento();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -563,7 +637,7 @@ if (loading) return <p style={{ color: "#E5E7EB" }}>Cargando usuarios…</p>;
           cellSpacing={0}
           style={{
             width: "100%",
-            minWidth: 1680,
+            minWidth: 1880,
             borderCollapse: "collapse",
             background: "#020817",
             color: "#E5E7EB",
@@ -681,6 +755,17 @@ if (loading) return <p style={{ color: "#E5E7EB" }}>Cargando usuarios…</p>;
               </th>
               <th
                 style={{
+                  padding: "12px 14px",
+                  fontSize: 14,
+                  border: "1px solid #334155",
+                  color: "#F8FAFC",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Territorios Alojamientos
+              </th>
+              <th
+                style={{
                   cursor: "pointer",
                   padding: "12px 14px",
                   fontSize: 14,
@@ -712,7 +797,9 @@ if (loading) return <p style={{ color: "#E5E7EB" }}>Cargando usuarios…</p>;
     const busy = busyId === u._id;
     const permisos = Array.isArray(u.permisos) ? u.permisos.map(up) : [];
     const habilitaBarrio = isInspectorLike(permisos);
+    const habilitaAlojamientos = hasInspectorAlojamientos(permisos);
     const draft = barrioDraft[u._id] ?? String(u.barrioAsignado || "");
+    const territoriosDraft = territorioAlojamientoDraft[u._id] || [];
 
     return (
       <tr key={u._id} style={{ background: "#020817" }}>
@@ -841,6 +928,55 @@ if (loading) return <p style={{ color: "#E5E7EB" }}>Cargando usuarios…</p>;
 
         <td
           style={{
+            whiteSpace: "nowrap",
+            padding: "12px 14px",
+            border: "1px solid #334155",
+            fontSize: 14,
+          }}
+        >
+          {habilitaAlojamientos ? (
+            <>
+              <select
+                multiple
+                size={Math.min(Math.max(territoriosAlojamiento.length, 2), 4)}
+                value={territoriosDraft}
+                onChange={(e) => {
+                  const selected = Array.from(e.currentTarget.selectedOptions).map((o) => o.value);
+                  setTerritorioAlojamientoDraft((curr) => ({ ...curr, [u._id]: selected }));
+                }}
+                disabled={busy || loadingTerritoriosAlojamiento}
+                style={{ ...selectStyle, minWidth: 220, minHeight: 74 }}
+              >
+                {territoriosAlojamiento.map((t) => (
+                  <option key={territorioKey(t)} value={territorioKey(t)} style={optionStyle}>
+                    {territorioLabel(t)}
+                  </option>
+                ))}
+              </select>{" "}
+              <button
+                disabled={busy || loadingTerritoriosAlojamiento}
+                onClick={() => guardarTerritoriosAlojamiento(u._id)}
+                style={{
+                  padding: "9px 12px",
+                  fontSize: 14,
+                  fontWeight: 700,
+                  color: "#F8FAFC",
+                  background: "#1E293B",
+                  border: "1px solid #475569",
+                  borderRadius: 8,
+                  cursor: "pointer",
+                }}
+              >
+                Guardar
+              </button>
+            </>
+          ) : (
+            "â€”"
+          )}
+        </td>
+
+        <td
+          style={{
             textAlign: "center",
             padding: "12px 14px",
             border: "1px solid #334155",
@@ -914,7 +1050,7 @@ if (loading) return <p style={{ color: "#E5E7EB" }}>Cargando usuarios…</p>;
   {rows.length === 0 && (
     <tr>
       <td
-        colSpan={10}
+        colSpan={11}
         style={{
           textAlign: "center",
           padding: 16,

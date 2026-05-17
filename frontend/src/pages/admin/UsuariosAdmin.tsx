@@ -12,6 +12,7 @@ type Usuario = {
   role?: string;
   permisos?: string[];
   barrioAsignado?: string;
+  territoriosAlojamiento?: { tipo?: string; valor?: string }[];
   viviendaAsignada?: string;
   activo?: boolean;
   archivado?: boolean;
@@ -37,6 +38,18 @@ function safe(v: unknown) {
 
 function up(v: unknown) {
   return String(v || "").toUpperCase().trim();
+}
+
+function territoriosAlojamientoLabel(u: Usuario) {
+  const list = Array.isArray(u.territoriosAlojamiento) ? u.territoriosAlojamiento : [];
+  const labels = list
+    .map((t) => {
+      const tipo = up(t?.tipo);
+      const valor = String(t?.valor || "").trim();
+      return tipo && valor ? `${tipo} - ${valor}` : "";
+    })
+    .filter(Boolean);
+  return labels.length ? labels.join(", ") : "â€”";
 }
 
 export default function UsuariosAdmin() {
@@ -251,7 +264,7 @@ export default function UsuariosAdmin() {
   const tableStyle: CSSProperties = {
     width: "100%",
     borderCollapse: "collapse",
-    minWidth: 1280,
+    minWidth: 1440,
   };
 
   const thStyle: CSSProperties = {
@@ -468,6 +481,7 @@ export default function UsuariosAdmin() {
               <th style={{ ...thStyle, cursor: "pointer" }} onClick={() => toggleSort("barrioAsignado")}>
                 Barrio {sortBy === "barrioAsignado" ? (sortDir === "asc" ? "▲" : "▼") : ""}
               </th>
+              <th style={thStyle}>Territorios Alojamientos</th>
               <th style={thStyle}>Vivienda (asignada)</th>
               <th style={thStyle}>Vivienda (ocupada)</th>
               <th style={{ ...thStyle, cursor: "pointer" }} onClick={() => toggleSort("activo")}>
@@ -494,6 +508,7 @@ export default function UsuariosAdmin() {
       {Array.isArray(u.permisos) && u.permisos.length ? u.permisos.map(up).join(", ") : "—"}
     </td>
     <td style={tdStyle}>{safe(u.barrioAsignado)}</td>
+    <td style={tdStyle}>{territoriosAlojamientoLabel(u)}</td>
     <td style={tdStyle}>{safe((u as any).viviendaLabel || u.viviendaAsignada)}</td>
     <td style={tdStyle}>{safe((u as any).viviendaOcupadaLabel)}</td>
     <td style={tdStyle}>{u.activo === false ? "No" : "Sí"}</td>
@@ -517,7 +532,7 @@ export default function UsuariosAdmin() {
 
 {rows.length === 0 && (
   <tr>
-    <td colSpan={11} style={{ ...tdStyle, textAlign: "center" }}>
+    <td colSpan={12} style={{ ...tdStyle, textAlign: "center" }}>
       No hay usuarios para los filtros seleccionados.
     </td>
   </tr>

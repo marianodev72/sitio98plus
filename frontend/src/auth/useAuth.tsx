@@ -16,6 +16,7 @@ export type User = {
   email?: string;
   role?: string;
   permisos?: string[];
+  territoriosAlojamiento?: { tipo: "LUGAR"; valor: string }[];
   activo?: boolean;
   barrioAsignado?: string | null;
   viviendaAsignada?: string | null;
