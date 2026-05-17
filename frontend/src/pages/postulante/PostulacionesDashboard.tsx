@@ -64,7 +64,7 @@ export default function PostulacionesDashboard() {
         <section style={cardStyle}>
           <h2 style={cardHeaderStyle}>Solicitar Alojamiento Naval</h2>
           <p style={cardTextStyle}>
-            Acceso preparatorio para el futuro formulario de inscripción de Alojamientos Navales.
+            Inicia el flujo institucional vigente de inscripcion para solicitar Alojamiento Naval.
           </p>
           <div style={{ marginTop: 16 }}>
             <button
@@ -72,7 +72,7 @@ export default function PostulacionesDashboard() {
               style={secondaryButtonStyle}
               onClick={() => navigate("/app/postulante/postulaciones/alojamiento")}
             >
-              Ver estado
+              Iniciar solicitud
             </button>
           </div>
         </section>
