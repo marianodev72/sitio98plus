@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { http } from "../../api/http";
+import { useAuth } from "../../auth/useAuth";
 
 type AdjuntoPublico = {
   id?: string;
@@ -17,6 +18,17 @@ type AlojamientoDocumento = {
   estado: string;
   estadoInstitucional?: string | null;
   datos?: Record<string, any>;
+  solicitante?: string | { _id?: string };
+  alojado?: string | { _id?: string };
+  intervinientes?: Array<{ userId?: string | { _id?: string }; rol?: string }>;
+  conformidades?: Array<{
+    tipo?: string;
+    ok?: boolean;
+    usuario?: string | { _id?: string };
+    rol?: string;
+    fecha?: string;
+    observacion?: string;
+  }>;
   historialEstados?: Array<{
     estadoNuevo?: string;
     fecha?: string;
@@ -101,6 +113,16 @@ const neutralButtonStyle: CSSProperties = {
   cursor: "pointer",
 };
 
+const primaryButtonStyle: CSSProperties = {
+  background: "#1D4ED8",
+  border: "1px solid rgba(147,197,253,0.55)",
+  color: "#ffffff",
+  borderRadius: 10,
+  padding: "10px 14px",
+  fontWeight: 800,
+  cursor: "pointer",
+};
+
 function up(v: unknown) {
   return String(v || "").toUpperCase().trim();
 }
@@ -135,6 +157,30 @@ function adjuntosFromDatos(datos: Record<string, any> | undefined): AdjuntoPubli
   return Object.values(adjuntos).filter(Boolean) as AdjuntoPublico[];
 }
 
+function idValue(value: unknown) {
+  if (!value) return "";
+  if (typeof value === "object" && "_id" in (value as Record<string, unknown>)) {
+    return String((value as { _id?: string })._id || "");
+  }
+  return String(value || "");
+}
+
+function conformidadPostulante(documento: AlojamientoDocumento | null, userId?: string) {
+  const conformidades = Array.isArray(documento?.conformidades) ? documento.conformidades : [];
+  return conformidades.find(
+    (item) => up(item?.tipo) === "POSTULANTE" && (!userId || idValue(item?.usuario) === userId)
+  );
+}
+
+function esTitularOInterviniente(documento: AlojamientoDocumento | null, userId?: string) {
+  if (!documento || !userId) return false;
+  if (idValue(documento.solicitante) === userId) return true;
+  if (idValue(documento.alojado) === userId) return true;
+
+  const intervinientes = Array.isArray(documento.intervinientes) ? documento.intervinientes : [];
+  return intervinientes.some((item) => idValue(item?.userId) === userId);
+}
+
 function Field({ label, value }: { label: string; value: unknown }) {
   return (
     <div style={fieldStyle}>
@@ -147,14 +193,25 @@ function Field({ label, value }: { label: string; value: unknown }) {
 export default function AlojamientoDocumentoReadonly() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const [documento, setDocumento] = useState<AlojamientoDocumento | null>(null);
   const [loading, setLoading] = useState(true);
+  const [submittingConformidad, setSubmittingConformidad] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [infoMsg, setInfoMsg] = useState("");
 
   const datos = documento?.datos || {};
   const adjuntos = useMemo(() => adjuntosFromDatos(datos), [datos]);
   const esAnexo22 = up(documento?.codigo) === "ANEXO_22";
+  const userId = String(user?._id || "");
+  const conformidadActual = conformidadPostulante(documento, userId);
+  const puedeConformar =
+    esAnexo22 &&
+    up(documento?.estado) === "ENVIADO" &&
+    up(user?.role) === "POSTULANTE" &&
+    esTitularOInterviniente(documento, userId) &&
+    !conformidadActual;
 
   async function cargar() {
     if (!id) return;
@@ -169,6 +226,26 @@ export default function AlojamientoDocumentoReadonly() {
       setErrorMsg("No es posible acceder al documento solicitado.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function prestarConformidad() {
+    if (!id || !puedeConformar || submittingConformidad) return;
+    const confirmado = window.confirm("Confirma que presta conformidad sobre el ANEXO_22?");
+    if (!confirmado) return;
+
+    setSubmittingConformidad(true);
+    setErrorMsg("");
+    setInfoMsg("");
+
+    try {
+      await http.post(`/alojamientos-documentos/${id}/conformidad-postulante`, {});
+      await cargar();
+      setInfoMsg("Conformidad registrada correctamente.");
+    } catch {
+      setErrorMsg("No fue posible registrar la conformidad.");
+    } finally {
+      setSubmittingConformidad(false);
     }
   }
 
@@ -198,6 +275,19 @@ export default function AlojamientoDocumentoReadonly() {
           }}
         >
           {errorMsg}
+        </section>
+      ) : null}
+
+      {infoMsg ? (
+        <section
+          style={{
+            ...cardStyle,
+            background: "rgba(22,101,52,0.18)",
+            border: "1px solid rgba(74,222,128,0.35)",
+            color: "#BBF7D0",
+          }}
+        >
+          {infoMsg}
         </section>
       ) : null}
 
@@ -250,6 +340,44 @@ export default function AlojamientoDocumentoReadonly() {
                 <Field label="Codigo plaza" value={datos.plazaCodigo} />
                 <Field label="Fecha reserva" value={fmtDate(datos.fechaReserva)} />
               </div>
+            </section>
+          ) : null}
+
+          {esAnexo22 ? (
+            <section style={cardStyle}>
+              <h2 style={sectionTitleStyle}>Conformidad del postulante</h2>
+              {conformidadActual ? (
+                <div style={gridStyle}>
+                  <Field label="Estado" value="Conformidad registrada" />
+                  <Field label="Fecha" value={fmtDate(conformidadActual.fecha)} />
+                  <Field label="Rol" value={conformidadActual.rol || "POSTULANTE"} />
+                </div>
+              ) : (
+                <>
+                  <p style={subtitleStyle}>
+                    Revise los datos de asignacion. Si esta de acuerdo, preste conformidad para
+                    continuar el tramite.
+                  </p>
+                  {puedeConformar ? (
+                    <button
+                      type="button"
+                      style={{
+                        ...primaryButtonStyle,
+                        opacity: submittingConformidad ? 0.65 : 1,
+                        cursor: submittingConformidad ? "not-allowed" : "pointer",
+                      }}
+                      onClick={prestarConformidad}
+                      disabled={submittingConformidad}
+                    >
+                      {submittingConformidad ? "Registrando..." : "Prestar conformidad"}
+                    </button>
+                  ) : (
+                    <p style={{ margin: 0, color: "#CBD5E1" }}>
+                      No hay acciones de conformidad disponibles para este documento.
+                    </p>
+                  )}
+                </>
+              )}
             </section>
           ) : null}
 
