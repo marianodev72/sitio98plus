@@ -4,6 +4,7 @@ const { authRequired } = require("../../../middleware/auth");
 const { refreshUserPrivileges } = require("../../../middleware/refreshUserPrivileges");
 const controller = require("../controllers/documentos/alojamientosDocumentosController");
 const anexo21Controller = require("../controllers/documentos/anexo21Controller");
+const anexo22Controller = require("../controllers/documentos/anexo22Controller");
 const {
   uploadAlojamientoDocumento,
 } = require("../middleware/alojamientoDocumentoUpload");
@@ -22,6 +23,7 @@ router.post(
 );
 router.delete("/anexo-21/:id/adjuntos/:campo", anexo21Controller.eliminarAdjunto);
 router.get("/:id/adjuntos/:campo", anexo21Controller.descargarAdjunto);
+router.post("/:id/generar-anexo-22", anexo22Controller.generarDesdeAnexo21);
 
 router.get("/", controller.listar);
 router.get("/:id", controller.obtenerPorId);

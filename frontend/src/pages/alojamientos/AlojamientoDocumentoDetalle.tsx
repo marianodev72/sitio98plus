@@ -166,6 +166,7 @@ export default function AlojamientoDocumentoDetalle() {
   const [plazas, setPlazas] = useState<PlazaElegible[]>([]);
   const [loadingPlazas, setLoadingPlazas] = useState(false);
   const [plazaSeleccionada, setPlazaSeleccionada] = useState("");
+  const [generandoAnexo22, setGenerandoAnexo22] = useState(false);
   const [infoMsg, setInfoMsg] = useState("");
   const [plazasError, setPlazasError] = useState("");
 
@@ -208,6 +209,35 @@ export default function AlojamientoDocumentoDetalle() {
       setErrorMsg("No es posible acceder al documento de alojamiento.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function generarAnexo22() {
+    if (!documento?._id || !plazaSeleccionada || generandoAnexo22) return;
+
+    setGenerandoAnexo22(true);
+    setInfoMsg("");
+    setErrorMsg("");
+
+    try {
+      const res = await http.post(`/alojamientos-documentos/${documento._id}/generar-anexo-22`, {
+        plazaId: plazaSeleccionada,
+      });
+      const nuevoDocumento = res.data?.documento;
+
+      if (nuevoDocumento?._id) {
+        setInfoMsg("ANEXO_22 generado correctamente.");
+        navigate(`/app/admin-general/gestiones/alojamientos/${nuevoDocumento._id}`);
+        return;
+      }
+
+      setInfoMsg("ANEXO_22 generado correctamente.");
+      await cargar();
+    } catch {
+      setErrorMsg("No es posible generar el ANEXO_22 en este momento.");
+      await cargarPlazasElegibles();
+    } finally {
+      setGenerandoAnexo22(false);
     }
   }
 
@@ -393,8 +423,8 @@ export default function AlojamientoDocumentoDetalle() {
                 <section style={{ ...softCardStyle, marginTop: 16 }}>
                   <h3 style={{ marginTop: 0, color: "#ffffff" }}>Asignacion de plaza / ANEXO_22</h3>
                   <p style={subtitleStyle}>
-                    Seleccion preliminar read-only para preparar el acta de asignacion. Esta etapa no crea
-                    documentos ni reserva plazas todavia.
+                    Seleccion de plaza para generar el acta de asignacion. La disponibilidad se revalida al
+                    confirmar.
                   </p>
 
                   {plazasError && (
@@ -453,20 +483,16 @@ export default function AlojamientoDocumentoDetalle() {
                     <button
                       type="button"
                       style={primaryButtonStyle}
-                      disabled={!plazaSeleccionada || loadingPlazas}
-                      onClick={() =>
-                        setInfoMsg(
-                          "Generacion de ANEXO_22 pendiente para la proxima etapa. No se realizaron cambios."
-                        )
-                      }
+                      disabled={!plazaSeleccionada || loadingPlazas || generandoAnexo22}
+                      onClick={generarAnexo22}
                     >
-                      Generar ANEXO_22
+                      {generandoAnexo22 ? "Generando..." : "Generar ANEXO_22"}
                     </button>
 
                     <button
                       type="button"
                       style={secondaryButtonStyle}
-                      disabled={loadingPlazas}
+                      disabled={loadingPlazas || generandoAnexo22}
                       onClick={cargarPlazasElegibles}
                     >
                       Actualizar plazas
