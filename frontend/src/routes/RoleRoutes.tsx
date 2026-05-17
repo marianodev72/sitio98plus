@@ -36,6 +36,7 @@ import AlojamientoDetalle from "../pages/alojamientos/AlojamientoDetalle";
 import AlojamientoDocumentoDetalle from "../pages/alojamientos/AlojamientoDocumentoDetalle";
 import AlojamientosInspectorDashboard from "../pages/alojamientos_inspector/AlojamientosInspectorDashboard";
 import AlojamientosInspectorInventario from "../pages/alojamientos_inspector/AlojamientosInspectorInventario";
+import AlojamientosInspectorDocumentos from "../pages/alojamientos_inspector/AlojamientosInspectorDocumentos";
 
 /* Admin */
 import AdminDashboard from "../pages/admin/AdminDashboard";
@@ -198,6 +199,7 @@ export default function RoleRoutes() {
         <Route path="alojamientos-inspector" element={<AlojamientosInspectorLayout />}>
           <Route index element={<AlojamientosInspectorDashboard />} />
           <Route path="inventario" element={<AlojamientosInspectorInventario />} />
+          <Route path="documentos" element={<AlojamientosInspectorDocumentos />} />
           <Route path="*" element={<GenericUnavailable />} />
         </Route>
 

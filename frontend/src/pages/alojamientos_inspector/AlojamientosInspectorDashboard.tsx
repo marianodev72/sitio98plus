@@ -70,9 +70,13 @@ export default function AlojamientosInspectorDashboard() {
             Inventario
             <div style={metaStyle}>Consulta territorial readonly</div>
           </button>
-          <button type="button" disabled style={{ ...moduleButtonStyle, cursor: "not-allowed", opacity: 0.72 }}>
+          <button
+            type="button"
+            onClick={() => navigate("/app/alojamientos-inspector/documentos")}
+            style={moduleButtonStyle}
+          >
             Documentos
-            <div style={metaStyle}>Próxima etapa</div>
+            <div style={metaStyle}>Consulta documental readonly</div>
           </button>
         </div>
       </div>
