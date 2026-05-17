@@ -154,6 +154,7 @@ export default function AlojamientoDocumentoReadonly() {
 
   const datos = documento?.datos || {};
   const adjuntos = useMemo(() => adjuntosFromDatos(datos), [datos]);
+  const esAnexo22 = up(documento?.codigo) === "ANEXO_22";
 
   async function cargar() {
     if (!id) return;
@@ -222,13 +223,35 @@ export default function AlojamientoDocumentoReadonly() {
             <h2 style={sectionTitleStyle}>Datos personales</h2>
             <div style={gridStyle}>
               <Field label="Tipo solicitud" value={datos.tipoSolicitud} />
+              <Field label="Postulante / alojado" value={datos.postulanteNombre} />
               <Field label="Apellido" value={datos.apellido} />
               <Field label="Nombres" value={datos.nombres} />
               <Field label="Genero" value={datos.genero || datos.sexo} />
+              <Field label="M.R." value={datos.mr} />
               <Field label="Grado / escalafon" value={datos.gradoEscalafon} />
               <Field label="Afiliado IOSFA" value={datos.afiliadoIOSFA} />
             </div>
           </section>
+
+          {esAnexo22 ? (
+            <section style={cardStyle}>
+              <h2 style={sectionTitleStyle}>Asignacion de alojamiento</h2>
+              <div style={gridStyle}>
+                <Field label="Alojamiento" value={datos.alojamientoCodigo} />
+                <Field label="Dependencia" value={datos.dependencia} />
+                <Field label="Lugar" value={datos.lugar} />
+                <Field label="Sector" value={datos.sector} />
+                <Field label="Tipo" value={datos.tipo} />
+                <Field label="Numero" value={datos.numero} />
+                <Field label="Clase" value={datos.clase} />
+                <Field label="Capacidad" value={datos.capacidad} />
+                <Field label="Genero permitido" value={datos.generoPermitido} />
+                <Field label="Plaza" value={datos.numeroPlaza} />
+                <Field label="Codigo plaza" value={datos.plazaCodigo} />
+                <Field label="Fecha reserva" value={fmtDate(datos.fechaReserva)} />
+              </div>
+            </section>
+          ) : null}
 
           <section style={cardStyle}>
             <h2 style={sectionTitleStyle}>Datos laborales</h2>
