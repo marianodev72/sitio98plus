@@ -1,4 +1,5 @@
 import { useAuth } from "../../auth/useAuth";
+import { useNavigate } from "react-router-dom";
 import {
   badgeStyle,
   cardStyle,
@@ -25,6 +26,7 @@ function getTerritorios(user: any) {
 
 export default function AlojamientosInspectorDashboard() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const territorios = getTerritorios(user);
 
   return (
@@ -60,9 +62,13 @@ export default function AlojamientosInspectorDashboard() {
       <div style={{ marginTop: 18 }}>
         <h3 style={sectionTitleStyle}>Módulos</h3>
         <div style={modulesGridStyle}>
-          <button type="button" disabled style={{ ...moduleButtonStyle, cursor: "not-allowed", opacity: 0.72 }}>
+          <button
+            type="button"
+            onClick={() => navigate("/app/alojamientos-inspector/inventario")}
+            style={moduleButtonStyle}
+          >
             Inventario
-            <div style={metaStyle}>Próxima etapa</div>
+            <div style={metaStyle}>Consulta territorial readonly</div>
           </button>
           <button type="button" disabled style={{ ...moduleButtonStyle, cursor: "not-allowed", opacity: 0.72 }}>
             Documentos

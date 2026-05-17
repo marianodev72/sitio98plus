@@ -69,6 +69,16 @@ export default function AlojamientosInspectorLayout() {
             >
               Inicio
             </NavLink>
+            <NavLink
+              to="/app/alojamientos-inspector/inventario"
+              style={({ isActive }) => ({
+                ...badgeStyle,
+                textDecoration: "none",
+                background: isActive ? "rgba(37,99,235,0.35)" : badgeStyle.background,
+              })}
+            >
+              Inventario
+            </NavLink>
           </nav>
         </section>
 
