@@ -31,6 +31,23 @@ async function generarDesdeAnexo21(req, res) {
   }
 }
 
+async function conformidadPostulante(req, res) {
+  try {
+    const result = await anexo22Service.conformidadPostulante({
+      id: req.params.id,
+      user: req.user,
+    });
+
+    return sendResult(res, result);
+  } catch {
+    return res.status(500).json({
+      ok: false,
+      error: "No es posible procesar la solicitud.",
+    });
+  }
+}
+
 module.exports = {
   generarDesdeAnexo21,
+  conformidadPostulante,
 };

@@ -25,6 +25,7 @@ router.post(
 router.delete("/anexo-21/:id/adjuntos/:campo", anexo21Controller.eliminarAdjunto);
 router.get("/:id/adjuntos/:campo", anexo21Controller.descargarAdjunto);
 router.post("/:id/generar-anexo-22", anexo22Controller.generarDesdeAnexo21);
+router.post("/:id/conformidad-postulante", anexo22Controller.conformidadPostulante);
 
 router.get("/", controller.listar);
 router.get("/:id", controller.obtenerPorId);

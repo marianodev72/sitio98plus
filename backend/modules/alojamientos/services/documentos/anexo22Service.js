@@ -6,6 +6,7 @@ const AsignacionAlojamiento = require("../../models/AsignacionAlojamiento");
 const { validarDisponibilidadPlaza } = require("../alojamientoAsignacionService");
 const {
   agregarInterviniente,
+  registrarConformidad,
   registrarCambioEstado,
   up,
 } = require("./alojamientoDocumentoStateService");
@@ -28,6 +29,53 @@ function publicError(status, code = "NO_DISPONIBLE") {
     code,
     message: "No es posible generar el ANEXO_22 en este momento.",
   };
+}
+
+function nombreUsuario(user = {}) {
+  const apellido = String(user.apellido || "").trim();
+  const nombre = String(user.nombre || user.nombres || "").trim();
+  const completo = [apellido, nombre].filter(Boolean).join(", ");
+  return completo || String(user.email || user.username || user._id || "Usuario").trim();
+}
+
+function isTitularOInterviniente(documento, user) {
+  const userId = String(user?._id || "");
+  if (!userId || !documento) return false;
+
+  if (String(documento.solicitante || "") === userId) return true;
+  if (String(documento.alojado || "") === userId) return true;
+
+  const intervinientes = Array.isArray(documento.intervinientes) ? documento.intervinientes : [];
+  return intervinientes.some((item) => String(item?.userId || "") === userId);
+}
+
+function tieneConformidadPostulante(documento, user) {
+  const userId = String(user?._id || "");
+  const conformidades = Array.isArray(documento?.conformidades) ? documento.conformidades : [];
+  return conformidades.some(
+    (item) => up(item?.tipo) === "POSTULANTE" && String(item?.usuario || "") === userId
+  );
+}
+
+function upsertSignerPostulante(documento, user, fecha) {
+  documento.signers = Array.isArray(documento.signers) ? documento.signers : [];
+
+  const userId = String(user?._id || "");
+  const index = documento.signers.findIndex(
+    (item) => up(item?.tipo) === "POSTULANTE" && String(item?.usuario || "") === userId
+  );
+
+  const signer = {
+    tipo: "POSTULANTE",
+    usuario: user._id,
+    nombre: nombreUsuario(user),
+    rol: "POSTULANTE",
+    fecha,
+    fuente: "CONFORMIDAD_POSTULANTE",
+  };
+
+  if (index >= 0) documento.signers[index] = signer;
+  else documento.signers.push(signer);
 }
 
 function buildAsignacionCodigo(anexo21Id, plazaId) {
@@ -279,6 +327,50 @@ async function generarDesdeAnexo21({ id, plazaId, user }) {
   }
 }
 
+async function conformidadPostulante({ id, user }) {
+  if (!user?._id || !isObjectId(id)) return publicError(404, "NO_AUTORIZADO");
+  if (up(user?.role) !== "POSTULANTE") return publicError(404, "NO_AUTORIZADO");
+
+  const documento = await AlojamientoDocumento.findOne({
+    _id: id,
+    codigo: "ANEXO_22",
+    activo: { $ne: false },
+  });
+
+  if (!documento) return publicError(404, "NO_DISPONIBLE");
+  if (up(documento.estado) !== "ENVIADO") return publicError(404, "ESTADO_NO_DISPONIBLE");
+  if (!isTitularOInterviniente(documento, user)) return publicError(404, "NO_AUTORIZADO");
+  if (tieneConformidadPostulante(documento, user)) return publicError(409, "CONFORMIDAD_EXISTENTE");
+
+  const fecha = new Date();
+  const conformidad = registrarConformidad(documento, {
+    tipo: "POSTULANTE",
+    usuario: user._id,
+    rol: "POSTULANTE",
+    ok: true,
+    observacion: "",
+  });
+
+  if (!conformidad.ok) return publicError(404, "CONFORMIDAD_INVALIDA");
+
+  upsertSignerPostulante(documento, user, fecha);
+  documento.estadoInstitucional = "CONFORMADO_POSTULANTE";
+  documento.actualizadoPor = user._id;
+
+  const transition = registrarCambioEstado(documento, {
+    estadoNuevo: "EN_REVISION",
+    actorId: user._id,
+    rolActor: "POSTULANTE",
+    observacion: "Conformidad POSTULANTE ANEXO_22",
+  });
+
+  if (!transition.ok) return publicError(404, transition.error);
+
+  await documento.save();
+  return { ok: true, status: 200, documento: toResponse(documento) };
+}
+
 module.exports = {
   generarDesdeAnexo21,
+  conformidadPostulante,
 };
