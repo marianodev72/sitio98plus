@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { http } from "../../api/http";
 import { useAuth } from "../../auth/useAuth";
@@ -518,6 +518,9 @@ function validarEnvio(form: FormState) {
   return true;
 }
 
+const MENSAJE_VALIDACION_ENVIO =
+  "Complete los campos obligatorios antes de enviar: datos personales, destino, fechas, SI/NO reglamentarios, agregados y autorizaciones.";
+
 function BoolRadio({
   label,
   value,
@@ -568,6 +571,7 @@ export default function PostulacionAlojamientoPlaceholder() {
   const [busyAdjunto, setBusyAdjunto] = useState<AdjuntoCampo | "">("");
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
+  const feedbackRef = useRef<HTMLDivElement | null>(null);
 
   const estado = useMemo(() => up(documento?.estado), [documento?.estado]);
   const isBorrador = estado === "BORRADOR";
@@ -796,11 +800,11 @@ export default function PostulacionAlojamientoPlaceholder() {
   }
 
   async function enviar() {
-    if (!documento?._id) return;
     if (isAdjuntoBusy) return;
     if (!validarEnvio(form)) {
-      setError("Complete los campos obligatorios antes de enviar.");
+      setError(MENSAJE_VALIDACION_ENVIO);
       setInfo("");
+      window.setTimeout(() => feedbackRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 0);
       return;
     }
 
@@ -809,16 +813,32 @@ export default function PostulacionAlojamientoPlaceholder() {
     setInfo("");
 
     try {
-      await http.patch(`/alojamientos-documentos/anexo-21/${documento._id}`, {
-        datos: formToDatos(form),
-      });
-      const res = await http.post(`/alojamientos-documentos/anexo-21/${documento._id}/enviar`);
+      const payload = { datos: formToDatos(form) };
+      let documentoId = documento?._id || "";
+
+      if (documentoId) {
+        await http.patch(`/alojamientos-documentos/anexo-21/${documentoId}`, payload);
+      } else {
+        const creadoRes = await http.post("/alojamientos-documentos/anexo-21", payload);
+        const creado = creadoRes.data?.documento || null;
+        documentoId = creado?._id || "";
+        if (!documentoId) throw new Error("sin documento");
+        setDocumento(creado);
+      }
+
+      const res = await http.post(`/alojamientos-documentos/anexo-21/${documentoId}/enviar`);
       const sent = res.data?.documento || null;
       setDocumento(sent);
       setForm(datosToForm(sent?.datos, user));
       setInfo("Solicitud enviada. Se encuentra en revision institucional.");
-    } catch {
-      setError("No es posible procesar la solicitud.");
+    } catch (e: any) {
+      const status = e?.response?.status;
+      const code = String(e?.response?.data?.code || e?.response?.data?.error || "").toUpperCase();
+      if (status === 409 || code === "SOLICITUD_ACTIVA_EXISTENTE") {
+        setError("Ya existe un borrador activo. Continua o anula ese borrador antes de iniciar otro.");
+      } else {
+        setError("No es posible procesar la solicitud.");
+      }
     } finally {
       setBusy(false);
     }
@@ -933,6 +953,7 @@ export default function PostulacionAlojamientoPlaceholder() {
 
       {error ? (
         <div
+          ref={feedbackRef}
           style={{
             border: "1px solid rgba(239,68,68,0.35)",
             padding: 12,
@@ -1204,7 +1225,7 @@ export default function PostulacionAlojamientoPlaceholder() {
                 </button>
               ) : null}
 
-              {isBorrador ? (
+              {canEdit ? (
                 <button type="button" style={successButtonStyle} onClick={enviar} disabled={busy || isAdjuntoBusy}>
                   {busy ? "Enviando..." : "Enviar ANEXO 21"}
                 </button>
