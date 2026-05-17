@@ -57,6 +57,12 @@ function tieneConformidadPostulante(documento, user) {
   );
 }
 
+function tieneConformidadOk(documento, tipo) {
+  const tipoUp = up(tipo);
+  const conformidades = Array.isArray(documento?.conformidades) ? documento.conformidades : [];
+  return conformidades.some((item) => up(item?.tipo) === tipoUp && item?.ok === true);
+}
+
 function upsertSignerPostulante(documento, user, fecha) {
   documento.signers = Array.isArray(documento.signers) ? documento.signers : [];
 
@@ -72,6 +78,27 @@ function upsertSignerPostulante(documento, user, fecha) {
     rol: "POSTULANTE",
     fecha,
     fuente: "CONFORMIDAD_POSTULANTE",
+  };
+
+  if (index >= 0) documento.signers[index] = signer;
+  else documento.signers.push(signer);
+}
+
+function upsertSignerAdminGeneral(documento, user, fecha) {
+  documento.signers = Array.isArray(documento.signers) ? documento.signers : [];
+
+  const userId = String(user?._id || "");
+  const index = documento.signers.findIndex(
+    (item) => up(item?.tipo) === "ADMIN_GENERAL" && String(item?.usuario || "") === userId
+  );
+
+  const signer = {
+    tipo: "ADMIN_GENERAL",
+    usuario: user._id,
+    nombre: nombreUsuario(user),
+    rol: "ADMIN_GENERAL",
+    fecha,
+    fuente: "CIERRE_ADMIN_GENERAL",
   };
 
   if (index >= 0) documento.signers[index] = signer;
@@ -370,7 +397,56 @@ async function conformidadPostulante({ id, user }) {
   return { ok: true, status: 200, documento: toResponse(documento) };
 }
 
+async function cerrarAnexo22({ id, user }) {
+  if (!isAdminGeneral(user)) return publicError(403, "NO_AUTORIZADO");
+  if (!isObjectId(id)) return publicError(404, "NO_DISPONIBLE");
+
+  const documento = await AlojamientoDocumento.findOne({
+    _id: id,
+    codigo: "ANEXO_22",
+    activo: { $ne: false },
+  });
+
+  if (!documento) return publicError(404, "NO_DISPONIBLE");
+  if (up(documento.estado) === "CERRADO") return publicError(409, "CIERRE_EXISTENTE");
+  if (up(documento.estado) !== "EN_REVISION") return publicError(404, "ESTADO_NO_DISPONIBLE");
+  if (!tieneConformidadOk(documento, "POSTULANTE")) {
+    return publicError(404, "CONFORMIDAD_POSTULANTE_REQUERIDA");
+  }
+  if (tieneConformidadOk(documento, "ADMIN_GENERAL")) {
+    return publicError(409, "CIERRE_EXISTENTE");
+  }
+
+  const fecha = new Date();
+  const conformidad = registrarConformidad(documento, {
+    tipo: "ADMIN_GENERAL",
+    usuario: user._id,
+    rol: "ADMIN_GENERAL",
+    ok: true,
+    observacion: "",
+  });
+
+  if (!conformidad.ok) return publicError(404, "CONFORMIDAD_INVALIDA");
+
+  upsertSignerAdminGeneral(documento, user, fecha);
+  documento.estadoInstitucional = "CERRADO_ADMIN_GENERAL";
+  documento.actualizadoPor = user._id;
+
+  const transition = registrarCambioEstado(documento, {
+    estadoNuevo: "CERRADO",
+    actorId: user._id,
+    rolActor: "ADMIN_GENERAL",
+    observacion: "Cierre ADMIN_GENERAL ANEXO_22",
+  });
+
+  if (!transition.ok) return publicError(404, transition.error);
+
+  await documento.save();
+  return { ok: true, status: 200, documento: toResponse(documento) };
+}
+
 module.exports = {
   generarDesdeAnexo21,
   conformidadPostulante,
+  cerrarAnexo22,
 };

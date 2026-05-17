@@ -47,7 +47,24 @@ async function conformidadPostulante(req, res) {
   }
 }
 
+async function cerrarAnexo22(req, res) {
+  try {
+    const result = await anexo22Service.cerrarAnexo22({
+      id: req.params.id,
+      user: req.user,
+    });
+
+    return sendResult(res, result);
+  } catch {
+    return res.status(500).json({
+      ok: false,
+      error: "No es posible procesar la solicitud.",
+    });
+  }
+}
+
 module.exports = {
   generarDesdeAnexo21,
   conformidadPostulante,
+  cerrarAnexo22,
 };
