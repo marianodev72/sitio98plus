@@ -1,5 +1,9 @@
+const mongoose = require("mongoose");
+
+const AlojamientoDocumento = require("../models/AlojamientoDocumento");
 const AlojamientoPlaza = require("../models/AlojamientoPlaza");
 const AsignacionAlojamiento = require("../models/AsignacionAlojamiento");
+const { validarDisponibilidadPlaza } = require("./alojamientoAsignacionService");
 
 const ESTADOS_ALOJAMIENTO_NO_ASIGNABLES = [
   "MANTENIMIENTO",
@@ -12,6 +16,14 @@ const ESTADOS_ASIGNACION_BLOQUEANTES = ["RESERVADA", "ACTIVA"];
 
 function safe(value) {
   return String(value || "").trim();
+}
+
+function up(value) {
+  return String(value || "").toUpperCase().trim();
+}
+
+function isObjectId(value) {
+  return mongoose.Types.ObjectId.isValid(String(value || ""));
 }
 
 function buildLabel(plaza) {
@@ -73,6 +85,67 @@ async function listarElegiblesAsignacion() {
     .map(toPublicPlaza);
 }
 
+async function resolveAlojadoDesdeContexto({ anexo21Id, alojadoId } = {}) {
+  if (alojadoId !== undefined && alojadoId !== "") {
+    if (!isObjectId(alojadoId)) return { ok: false };
+    return { ok: true, alojadoId };
+  }
+
+  if (anexo21Id !== undefined && anexo21Id !== "") {
+    if (!isObjectId(anexo21Id)) return { ok: false };
+
+    const documento = await AlojamientoDocumento.findOne({
+      _id: anexo21Id,
+      codigo: "ANEXO_21",
+      activo: { $ne: false },
+      estado: { $in: ["ENVIADO", "EN_REVISION"] },
+    })
+      .select("solicitante alojado")
+      .lean();
+
+    const solicitante = documento?.solicitante || documento?.alojado;
+    if (!solicitante || !isObjectId(solicitante)) return { ok: false };
+    return { ok: true, alojadoId: solicitante };
+  }
+
+  return { ok: true, alojadoId: null };
+}
+
+async function filtrarCompatiblesConAlojado(plazas, alojadoId) {
+  if (!alojadoId) return plazas;
+
+  const evaluadas = await Promise.all(
+    plazas.map(async (plaza) => {
+      const disponibilidad = await validarDisponibilidadPlaza({
+        plazaId: plaza._id,
+        alojadoId,
+      });
+      return disponibilidad?.puedeAsignar ? plaza : null;
+    })
+  );
+
+  return evaluadas.filter(Boolean);
+}
+
+async function listarElegiblesAsignacionConContexto(contexto = {}) {
+  const resolved = await resolveAlojadoDesdeContexto(contexto);
+  if (!resolved.ok) return { ok: false, status: 404 };
+
+  const plazas = await listarElegiblesAsignacion();
+  const compatibles = await filtrarCompatiblesConAlojado(plazas, resolved.alojadoId);
+
+  return {
+    ok: true,
+    plazas: compatibles,
+    contexto: {
+      anexo21Id: safe(contexto.anexo21Id),
+      alojadoId: resolved.alojadoId ? String(resolved.alojadoId) : null,
+      tipo: up(contexto.anexo21Id) ? "ANEXO_21" : null,
+    },
+  };
+}
+
 module.exports = {
   listarElegiblesAsignacion,
+  listarElegiblesAsignacionConContexto,
 };

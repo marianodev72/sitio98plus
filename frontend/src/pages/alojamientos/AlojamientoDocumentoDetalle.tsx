@@ -183,7 +183,9 @@ export default function AlojamientoDocumentoDetalle() {
     setPlazasError("");
 
     try {
-      const res = await http.get("/alojamientos-plazas/elegibles-asignacion");
+      const res = await http.get("/alojamientos-plazas/elegibles-asignacion", {
+        params: { anexo21Id: documento?._id },
+      });
       setPlazas(Array.isArray(res.data?.plazas) ? res.data.plazas : []);
     } catch {
       setPlazas([]);
