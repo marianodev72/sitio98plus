@@ -136,7 +136,7 @@ function alojamientoLabel(a: Anexo): string {
 
 function personaFromRef(value: Anexo["solicitante"]) {
   if (!value) return "";
-  if (typeof value === "string") return `...${value.slice(-6)}`;
+  if (typeof value === "string") return "";
 
   const ape = value.apellido ? String(value.apellido).trim() : "";
   const nom = value.nombre ? String(value.nombre).trim() : "";
@@ -150,6 +150,12 @@ function personaLabel(a: Anexo): string {
 
   if (typeof d.apellidoNombres === "string" && d.apellidoNombres.trim()) {
     return d.apellidoNombres.trim();
+  }
+  if (typeof d.apellidoNombre === "string" && d.apellidoNombre.trim()) {
+    return d.apellidoNombre.trim();
+  }
+  if (typeof d.nombreCompleto === "string" && d.nombreCompleto.trim()) {
+    return d.nombreCompleto.trim();
   }
   if (typeof d.permisionarioNombre === "string" && d.permisionarioNombre.trim()) {
     return d.permisionarioNombre.trim();
@@ -167,6 +173,7 @@ function personaLabel(a: Anexo): string {
   const refLabel = personaFromRef(a.solicitante) || personaFromRef(a.alojado);
 
   if (full || refLabel) return full || refLabel;
+  if (!full && !refLabel) return "Sin identificar";
 
   return full || "—";
 }

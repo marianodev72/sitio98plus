@@ -124,6 +124,8 @@ async function listar(req, res) {
         .select(
           "codigo estado estadoInstitucional derivadoDe alojamiento plaza asignacion solicitante alojado inspector intervinientes createdAt updatedAt"
         )
+        .populate({ path: "solicitante", select: "nombre apellido" })
+        .populate({ path: "alojado", select: "nombre apellido" })
         .sort({ updatedAt: -1, createdAt: -1, _id: -1 })
         .skip(skip)
         .limit(limit)
