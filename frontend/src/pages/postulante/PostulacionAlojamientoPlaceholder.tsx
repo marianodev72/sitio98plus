@@ -824,6 +824,30 @@ export default function PostulacionAlojamientoPlaceholder() {
     }
   }
 
+  async function anularBorradorActivo() {
+    if (!documento?._id || !isBorrador || busy || isAdjuntoBusy) return;
+
+    const ok = window.confirm(
+      "Esta accion anulara el borrador activo para iniciar una nueva solicitud en blanco. Desea continuar?"
+    );
+    if (!ok) return;
+
+    setBusy(true);
+    setError("");
+    setInfo("");
+
+    try {
+      await http.post(`/alojamientos-documentos/anexo-21/${documento._id}/anular`);
+      setDocumento(null);
+      setForm(buildInitialForm(user));
+      setInfo("Borrador anulado. Puede iniciar una nueva solicitud en blanco.");
+    } catch {
+      setError("No es posible anular el borrador en este momento.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   useEffect(() => {
     cargar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -864,6 +888,20 @@ export default function PostulacionAlojamientoPlaceholder() {
       {isEnviado ? (
         <div style={{ ...cardStyle, color: "#CBD5E1" }}>
           La solicitud fue enviada y se encuentra en revision institucional.
+        </div>
+      ) : null}
+
+      {isBorrador ? (
+        <div
+          style={{
+            ...cardStyle,
+            marginBottom: 12,
+            border: "1px solid rgba(245,158,11,0.35)",
+            background: "rgba(120,53,15,0.18)",
+            color: "#FDE68A",
+          }}
+        >
+          Tenes un borrador activo. Podes continuarlo o anularlo para iniciar una nueva solicitud.
         </div>
       ) : null}
 
@@ -1169,6 +1207,17 @@ export default function PostulacionAlojamientoPlaceholder() {
               {isBorrador ? (
                 <button type="button" style={successButtonStyle} onClick={enviar} disabled={busy || isAdjuntoBusy}>
                   {busy ? "Enviando..." : "Enviar ANEXO 21"}
+                </button>
+              ) : null}
+
+              {isBorrador ? (
+                <button
+                  type="button"
+                  style={dangerButtonStyle}
+                  onClick={anularBorradorActivo}
+                  disabled={busy || isAdjuntoBusy}
+                >
+                  Anular borrador e iniciar nueva solicitud
                 </button>
               ) : null}
             </div>
