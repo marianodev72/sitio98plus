@@ -1,16 +1,7 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { http } from "../../api/http";
 import { useAuth } from "../../auth/useAuth";
-import {
-  buttonRowStyle,
-  cardStyle,
-  primaryButtonStyle,
-  secondaryButtonStyle,
-  subtitleStyle,
-  successButtonStyle,
-  titleStyle,
-} from "../permisionario/uiStyles";
 
 type Documento = {
   _id: string;
@@ -122,48 +113,46 @@ const EMPTY_FORM: FormState = {
 };
 
 const pageStyle: CSSProperties = {
-  maxWidth: 1080,
+  maxWidth: 1020,
   margin: "0 auto",
-  padding: "clamp(12px, 2vw, 24px)",
+  padding: 24,
   color: "#F8FAFC",
   boxSizing: "border-box",
 };
 
-const noteStyle: CSSProperties = {
-  marginTop: 12,
-  color: "rgba(255,255,255,0.76)",
-  lineHeight: 1.65,
-};
-
-const badgeStyle: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  padding: "4px 10px",
-  borderRadius: 999,
-  border: "1px solid rgba(96,165,250,0.36)",
-  background: "rgba(37,99,235,0.16)",
-  color: "#bfdbfe",
-  fontSize: 12,
-  fontWeight: 800,
-};
-
-const sectionStyle: CSSProperties = {
-  marginTop: 18,
-  paddingTop: 16,
-  borderTop: "1px solid rgba(255,255,255,0.10)",
-};
-
 const sectionTitleStyle: CSSProperties = {
-  margin: "0 0 12px",
-  fontSize: 16,
-  color: "#E5E7EB",
+  fontWeight: 800,
+  marginBottom: 8,
+  color: "#F8FAFC",
 };
 
-const fieldGridStyle: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-  gap: 12,
+const cardStyle: CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(255,255,255,0.05)",
+  borderRadius: 12,
+  padding: 16,
+  marginBottom: 12,
 };
+
+const rowLabelStyle: CSSProperties = {
+  fontWeight: 700,
+  fontSize: 13,
+  marginBottom: 4,
+  color: "#CBD5E1",
+};
+
+const controlStyle: CSSProperties = {
+  width: "100%",
+  padding: "10px 12px",
+  borderRadius: 10,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(255,255,255,0.04)",
+  color: "#ffffff",
+  boxSizing: "border-box",
+  outline: "none",
+};
+
+const inputStyle = controlStyle;
 
 const labelStyle: CSSProperties = {
   display: "grid",
@@ -173,37 +162,72 @@ const labelStyle: CSSProperties = {
   fontWeight: 700,
 };
 
-const inputStyle: CSSProperties = {
-  width: "100%",
-  minHeight: 42,
-  padding: "10px 12px",
-  borderRadius: 10,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(255,255,255,0.05)",
-  color: "#ffffff",
-  boxSizing: "border-box",
-  outline: "none",
-};
-
 const selectStyle: CSSProperties = {
-  ...inputStyle,
-  background: "#111827",
-  color: "#F8FAFC",
-  border: "1px solid rgba(148,163,184,0.32)",
+  width: "100%",
+  padding: "8px 10px",
+  borderRadius: 8,
+  border: "1px solid rgba(255,255,255,0.12)",
+  backgroundColor: "#111827",
+  color: "#ffffff",
+  appearance: "none",
+  WebkitAppearance: "none",
+  MozAppearance: "none",
   colorScheme: "dark",
 };
 
 const optionStyle: CSSProperties = {
-  background: "#111827",
-  color: "#F8FAFC",
+  backgroundColor: "#1f2937",
+  color: "#ffffff",
 };
 
 const dateInputStyle: CSSProperties = {
-  ...inputStyle,
+  ...controlStyle,
   background: "#111827",
   color: "#F8FAFC",
   border: "1px solid rgba(148,163,184,0.32)",
   colorScheme: "dark",
+};
+
+const neutralButtonStyle: CSSProperties = {
+  background: "rgba(255,255,255,0.06)",
+  border: "1px solid rgba(255,255,255,0.12)",
+  color: "#ffffff",
+  borderRadius: 10,
+  padding: "10px 14px",
+  fontWeight: 700,
+  cursor: "pointer",
+};
+
+const primaryButtonStyle: CSSProperties = {
+  background: "rgba(59,130,246,0.20)",
+  border: "1px solid rgba(255,255,255,0.12)",
+  color: "#ffffff",
+  borderRadius: 10,
+  padding: "10px 14px",
+  fontWeight: 800,
+  cursor: "pointer",
+};
+
+const successButtonStyle: CSSProperties = {
+  ...primaryButtonStyle,
+  background: "rgba(22,163,74,0.20)",
+};
+
+const dangerButtonStyle: CSSProperties = {
+  background: "rgba(127,29,29,0.18)",
+  border: "1px solid rgba(239,68,68,0.35)",
+  color: "#FCA5A5",
+  borderRadius: 10,
+  padding: "10px 14px",
+  fontWeight: 700,
+  cursor: "pointer",
+};
+
+const buttonRowStyle: CSSProperties = {
+  display: "flex",
+  gap: 10,
+  flexWrap: "wrap",
+  alignItems: "center",
 };
 
 const radioRowStyle: CSSProperties = {
@@ -223,6 +247,57 @@ const radioOptionStyle: CSSProperties = {
   background: "rgba(255,255,255,0.04)",
   color: "rgba(255,255,255,0.84)",
 };
+
+const fileNameStyle: CSSProperties = {
+  fontSize: 12,
+  color: "#9CA3AF",
+  marginTop: 4,
+};
+
+const smallTextStyle: CSSProperties = {
+  fontSize: 12,
+  lineHeight: 1.35,
+  opacity: 0.9,
+  color: "#9CA3AF",
+};
+
+function Box({
+  title,
+  children,
+}: {
+  title?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div style={cardStyle}>
+      {title ? (
+        <div style={{ fontWeight: 800, marginBottom: 10, fontSize: 14, color: "#F8FAFC" }}>
+          {title}
+        </div>
+      ) : null}
+      {children}
+    </div>
+  );
+}
+
+function Row({
+  label,
+  children,
+  requiredMark,
+}: {
+  label: string;
+  children: ReactNode;
+  requiredMark?: boolean;
+}) {
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <div style={rowLabelStyle}>
+        {label} {requiredMark ? "*" : ""}
+      </div>
+      {children}
+    </div>
+  );
+}
 
 function up(value: unknown) {
   return String(value || "").toUpperCase().trim();
@@ -634,67 +709,63 @@ export default function PostulacionAlojamientoPlaceholder() {
   function renderAdjunto(campo: AdjuntoCampo, titulo: string) {
     const adjunto = getAdjunto(documento, campo);
     const disabled = busy || isAdjuntoBusy;
+    const working = busyAdjunto === campo;
 
     return (
-      <div style={{ ...cardStyle, marginTop: 12 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-          <div>
-            <h3 style={{ ...sectionTitleStyle, fontSize: 14, marginBottom: 8 }}>{titulo}</h3>
-            {adjunto ? (
-              <div style={{ color: "rgba(255,255,255,0.76)", lineHeight: 1.6, fontSize: 13 }}>
-                <div>Archivo: <b>{safe(adjunto.nombreOriginal)}</b></div>
-                <div>Tamano: {formatBytes(adjunto.size)}</div>
-                <div>Tipo: {safe(adjunto.mime)}</div>
-                <div>Fecha: {formatFecha(adjunto.fechaSubida)}</div>
-              </div>
-            ) : (
-              <div style={{ color: "rgba(255,255,255,0.62)", fontSize: 13 }}>
-                Sin adjunto cargado.
-              </div>
-            )}
-          </div>
-
-          <div style={{ ...buttonRowStyle, marginTop: 0 }}>
-            {adjunto ? (
-              <button
-                type="button"
-                style={secondaryButtonStyle}
-                onClick={() => descargarAdjunto(campo)}
+      <div style={{ marginTop: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          {isBorrador ? (
+            <label style={{ ...neutralButtonStyle, cursor: disabled ? "default" : "pointer" }}>
+              Elegir archivo
+              <input
+                type="file"
+                accept=".pdf,.jpg,.jpeg"
+                style={{ display: "none" }}
                 disabled={disabled}
-              >
-                Descargar
-              </button>
-            ) : null}
+                onChange={(event) => {
+                  const file = event.target.files?.[0] || null;
+                  event.target.value = "";
+                  subirAdjunto(campo, file);
+                }}
+              />
+            </label>
+          ) : null}
 
-            {isBorrador ? (
-              <>
-                <label style={{ ...secondaryButtonStyle, cursor: disabled ? "default" : "pointer" }}>
-                  Subir
-                  <input
-                    type="file"
-                    accept=".pdf,.jpg,.jpeg"
-                    style={{ display: "none" }}
-                    disabled={disabled}
-                    onChange={(event) => {
-                      const file = event.target.files?.[0] || null;
-                      event.target.value = "";
-                      subirAdjunto(campo, file);
-                    }}
-                  />
-                </label>
-                {adjunto ? (
-                  <button
-                    type="button"
-                    style={secondaryButtonStyle}
-                    onClick={() => eliminarAdjunto(campo)}
-                    disabled={disabled}
-                  >
-                    Eliminar
-                  </button>
-                ) : null}
-              </>
-            ) : null}
+          <div style={{ fontSize: 12, color: "#9CA3AF" }}>
+            {working
+              ? "Procesando archivo..."
+              : adjunto?.nombreOriginal
+                ? adjunto.nombreOriginal
+                : "No se eligio ningun archivo"}
           </div>
+
+          {adjunto ? (
+            <button
+              type="button"
+              style={neutralButtonStyle}
+              onClick={() => descargarAdjunto(campo)}
+              disabled={disabled}
+            >
+              Descargar
+            </button>
+          ) : null}
+
+          {isBorrador && adjunto ? (
+            <button
+              type="button"
+              style={dangerButtonStyle}
+              onClick={() => eliminarAdjunto(campo)}
+              disabled={disabled}
+            >
+              Eliminar
+            </button>
+          ) : null}
+        </div>
+
+        <div style={fileNameStyle}>
+          {adjunto
+            ? `${titulo} - ${formatBytes(adjunto.size)} - ${safe(adjunto.mime)} - ${formatFecha(adjunto.fechaSubida)}`
+            : null}
         </div>
       </div>
     );
@@ -734,170 +805,310 @@ export default function PostulacionAlojamientoPlaceholder() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const disabled = !canEdit || busy || isAdjuntoBusy;
+  const estadoLabel = documento ? safe(documento.estado) : "Sin solicitud iniciada";
+  const aniosServicioOptions = Array.from({ length: 51 }, (_, i) => String(i).padStart(2, "0"));
+
   if (loading) {
     return (
       <div style={pageStyle}>
-        <h1 style={titleStyle}>Alojamiento Naval</h1>
-        <p style={subtitleStyle}>Cargando solicitud...</p>
+        <Box>
+          <div style={{ fontWeight: 900, fontSize: 16, color: "#F8FAFC" }}>ANEXO 21</div>
+          <div style={smallTextStyle}>Cargando solicitud...</div>
+        </Box>
       </div>
     );
   }
 
   return (
     <div style={pageStyle}>
-      <h1 style={titleStyle}>Alojamiento Naval</h1>
-      <p style={subtitleStyle}>Formulario de inscripcion para ocupar Alojamiento Naval.</p>
-
-      <section style={{ ...cardStyle, marginTop: 18 }}>
-        <span style={badgeStyle}>ANEXO_21</span>
-
-        <p style={noteStyle}>
-          Estado actual: <b>{documento ? safe(documento.estado) : "Sin solicitud iniciada"}</b>
+      <div style={{ ...cardStyle, marginBottom: 14 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ fontWeight: 900, color: "#F8FAFC" }}>ARMADA ARGENTINA</div>
+          <div style={{ fontWeight: 700, color: "#CBD5E1" }}>R.G-6-002 - PUBLICO</div>
+        </div>
+        <div style={{ marginTop: 8, fontWeight: 900, fontSize: 16, color: "#F8FAFC" }}>
+          ANEXO 21 - FORMULARIO DE INSCRIPCION PARA OCUPAR ALOJAMIENTO NAVAL
+        </div>
+        <div style={smallTextStyle}>DECLARACION JURADA DE POSTULACION</div>
+        <div style={{ marginTop: 10, color: "#CBD5E1", fontSize: 13 }}>
+          Estado actual: <b>{estadoLabel}</b>
           {documento?.estadoInstitucional ? ` / ${documento.estadoInstitucional}` : ""}
-        </p>
+        </div>
+      </div>
 
-        {isEnviado ? (
-          <p style={noteStyle}>
-            La solicitud fue enviada y se encuentra en revision institucional.
-          </p>
-        ) : null}
+      {isEnviado ? (
+        <div style={{ ...cardStyle, color: "#CBD5E1" }}>
+          La solicitud fue enviada y se encuentra en revision institucional.
+        </div>
+      ) : null}
 
-        {error ? (
-          <div style={{ ...cardStyle, marginTop: 14, borderColor: "rgba(239,68,68,0.34)" }}>
-            {error}
+      {error ? (
+        <div
+          style={{
+            border: "1px solid rgba(239,68,68,0.35)",
+            padding: 12,
+            marginBottom: 12,
+            background: "rgba(127,29,29,0.18)",
+            color: "#FCA5A5",
+          }}
+        >
+          {error}
+        </div>
+      ) : null}
+
+      {info ? (
+        <div
+          style={{
+            border: "1px solid rgba(34,197,94,0.35)",
+            padding: 12,
+            marginBottom: 12,
+            background: "rgba(22,163,74,0.18)",
+            color: "#86EFAC",
+          }}
+        >
+          {info}
+        </div>
+      ) : null}
+
+      <form>
+        <Box>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <Row label="Lugar y fecha:" requiredMark>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 190px", gap: 10 }}>
+                <input
+                  value={form.lugar}
+                  onChange={(e) => setField("lugar", e.target.value)}
+                  placeholder="Lugar"
+                  style={controlStyle}
+                  disabled={disabled}
+                  maxLength={80}
+                />
+                <input
+                  type="date"
+                  value={form.fechaLugar}
+                  onChange={(e) => setField("fechaLugar", e.target.value)}
+                  style={dateInputStyle}
+                  disabled={disabled}
+                />
+              </div>
+            </Row>
+
+            <Row label="Autoridad de Asignacion / Zona Naval:" requiredMark>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 110px", gap: 10 }}>
+                <input
+                  value={form.autoridadAsignacion}
+                  onChange={(e) => setField("autoridadAsignacion", e.target.value)}
+                  style={controlStyle}
+                  disabled={disabled}
+                  maxLength={120}
+                />
+                <input
+                  value={form.zonaNaval}
+                  onChange={(e) => setField("zonaNaval", e.target.value)}
+                  style={controlStyle}
+                  disabled={disabled}
+                  maxLength={20}
+                />
+              </div>
+            </Row>
           </div>
-        ) : null}
 
-        {info ? (
-          <div style={{ ...cardStyle, marginTop: 14, borderColor: "rgba(34,197,94,0.34)" }}>
-            {info}
+          <div style={{ marginTop: 6, ...smallTextStyle }}>
+            Marcar con una equis la opcion seleccionada que corresponda.
           </div>
-        ) : null}
-
-        <div style={sectionStyle}>
-          <h2 style={sectionTitleStyle}>Declaracion jurada de postulacion</h2>
-          <div style={fieldGridStyle}>
-            <label style={labelStyle}>
-              Tipo de solicitud
-              <select
-                value={form.tipoSolicitud}
-                onChange={(e) => setField("tipoSolicitud", e.target.value)}
-                style={selectStyle}
-                disabled={!canEdit || busy}
+          <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+            {[
+              ["INSCRIPCION_INICIAL", "Solicito mi inscripcion inicial"],
+              ["CAMBIO_ALOJAMIENTO", "Solicito cambio de alojamiento"],
+              ["RECTIFICACION", "Solicito rectificacion"],
+            ].map(([value, label]) => (
+              <label
+                key={value}
+                style={{ display: "flex", gap: 8, alignItems: "center", border: "1px solid rgba(255,255,255,0.14)", padding: 10 }}
               >
-                <option value="" style={optionStyle}>Seleccionar...</option>
-                <option value="INSCRIPCION_INICIAL" style={optionStyle}>Inscripcion inicial</option>
-                <option value="CAMBIO_ALOJAMIENTO" style={optionStyle}>Cambio de alojamiento</option>
-                <option value="RECTIFICACION" style={optionStyle}>Rectificacion</option>
+                <input
+                  type="radio"
+                  checked={form.tipoSolicitud === value}
+                  disabled={disabled}
+                  onChange={() => setField("tipoSolicitud", value)}
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+        </Box>
+
+        <Box>
+          <div style={sectionTitleStyle}>
+            1. Conozco y acepto las condiciones reglamentarias para ocupar Alojamiento Naval.
+          </div>
+          <BoolRadio
+            label="Acepto condiciones del reglamento"
+            value={form.aceptaCondicionesReglamento}
+            disabled={disabled}
+            onChange={(value) => setField("aceptaCondicionesReglamento", value)}
+          />
+        </Box>
+
+        <Box title="2. Datos personales del solicitante">
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
+            <Row label="M.R." requiredMark><input value={form.mr} onChange={(e) => setField("mr", e.target.value)} style={controlStyle} disabled={disabled} maxLength={40} /></Row>
+            <Row label="Afiliado IOSFA" requiredMark><input value={form.afiliadoIOSFA} onChange={(e) => setField("afiliadoIOSFA", e.target.value)} style={controlStyle} disabled={disabled} maxLength={40} /></Row>
+            <Row label="Grado / Escalafon" requiredMark><input value={form.gradoEscalafon} onChange={(e) => setField("gradoEscalafon", e.target.value)} style={controlStyle} disabled={disabled} maxLength={80} /></Row>
+            <Row label="Apellido" requiredMark><input value={form.apellido} onChange={(e) => setField("apellido", e.target.value)} style={controlStyle} disabled={disabled} maxLength={80} /></Row>
+            <Row label="Nombres" requiredMark><input value={form.nombres} onChange={(e) => setField("nombres", e.target.value)} style={controlStyle} disabled={disabled} maxLength={100} /></Row>
+            <Row label="Organismo Administrador" requiredMark><input value={form.organismoAdministrador} onChange={(e) => setField("organismoAdministrador", e.target.value)} style={controlStyle} disabled={disabled} maxLength={160} /></Row>
+            <Row label="Destino actual" requiredMark><input value={form.destinoActual} onChange={(e) => setField("destinoActual", e.target.value)} style={controlStyle} disabled={disabled} maxLength={120} /></Row>
+            <Row label="Destino futuro"><input value={form.destinoFuturo} onChange={(e) => setField("destinoFuturo", e.target.value)} style={controlStyle} disabled={disabled} maxLength={120} /></Row>
+            <Row label="Telefono actual" requiredMark><input value={form.telefonoActual} onChange={(e) => setField("telefonoActual", e.target.value)} style={controlStyle} disabled={disabled} maxLength={40} /></Row>
+            <Row label="Telefono futuro"><input value={form.telefonoFuturo} onChange={(e) => setField("telefonoFuturo", e.target.value)} style={controlStyle} disabled={disabled} maxLength={40} /></Row>
+          </div>
+        </Box>
+
+        <Box>
+          <div style={sectionTitleStyle}>3. Fecha del ultimo ascenso y anos de servicio segun recibo.</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 220px", gap: 12 }}>
+            <Row label="Fecha ultimo ascenso" requiredMark>
+              <input type="date" value={form.fechaUltimoAscenso} onChange={(e) => setField("fechaUltimoAscenso", e.target.value)} style={dateInputStyle} disabled={disabled} />
+            </Row>
+            <Row label="Anos de servicio" requiredMark>
+              <select value={form.aniosServicioRecibo} onChange={(e) => setField("aniosServicioRecibo", e.target.value)} style={selectStyle} disabled={disabled}>
+                <option value="" style={optionStyle}>--</option>
+                {aniosServicioOptions.map((y) => <option key={y} value={y} style={optionStyle}>{y}</option>)}
               </select>
-            </label>
-            <label style={labelStyle}>
-              Lugar
-              <input value={form.lugar} onChange={(e) => setField("lugar", e.target.value)} style={inputStyle} disabled={!canEdit || busy} maxLength={80} />
-            </label>
-            <label style={labelStyle}>
-              Fecha
-              <input type="date" value={form.fechaLugar} onChange={(e) => setField("fechaLugar", e.target.value)} style={dateInputStyle} disabled={!canEdit || busy} />
-            </label>
-            <label style={labelStyle}>
-              Autoridad de asignacion
-              <input value={form.autoridadAsignacion} onChange={(e) => setField("autoridadAsignacion", e.target.value)} style={inputStyle} disabled={!canEdit || busy} maxLength={120} />
-            </label>
-            <label style={labelStyle}>
-              Zona naval
-              <input value={form.zonaNaval} onChange={(e) => setField("zonaNaval", e.target.value)} style={inputStyle} disabled={!canEdit || busy} maxLength={20} />
-            </label>
-            <label style={labelStyle}>
-              Organismo administrador
-              <input value={form.organismoAdministrador} onChange={(e) => setField("organismoAdministrador", e.target.value)} style={inputStyle} disabled={!canEdit || busy} maxLength={160} />
-            </label>
+            </Row>
           </div>
-        </div>
+        </Box>
 
-        <div style={sectionStyle}>
-          <h2 style={sectionTitleStyle}>Datos personales</h2>
-          <div style={fieldGridStyle}>
-            <label style={labelStyle}>MR<input value={form.mr} onChange={(e) => setField("mr", e.target.value)} style={inputStyle} disabled={!canEdit || busy} maxLength={40} /></label>
-            <label style={labelStyle}>Nro. afiliado IOSFA<input value={form.afiliadoIOSFA} onChange={(e) => setField("afiliadoIOSFA", e.target.value)} style={inputStyle} disabled={!canEdit || busy} maxLength={40} /></label>
-            <label style={labelStyle}>Grado y escalafon<input value={form.gradoEscalafon} onChange={(e) => setField("gradoEscalafon", e.target.value)} style={inputStyle} disabled={!canEdit || busy} maxLength={80} /></label>
-            <label style={labelStyle}>Apellido<input value={form.apellido} onChange={(e) => setField("apellido", e.target.value)} style={inputStyle} disabled={!canEdit || busy} maxLength={80} /></label>
-            <label style={labelStyle}>Nombres<input value={form.nombres} onChange={(e) => setField("nombres", e.target.value)} style={inputStyle} disabled={!canEdit || busy} maxLength={100} /></label>
-            <label style={labelStyle}>Destino actual<input value={form.destinoActual} onChange={(e) => setField("destinoActual", e.target.value)} style={inputStyle} disabled={!canEdit || busy} maxLength={120} /></label>
-            <label style={labelStyle}>Destino futuro<input value={form.destinoFuturo} onChange={(e) => setField("destinoFuturo", e.target.value)} style={inputStyle} disabled={!canEdit || busy} maxLength={120} /></label>
-            <label style={labelStyle}>Telefono actual<input value={form.telefonoActual} onChange={(e) => setField("telefonoActual", e.target.value)} style={inputStyle} disabled={!canEdit || busy} maxLength={40} /></label>
-            <label style={labelStyle}>Telefono futuro<input value={form.telefonoFuturo} onChange={(e) => setField("telefonoFuturo", e.target.value)} style={inputStyle} disabled={!canEdit || busy} maxLength={40} /></label>
-            <label style={labelStyle}>Fecha ultimo ascenso<input type="date" value={form.fechaUltimoAscenso} onChange={(e) => setField("fechaUltimoAscenso", e.target.value)} style={dateInputStyle} disabled={!canEdit || busy} /></label>
-            <label style={labelStyle}>Anios de servicio segun recibo<input type="number" min={0} max={60} value={form.aniosServicioRecibo} onChange={(e) => setField("aniosServicioRecibo", e.target.value)} style={inputStyle} disabled={!canEdit || busy} /></label>
+        <Box>
+          <div style={sectionTitleStyle}>4. Agrego fotocopia autenticada de FIDOFAC.</div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <BoolRadio label="Agrego FIDOFAC" value={form.agregaFidofac} disabled={disabled} onChange={(value) => setField("agregaFidofac", value)} />
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 13, color: "#CBD5E1", marginBottom: 6 }}>Adjuntar FIDOFAC:</div>
+              {renderAdjunto("fidofac", "FIDOFAC")}
+            </div>
           </div>
-        </div>
+        </Box>
 
-        <div style={sectionStyle}>
-          <h2 style={sectionTitleStyle}>Declaraciones</h2>
-          <div style={fieldGridStyle}>
-            <BoolRadio label="Acepto condiciones del reglamento" value={form.aceptaCondicionesReglamento} disabled={!canEdit || busy} onChange={(value) => setField("aceptaCondicionesReglamento", value)} />
-            <BoolRadio label="Agrego FIDOFAC" value={form.agregaFidofac} disabled={!canEdit || busy} onChange={(value) => setField("agregaFidofac", value)} />
-            <BoolRadio label="Tengo problemas socioeconomicos atendibles" value={form.tieneProblemasSocioeconomicos} disabled={!canEdit || busy} onChange={(value) => setField("tieneProblemasSocioeconomicos", value)} />
-            <label style={labelStyle}>Oficio tramite socioeconomico<input value={form.oficioProblemasSocioeconomicos} onChange={(e) => setField("oficioProblemasSocioeconomicos", e.target.value)} style={inputStyle} disabled={!canEdit || busy || form.tieneProblemasSocioeconomicos !== true} maxLength={80} /></label>
-            <BoolRadio label="Me encuentro declarado INEPTO por DGPN" value={form.declaradoIneptoDGPN} disabled={!canEdit || busy} onChange={(value) => setField("declaradoIneptoDGPN", value)} />
-            <BoolRadio label="Agrego indice de titularidad" value={form.agregaIndiceTitularidad} disabled={!canEdit || busy} onChange={(value) => setField("agregaIndiceTitularidad", value)} />
+        <Box>
+          <div style={sectionTitleStyle}>5. Tengo problemas socioeconomicos atendibles e inicie el tramite por Oficio.</div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <BoolRadio label="Problemas socioeconomicos" value={form.tieneProblemasSocioeconomicos} disabled={disabled} onChange={(value) => setField("tieneProblemasSocioeconomicos", value)} />
+            <input
+              value={form.oficioProblemasSocioeconomicos}
+              onChange={(e) => setField("oficioProblemasSocioeconomicos", e.target.value)}
+              placeholder="Oficio..."
+              style={{ ...controlStyle, maxWidth: 420 }}
+              disabled={disabled || form.tieneProblemasSocioeconomicos !== true}
+              maxLength={80}
+            />
           </div>
-        </div>
+        </Box>
 
-        <div style={sectionStyle}>
-          <h2 style={sectionTitleStyle}>Representantes autorizados</h2>
+        <Box>
+          <div style={sectionTitleStyle}>6. Me encuentro declarado INEPTO por la Direccion General del Personal Naval.</div>
+          <BoolRadio label="Declarado INEPTO DGPN" value={form.declaradoIneptoDGPN} disabled={disabled} onChange={(value) => setField("declaradoIneptoDGPN", value)} />
+        </Box>
+
+        <Box>
+          <div style={sectionTitleStyle}>7. Agrego indice de titularidad.</div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <BoolRadio label="Agrego indice de titularidad" value={form.agregaIndiceTitularidad} disabled={disabled} onChange={(value) => setField("agregaIndiceTitularidad", value)} />
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 13, color: "#CBD5E1", marginBottom: 6 }}>Adjuntar indice:</div>
+              {renderAdjunto("indiceTitularidad", "Indice de titularidad")}
+            </div>
+          </div>
+        </Box>
+
+        <Box>
+          <div style={sectionTitleStyle}>
+            8. Si no me encuentro presente el dia de la asignacion, autorizo como representante(s):
+          </div>
           {[0, 1].map((index) => (
-            <div key={index} style={{ ...cardStyle, marginTop: index === 0 ? 0 : 12 }}>
-              <h3 style={{ ...sectionTitleStyle, fontSize: 14 }}>Representante {index + 1}</h3>
-              <div style={fieldGridStyle}>
-                <label style={labelStyle}>Apellido y nombres<input value={form.representantes[index]?.apellidoNombres || ""} onChange={(e) => setRepresentante(index, "apellidoNombres", e.target.value)} style={inputStyle} disabled={!canEdit || busy} maxLength={120} /></label>
-                <label style={labelStyle}>Grado<input value={form.representantes[index]?.grado || ""} onChange={(e) => setRepresentante(index, "grado", e.target.value)} style={inputStyle} disabled={!canEdit || busy} maxLength={60} /></label>
-                <label style={labelStyle}>MR<input value={form.representantes[index]?.mr || ""} onChange={(e) => setRepresentante(index, "mr", e.target.value)} style={inputStyle} disabled={!canEdit || busy} maxLength={40} /></label>
-                <label style={labelStyle}>Destino<input value={form.representantes[index]?.destino || ""} onChange={(e) => setRepresentante(index, "destino", e.target.value)} style={inputStyle} disabled={!canEdit || busy} maxLength={120} /></label>
-                <label style={labelStyle}>Telefono<input value={form.representantes[index]?.telefono || ""} onChange={(e) => setRepresentante(index, "telefono", e.target.value)} style={inputStyle} disabled={!canEdit || busy} maxLength={40} /></label>
+            <div key={index} style={{ border: "1px solid rgba(255,255,255,0.14)", padding: 10, marginBottom: 10 }}>
+              <div style={{ fontWeight: 800, marginBottom: 8, color: "#F8FAFC" }}>REPRESENTANTE {index + 1}</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 160px", gap: 10 }}>
+                <Row label="Apellido y nombres:"><input value={form.representantes[index]?.apellidoNombres || ""} onChange={(e) => setRepresentante(index, "apellidoNombres", e.target.value)} style={controlStyle} disabled={disabled} maxLength={120} /></Row>
+                <Row label="Grado:"><input value={form.representantes[index]?.grado || ""} onChange={(e) => setRepresentante(index, "grado", e.target.value)} style={controlStyle} disabled={disabled} maxLength={60} /></Row>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "160px 1fr 200px", gap: 10 }}>
+                <Row label="M.R.:"><input value={form.representantes[index]?.mr || ""} onChange={(e) => setRepresentante(index, "mr", e.target.value)} style={controlStyle} disabled={disabled} maxLength={40} /></Row>
+                <Row label="Destino:"><input value={form.representantes[index]?.destino || ""} onChange={(e) => setRepresentante(index, "destino", e.target.value)} style={controlStyle} disabled={disabled} maxLength={120} /></Row>
+                <Row label="Telefono:"><input value={form.representantes[index]?.telefono || ""} onChange={(e) => setRepresentante(index, "telefono", e.target.value)} style={controlStyle} disabled={disabled} maxLength={40} /></Row>
               </div>
             </div>
           ))}
-          <div style={{ ...fieldGridStyle, marginTop: 12 }}>
-            <BoolRadio label="Acepto las decisiones del representante" value={form.aceptaDecisionRepresentante} disabled={!canEdit || busy} onChange={(value) => setField("aceptaDecisionRepresentante", value)} />
+          <div style={smallTextStyle}>
+            Acepto todas las decisiones que el/los representante/s tome/n respecto a la eleccion que haga/n.
+          </div>
+          <div style={{ marginTop: 10 }}>
+            <BoolRadio label="Acepto decisiones del representante" value={form.aceptaDecisionRepresentante} disabled={disabled} onChange={(value) => setField("aceptaDecisionRepresentante", value)} />
+          </div>
+        </Box>
+
+        <Box>
+          <div style={sectionTitleStyle}>
+            9. Autorizo descuento de compensaciones por uso del haber mensual.
+          </div>
+          <BoolRadio label="Autorizo descuento de haberes" value={form.autorizaDescuentoHaberes} disabled={disabled} onChange={(value) => setField("autorizaDescuentoHaberes", value)} />
+        </Box>
+
+        <Box>
+          <div style={sectionTitleStyle}>
+            10. Autorizo administracion de expensas comunes por Administrador bajo supervision del Organismo Administrador.
+          </div>
+          <BoolRadio label="Autorizo administracion de expensas" value={form.autorizaAdministracionExpensas} disabled={disabled} onChange={(value) => setField("autorizaAdministracionExpensas", value)} />
+        </Box>
+
+        <Box>
+          <div style={sectionTitleStyle}>11. Fecha estimada de traslado a la zona:</div>
+          <input
+            type="date"
+            value={form.fechaEstimadaTrasladoZona}
+            onChange={(e) => setField("fechaEstimadaTrasladoZona", e.target.value)}
+            style={dateInputStyle}
+            disabled={disabled}
+          />
+        </Box>
+
+        <Box title="AGREGADOS (marcar SI/NO)">
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 160px", gap: 10, alignItems: "center" }}>
+            <div>1. Fotocopia autenticada de la FIDOFAC.</div>
+            <BoolRadio label="" value={form.agregados.fidofac} disabled={disabled} onChange={(value) => setAgregado("fidofac", value)} />
+            <div>2. Indice de titularidad.</div>
+            <BoolRadio label="" value={form.agregados.indiceTitularidad} disabled={disabled} onChange={(value) => setAgregado("indiceTitularidad", value)} />
+          </div>
+        </Box>
+
+        <div style={{ borderTop: "1px solid rgba(255,255,255,0.12)", marginTop: 14, paddingTop: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+            <button type="button" style={neutralButtonStyle} onClick={() => navigate("/app/postulante/postulaciones")} disabled={busy || isAdjuntoBusy}>
+              Volver a postulaciones
+            </button>
+
+            <div style={buttonRowStyle}>
+              {canEdit ? (
+                <button type="button" style={primaryButtonStyle} onClick={guardar} disabled={busy || isAdjuntoBusy}>
+                  {documento ? "Guardar borrador" : "Iniciar solicitud"}
+                </button>
+              ) : null}
+
+              {isBorrador ? (
+                <button type="button" style={successButtonStyle} onClick={enviar} disabled={busy || isAdjuntoBusy}>
+                  {busy ? "Enviando..." : "Enviar ANEXO 21"}
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          <div style={{ marginTop: 16, textAlign: "right", fontWeight: 800, color: "#CBD5E1" }}>
+            Firma del Solicitante
           </div>
         </div>
-
-        <div style={sectionStyle}>
-          <h2 style={sectionTitleStyle}>Autorizaciones y agregados</h2>
-          <div style={fieldGridStyle}>
-            <BoolRadio label="Autorizo descuento de haberes" value={form.autorizaDescuentoHaberes} disabled={!canEdit || busy} onChange={(value) => setField("autorizaDescuentoHaberes", value)} />
-            <BoolRadio label="Autorizo administracion de expensas" value={form.autorizaAdministracionExpensas} disabled={!canEdit || busy} onChange={(value) => setField("autorizaAdministracionExpensas", value)} />
-            <label style={labelStyle}>Fecha estimada de traslado a la zona<input type="date" value={form.fechaEstimadaTrasladoZona} onChange={(e) => setField("fechaEstimadaTrasladoZona", e.target.value)} style={dateInputStyle} disabled={!canEdit || busy} /></label>
-            <BoolRadio label="Agregado: fotocopia autenticada FIDOFAC" value={form.agregados.fidofac} disabled={!canEdit || busy} onChange={(value) => setAgregado("fidofac", value)} />
-            <BoolRadio label="Agregado: indice de titularidad" value={form.agregados.indiceTitularidad} disabled={!canEdit || busy} onChange={(value) => setAgregado("indiceTitularidad", value)} />
-          </div>
-          {renderAdjunto("fidofac", "FIDOFAC")}
-          {renderAdjunto("indiceTitularidad", "Indice de titularidad")}
-        </div>
-
-        <div style={{ ...buttonRowStyle, marginTop: 18 }}>
-          <button
-            type="button"
-            style={secondaryButtonStyle}
-            onClick={() => navigate("/app/postulante/postulaciones")}
-            disabled={busy || isAdjuntoBusy}
-          >
-            Volver a postulaciones
-          </button>
-
-          {canEdit ? (
-            <button type="button" style={primaryButtonStyle} onClick={guardar} disabled={busy || isAdjuntoBusy}>
-              {documento ? "Guardar borrador" : "Iniciar solicitud"}
-            </button>
-          ) : null}
-
-          {isBorrador ? (
-            <button type="button" style={successButtonStyle} onClick={enviar} disabled={busy || isAdjuntoBusy}>
-              Enviar solicitud
-            </button>
-          ) : null}
-        </div>
-      </section>
+      </form>
     </div>
   );
 }
