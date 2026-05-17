@@ -1,4 +1,6 @@
 const anexo22Service = require("../../services/documentos/anexo22Service");
+const alojamientoDocumentoPdfService = require("../../services/documentos/alojamientoDocumentoPdfService");
+const { renderAnexo22Pdf } = require("../../pdf/anexo22PdfRenderer");
 
 function sendResult(res, result) {
   if (result?.ok) {
@@ -63,8 +65,40 @@ async function cerrarAnexo22(req, res) {
   }
 }
 
+async function descargarPdf(req, res) {
+  try {
+    const result = await alojamientoDocumentoPdfService.obtenerPayloadAnexo22({
+      id: req.params.id,
+      user: req.user,
+    });
+
+    if (!result?.ok) {
+      return res.status(result?.status || 404).json({
+        ok: false,
+        error: result?.message || "No es posible procesar la solicitud.",
+      });
+    }
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="ANEXO_22_${req.params.id}.pdf"`);
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+
+    return renderAnexo22Pdf(res, {
+      documento: result.documento,
+      origen: result.origen,
+    });
+  } catch {
+    return res.status(500).json({
+      ok: false,
+      error: "No es posible procesar la solicitud.",
+    });
+  }
+}
+
 module.exports = {
   generarDesdeAnexo21,
   conformidadPostulante,
   cerrarAnexo22,
+  descargarPdf,
 };
