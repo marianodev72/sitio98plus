@@ -185,8 +185,51 @@ async function enviarBorrador({ id, user }) {
   return { ok: true, status: 200, documento: toResponse(documento) };
 }
 
+async function anularBorrador({ id, user }) {
+  if (!isPostulante(user)) {
+    return { ok: false, status: 404, code: "NO_AUTORIZADO" };
+  }
+
+  const documento = await AlojamientoDocumento.findById(id);
+  if (!documento || documento.activo === false || documento.codigo !== CODIGO) {
+    return { ok: false, status: 404, code: "NO_DISPONIBLE" };
+  }
+  if (!isOwner(documento, user) || up(documento.estado) !== "BORRADOR") {
+    return { ok: false, status: 404, code: "NO_DISPONIBLE" };
+  }
+
+  const transition = registrarCambioEstado(documento, {
+    estadoNuevo: "ANULADO",
+    actorId: user._id,
+    rolActor: "POSTULANTE",
+    observacion: "Anulado por el postulante para iniciar nueva solicitud",
+  });
+
+  if (!transition.ok) {
+    return { ok: false, status: 404, code: transition.error };
+  }
+
+  const datos = documento.datos && typeof documento.datos === "object" && !Array.isArray(documento.datos)
+    ? { ...documento.datos }
+    : {};
+
+  datos.anulacion = {
+    anuladoPor: user._id,
+    fechaAnulacion: new Date(),
+    motivoAnulacion: "Anulado por el postulante para iniciar nueva solicitud",
+  };
+
+  documento.datos = datos;
+  documento.actualizadoPor = user._id;
+  documento.markModified("datos");
+  await documento.save();
+
+  return { ok: true, status: 200, documento: toResponse(documento) };
+}
+
 module.exports = {
   crearBorrador,
   actualizarBorrador,
   enviarBorrador,
+  anularBorrador,
 };

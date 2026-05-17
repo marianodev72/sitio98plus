@@ -16,6 +16,7 @@ router.use(authRequired, refreshUserPrivileges);
 router.post("/anexo-21", anexo21Controller.crear);
 router.patch("/anexo-21/:id", anexo21Controller.actualizar);
 router.post("/anexo-21/:id/enviar", anexo21Controller.enviar);
+router.post("/anexo-21/:id/anular", anexo21Controller.anular);
 router.post(
   "/anexo-21/:id/adjuntos/:campo",
   uploadAlojamientoDocumento,

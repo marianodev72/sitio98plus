@@ -82,6 +82,23 @@ async function enviar(req, res) {
   }
 }
 
+async function anular(req, res) {
+  try {
+    const { id } = req.params || {};
+    if (!isObjectId(id)) return deny(res);
+
+    const result = await anexo21Service.anularBorrador({
+      id,
+      user: req.user,
+    });
+
+    return sendServiceResult(res, result);
+  } catch (err) {
+    console.error("[alojamientos-documentos][anexo21] anular error:", err?.message || "Error controlado");
+    return res.status(500).json({ message: "Error interno al procesar solicitud" });
+  }
+}
+
 async function subirAdjunto(req, res) {
   try {
     const { id, campo } = req.params || {};
@@ -148,6 +165,7 @@ module.exports = {
   crear,
   actualizar,
   enviar,
+  anular,
   subirAdjunto,
   eliminarAdjunto,
   descargarAdjunto,
