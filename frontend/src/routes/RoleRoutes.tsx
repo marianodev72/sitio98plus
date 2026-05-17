@@ -32,6 +32,7 @@ import PerfilAdminGeneral from "../pages/admin_general/Perfil";
 import AlojamientosInventario from "../pages/alojamientos/AlojamientosInventario";
 import AlojamientosDashboard from "../pages/alojamientos/AlojamientosDashboard";
 import AlojamientoDetalle from "../pages/alojamientos/AlojamientoDetalle";
+import AlojamientoDocumentoDetalle from "../pages/alojamientos/AlojamientoDocumentoDetalle";
 
 /* Admin */
 import AdminDashboard from "../pages/admin/AdminDashboard";
@@ -307,6 +308,7 @@ export default function RoleRoutes() {
           />
           <Route path="alojamientos/:id" element={<AlojamientoDetalle />} />
           <Route path="gestiones" element={<GestionesAdminGeneral />} />
+          <Route path="gestiones/alojamientos/:id" element={<AlojamientoDocumentoDetalle />} />
           <Route path="gestiones/:id" element={<GestionarAnexo />} />
           <Route path="mensajeria" element={<MensajeriaAdminGeneral />} />
           <Route path="liquidaciones" element={<LiquidacionesAdminGeneral />} />

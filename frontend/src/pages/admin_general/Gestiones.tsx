@@ -25,6 +25,8 @@ type Anexo = {
   createdAt?: string;
   updatedAt?: string;
   datos?: any;
+  solicitante?: string | { _id?: string; nombre?: string; apellido?: string; email?: string } | null;
+  alojado?: string | { _id?: string; nombre?: string; apellido?: string; email?: string } | null;
   usuario?: {
     _id?: string;
     nombre?: string;
@@ -69,6 +71,15 @@ const ESTADOS_FILTRO = [
   "ASIGNADO",
 ];
 
+const ESTADOS_ALOJAMIENTO = [
+  "BORRADOR",
+  "ENVIADO",
+  "EN_REVISION",
+  "CERRADO",
+  "RECHAZADO",
+  "ANULADO",
+];
+
 function safe(v: unknown) {
   return v === null || v === undefined || v === "" ? "-" : String(v);
 }
@@ -110,6 +121,30 @@ function viviendaLabel(a: Anexo): string {
   return "—";
 }
 
+function alojamientoLabel(a: Anexo): string {
+  const d = a?.datos || {};
+
+  const label =
+    (typeof d.alojamientoLabel === "string" && d.alojamientoLabel.trim()) ||
+    (typeof d.alojamientoCodigo === "string" && d.alojamientoCodigo.trim()) ||
+    (typeof d.lugar === "string" && d.lugar.trim()) ||
+    (typeof d.destinoActual === "string" && d.destinoActual.trim()) ||
+    "";
+
+  return label || "Pendiente";
+}
+
+function personaFromRef(value: Anexo["solicitante"]) {
+  if (!value) return "";
+  if (typeof value === "string") return `...${value.slice(-6)}`;
+
+  const ape = value.apellido ? String(value.apellido).trim() : "";
+  const nom = value.nombre ? String(value.nombre).trim() : "";
+  const full = `${ape} ${nom}`.trim();
+
+  return full || String(value.email || "").trim();
+}
+
 function personaLabel(a: Anexo): string {
   const d = a.datos || {};
 
@@ -129,6 +164,9 @@ function personaLabel(a: Anexo): string {
   const ape = a.usuario?.apellido ? String(a.usuario.apellido).trim() : "";
   const nom = a.usuario?.nombre ? String(a.usuario.nombre).trim() : "";
   const full = `${ape} ${nom}`.trim();
+  const refLabel = personaFromRef(a.solicitante) || personaFromRef(a.alojado);
+
+  if (full || refLabel) return full || refLabel;
 
   return full || "—";
 }
@@ -140,6 +178,10 @@ export default function Gestiones() {
   const [panel, setPanel] = useState<Panel>("PERMISIONARIOS");
   const anexosDisponibles = useMemo(
     () => (panel === "PERMISIONARIOS" ? ANEXOS_PERMISIONARIO : ANEXOS_ALOJADO),
+    [panel]
+  );
+  const estadosDisponibles = useMemo(
+    () => (panel === "PERMISIONARIOS" ? ESTADOS_FILTRO : ESTADOS_ALOJAMIENTO),
     [panel]
   );
 
@@ -156,7 +198,9 @@ export default function Gestiones() {
   const esAdmin = myRole === "ADMIN" || myRole === "ADMIN_GENERAL";
 
   useEffect(() => {
-    setCodigo(TODOS_CODIGOS);
+    setCodigo(panel === "PERMISIONARIOS" ? TODOS_CODIGOS : "ANEXO_21");
+    setEstadoFiltro("");
+    setBarrioFiltro("");
   }, [panel]);
 
   async function cargarLista() {
@@ -175,6 +219,14 @@ export default function Gestiones() {
         };
 
         if (estadoFiltro) params.estado = estadoFiltro;
+
+        if (panel === "ALOJADOS") {
+          if (codigo && codigo !== TODOS_CODIGOS) params.codigo = codigo;
+          const res = await http.get("/alojamientos-documentos", { params });
+          setItems(Array.isArray(res.data?.documentos) ? res.data.documentos : []);
+          return;
+        }
+
         if (barrioFiltro.trim()) params.barrio = barrioFiltro.trim();
 
         const res = await http.get(`/formularios/anexo/${codigo}`, { params });
@@ -226,6 +278,8 @@ export default function Gestiones() {
     cargarLista();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [codigo, estadoFiltro, barrioFiltro, sortDir, esAdmin]);
+
+  const isAlojados = panel === "ALOJADOS";
 
   const thStyle: CSSProperties = {
     textAlign: "left",
@@ -324,9 +378,11 @@ const optionStyle: CSSProperties = {
   disabled={loading}
   style={selectStyle}
 >
-  <option value={TODOS_CODIGOS} style={optionStyle}>
-    Todos
-  </option>
+  {!isAlojados && (
+    <option value={TODOS_CODIGOS} style={optionStyle}>
+      Todos
+    </option>
+  )}
   {anexosDisponibles.map((c) => (
     <option key={c} value={c} style={optionStyle}>
       {c}
@@ -344,21 +400,23 @@ const optionStyle: CSSProperties = {
                 <option value="" style={optionStyle}>
                   Todos los estados
                 </option>
-                {ESTADOS_FILTRO.map((estado) => (
+                {estadosDisponibles.map((estado) => (
                   <option key={estado} value={estado} style={optionStyle}>
                     {estado}
                   </option>
                 ))}
               </select>
 
-              <input
-                value={barrioFiltro}
-                onChange={(e) => setBarrioFiltro(e.target.value)}
-                disabled={loading}
-                placeholder="Barrio"
-                style={{ ...controlStyle, minWidth: 180 }}
-                aria-label="Barrio"
-              />
+              {!isAlojados && (
+                <input
+                  value={barrioFiltro}
+                  onChange={(e) => setBarrioFiltro(e.target.value)}
+                  disabled={loading}
+                  placeholder="Barrio"
+                  style={{ ...controlStyle, minWidth: 180 }}
+                  aria-label="Barrio"
+                />
+              )}
 
               <select
                 value={sortDir}
@@ -411,8 +469,12 @@ const optionStyle: CSSProperties = {
                     <tr>
                       <th style={thStyle}>Código</th>
                       <th style={thStyle}>Estado</th>
-                      <th style={thStyle}>Vivienda / Unidad</th>
-                      <th style={thStyle}>Postulante / Permisionario</th>
+                      <th style={thStyle}>
+                        {isAlojados ? "Alojamiento / Unidad" : "Vivienda / Unidad"}
+                      </th>
+                      <th style={thStyle}>
+                        {isAlojados ? "Postulante / Alojado" : "Postulante / Permisionario"}
+                      </th>
                       <th style={thStyle}>Fecha</th>
                       <th style={thStyle}>Acciones</th>
                     </tr>
@@ -428,25 +490,35 @@ const optionStyle: CSSProperties = {
                             {safe(an.estado)}
                             {an.estadoInstitucional ? ` / ${safe(an.estadoInstitucional)}` : ""}
                           </td>
-                          <td style={tdStyle}>{viviendaLabel(an)}</td>
+                          <td style={tdStyle}>
+                            {isAlojados ? alojamientoLabel(an) : viviendaLabel(an)}
+                          </td>
                           <td style={tdStyle}>{personaLabel(an)}</td>
                           <td style={tdStyle}>{fmtDate(an.updatedAt || an.createdAt)}</td>
                           <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
                             <div style={{ ...buttonRowStyle, marginTop: 0 }}>
                               <button
                                 disabled={busy}
-                                onClick={() => navigate(`/app/admin-general/gestiones/${an._id}`)}
+                                onClick={() =>
+                                  navigate(
+                                    isAlojados
+                                      ? `/app/admin-general/gestiones/alojamientos/${an._id}`
+                                      : `/app/admin-general/gestiones/${an._id}`
+                                  )
+                                }
                                 style={primaryButtonStyle}
                               >
                                 Gestionar
                               </button>
-                              <button
-                                disabled={busy}
-                                onClick={() => descargarPdf(an._id, up(an.codigo))}
-                                style={secondaryButtonStyle}
-                              >
-                                PDF
-                              </button>
+                              {!isAlojados && (
+                                <button
+                                  disabled={busy}
+                                  onClick={() => descargarPdf(an._id, up(an.codigo))}
+                                  style={secondaryButtonStyle}
+                                >
+                                  PDF
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
