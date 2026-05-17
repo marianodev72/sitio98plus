@@ -89,6 +89,7 @@ import NuevaPostulacion from "../pages/postulante/NuevaPostulacion";
 import Anexo01Institucional from "../pages/postulante/Anexo01Institucional";
 import PostulacionesDashboard from "../pages/postulante/PostulacionesDashboard";
 import PostulacionAlojamientoPlaceholder from "../pages/postulante/PostulacionAlojamientoPlaceholder";
+import AlojamientoDocumentoReadonly from "../pages/postulante/AlojamientoDocumentoReadonly";
 
 /* ALOJADO */
 import AlojadoDashboard from "../pages/alojado/Dashboard";
@@ -161,6 +162,9 @@ export default function RoleRoutes() {
 
   {/* /app/postulante/mis-anexos */}
   <Route path="mis-anexos" element={<MisAnexos />} />
+
+  {/* /app/postulante/mis-anexos/alojamientos/:id */}
+  <Route path="mis-anexos/alojamientos/:id" element={<AlojamientoDocumentoReadonly />} />
 
   {/* /app/postulante/mis-anexos/:id */}
   <Route path="mis-anexos/:id" element={<VerAnexo />} />

@@ -106,7 +106,7 @@ export default function MisAnexos() {
 
   // En esta etapa necesitamos que el usuario pueda ver ANEXO_02 siempre.
   // Permitimos listar anexos relevantes (podés ampliar después).
-  const CODIGOS = useMemo(() => ["ANEXO_01", "ANEXO_02", "ANEXO_03"], []);
+  const CODIGOS = useMemo(() => ["ANEXO_01", "ANEXO_02", "ANEXO_03", "ANEXO_21"], []);
   const [codigo, setCodigo] = useState<string>("ANEXO_02");
 
   const [items, setItems] = useState<Anexo[]>([]);
@@ -119,8 +119,13 @@ export default function MisAnexos() {
     setItems([]);
 
     try {
-      const res = await http.get("/formularios/mios", { params: { codigo } });
-      setItems(Array.isArray(res.data?.anexos) ? res.data.anexos : []);
+      if (codigo === "ANEXO_21") {
+        const res = await http.get("/alojamientos-documentos", { params: { codigo: "ANEXO_21" } });
+        setItems(Array.isArray(res.data?.documentos) ? res.data.documentos : []);
+      } else {
+        const res = await http.get("/formularios/mios", { params: { codigo } });
+        setItems(Array.isArray(res.data?.anexos) ? res.data.anexos : []);
+      }
     } catch (e) {
       console.error("[MIS ANEXOS] Error", e);
       setErrorMsg(
@@ -252,20 +257,32 @@ export default function MisAnexos() {
                       {/* ✅ RUTA CORRECTA SEGÚN RoleRoutes:
                           /app/postulante/mis-anexos/:id */}
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        <button
-                          type="button"
-                          style={neutralButtonStyle}
-                          onClick={() => navigate(`/app/postulante/mis-anexos/${an._id}`)}
-                        >
-                          Ver
-                        </button>
-                        <button
-                          type="button"
-                          style={neutralButtonStyle}
-                          onClick={() => descargarPdf(an._id, up(an.codigo))}
-                        >
-                          PDF
-                        </button>
+                        {up(an.codigo) === "ANEXO_21" ? (
+                          <button
+                            type="button"
+                            style={neutralButtonStyle}
+                            onClick={() => navigate(`/app/postulante/mis-anexos/alojamientos/${an._id}`)}
+                          >
+                            Ver
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              style={neutralButtonStyle}
+                              onClick={() => navigate(`/app/postulante/mis-anexos/${an._id}`)}
+                            >
+                              Ver
+                            </button>
+                            <button
+                              type="button"
+                              style={neutralButtonStyle}
+                              onClick={() => descargarPdf(an._id, up(an.codigo))}
+                            >
+                              PDF
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
