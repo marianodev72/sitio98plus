@@ -13,7 +13,7 @@ type Documento = {
   updatedAt?: string;
 };
 
-type AdjuntoCampo = "fidofac" | "indiceTitularidad";
+type AdjuntoCampo = "fidofac" | "reciboHaberes" | "indiceTitularidad";
 
 type AdjuntoMetadata = {
   id?: string;
@@ -54,6 +54,7 @@ type FormState = {
   aniosServicioRecibo: string;
   aceptaCondicionesReglamento: boolean | null;
   agregaFidofac: boolean | null;
+  agregaReciboHaberes: boolean | null;
   tieneProblemasSocioeconomicos: boolean | null;
   oficioProblemasSocioeconomicos: string;
   declaradoIneptoDGPN: boolean | null;
@@ -65,6 +66,7 @@ type FormState = {
   fechaEstimadaTrasladoZona: string;
   agregados: {
     fidofac: boolean | null;
+    reciboHaberes: boolean | null;
     indiceTitularidad: boolean | null;
   };
 };
@@ -97,6 +99,7 @@ const EMPTY_FORM: FormState = {
   aniosServicioRecibo: "",
   aceptaCondicionesReglamento: null,
   agregaFidofac: null,
+  agregaReciboHaberes: null,
   tieneProblemasSocioeconomicos: null,
   oficioProblemasSocioeconomicos: "",
   declaradoIneptoDGPN: null,
@@ -108,6 +111,7 @@ const EMPTY_FORM: FormState = {
   fechaEstimadaTrasladoZona: "",
   agregados: {
     fidofac: null,
+    reciboHaberes: null,
     indiceTitularidad: null,
   },
 };
@@ -405,6 +409,7 @@ function datosToForm(datos: Record<string, unknown> | undefined, user: any): For
     aniosServicioRecibo: str(datos?.aniosServicioRecibo),
     aceptaCondicionesReglamento: boolFromUnknown(datos?.aceptaCondicionesReglamento),
     agregaFidofac: boolFromUnknown(datos?.agregaFidofac),
+    agregaReciboHaberes: boolFromUnknown(datos?.agregaReciboHaberes),
     tieneProblemasSocioeconomicos: boolFromUnknown(datos?.tieneProblemasSocioeconomicos),
     oficioProblemasSocioeconomicos: str(datos?.oficioProblemasSocioeconomicos),
     declaradoIneptoDGPN: boolFromUnknown(datos?.declaradoIneptoDGPN),
@@ -416,6 +421,7 @@ function datosToForm(datos: Record<string, unknown> | undefined, user: any): For
     fechaEstimadaTrasladoZona: str(datos?.fechaEstimadaTrasladoZona),
     agregados: {
       fidofac: boolFromUnknown(agregados.fidofac),
+      reciboHaberes: boolFromUnknown(agregados.reciboHaberes),
       indiceTitularidad: boolFromUnknown(agregados.indiceTitularidad),
     },
   };
@@ -442,6 +448,7 @@ function formToDatos(form: FormState) {
     aniosServicioRecibo: form.aniosServicioRecibo,
     aceptaCondicionesReglamento: form.aceptaCondicionesReglamento,
     agregaFidofac: form.agregaFidofac,
+    agregaReciboHaberes: form.agregaReciboHaberes,
     tieneProblemasSocioeconomicos: form.tieneProblemasSocioeconomicos,
     oficioProblemasSocioeconomicos: form.oficioProblemasSocioeconomicos,
     declaradoIneptoDGPN: form.declaradoIneptoDGPN,
@@ -453,6 +460,7 @@ function formToDatos(form: FormState) {
     fechaEstimadaTrasladoZona: form.fechaEstimadaTrasladoZona,
     agregados: {
       fidofac: form.agregados.fidofac,
+      reciboHaberes: form.agregados.reciboHaberes,
       indiceTitularidad: form.agregados.indiceTitularidad,
     },
   };
@@ -487,10 +495,12 @@ function validarEnvio(form: FormState) {
 
   const radios = [
     form.agregaFidofac,
+    form.agregaReciboHaberes,
     form.tieneProblemasSocioeconomicos,
     form.declaradoIneptoDGPN,
     form.agregaIndiceTitularidad,
     form.agregados.fidofac,
+    form.agregados.reciboHaberes,
     form.agregados.indiceTitularidad,
   ];
 
@@ -714,7 +724,7 @@ export default function PostulacionAlojamientoPlaceholder() {
     return (
       <div style={{ marginTop: 10 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          {isBorrador ? (
+          {canEdit ? (
             <label style={{ ...neutralButtonStyle, cursor: disabled ? "default" : "pointer" }}>
               Elegir archivo
               <input
@@ -993,6 +1003,17 @@ export default function PostulacionAlojamientoPlaceholder() {
         </Box>
 
         <Box>
+          <div style={sectionTitleStyle}>4.1 Agrego Recibo de Haberes.</div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <BoolRadio label="Agrego Recibo de Haberes" value={form.agregaReciboHaberes} disabled={disabled} onChange={(value) => setField("agregaReciboHaberes", value)} />
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 13, color: "#CBD5E1", marginBottom: 6 }}>Adjuntar Recibo:</div>
+              {renderAdjunto("reciboHaberes", "Recibo de Haberes")}
+            </div>
+          </div>
+        </Box>
+
+        <Box>
           <div style={sectionTitleStyle}>5. Tengo problemas socioeconomicos atendibles e inicie el tramite por Oficio.</div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             <BoolRadio label="Problemas socioeconomicos" value={form.tieneProblemasSocioeconomicos} disabled={disabled} onChange={(value) => setField("tieneProblemasSocioeconomicos", value)} />
@@ -1078,7 +1099,9 @@ export default function PostulacionAlojamientoPlaceholder() {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 160px", gap: 10, alignItems: "center" }}>
             <div>1. Fotocopia autenticada de la FIDOFAC.</div>
             <BoolRadio label="" value={form.agregados.fidofac} disabled={disabled} onChange={(value) => setAgregado("fidofac", value)} />
-            <div>2. Indice de titularidad.</div>
+            <div>2. Fotocopia del ultimo Recibo de Haberes.</div>
+            <BoolRadio label="" value={form.agregados.reciboHaberes} disabled={disabled} onChange={(value) => setAgregado("reciboHaberes", value)} />
+            <div>3. Indice de titularidad.</div>
             <BoolRadio label="" value={form.agregados.indiceTitularidad} disabled={disabled} onChange={(value) => setAgregado("indiceTitularidad", value)} />
           </div>
         </Box>

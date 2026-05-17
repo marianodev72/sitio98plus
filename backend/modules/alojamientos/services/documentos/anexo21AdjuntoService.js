@@ -14,7 +14,7 @@ const CODIGO = "ANEXO_21";
 // Permite montar storage persistente en produccion/docker sin depender del cwd.
 const STORAGE_ROOT = resolveStorageRoot();
 const STORAGE_KEY_PREFIX = "anexo21";
-const CAMPOS_ADJUNTO = new Set(["fidofac", "indiceTitularidad"]);
+const CAMPOS_ADJUNTO = new Set(["fidofac", "indiceTitularidad", "reciboHaberes"]);
 const MIME_TO_EXT = Object.freeze({
   "application/pdf": "pdf",
   "image/jpeg": "jpg",

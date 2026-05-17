@@ -29,6 +29,7 @@ const STRING_LIMITS = Object.freeze({
 const BOOLEAN_FIELDS = Object.freeze([
   "aceptaCondicionesReglamento",
   "agregaFidofac",
+  "agregaReciboHaberes",
   "tieneProblemasSocioeconomicos",
   "declaradoIneptoDGPN",
   "agregaIndiceTitularidad",
@@ -61,6 +62,7 @@ const REQUIRED_BOOLEAN_TRUE_FIELDS = Object.freeze([
 
 const REQUIRED_BOOLEAN_FIELDS = Object.freeze([
   "agregaFidofac",
+  "agregaReciboHaberes",
   "tieneProblemasSocioeconomicos",
   "declaradoIneptoDGPN",
   "agregaIndiceTitularidad",
@@ -74,7 +76,7 @@ const REPRESENTANTE_STRING_LIMITS = Object.freeze({
   telefono: 40,
 });
 
-const AGREGADOS_FIELDS = Object.freeze(["fidofac", "indiceTitularidad"]);
+const AGREGADOS_FIELDS = Object.freeze(["fidofac", "reciboHaberes", "indiceTitularidad"]);
 
 const ALLOWED_ROOT_KEYS = new Set([
   ...Object.keys(STRING_LIMITS),
@@ -149,6 +151,7 @@ function cleanAgregados(input) {
   const source = input && typeof input === "object" && !Array.isArray(input) ? input : {};
   return {
     fidofac: cleanOptionalBoolean(source.fidofac),
+    reciboHaberes: cleanOptionalBoolean(source.reciboHaberes),
     indiceTitularidad: cleanOptionalBoolean(source.indiceTitularidad),
   };
 }
