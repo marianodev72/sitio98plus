@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useNavigate } from "react-router-dom";
 import { http } from "../../api/http";
 import {
   badgeStyle,
@@ -127,6 +128,7 @@ const tdStyle: CSSProperties = {
 };
 
 export default function AlojamientosInspectorDocumentos() {
+  const navigate = useNavigate();
   const [items, setItems] = useState<AlojamientoDocumento[]>([]);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
@@ -260,17 +262,18 @@ export default function AlojamientosInspectorDocumentos() {
               <th style={thStyle}>Postulante / alojado</th>
               <th style={thStyle}>Alojamiento / plaza</th>
               <th style={thStyle}>Fecha</th>
+              <th style={thStyle}>Detalle</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td style={tdStyle} colSpan={5}>Cargando documentos...</td>
+                <td style={tdStyle} colSpan={6}>Cargando documentos...</td>
               </tr>
             )}
             {!loading && filtrados.length === 0 && (
               <tr>
-                <td style={tdStyle} colSpan={5}>No hay documentos para los filtros seleccionados.</td>
+                <td style={tdStyle} colSpan={6}>No hay documentos para los filtros seleccionados.</td>
               </tr>
             )}
             {!loading && filtrados.map((doc) => (
@@ -285,6 +288,15 @@ export default function AlojamientosInspectorDocumentos() {
                 <td style={tdStyle}>
                   {fmtDate(doc.updatedAt || doc.createdAt)}
                   <div style={metaStyle}>Actualizacion / creacion</div>
+                </td>
+                <td style={tdStyle}>
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/app/alojamientos-inspector/documentos/${doc._id}`)}
+                    style={{ ...badgeStyle, cursor: "pointer" }}
+                  >
+                    Ver detalle
+                  </button>
                 </td>
               </tr>
             ))}
