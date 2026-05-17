@@ -190,6 +190,17 @@ function Field({ label, value }: { label: string; value: unknown }) {
   );
 }
 
+function descargarBlob(blob: Blob, filename: string) {
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
 export default function AlojamientoDocumentoReadonly() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -198,6 +209,7 @@ export default function AlojamientoDocumentoReadonly() {
   const [documento, setDocumento] = useState<AlojamientoDocumento | null>(null);
   const [loading, setLoading] = useState(true);
   const [submittingConformidad, setSubmittingConformidad] = useState(false);
+  const [descargandoPdf, setDescargandoPdf] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [infoMsg, setInfoMsg] = useState("");
 
@@ -249,6 +261,26 @@ export default function AlojamientoDocumentoReadonly() {
     }
   }
 
+  async function descargarPdfAnexo22() {
+    if (!id || !esAnexo22 || descargandoPdf) return;
+
+    setDescargandoPdf(true);
+    setErrorMsg("");
+    setInfoMsg("");
+
+    try {
+      const res = await http.get(`/alojamientos-documentos/${id}/pdf`, {
+        responseType: "blob",
+      });
+      descargarBlob(new Blob([res.data], { type: "application/pdf" }), `ANEXO_22_${id}.pdf`);
+      setInfoMsg("PDF descargado correctamente.");
+    } catch {
+      setErrorMsg("No fue posible descargar el PDF.");
+    } finally {
+      setDescargandoPdf(false);
+    }
+  }
+
   useEffect(() => {
     cargar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -259,6 +291,16 @@ export default function AlojamientoDocumentoReadonly() {
       <button type="button" style={neutralButtonStyle} onClick={() => navigate("/app/postulante/mis-anexos")}>
         Volver a Mis anexos
       </button>
+      {esAnexo22 ? (
+        <button
+          type="button"
+          style={{ ...neutralButtonStyle, marginLeft: 8 }}
+          onClick={descargarPdfAnexo22}
+          disabled={descargandoPdf}
+        >
+          {descargandoPdf ? "Descargando..." : "Descargar PDF"}
+        </button>
+      ) : null}
 
       <section style={cardStyle}>
         <h1 style={titleStyle}>Documento de alojamiento</h1>

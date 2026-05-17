@@ -167,6 +167,17 @@ function signerPorTipo(documento: AlojamientoDocumento | null, tipo: string) {
   return signers.find((item: any) => up(item?.tipo) === tipoUp) || null;
 }
 
+function descargarBlob(blob: Blob, filename: string) {
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
 export default function AlojamientoDocumentoDetalle() {
   const { user } = useAuth();
   const { id } = useParams();
@@ -180,6 +191,7 @@ export default function AlojamientoDocumentoDetalle() {
   const [plazaSeleccionada, setPlazaSeleccionada] = useState("");
   const [generandoAnexo22, setGenerandoAnexo22] = useState(false);
   const [cerrandoAnexo22, setCerrandoAnexo22] = useState(false);
+  const [descargandoPdf, setDescargandoPdf] = useState(false);
   const [infoMsg, setInfoMsg] = useState("");
   const [plazasError, setPlazasError] = useState("");
 
@@ -286,6 +298,26 @@ export default function AlojamientoDocumentoDetalle() {
     }
   }
 
+  async function descargarPdfAnexo22() {
+    if (!documento?._id || !esAnexo22 || descargandoPdf) return;
+
+    setDescargandoPdf(true);
+    setInfoMsg("");
+    setErrorMsg("");
+
+    try {
+      const res = await http.get(`/alojamientos-documentos/${documento._id}/pdf`, {
+        responseType: "blob",
+      });
+      descargarBlob(new Blob([res.data], { type: "application/pdf" }), `ANEXO_22_${documento._id}.pdf`);
+      setInfoMsg("PDF descargado correctamente.");
+    } catch {
+      setErrorMsg("No es posible descargar el PDF en este momento.");
+    } finally {
+      setDescargandoPdf(false);
+    }
+  }
+
   useEffect(() => {
     cargar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -328,6 +360,16 @@ export default function AlojamientoDocumentoDetalle() {
             <button type="button" style={secondaryButtonStyle} onClick={cargar} disabled={loading}>
               {loading ? "Cargando..." : "Recargar"}
             </button>
+            {esAnexo22 ? (
+              <button
+                type="button"
+                style={secondaryButtonStyle}
+                onClick={descargarPdfAnexo22}
+                disabled={descargandoPdf}
+              >
+                {descargandoPdf ? "Descargando..." : "Descargar PDF"}
+              </button>
+            ) : null}
           </div>
 
           {errorMsg && (
