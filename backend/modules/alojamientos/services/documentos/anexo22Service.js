@@ -65,6 +65,10 @@ function plazaSnapshot(plaza = {}) {
   };
 }
 
+function generoDesdeAnexo21(documento) {
+  return up(documento?.datos?.genero || documento?.datos?.sexo);
+}
+
 function toResponse(documento) {
   if (!documento) return null;
 
@@ -135,7 +139,11 @@ async function generarDesdeAnexo21({ id, plazaId, user }) {
     return { ok: true, status: 200, documento: toResponse(existente) };
   }
 
-  const disponibilidad = await validarDisponibilidadPlaza({ plazaId, alojadoId });
+  const disponibilidad = await validarDisponibilidadPlaza({
+    plazaId,
+    alojadoId,
+    generoDocumento: generoDesdeAnexo21(origen),
+  });
   if (!disponibilidad?.puedeAsignar) {
     return publicError(404, "PLAZA_NO_DISPONIBLE");
   }
@@ -191,6 +199,7 @@ async function generarDesdeAnexo21({ id, plazaId, user }) {
         anexo21Id: origen._id,
         tipoSolicitud: origen.datos?.tipoSolicitud || null,
         postulanteNombre: nombreSolicitante(origen.datos),
+        genero: generoDesdeAnexo21(origen) || null,
         mr: origen.datos?.mr || null,
         gradoEscalafon: origen.datos?.gradoEscalafon || null,
         destinoActual: origen.datos?.destinoActual || null,

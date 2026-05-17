@@ -44,6 +44,7 @@ type FormState = {
   mr: string;
   afiliadoIOSFA: string;
   gradoEscalafon: string;
+  genero: string;
   apellido: string;
   nombres: string;
   destinoActual: string;
@@ -89,6 +90,7 @@ const EMPTY_FORM: FormState = {
   mr: "",
   afiliadoIOSFA: "",
   gradoEscalafon: "",
+  genero: "",
   apellido: "",
   nombres: "",
   destinoActual: "",
@@ -377,6 +379,7 @@ function buildInitialForm(user: any): FormState {
     nombres: str(user?.nombre),
     mr: str(user?.matricula),
     telefonoActual: str(user?.telefono),
+    genero: str(user?.genero || user?.sexo || user?.meta?.genero || user?.meta?.sexo).toUpperCase(),
     representantes: [{ ...EMPTY_REPRESENTANTE }, { ...EMPTY_REPRESENTANTE }],
     agregados: { ...EMPTY_FORM.agregados },
   };
@@ -399,6 +402,7 @@ function datosToForm(datos: Record<string, unknown> | undefined, user: any): For
     mr: str(datos?.mr) || initial.mr,
     afiliadoIOSFA: str(datos?.afiliadoIOSFA),
     gradoEscalafon: str(datos?.gradoEscalafon),
+    genero: str(datos?.genero || datos?.sexo) || initial.genero,
     apellido: str(datos?.apellido) || initial.apellido,
     nombres: str(datos?.nombres) || initial.nombres,
     destinoActual: str(datos?.destinoActual),
@@ -438,6 +442,7 @@ function formToDatos(form: FormState) {
     mr: form.mr,
     afiliadoIOSFA: form.afiliadoIOSFA,
     gradoEscalafon: form.gradoEscalafon,
+    genero: form.genero,
     apellido: form.apellido,
     nombres: form.nombres,
     destinoActual: form.destinoActual,
@@ -477,6 +482,7 @@ function validarEnvio(form: FormState) {
     "mr",
     "afiliadoIOSFA",
     "gradoEscalafon",
+    "genero",
     "apellido",
     "nombres",
     "destinoActual",
@@ -966,6 +972,13 @@ export default function PostulacionAlojamientoPlaceholder() {
             <Row label="M.R." requiredMark><input value={form.mr} onChange={(e) => setField("mr", e.target.value)} style={controlStyle} disabled={disabled} maxLength={40} /></Row>
             <Row label="Afiliado IOSFA" requiredMark><input value={form.afiliadoIOSFA} onChange={(e) => setField("afiliadoIOSFA", e.target.value)} style={controlStyle} disabled={disabled} maxLength={40} /></Row>
             <Row label="Grado / Escalafon" requiredMark><input value={form.gradoEscalafon} onChange={(e) => setField("gradoEscalafon", e.target.value)} style={controlStyle} disabled={disabled} maxLength={80} /></Row>
+            <Row label="Genero" requiredMark>
+              <select value={form.genero} onChange={(e) => setField("genero", e.target.value)} style={selectStyle} disabled={disabled}>
+                <option value="" style={optionStyle}>Seleccionar...</option>
+                <option value="MASCULINO" style={optionStyle}>Masculino</option>
+                <option value="FEMENINO" style={optionStyle}>Femenino</option>
+              </select>
+            </Row>
             <Row label="Apellido" requiredMark><input value={form.apellido} onChange={(e) => setField("apellido", e.target.value)} style={controlStyle} disabled={disabled} maxLength={80} /></Row>
             <Row label="Nombres" requiredMark><input value={form.nombres} onChange={(e) => setField("nombres", e.target.value)} style={controlStyle} disabled={disabled} maxLength={100} /></Row>
             <Row label="Organismo Administrador" requiredMark><input value={form.organismoAdministrador} onChange={(e) => setField("organismoAdministrador", e.target.value)} style={controlStyle} disabled={disabled} maxLength={160} /></Row>

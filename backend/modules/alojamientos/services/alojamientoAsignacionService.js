@@ -23,8 +23,10 @@ function publicReason(code, message) {
 
 function extractGeneroUsuario(user) {
   const candidates = [
+    user?.generoDocumento,
     user?.genero,
     user?.sexo,
+    user?.meta?.generoDocumento,
     user?.meta?.genero,
     user?.meta?.sexo,
     user?.meta?.generoDeclarado,
@@ -70,7 +72,7 @@ function validarUsuarioElegible(usuario) {
   return null;
 }
 
-async function validarDisponibilidadPlaza({ plazaId, alojadoId }) {
+async function validarDisponibilidadPlaza({ plazaId, alojadoId, generoDocumento }) {
   const reasons = [];
 
   if (!isObjectId(plazaId)) {
@@ -86,7 +88,7 @@ async function validarDisponibilidadPlaza({ plazaId, alojadoId }) {
   const [plaza, usuario, asignacionPlaza, asignacionUsuario] = await Promise.all([
     AlojamientoPlaza.findById(plazaId).lean(),
     User.findById(alojadoId)
-      .select("_id role estadoHabitacional activo bloqueado archivado alojamientoAsignado meta")
+      .select("_id role estadoHabitacional activo bloqueado archivado alojamientoAsignado genero sexo meta")
       .lean(),
     AsignacionAlojamiento.findOne({
       plaza: plazaId,
@@ -117,6 +119,13 @@ async function validarDisponibilidadPlaza({ plazaId, alojadoId }) {
     if (asignacionPlaza) reasons.push(publicReason("PLAZA_CON_ASIGNACION", "Plaza no libre"));
   }
 
+  const usuarioParaCompatibilidad = usuario
+    ? {
+        ...usuario,
+        generoDocumento: up(generoDocumento),
+      }
+    : usuario;
+
   const usuarioReason = validarUsuarioElegible(usuario);
   if (usuarioReason) reasons.push(usuarioReason);
   if (asignacionUsuario) {
@@ -136,7 +145,7 @@ async function validarDisponibilidadPlaza({ plazaId, alojadoId }) {
         reasons.push(publicReason("ALOJAMIENTO_ESTADO_NO_ASIGNABLE", "Alojamiento no asignable"));
       }
 
-      const generoReason = validarCompatibilidadGenero(alojamiento, usuario);
+      const generoReason = validarCompatibilidadGenero(alojamiento, usuarioParaCompatibilidad);
       if (generoReason) reasons.push(generoReason);
     }
   }

@@ -85,10 +85,14 @@ async function listarElegiblesAsignacion() {
     .map(toPublicPlaza);
 }
 
+function generoDesdeDocumento(documento) {
+  return up(documento?.datos?.genero || documento?.datos?.sexo);
+}
+
 async function resolveAlojadoDesdeContexto({ anexo21Id, alojadoId } = {}) {
   if (alojadoId !== undefined && alojadoId !== "") {
     if (!isObjectId(alojadoId)) return { ok: false };
-    return { ok: true, alojadoId };
+    return { ok: true, alojadoId, generoDocumento: "" };
   }
 
   if (anexo21Id !== undefined && anexo21Id !== "") {
@@ -100,18 +104,22 @@ async function resolveAlojadoDesdeContexto({ anexo21Id, alojadoId } = {}) {
       activo: { $ne: false },
       estado: { $in: ["ENVIADO", "EN_REVISION"] },
     })
-      .select("solicitante alojado")
+      .select("solicitante alojado datos.genero datos.sexo")
       .lean();
 
     const solicitante = documento?.solicitante || documento?.alojado;
     if (!solicitante || !isObjectId(solicitante)) return { ok: false };
-    return { ok: true, alojadoId: solicitante };
+    return {
+      ok: true,
+      alojadoId: solicitante,
+      generoDocumento: generoDesdeDocumento(documento),
+    };
   }
 
-  return { ok: true, alojadoId: null };
+  return { ok: true, alojadoId: null, generoDocumento: "" };
 }
 
-async function filtrarCompatiblesConAlojado(plazas, alojadoId) {
+async function filtrarCompatiblesConAlojado(plazas, alojadoId, generoDocumento = "") {
   if (!alojadoId) return plazas;
 
   const evaluadas = await Promise.all(
@@ -119,6 +127,7 @@ async function filtrarCompatiblesConAlojado(plazas, alojadoId) {
       const disponibilidad = await validarDisponibilidadPlaza({
         plazaId: plaza._id,
         alojadoId,
+        generoDocumento,
       });
       return disponibilidad?.puedeAsignar ? plaza : null;
     })
@@ -132,7 +141,11 @@ async function listarElegiblesAsignacionConContexto(contexto = {}) {
   if (!resolved.ok) return { ok: false, status: 404 };
 
   const plazas = await listarElegiblesAsignacion();
-  const compatibles = await filtrarCompatiblesConAlojado(plazas, resolved.alojadoId);
+  const compatibles = await filtrarCompatiblesConAlojado(
+    plazas,
+    resolved.alojadoId,
+    resolved.generoDocumento
+  );
 
   return {
     ok: true,
@@ -140,6 +153,7 @@ async function listarElegiblesAsignacionConContexto(contexto = {}) {
     contexto: {
       anexo21Id: safe(contexto.anexo21Id),
       alojadoId: resolved.alojadoId ? String(resolved.alojadoId) : null,
+      generoDocumento: resolved.generoDocumento || null,
       tipo: up(contexto.anexo21Id) ? "ANEXO_21" : null,
     },
   };

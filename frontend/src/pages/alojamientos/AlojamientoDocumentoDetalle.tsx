@@ -353,6 +353,7 @@ export default function AlojamientoDocumentoDetalle() {
                   <Field label="MR" value={datos.mr} />
                   <Field label="Afiliado IOSFA" value={datos.afiliadoIOSFA} />
                   <Field label="Grado / escalafon" value={datos.gradoEscalafon} />
+                  <Field label="Genero" value={datos.genero || datos.sexo} />
                   <Field label="Apellido" value={datos.apellido} />
                   <Field label="Nombres" value={datos.nombres} />
                   <Field label="Destino actual" value={datos.destinoActual} />

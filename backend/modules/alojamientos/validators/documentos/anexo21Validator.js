@@ -15,6 +15,7 @@ const STRING_LIMITS = Object.freeze({
   mr: 40,
   afiliadoIOSFA: 40,
   gradoEscalafon: 80,
+  genero: 20,
   apellido: 80,
   nombres: 100,
   destinoActual: 120,
@@ -47,6 +48,7 @@ const REQUIRED_STRING_FIELDS = Object.freeze([
   "mr",
   "afiliadoIOSFA",
   "gradoEscalafon",
+  "genero",
   "apellido",
   "nombres",
   "destinoActual",
@@ -138,6 +140,11 @@ function cleanTipoSolicitud(value) {
   return TIPOS_SOLICITUD.includes(clean) ? clean : "";
 }
 
+function cleanGenero(value) {
+  const clean = cleanString(value, 20).toUpperCase();
+  return ["MASCULINO", "FEMENINO"].includes(clean) ? clean : "";
+}
+
 function cleanRepresentante(input) {
   const source = input && typeof input === "object" && !Array.isArray(input) ? input : {};
   const out = {};
@@ -206,6 +213,8 @@ function validateAnexo21Datos(input, options = {}) {
   for (const [field, limit] of Object.entries(STRING_LIMITS)) {
     if (field === "fechaLugar" || field === "fechaUltimoAscenso" || field === "fechaEstimadaTrasladoZona") {
       value[field] = cleanDate(datos[field]);
+    } else if (field === "genero") {
+      value[field] = cleanGenero(datos[field]);
     } else {
       value[field] = cleanString(datos[field], limit);
     }
