@@ -128,58 +128,150 @@ function hasConformidadTipo(documento, tipo) {
 
 function alojamientoSnapshotFrom(origen) {
   const datos = origen?.datos || {};
+  const datosAlojamiento = datos.alojamiento && typeof datos.alojamiento === "object" ? datos.alojamiento : {};
+  const snapshot = datos.alojamientoSnapshot && typeof datos.alojamientoSnapshot === "object"
+    ? datos.alojamientoSnapshot
+    : {};
   const alojamiento = origen?.alojamiento && typeof origen.alojamiento === "object"
     ? origen.alojamiento
     : {};
 
   return {
-    alojamientoCodigo: stringValue(datos.alojamientoCodigo, alojamiento.codigo),
-    lugar: stringValue(datos.lugar, datos.alojamientoLugar, alojamiento.lugar),
-    dependencia: stringValue(datos.dependencia, alojamiento.dependencia),
-    sector: stringValue(datos.sector, alojamiento.sector),
-    tipo: stringValue(datos.tipo, alojamiento.tipo),
-    numero: stringValue(datos.numero, alojamiento.numero),
-    clase: stringValue(datos.clase, alojamiento.clase),
-    capacidad: datos.capacidad ?? alojamiento.capacidad ?? null,
-    generoPermitido: stringValue(datos.generoPermitido, alojamiento.generoPermitido),
-    localidad: stringValue(datos.localidad, alojamiento.localidad),
-    provincia: stringValue(datos.provincia, alojamiento.provincia),
-    predio: stringValue(datos.predio, datos.lugar, datos.alojamientoLugar, alojamiento.lugar),
-    edificio: stringValue(datos.edificio, datos.sector, alojamiento.sector),
+    alojamientoCodigo: stringValue(
+      datos.alojamientoCodigo,
+      datosAlojamiento.codigo,
+      snapshot.alojamientoCodigo,
+      alojamiento.codigo
+    ),
+    lugar: stringValue(datos.lugar, datos.alojamientoLugar, datosAlojamiento.lugar, snapshot.lugar, alojamiento.lugar),
+    dependencia: stringValue(datos.dependencia, datosAlojamiento.dependencia, snapshot.dependencia, alojamiento.dependencia),
+    sector: stringValue(datos.sector, datosAlojamiento.sector, snapshot.sector, alojamiento.sector),
+    tipo: stringValue(datos.tipo, datosAlojamiento.tipo, snapshot.tipo, alojamiento.tipo),
+    numero: stringValue(datos.numero, datosAlojamiento.numero, snapshot.numero, alojamiento.numero),
+    clase: stringValue(datos.clase, datosAlojamiento.clase, snapshot.clase, alojamiento.clase),
+    capacidad: datos.capacidad ?? datosAlojamiento.capacidad ?? snapshot.capacidad ?? alojamiento.capacidad ?? null,
+    generoPermitido: stringValue(
+      datos.generoPermitido,
+      datosAlojamiento.generoPermitido,
+      snapshot.generoPermitido,
+      alojamiento.generoPermitido
+    ),
+    localidad: stringValue(datos.localidad, datosAlojamiento.localidad, snapshot.localidad, alojamiento.localidad),
+    provincia: stringValue(datos.provincia, datosAlojamiento.provincia, snapshot.provincia, alojamiento.provincia),
+    predio: stringValue(
+      datos.predio,
+      datosAlojamiento.predio,
+      snapshot.predio,
+      alojamiento.predio,
+      datos.lugar,
+      datos.alojamientoLugar,
+      alojamiento.lugar
+    ),
+    edificio: stringValue(
+      datos.edificio,
+      datosAlojamiento.edificio,
+      snapshot.edificio,
+      alojamiento.edificio,
+      datos.sector,
+      alojamiento.sector
+    ),
   };
 }
 
 function plazaSnapshotFrom(origen) {
   const datos = origen?.datos || {};
+  const snapshot = datos.plazaSnapshot && typeof datos.plazaSnapshot === "object" ? datos.plazaSnapshot : {};
   const plaza = origen?.plaza && typeof origen.plaza === "object" ? origen.plaza : {};
 
   return {
-    plazaCodigo: stringValue(datos.plazaCodigo, plaza.codigo),
-    numeroPlaza: datos.numeroPlaza ?? plaza.numeroPlaza ?? null,
+    plazaCodigo: stringValue(datos.plazaCodigo, snapshot.plazaCodigo, plaza.codigo),
+    numeroPlaza: datos.numeroPlaza ?? snapshot.numeroPlaza ?? plaza.numeroPlaza ?? null,
   };
 }
 
-function huespedSnapshotFrom(origen) {
+function huespedSnapshotFrom(origen, anexo21Origen = null) {
   const datos = origen?.datos || {};
+  const datos21 = anexo21Origen?.datos || {};
+  const huesped = datos.huesped && typeof datos.huesped === "object" ? datos.huesped : {};
   const alojado = origen?.alojado && typeof origen.alojado === "object" ? origen.alojado : {};
   const solicitante = origen?.solicitante && typeof origen.solicitante === "object" ? origen.solicitante : {};
+  const nombreCompleto = stringValue(
+    datos21.apellidoNombre,
+    datos21.nombreCompleto,
+    datos21.postulanteNombre,
+    datos.apellidoNombre,
+    datos.nombreCompleto,
+    datos.postulanteNombre,
+    huesped.nombre,
+    nombreDesdeUsuario(alojado),
+    nombreDesdeUsuario(solicitante)
+  );
+  const destinoActual = stringValue(datos21.destinoActual, datos.destinoActual, huesped.destinoActual);
+  const destinoFuturo = stringValue(datos21.destinoFuturo, datos.destinoFuturo, huesped.destinoFuturo);
 
   return {
-    nombre: stringValue(datos.postulanteNombre, nombreDesdeUsuario(alojado), nombreDesdeUsuario(solicitante)),
-    apellido: stringValue(datos.apellido, alojado.apellido, solicitante.apellido),
-    nombres: stringValue(datos.nombres, alojado.nombre, alojado.nombres, solicitante.nombre, solicitante.nombres),
-    mr: stringValue(datos.mr),
-    gradoEscalafon: stringValue(datos.gradoEscalafon),
-    destino: stringValue(datos.destinoActual, datos.destinoFuturo),
-    genero: stringValue(datos.genero, datos.sexo),
+    nombre: nombreCompleto,
+    apellido: stringValue(datos21.apellido, datos.apellido, huesped.apellido, alojado.apellido, solicitante.apellido),
+    nombres: stringValue(
+      datos21.nombres,
+      datos.nombres,
+      huesped.nombres,
+      alojado.nombre,
+      alojado.nombres,
+      solicitante.nombre,
+      solicitante.nombres
+    ),
+    nombreCompleto,
+    postulanteNombre: nombreCompleto,
+    mr: stringValue(datos21.mr, datos21.dni, datos.mr, datos.dni, huesped.mr),
+    dni: stringValue(datos21.dni, datos.dni, huesped.dni),
+    gradoEscalafon: stringValue(datos21.gradoEscalafon, datos21.grado, datos.gradoEscalafon, datos.grado, huesped.gradoEscalafon),
+    grado: stringValue(datos21.grado, datos.grado, huesped.grado),
+    destino: stringValue(destinoActual, destinoFuturo, datos21.destino, datos.destino, huesped.destino),
+    destinoActual,
+    destinoFuturo,
+    genero: stringValue(datos21.genero, datos21.sexo, datos.genero, datos.sexo, huesped.genero, alojado.genero, solicitante.genero),
+    telefono: stringValue(
+      datos21.telefono,
+      datos21.telefonoActual,
+      datos21.telefonoFuturo,
+      datos.telefono,
+      datos.telefonoActual,
+      datos.telefonoFuturo,
+      huesped.telefono,
+      alojado.telefono,
+      solicitante.telefono
+    ),
+    email: stringValue(datos21.email, datos.email, huesped.email, alojado.email, solicitante.email),
   };
 }
 
 function inspectorSnapshotFrom(user) {
+  if (!isInspectorAlojamientos(user)) {
+    return {
+      nombre: "No asignado",
+      grado: "",
+    };
+  }
+
   return {
     nombre: nombreDesdeUsuario(user),
     grado: stringValue(user?.grado),
   };
+}
+
+async function findAnexo21Origen(documentoOrigen) {
+  const anexo21Id = idValue(documentoOrigen?.derivadoDe);
+  if (!isObjectId(anexo21Id)) return null;
+
+  return AlojamientoDocumento.findOne({
+    _id: anexo21Id,
+    codigo: "ANEXO_21",
+    activo: { $ne: false },
+  }).populate([
+    { path: "solicitante", select: "nombre apellido email grado mr destino genero sexo telefono" },
+    { path: "alojado", select: "nombre apellido email grado mr destino genero sexo telefono" },
+  ]);
 }
 
 function trimText(value, max = 4000) {
@@ -333,10 +425,12 @@ async function generarDesdeAnexo22(documentoOrigen, user) {
     return { ok: true, status: 200, documento: toResponse(existente) };
   }
 
+  const anexo21Origen = await findAnexo21Origen(documentoOrigen);
   const alojamientoSnapshot = alojamientoSnapshotFrom(documentoOrigen);
   const plazaSnapshot = plazaSnapshotFrom(documentoOrigen);
-  const huesped = huespedSnapshotFrom(documentoOrigen);
+  const huesped = huespedSnapshotFrom(documentoOrigen, anexo21Origen);
   const inspector = inspectorSnapshotFrom(user);
+  const inspectorId = isInspectorAlojamientos(user) ? idValue(user?._id) : null;
 
   const alojadoId = idValue(documentoOrigen.alojado) || idValue(documentoOrigen.solicitante);
   if (!isObjectId(alojadoId)) return publicError(404, "ALOJADO_NO_DISPONIBLE");
@@ -350,10 +444,23 @@ async function generarDesdeAnexo22(documentoOrigen, user) {
     asignacion: idValue(documentoOrigen.asignacion),
     solicitante: idValue(documentoOrigen.solicitante),
     alojado: alojadoId,
-    inspector: idValue(user?._id),
+    inspector: inspectorId,
     creadoPor: idValue(user?._id),
     actualizadoPor: idValue(user?._id),
     datos: {
+      apellido: huesped.apellido,
+      nombres: huesped.nombres,
+      postulanteNombre: huesped.postulanteNombre,
+      nombreCompleto: huesped.nombreCompleto,
+      genero: huesped.genero,
+      mr: huesped.mr,
+      dni: huesped.dni,
+      gradoEscalafon: huesped.gradoEscalafon,
+      grado: huesped.grado,
+      destinoActual: huesped.destinoActual,
+      destinoFuturo: huesped.destinoFuturo,
+      telefono: huesped.telefono,
+      email: huesped.email,
       huesped,
       inspector,
       alojamientoSnapshot,
@@ -372,7 +479,7 @@ async function generarDesdeAnexo22(documentoOrigen, user) {
   });
 
   agregarInterviniente(documento, alojadoId, "ALOJADO");
-  agregarInterviniente(documento, user._id, "INSPECTOR");
+  if (inspectorId) agregarInterviniente(documento, inspectorId, "INSPECTOR");
   documento.historialEstados.push({
     estadoNuevo: "BORRADOR",
     realizadoPor: user._id,

@@ -79,11 +79,13 @@ function personaFromRef(value: UsuarioRef) {
 function personaLabel(doc: AlojamientoDocumento | null) {
   const datos = doc?.datos || {};
   const datosLabel =
+    safe(datos.huesped?.postulanteNombre, "") ||
+    safe(datos.huesped?.nombreCompleto, "") ||
+    safe(datos.huesped?.nombre, "") ||
     safe(datos.apellidoNombre, "") ||
     safe(datos.nombreCompleto, "") ||
     safe(datos.postulanteNombre, "") ||
-    safe(datos.titularNombre, "") ||
-    safe(datos.huesped?.nombre, "");
+    safe(datos.titularNombre, "");
   if (datosLabel) return datosLabel;
 
   const usuarioLabel = [doc?.usuario?.apellido, doc?.usuario?.nombre].filter(Boolean).join(" ").trim();
@@ -405,24 +407,24 @@ export default function AlojamientoDocumentoDetalleInspector() {
           <Section title="Postulante / alojado">
             <div style={gridStyle}>
               <Field label="Nombre" value={personaLabel(documento)} />
-              <Field label="MR" value={datos.mr || datos.huesped?.mr || datos.matricula || datos.numeroRegistro} />
-              <Field label="Grado" value={datos.grado || datos.huesped?.gradoEscalafon} />
+              <Field label="MR" value={datos.huesped?.mr || datos.mr || datos.matricula || datos.numeroRegistro} />
+              <Field label="Grado" value={datos.huesped?.gradoEscalafon || datos.gradoEscalafon || datos.grado} />
               <Field label="Escalafon" value={datos.escalafon} />
-              <Field label="Destino" value={datos.destinoActual || datos.destino || datos.huesped?.destino} />
-              <Field label="Genero" value={datos.genero || datos.sexo || datos.huesped?.genero} />
+              <Field label="Destino" value={datos.huesped?.destino || datos.destinoActual || datos.destino} />
+              <Field label="Genero" value={datos.huesped?.genero || datos.genero || datos.sexo} />
             </div>
           </Section>
 
           <Section title="Alojamiento / plaza">
             <div style={gridStyle}>
               <Field label="Referencia" value={alojamientoLabel(documento)} />
-              <Field label="Lugar" value={datos.lugar || datos.alojamientoLugar || datos.alojamiento?.lugar || datos.alojamientoSnapshot?.lugar} />
-              <Field label="Dependencia" value={datos.dependencia || datos.alojamiento?.dependencia || datos.alojamientoSnapshot?.dependencia} />
-              <Field label="Sector" value={datos.sector || datos.alojamiento?.sector || datos.alojamientoSnapshot?.sector} />
-              <Field label="Tipo" value={datos.tipo || datos.alojamiento?.tipo || datos.alojamientoSnapshot?.tipo} />
-              <Field label="Clase" value={datos.clase || datos.alojamiento?.clase || datos.alojamientoSnapshot?.clase} />
-              <Field label="Plaza" value={datos.plazaNumero ? `Plaza ${datos.plazaNumero}` : datos.plazaSnapshot?.numeroPlaza ? `Plaza ${datos.plazaSnapshot.numeroPlaza}` : ""} />
-              <Field label="Genero permitido" value={datos.generoPermitido || datos.alojamiento?.generoPermitido || datos.alojamientoSnapshot?.generoPermitido} />
+              <Field label="Lugar" value={datos.alojamientoSnapshot?.lugar || datos.lugar || datos.alojamientoLugar || datos.alojamiento?.lugar} />
+              <Field label="Dependencia" value={datos.alojamientoSnapshot?.dependencia || datos.dependencia || datos.alojamiento?.dependencia} />
+              <Field label="Sector" value={datos.alojamientoSnapshot?.sector || datos.sector || datos.alojamiento?.sector} />
+              <Field label="Tipo" value={datos.alojamientoSnapshot?.tipo || datos.tipo || datos.alojamiento?.tipo} />
+              <Field label="Clase" value={datos.alojamientoSnapshot?.clase || datos.clase || datos.alojamiento?.clase} />
+              <Field label="Plaza" value={datos.plazaSnapshot?.numeroPlaza ? `Plaza ${datos.plazaSnapshot.numeroPlaza}` : datos.plazaNumero ? `Plaza ${datos.plazaNumero}` : ""} />
+              <Field label="Genero permitido" value={datos.alojamientoSnapshot?.generoPermitido || datos.generoPermitido || datos.alojamiento?.generoPermitido} />
             </div>
           </Section>
 

@@ -320,6 +320,10 @@ export default function AlojamientoDocumentoReadonly() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  const huesped = datos.huesped || {};
+  const alojamientoSnapshot = datos.alojamientoSnapshot || {};
+  const plazaSnapshot = datos.plazaSnapshot || {};
+
   return (
     <div style={pageStyle}>
       <button type="button" style={neutralButtonStyle} onClick={() => navigate("/app/postulante/mis-anexos")}>
@@ -389,12 +393,15 @@ export default function AlojamientoDocumentoReadonly() {
             <h2 style={sectionTitleStyle}>Datos personales</h2>
             <div style={gridStyle}>
               <Field label="Tipo solicitud" value={datos.tipoSolicitud} />
-              <Field label="Postulante / alojado" value={datos.postulanteNombre} />
-              <Field label="Apellido" value={datos.apellido} />
-              <Field label="Nombres" value={datos.nombres} />
-              <Field label="Genero" value={datos.genero || datos.sexo} />
-              <Field label="M.R." value={datos.mr} />
-              <Field label="Grado / escalafon" value={datos.gradoEscalafon} />
+              <Field
+                label="Postulante / alojado"
+                value={huesped.postulanteNombre || huesped.nombreCompleto || huesped.nombre || datos.postulanteNombre}
+              />
+              <Field label="Apellido" value={huesped.apellido || datos.apellido} />
+              <Field label="Nombres" value={huesped.nombres || datos.nombres} />
+              <Field label="Genero" value={huesped.genero || datos.genero || datos.sexo} />
+              <Field label="M.R." value={huesped.mr || datos.mr} />
+              <Field label="Grado / escalafon" value={huesped.gradoEscalafon || datos.gradoEscalafon} />
               <Field label="Afiliado IOSFA" value={datos.afiliadoIOSFA} />
             </div>
           </section>
@@ -403,17 +410,17 @@ export default function AlojamientoDocumentoReadonly() {
             <section style={cardStyle}>
               <h2 style={sectionTitleStyle}>Asignacion de alojamiento</h2>
               <div style={gridStyle}>
-                <Field label="Alojamiento" value={datos.alojamientoCodigo} />
-                <Field label="Dependencia" value={datos.dependencia} />
-                <Field label="Lugar" value={datos.lugar} />
-                <Field label="Sector" value={datos.sector} />
-                <Field label="Tipo" value={datos.tipo} />
-                <Field label="Numero" value={datos.numero} />
-                <Field label="Clase" value={datos.clase} />
-                <Field label="Capacidad" value={datos.capacidad} />
-                <Field label="Genero permitido" value={datos.generoPermitido} />
-                <Field label="Plaza" value={datos.numeroPlaza} />
-                <Field label="Codigo plaza" value={datos.plazaCodigo} />
+                <Field label="Alojamiento" value={alojamientoSnapshot.alojamientoCodigo || datos.alojamientoCodigo} />
+                <Field label="Dependencia" value={alojamientoSnapshot.dependencia || datos.dependencia} />
+                <Field label="Lugar" value={alojamientoSnapshot.lugar || datos.lugar} />
+                <Field label="Sector" value={alojamientoSnapshot.sector || datos.sector} />
+                <Field label="Tipo" value={alojamientoSnapshot.tipo || datos.tipo} />
+                <Field label="Numero" value={alojamientoSnapshot.numero || datos.numero} />
+                <Field label="Clase" value={alojamientoSnapshot.clase || datos.clase} />
+                <Field label="Capacidad" value={alojamientoSnapshot.capacidad || datos.capacidad} />
+                <Field label="Genero permitido" value={alojamientoSnapshot.generoPermitido || datos.generoPermitido} />
+                <Field label="Plaza" value={plazaSnapshot.numeroPlaza || datos.numeroPlaza} />
+                <Field label="Codigo plaza" value={plazaSnapshot.plazaCodigo || datos.plazaCodigo} />
                 <Field label="Fecha reserva" value={fmtDate(datos.fechaReserva)} />
               </div>
             </section>
@@ -423,11 +430,11 @@ export default function AlojamientoDocumentoReadonly() {
             <section style={cardStyle}>
               <h2 style={sectionTitleStyle}>Recepcion del alojamiento</h2>
               <div style={gridStyle}>
-                <Field label="Lugar" value={datos.lugar || datos.alojamientoSnapshot?.lugar} />
-                <Field label="Edificio" value={datos.edificio || datos.alojamientoSnapshot?.edificio} />
-                <Field label="Predio" value={datos.predio || datos.alojamientoSnapshot?.predio} />
-                <Field label="Localidad" value={datos.localidad || datos.alojamientoSnapshot?.localidad} />
-                <Field label="Provincia" value={datos.provincia || datos.alojamientoSnapshot?.provincia} />
+                <Field label="Lugar" value={alojamientoSnapshot.lugar || datos.lugar} />
+                <Field label="Edificio" value={alojamientoSnapshot.edificio || datos.edificio} />
+                <Field label="Predio" value={alojamientoSnapshot.predio || datos.predio} />
+                <Field label="Localidad" value={alojamientoSnapshot.localidad || datos.localidad} />
+                <Field label="Provincia" value={alojamientoSnapshot.provincia || datos.provincia} />
                 <Field label="Lugar firma" value={datos.lugarFirma} />
                 <Field label="Fecha firma" value={datos.fechaFirma} />
                 <Field label="Autorizacion descuento" value={datos.autorizacionDescuento === true ? "SI" : "NO"} />

@@ -198,6 +198,9 @@ export default function AlojamientoDocumentoDetalle() {
 
   const allowed = roleAllowed(user?.role);
   const datos = documento?.datos || {};
+  const huesped = datos.huesped || {};
+  const alojamientoSnapshot = datos.alojamientoSnapshot || {};
+  const plazaSnapshot = datos.plazaSnapshot || {};
   const adjuntos = useMemo(() => adjuntosFromDatos(datos), [datos]);
   const esAnexo22 = up(documento?.codigo) === "ANEXO_22";
   const esAnexo23 = up(documento?.codigo) === "ANEXO_23";
@@ -459,21 +462,28 @@ export default function AlojamientoDocumentoDetalle() {
                   }}
                 >
                   <Field label="Tipo de solicitud" value={datos.tipoSolicitud} />
-                  <Field label="Lugar" value={datos.lugar} />
+                  <Field label="Lugar" value={alojamientoSnapshot.lugar || datos.lugar} />
                   <Field label="Fecha lugar" value={datos.fechaLugar} />
                   <Field label="Autoridad de asignacion" value={datos.autoridadAsignacion} />
                   <Field label="Zona naval" value={datos.zonaNaval} />
                   <Field label="Organismo administrador" value={datos.organismoAdministrador} />
-                  <Field label="MR" value={datos.mr} />
+                  <Field label="MR" value={huesped.mr || datos.mr} />
                   <Field label="Afiliado IOSFA" value={datos.afiliadoIOSFA} />
-                  <Field label="Grado / escalafon" value={datos.gradoEscalafon} />
-                  <Field label="Genero" value={datos.genero || datos.sexo} />
-                  <Field label="Apellido" value={datos.apellido} />
-                  <Field label="Nombres" value={datos.nombres} />
-                  <Field label="Destino actual" value={datos.destinoActual} />
-                  <Field label="Destino futuro" value={datos.destinoFuturo} />
-                  <Field label="Telefono actual" value={datos.telefonoActual} />
+                  <Field label="Grado / escalafon" value={huesped.gradoEscalafon || datos.gradoEscalafon} />
+                  <Field label="Genero" value={huesped.genero || datos.genero || datos.sexo} />
+                  <Field label="Apellido" value={huesped.apellido || datos.apellido} />
+                  <Field label="Nombres" value={huesped.nombres || datos.nombres} />
+                  <Field label="Destino actual" value={huesped.destinoActual || datos.destinoActual} />
+                  <Field label="Destino futuro" value={huesped.destinoFuturo || datos.destinoFuturo} />
+                  <Field label="Telefono actual" value={huesped.telefono || datos.telefonoActual || datos.telefono} />
                   <Field label="Telefono futuro" value={datos.telefonoFuturo} />
+                  <Field label="Email" value={huesped.email || datos.email} />
+                  <Field label="Alojamiento" value={alojamientoSnapshot.alojamientoCodigo || datos.alojamientoCodigo} />
+                  <Field label="Edificio" value={alojamientoSnapshot.edificio || datos.edificio} />
+                  <Field label="Predio" value={alojamientoSnapshot.predio || datos.predio} />
+                  <Field label="Localidad" value={alojamientoSnapshot.localidad || datos.localidad} />
+                  <Field label="Provincia" value={alojamientoSnapshot.provincia || datos.provincia} />
+                  <Field label="Plaza" value={plazaSnapshot.numeroPlaza || datos.numeroPlaza} />
                   <Field label="Ultimo ascenso" value={datos.fechaUltimoAscenso} />
                   <Field label="Anios de servicio" value={datos.aniosServicioRecibo} />
                   <Field label="Acepta reglamento" value={boolLabel(datos.aceptaCondicionesReglamento)} />
