@@ -72,6 +72,32 @@ async function generarDesdeAnexo22(req, res) {
   }
 }
 
+async function actualizarDatos(req, res) {
+  try {
+    const result = await anexo23Service.actualizarDatos(req.params.id, req.body || {}, req.user);
+    return sendResult(res, result);
+  } catch {
+    return res.status(500).json({
+      ok: false,
+      error: "No es posible procesar la solicitud.",
+    });
+  }
+}
+
+async function enviar(req, res) {
+  try {
+    const result = await anexo23Service.enviar(req.params.id, req.user);
+    return sendResult(res, result);
+  } catch {
+    return res.status(500).json({
+      ok: false,
+      error: "No es posible procesar la solicitud.",
+    });
+  }
+}
+
 module.exports = {
   generarDesdeAnexo22,
+  actualizarDatos,
+  enviar,
 };

@@ -1,8 +1,57 @@
 const mongoose = require("mongoose");
 
 const AlojamientoDocumento = require("../../models/AlojamientoDocumento");
-const { agregarInterviniente, up } = require("./alojamientoDocumentoStateService");
+const { agregarInterviniente, registrarCambioEstado, up } = require("./alojamientoDocumentoStateService");
 const { sanitizeDatosDocumento } = require("./alojamientoDocumentoSanitizer");
+const {
+  puedeVerDocumento,
+  isInspectorAlojamientos,
+} = require("./alojamientoDocumentoVisibilityService");
+
+const SI_NO_FIELDS = Object.freeze([
+  "llavesEdificio",
+  "llavesAlojamiento",
+  "llaveTerraza",
+  "llaveCochera",
+  "inventarioMuebles",
+  "lineaTelefonica",
+]);
+
+const ESTADO_FIELDS = Object.freeze([
+  "electricidad",
+  "gas",
+  "telefono",
+  "aberturas",
+  "albanileria",
+  "alfombras",
+  "antenaTv",
+  "calefactorEstufa",
+  "calefonTermotanque",
+  "carpinteria",
+  "sanitarios",
+  "cerrajeria",
+  "cocina",
+  "desinfeccion",
+  "herrajes",
+  "limpieza",
+  "lustrado",
+  "pintura",
+  "pisos",
+  "vidrios",
+  "estadoGeneral",
+]);
+
+const EDITABLE_TOP_LEVEL = new Set([
+  "material",
+  "estadoSistemas",
+  "novedadesTexto",
+  "reparacionMantenimientoEntrega",
+  "lugarFirma",
+  "fechaFirma",
+  "autorizacionDescuento",
+]);
+const SI_NO_VALUES = new Set(["SI", "NO"]);
+const ESTADO_VALUES = new Set(["MB", "B", "R", "M"]);
 
 function publicError(status, code = "NO_DISPONIBLE") {
   return {
@@ -15,6 +64,14 @@ function publicError(status, code = "NO_DISPONIBLE") {
 
 function isObjectId(value) {
   return mongoose.Types.ObjectId.isValid(String(value || ""));
+}
+
+function isAdminGeneral(user) {
+  return up(user?.role) === "ADMIN_GENERAL";
+}
+
+function canOperateAnexo23(user) {
+  return isAdminGeneral(user) || isInspectorAlojamientos(user);
 }
 
 function idValue(value) {
@@ -93,6 +150,106 @@ function inspectorSnapshotFrom(user) {
     nombre: nombreDesdeUsuario(user),
     grado: stringValue(user?.grado),
   };
+}
+
+function trimText(value, max = 4000) {
+  return String(value ?? "").trim().slice(0, max);
+}
+
+function normalizeSiNo(value) {
+  const normalized = up(value);
+  if (!normalized) return "";
+  if (!SI_NO_VALUES.has(normalized)) return null;
+  return normalized;
+}
+
+function normalizeEstado(value) {
+  const normalized = up(value);
+  if (!normalized) return "";
+  if (!ESTADO_VALUES.has(normalized)) return null;
+  return normalized;
+}
+
+function assertNoUnknownKeys(source, allowed) {
+  if (!source || typeof source !== "object" || Array.isArray(source)) return false;
+  return Object.keys(source).every((key) => allowed.has(key));
+}
+
+function sanitizeMaterial(input = {}) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return null;
+  if (!Object.keys(input).every((key) => SI_NO_FIELDS.includes(key))) return null;
+
+  const out = {};
+  for (const field of SI_NO_FIELDS) {
+    if (input[field] === undefined) continue;
+    const value = normalizeSiNo(input[field]);
+    if (value === null) return null;
+    out[field] = value;
+  }
+  return out;
+}
+
+function sanitizeEstadoSistemas(input = {}) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return null;
+  if (!Object.keys(input).every((key) => ESTADO_FIELDS.includes(key))) return null;
+
+  const out = {};
+  for (const field of ESTADO_FIELDS) {
+    if (input[field] === undefined) continue;
+    const value = normalizeEstado(input[field]);
+    if (value === null) return null;
+    out[field] = value;
+  }
+  return out;
+}
+
+function sanitizePayload(payload = {}) {
+  const source = payload?.datos && typeof payload.datos === "object" && !Array.isArray(payload.datos)
+    ? payload.datos
+    : payload;
+
+  if (!assertNoUnknownKeys(source, EDITABLE_TOP_LEVEL)) return null;
+
+  const out = {};
+  if (source.material !== undefined) {
+    const material = sanitizeMaterial(source.material);
+    if (!material) return null;
+    out.material = material;
+  }
+  if (source.estadoSistemas !== undefined) {
+    const estadoSistemas = sanitizeEstadoSistemas(source.estadoSistemas);
+    if (!estadoSistemas) return null;
+    out.estadoSistemas = estadoSistemas;
+  }
+
+  for (const field of ["novedadesTexto", "reparacionMantenimientoEntrega", "lugarFirma", "fechaFirma"]) {
+    if (source[field] !== undefined) out[field] = trimText(source[field], field === "fechaFirma" ? 30 : 4000);
+  }
+
+  if (source.autorizacionDescuento !== undefined) {
+    if (typeof source.autorizacionDescuento !== "boolean") return null;
+    out.autorizacionDescuento = source.autorizacionDescuento;
+  }
+
+  return out;
+}
+
+async function findEditableAnexo23(id, user) {
+  if (!isObjectId(user?._id)) return publicError(403, "USUARIO_NO_AUTORIZADO");
+  if (!canOperateAnexo23(user)) return publicError(404, "NO_DISPONIBLE");
+  if (!isObjectId(id)) return publicError(404, "DOCUMENTO_NO_DISPONIBLE");
+
+  const documento = await AlojamientoDocumento.findOne({
+    _id: id,
+    codigo: "ANEXO_23",
+    activo: { $ne: false },
+  }).populate({ path: "alojamiento", select: "lugar codigo dependencia sector tipo numero" });
+
+  if (!documento) return publicError(404, "DOCUMENTO_NO_DISPONIBLE");
+  if (!puedeVerDocumento(user, documento)) return publicError(404, "DOCUMENTO_NO_DISPONIBLE");
+  if (up(documento.estado) !== "BORRADOR") return publicError(409, "ESTADO_INVALIDO");
+
+  return { ok: true, documento };
 }
 
 function toResponse(documento) {
@@ -180,7 +337,7 @@ async function generarDesdeAnexo22(documentoOrigen, user) {
       estadoSistemas: {},
       novedadesTexto: "",
       reparacionMantenimientoEntrega: "",
-      autorizacionDescuento: false,
+      autorizacionDescuento: true,
     },
   });
 
@@ -210,6 +367,67 @@ async function generarDesdeAnexo22(documentoOrigen, user) {
   }
 }
 
+async function actualizarDatos(id, payload, user) {
+  const resolved = await findEditableAnexo23(id, user);
+  if (!resolved.ok) return resolved;
+
+  const sanitized = sanitizePayload(payload);
+  if (!sanitized) return publicError(400, "PAYLOAD_INVALIDO");
+
+  const documento = resolved.documento;
+  documento.datos = {
+    ...(documento.datos || {}),
+    ...sanitized,
+    material: {
+      ...((documento.datos || {}).material || {}),
+      ...(sanitized.material || {}),
+    },
+    estadoSistemas: {
+      ...((documento.datos || {}).estadoSistemas || {}),
+      ...(sanitized.estadoSistemas || {}),
+    },
+  };
+  documento.actualizadoPor = idValue(user?._id);
+  documento.intervenciones.push({
+    tipo: "ACTUALIZACION_ANEXO_23",
+    actor: user._id,
+    rolActor: isAdminGeneral(user) ? "ADMIN_GENERAL" : "INSPECTOR",
+    observacion: "Actualizacion de datos operativos ANEXO_23.",
+  });
+
+  try {
+    await documento.save();
+    return { ok: true, status: 200, documento: toResponse(documento) };
+  } catch {
+    return publicError(500, "ERROR_INTERNO");
+  }
+}
+
+async function enviar(id, user) {
+  const resolved = await findEditableAnexo23(id, user);
+  if (!resolved.ok) return resolved;
+
+  const documento = resolved.documento;
+  const transition = registrarCambioEstado(documento, {
+    estadoNuevo: "ENVIADO",
+    actorId: user._id,
+    rolActor: isAdminGeneral(user) ? "ADMIN_GENERAL" : "INSPECTOR",
+    observacion: "ANEXO_23 enviado al alojado para conformidad.",
+  });
+  if (!transition.ok) return publicError(409, "TRANSICION_INVALIDA");
+
+  documento.actualizadoPor = idValue(user?._id);
+
+  try {
+    await documento.save();
+    return { ok: true, status: 200, documento: toResponse(documento) };
+  } catch {
+    return publicError(500, "ERROR_INTERNO");
+  }
+}
+
 module.exports = {
   generarDesdeAnexo22,
+  actualizarDatos,
+  enviar,
 };

@@ -18,6 +18,8 @@ router.post("/anexo-21", anexo21Controller.crear);
 router.patch("/anexo-21/:id", anexo21Controller.actualizar);
 router.post("/anexo-21/:id/enviar", anexo21Controller.enviar);
 router.post("/anexo-21/:id/anular", anexo21Controller.anular);
+router.patch("/anexo-23/:id", anexo23Controller.actualizarDatos);
+router.post("/anexo-23/:id/enviar", anexo23Controller.enviar);
 router.post(
   "/anexo-21/:id/adjuntos/:campo",
   uploadAlojamientoDocumento,

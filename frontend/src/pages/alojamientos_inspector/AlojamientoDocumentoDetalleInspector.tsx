@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { http } from "../../api/http";
+import Anexo23InspectorForm from "../../components/alojamientos/Anexo23InspectorForm";
 import {
   badgeStyle,
   cardStyle,
@@ -266,6 +267,7 @@ export default function AlojamientoDocumentoDetalleInspector() {
     [documento]
   );
   const esAnexo22Cerrado = up(documento?.codigo) === "ANEXO_22" && up(documento?.estado) === "CERRADO";
+  const esAnexo23 = up(documento?.codigo) === "ANEXO_23";
   const puedeGenerarAnexo23 =
     esAnexo22Cerrado && anexo23Verificado && !verificandoAnexo23 && !anexo23ExistenteId;
 
@@ -486,6 +488,13 @@ export default function AlojamientoDocumentoDetalleInspector() {
               ])}
             />
           </Section>
+
+          {esAnexo23 && (
+            <Anexo23InspectorForm
+              documento={documento}
+              onUpdated={cargar}
+            />
+          )}
 
           <p style={{ ...metaStyle, marginTop: 16 }}>
             Vista readonly: no permite editar, conformar, cerrar, generar ANEXO_22, descargar PDF ni adjuntos.
