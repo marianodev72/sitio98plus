@@ -130,6 +130,17 @@ function boolLabel(value: unknown) {
   return safe(value);
 }
 
+function descargarBlob(blob: Blob, filename: string) {
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
 const gridStyle: CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))",
@@ -250,6 +261,7 @@ export default function AlojamientoDocumentoDetalleInspector() {
   const [anexo23Verificado, setAnexo23Verificado] = useState(false);
   const [verificandoAnexo23, setVerificandoAnexo23] = useState(false);
   const [generandoAnexo23, setGenerandoAnexo23] = useState(false);
+  const [descargandoPdf, setDescargandoPdf] = useState(false);
 
   const datos = documento?.datos || {};
   const conformidades = useMemo(
@@ -338,6 +350,24 @@ export default function AlojamientoDocumentoDetalleInspector() {
     }
   }
 
+  async function descargarPdfAnexo23() {
+    if (!documento?._id || !esAnexo23 || descargandoPdf) return;
+
+    setDescargandoPdf(true);
+    setAccionMsg("");
+    try {
+      const res = await http.get(`/alojamientos-documentos/${documento._id}/pdf`, {
+        responseType: "blob",
+      });
+      descargarBlob(new Blob([res.data], { type: "application/pdf" }), `ANEXO_23_${documento._id}.pdf`);
+      setAccionMsg("PDF descargado correctamente.");
+    } catch {
+      setAccionMsg("No fue posible descargar el PDF.");
+    } finally {
+      setDescargandoPdf(false);
+    }
+  }
+
   useEffect(() => {
     cargar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -375,6 +405,21 @@ export default function AlojamientoDocumentoDetalleInspector() {
               }}
             >
               {generandoAnexo23 ? "Generando..." : "Generar ANEXO_23"}
+            </button>
+          )}
+          {esAnexo23 && (
+            <button
+              type="button"
+              onClick={descargarPdfAnexo23}
+              disabled={descargandoPdf}
+              style={{
+                ...badgeStyle,
+                minHeight: 36,
+                cursor: descargandoPdf ? "not-allowed" : "pointer",
+                opacity: descargandoPdf ? 0.65 : 1,
+              }}
+            >
+              {descargandoPdf ? "Descargando..." : "Descargar PDF"}
             </button>
           )}
           <button
@@ -499,7 +544,7 @@ export default function AlojamientoDocumentoDetalleInspector() {
           )}
 
           <p style={{ ...metaStyle, marginTop: 16 }}>
-            Vista readonly: no permite editar, conformar, cerrar, generar ANEXO_22, descargar PDF ni adjuntos.
+            Vista readonly: no permite editar, conformar, cerrar, generar ANEXO_22 ni descargar adjuntos.
           </p>
         </>
       )}

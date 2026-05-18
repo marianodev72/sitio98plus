@@ -2,6 +2,10 @@ const mongoose = require("mongoose");
 
 const AlojamientoDocumento = require("../../models/AlojamientoDocumento");
 const { up } = require("./alojamientoDocumentoStateService");
+const {
+  isInspectorAlojamientos,
+  puedeVerDocumento,
+} = require("./alojamientoDocumentoVisibilityService");
 
 function isObjectId(value) {
   return mongoose.Types.ObjectId.isValid(String(value || ""));
@@ -47,6 +51,23 @@ function canPostulanteDownloadAnexo22(user, documento) {
   return intervinientes.some((item) => idValue(item?.userId || item?.id || item?._id) === userId);
 }
 
+function isUsuarioVinculado(user, documento) {
+  const userId = idValue(user?._id);
+  if (!userId || !documento) return false;
+  if (idValue(documento.solicitante) === userId) return true;
+  if (idValue(documento.alojado) === userId) return true;
+
+  const intervinientes = Array.isArray(documento.intervinientes) ? documento.intervinientes : [];
+  return intervinientes.some((item) => idValue(item?.userId || item?.id || item?._id) === userId);
+}
+
+function canDownloadAnexo23(user, documento) {
+  if (!user || !documento) return false;
+  if (isAdminGeneral(user)) return true;
+  if (isInspectorAlojamientos(user)) return puedeVerDocumento(user, documento);
+  return isUsuarioVinculado(user, documento);
+}
+
 async function obtenerPayloadAnexo22({ id, user }) {
   if (!user?._id || !isObjectId(id)) return publicError(404, "NO_DISPONIBLE");
 
@@ -76,6 +97,62 @@ async function obtenerPayloadAnexo22({ id, user }) {
   };
 }
 
+async function obtenerPayloadAnexo23({ id, user }) {
+  if (!user?._id || !isObjectId(id)) return publicError(404, "NO_DISPONIBLE");
+
+  const documento = await AlojamientoDocumento.findOne({
+    _id: id,
+    codigo: "ANEXO_23",
+    activo: { $ne: false },
+  }).lean();
+
+  if (!documento) return publicError(404, "NO_DISPONIBLE");
+  if (!canDownloadAnexo23(user, documento)) return publicError(404, "NO_DISPONIBLE");
+
+  let anexo22 = null;
+  let anexo21 = null;
+  if (documento.derivadoDe && isObjectId(documento.derivadoDe)) {
+    anexo22 = await AlojamientoDocumento.findOne({
+      _id: documento.derivadoDe,
+      codigo: "ANEXO_22",
+      activo: { $ne: false },
+    }).lean();
+  }
+  if (anexo22?.derivadoDe && isObjectId(anexo22.derivadoDe)) {
+    anexo21 = await AlojamientoDocumento.findOne({
+      _id: anexo22.derivadoDe,
+      codigo: "ANEXO_21",
+      activo: { $ne: false },
+    }).lean();
+  }
+
+  return {
+    ok: true,
+    status: 200,
+    documento,
+    anexo22,
+    anexo21,
+  };
+}
+
+async function obtenerPayloadDocumentoPdf({ id, user }) {
+  if (!user?._id || !isObjectId(id)) return publicError(404, "NO_DISPONIBLE");
+
+  const base = await AlojamientoDocumento.findOne({
+    _id: id,
+    activo: { $ne: false },
+  })
+    .select("codigo")
+    .lean();
+
+  if (!base) return publicError(404, "NO_DISPONIBLE");
+  if (up(base.codigo) === "ANEXO_22") return obtenerPayloadAnexo22({ id, user });
+  if (up(base.codigo) === "ANEXO_23") return obtenerPayloadAnexo23({ id, user });
+  return publicError(404, "NO_DISPONIBLE");
+}
+
 module.exports = {
   obtenerPayloadAnexo22,
+  obtenerPayloadAnexo23,
+  obtenerPayloadDocumentoPdf,
 };

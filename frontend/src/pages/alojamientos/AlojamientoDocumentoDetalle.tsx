@@ -330,8 +330,8 @@ export default function AlojamientoDocumentoDetalle() {
     }
   }
 
-  async function descargarPdfAnexo22() {
-    if (!documento?._id || !esAnexo22 || descargandoPdf) return;
+  async function descargarPdfDocumento() {
+    if (!documento?._id || (!esAnexo22 && !esAnexo23) || descargandoPdf) return;
 
     setDescargandoPdf(true);
     setInfoMsg("");
@@ -341,7 +341,8 @@ export default function AlojamientoDocumentoDetalle() {
       const res = await http.get(`/alojamientos-documentos/${documento._id}/pdf`, {
         responseType: "blob",
       });
-      descargarBlob(new Blob([res.data], { type: "application/pdf" }), `ANEXO_22_${documento._id}.pdf`);
+      const codigo = esAnexo23 ? "ANEXO_23" : "ANEXO_22";
+      descargarBlob(new Blob([res.data], { type: "application/pdf" }), `${codigo}_${documento._id}.pdf`);
       setInfoMsg("PDF descargado correctamente.");
     } catch {
       setErrorMsg("No es posible descargar el PDF en este momento.");
@@ -392,11 +393,11 @@ export default function AlojamientoDocumentoDetalle() {
             <button type="button" style={secondaryButtonStyle} onClick={cargar} disabled={loading}>
               {loading ? "Cargando..." : "Recargar"}
             </button>
-            {esAnexo22 ? (
+            {esAnexo22 || esAnexo23 ? (
               <button
                 type="button"
                 style={secondaryButtonStyle}
-                onClick={descargarPdfAnexo22}
+                onClick={descargarPdfDocumento}
                 disabled={descargandoPdf}
               >
                 {descargandoPdf ? "Descargando..." : "Descargar PDF"}
