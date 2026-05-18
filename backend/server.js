@@ -205,6 +205,10 @@ const alojamientosPlazasRoutes = safeRequire(
   "alojamientosPlazasRoutes",
   "./modules/alojamientos/routes/alojamientosPlazasRoutes"
 );
+const alojamientosMiRoutes = safeRequire(
+  "alojamientosMiRoutes",
+  "./modules/alojamientos/routes/alojamientosMiRoutes"
+);
 
 // -------------------------
 // Health
@@ -239,6 +243,7 @@ app.use("/api/alojamientos-dashboard", alojamientosDashboardRoutes);
 app.use("/api/alojamientos-asignaciones", alojamientosAsignacionesRoutes);
 app.use("/api/alojamientos-documentos", alojamientosDocumentosRoutes);
 app.use("/api/alojamientos-plazas", alojamientosPlazasRoutes);
+app.use("/api/alojamientos-mi", alojamientosMiRoutes);
 
 // -------------------------
 app.use("/uploads", (_req, res) => res.status(404).end());
