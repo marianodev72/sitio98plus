@@ -172,6 +172,13 @@ function conformidadPostulante(documento: AlojamientoDocumento | null, userId?: 
   );
 }
 
+function conformidadAlojado(documento: AlojamientoDocumento | null, userId?: string) {
+  const conformidades = Array.isArray(documento?.conformidades) ? documento.conformidades : [];
+  return conformidades.find(
+    (item) => up(item?.tipo) === "ALOJADO" && (!userId || idValue(item?.usuario) === userId)
+  );
+}
+
 function esTitularOInterviniente(documento: AlojamientoDocumento | null, userId?: string) {
   if (!documento || !userId) return false;
   if (idValue(documento.solicitante) === userId) return true;
@@ -216,14 +223,21 @@ export default function AlojamientoDocumentoReadonly() {
   const datos = documento?.datos || {};
   const adjuntos = useMemo(() => adjuntosFromDatos(datos), [datos]);
   const esAnexo22 = up(documento?.codigo) === "ANEXO_22";
+  const esAnexo23 = up(documento?.codigo) === "ANEXO_23";
   const userId = String(user?._id || "");
   const conformidadActual = conformidadPostulante(documento, userId);
+  const conformidadAlojadoActual = conformidadAlojado(documento, userId);
   const puedeConformar =
     esAnexo22 &&
     up(documento?.estado) === "ENVIADO" &&
     up(user?.role) === "POSTULANTE" &&
     esTitularOInterviniente(documento, userId) &&
     !conformidadActual;
+  const puedeConformarAnexo23 =
+    esAnexo23 &&
+    up(documento?.estado) === "ENVIADO" &&
+    esTitularOInterviniente(documento, userId) &&
+    !conformidadAlojadoActual;
 
   async function cargar() {
     if (!id) return;
@@ -252,6 +266,26 @@ export default function AlojamientoDocumentoReadonly() {
 
     try {
       await http.post(`/alojamientos-documentos/${id}/conformidad-postulante`, {});
+      await cargar();
+      setInfoMsg("Conformidad registrada correctamente.");
+    } catch {
+      setErrorMsg("No fue posible registrar la conformidad.");
+    } finally {
+      setSubmittingConformidad(false);
+    }
+  }
+
+  async function prestarConformidadAlojado23() {
+    if (!id || !puedeConformarAnexo23 || submittingConformidad) return;
+    const confirmado = window.confirm("Confirma que presta conformidad sobre el ANEXO_23?");
+    if (!confirmado) return;
+
+    setSubmittingConformidad(true);
+    setErrorMsg("");
+    setInfoMsg("");
+
+    try {
+      await http.post(`/alojamientos-documentos/${id}/conformidad-alojado-23`, {});
       await cargar();
       setInfoMsg("Conformidad registrada correctamente.");
     } catch {
@@ -382,6 +416,95 @@ export default function AlojamientoDocumentoReadonly() {
                 <Field label="Codigo plaza" value={datos.plazaCodigo} />
                 <Field label="Fecha reserva" value={fmtDate(datos.fechaReserva)} />
               </div>
+            </section>
+          ) : null}
+
+          {esAnexo23 ? (
+            <section style={cardStyle}>
+              <h2 style={sectionTitleStyle}>Recepcion del alojamiento</h2>
+              <div style={gridStyle}>
+                <Field label="Lugar" value={datos.lugar || datos.alojamientoSnapshot?.lugar} />
+                <Field label="Edificio" value={datos.edificio || datos.alojamientoSnapshot?.edificio} />
+                <Field label="Predio" value={datos.predio || datos.alojamientoSnapshot?.predio} />
+                <Field label="Localidad" value={datos.localidad || datos.alojamientoSnapshot?.localidad} />
+                <Field label="Provincia" value={datos.provincia || datos.alojamientoSnapshot?.provincia} />
+                <Field label="Lugar firma" value={datos.lugarFirma} />
+                <Field label="Fecha firma" value={datos.fechaFirma} />
+                <Field label="Autorizacion descuento" value={datos.autorizacionDescuento === true ? "SI" : "NO"} />
+              </div>
+            </section>
+          ) : null}
+
+          {esAnexo23 ? (
+            <section style={cardStyle}>
+              <h2 style={sectionTitleStyle}>Material entregado</h2>
+              <div style={gridStyle}>
+                <Field label="Llaves edificio" value={datos.material?.llavesEdificio} />
+                <Field label="Llaves alojamiento" value={datos.material?.llavesAlojamiento} />
+                <Field label="Llave terraza" value={datos.material?.llaveTerraza} />
+                <Field label="Llave cochera" value={datos.material?.llaveCochera} />
+                <Field label="Inventario muebles" value={datos.material?.inventarioMuebles} />
+                <Field label="Linea telefonica" value={datos.material?.lineaTelefonica} />
+              </div>
+            </section>
+          ) : null}
+
+          {esAnexo23 ? (
+            <section style={cardStyle}>
+              <h2 style={sectionTitleStyle}>Estado de sistemas y elementos</h2>
+              <div style={gridStyle}>
+                {Object.entries(datos.estadoSistemas || {}).map(([key, value]) => (
+                  <Field key={key} label={key} value={value} />
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          {esAnexo23 ? (
+            <section style={cardStyle}>
+              <h2 style={sectionTitleStyle}>Novedades y entrega</h2>
+              <div style={gridStyle}>
+                <Field label="Novedades" value={datos.novedadesTexto} />
+                <Field label="Reparacion / mantenimiento / entrega" value={datos.reparacionMantenimientoEntrega} />
+              </div>
+            </section>
+          ) : null}
+
+          {esAnexo23 ? (
+            <section style={cardStyle}>
+              <h2 style={sectionTitleStyle}>Conformidad del alojado</h2>
+              {conformidadAlojadoActual ? (
+                <div style={gridStyle}>
+                  <Field label="Estado" value="Conformidad registrada" />
+                  <Field label="Fecha" value={fmtDate(conformidadAlojadoActual.fecha)} />
+                  <Field label="Rol" value={conformidadAlojadoActual.rol || "ALOJADO"} />
+                </div>
+              ) : (
+                <>
+                  <p style={subtitleStyle}>
+                    Revise el acta de recepcion. Si esta de acuerdo, preste conformidad para
+                    continuar el tramite.
+                  </p>
+                  {puedeConformarAnexo23 ? (
+                    <button
+                      type="button"
+                      style={{
+                        ...primaryButtonStyle,
+                        opacity: submittingConformidad ? 0.65 : 1,
+                        cursor: submittingConformidad ? "not-allowed" : "pointer",
+                      }}
+                      onClick={prestarConformidadAlojado23}
+                      disabled={submittingConformidad}
+                    >
+                      {submittingConformidad ? "Registrando..." : "Prestar conformidad"}
+                    </button>
+                  ) : (
+                    <p style={{ margin: 0, color: "#CBD5E1" }}>
+                      No hay acciones de conformidad disponibles para este documento.
+                    </p>
+                  )}
+                </>
+              )}
             </section>
           ) : null}
 

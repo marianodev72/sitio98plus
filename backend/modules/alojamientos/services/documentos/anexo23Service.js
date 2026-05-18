@@ -1,7 +1,12 @@
 const mongoose = require("mongoose");
 
 const AlojamientoDocumento = require("../../models/AlojamientoDocumento");
-const { agregarInterviniente, registrarCambioEstado, up } = require("./alojamientoDocumentoStateService");
+const {
+  agregarInterviniente,
+  registrarCambioEstado,
+  registrarConformidad,
+  up,
+} = require("./alojamientoDocumentoStateService");
 const { sanitizeDatosDocumento } = require("./alojamientoDocumentoSanitizer");
 const {
   puedeVerDocumento,
@@ -93,6 +98,25 @@ function nombreDesdeUsuario(user) {
   return stringValue(
     [user.apellido, user.nombre || user.nombres].filter(Boolean).join(", "),
     user.email
+  );
+}
+
+function isUsuarioVinculado(documento, user) {
+  const userId = String(user?._id || "");
+  if (!userId || !documento) return false;
+
+  if (String(idValue(documento.solicitante) || "") === userId) return true;
+  if (String(idValue(documento.alojado) || "") === userId) return true;
+
+  const intervinientes = Array.isArray(documento.intervinientes) ? documento.intervinientes : [];
+  return intervinientes.some((item) => String(idValue(item?.userId) || "") === userId);
+}
+
+function hasConformidadAlojado(documento, user) {
+  const userId = String(user?._id || "");
+  const conformidades = Array.isArray(documento?.conformidades) ? documento.conformidades : [];
+  return conformidades.some(
+    (item) => up(item?.tipo) === "ALOJADO" && String(idValue(item?.usuario) || "") === userId
   );
 }
 
@@ -426,8 +450,62 @@ async function enviar(id, user) {
   }
 }
 
+async function conformidadAlojado(id, payload = {}, user) {
+  if (!isObjectId(user?._id)) return publicError(403, "USUARIO_NO_AUTORIZADO");
+  if (!isObjectId(id)) return publicError(404, "DOCUMENTO_NO_DISPONIBLE");
+
+  const documento = await AlojamientoDocumento.findOne({
+    _id: id,
+    codigo: "ANEXO_23",
+    activo: { $ne: false },
+  });
+
+  if (!documento) return publicError(404, "DOCUMENTO_NO_DISPONIBLE");
+  if (!isUsuarioVinculado(documento, user)) return publicError(404, "DOCUMENTO_NO_DISPONIBLE");
+  if (up(documento.estado) !== "ENVIADO") return publicError(409, "ESTADO_INVALIDO");
+  if (hasConformidadAlojado(documento, user)) return publicError(409, "CONFORMIDAD_DUPLICADA");
+
+  const observacion = trimText(payload?.observacion, 1000);
+  const conformidad = registrarConformidad(documento, {
+    tipo: "ALOJADO",
+    usuario: user._id,
+    rol: "ALOJADO",
+    ok: true,
+    observacion,
+  });
+  if (!conformidad.ok) return publicError(400, "CONFORMIDAD_INVALIDA");
+
+  documento.signers = Array.isArray(documento.signers) ? documento.signers : [];
+  documento.signers.push({
+    tipo: "ALOJADO",
+    usuario: user._id,
+    nombre: nombreDesdeUsuario(user),
+    rol: "ALOJADO",
+    fecha: new Date(),
+    fuente: "CONFORMIDAD_ALOJADO_ANEXO_23",
+  });
+
+  const transition = registrarCambioEstado(documento, {
+    estadoNuevo: "EN_REVISION",
+    actorId: user._id,
+    rolActor: "ALOJADO",
+    observacion: "Conformidad ALOJADO ANEXO_23.",
+  });
+  if (!transition.ok) return publicError(409, "TRANSICION_INVALIDA");
+
+  documento.actualizadoPor = idValue(user?._id);
+
+  try {
+    await documento.save();
+    return { ok: true, status: 200, documento: toResponse(documento) };
+  } catch {
+    return publicError(500, "ERROR_INTERNO");
+  }
+}
+
 module.exports = {
   generarDesdeAnexo22,
   actualizarDatos,
   enviar,
+  conformidadAlojado,
 };

@@ -96,8 +96,21 @@ async function enviar(req, res) {
   }
 }
 
+async function conformidadAlojado(req, res) {
+  try {
+    const result = await anexo23Service.conformidadAlojado(req.params.id, req.body || {}, req.user);
+    return sendResult(res, result);
+  } catch {
+    return res.status(500).json({
+      ok: false,
+      error: "No es posible procesar la solicitud.",
+    });
+  }
+}
+
 module.exports = {
   generarDesdeAnexo22,
   actualizarDatos,
   enviar,
+  conformidadAlojado,
 };

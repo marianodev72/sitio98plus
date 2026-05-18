@@ -106,7 +106,7 @@ export default function MisAnexos() {
 
   // En esta etapa necesitamos que el usuario pueda ver ANEXO_02 siempre.
   // Permitimos listar anexos relevantes (podés ampliar después).
-  const CODIGOS = useMemo(() => ["ANEXO_01", "ANEXO_02", "ANEXO_03", "ANEXO_21", "ANEXO_22"], []);
+  const CODIGOS = useMemo(() => ["ANEXO_01", "ANEXO_02", "ANEXO_03", "ANEXO_21", "ANEXO_22", "ANEXO_23"], []);
   const [codigo, setCodigo] = useState<string>("ANEXO_02");
 
   const [items, setItems] = useState<Anexo[]>([]);
@@ -119,7 +119,7 @@ export default function MisAnexos() {
     setItems([]);
 
     try {
-      if (codigo === "ANEXO_21" || codigo === "ANEXO_22") {
+      if (codigo === "ANEXO_21" || codigo === "ANEXO_22" || codigo === "ANEXO_23") {
         const res = await http.get("/alojamientos-documentos", { params: { codigo } });
         setItems(Array.isArray(res.data?.documentos) ? res.data.documentos : []);
       } else {
@@ -257,7 +257,7 @@ export default function MisAnexos() {
                       {/* ✅ RUTA CORRECTA SEGÚN RoleRoutes:
                           /app/postulante/mis-anexos/:id */}
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        {up(an.codigo) === "ANEXO_21" || up(an.codigo) === "ANEXO_22" ? (
+                        {up(an.codigo) === "ANEXO_21" || up(an.codigo) === "ANEXO_22" || up(an.codigo) === "ANEXO_23" ? (
                           <button
                             type="button"
                             style={neutralButtonStyle}
