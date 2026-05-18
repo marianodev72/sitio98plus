@@ -782,10 +782,138 @@ async function cerrarAnexo23(id, payload = {}, user) {
   }
 }
 
+async function materializarAlojadoDesdeAnexo23(documento, adminUser, options = {}) {
+  const { session = null, modoRegularizacion = false } = options;
+  if (!documento) throw publicError(404, "DOCUMENTO_NO_DISPONIBLE");
+  if (up(documento.codigo) !== "ANEXO_23") throw publicError(409, "CODIGO_INVALIDO");
+  if (modoRegularizacion) {
+    if (up(documento.estado) !== "CERRADO") throw publicError(409, "ESTADO_INVALIDO");
+    if (!hasConformidadTipo(documento, "ADMIN_GENERAL")) {
+      throw publicError(409, "CONFORMIDAD_ADMIN_GENERAL_REQUERIDA");
+    }
+  } else if (up(documento.estado) !== "EN_REVISION") {
+    throw publicError(409, "ESTADO_INVALIDO");
+  }
+  if (!hasConformidadTipo(documento, "ALOJADO")) {
+    throw publicError(409, "CONFORMIDAD_ALOJADO_REQUERIDA");
+  }
+
+  const alojadoId = idValue(documento.alojado);
+  const alojamientoId = idValue(documento.alojamiento);
+  const plazaId = idValue(documento.plaza);
+  const asignacionId = idValue(documento.asignacion);
+
+  if (!isObjectId(alojadoId)) throw publicError(409, "ALOJADO_REQUERIDO");
+  if (!isObjectId(alojamientoId)) throw publicError(409, "ALOJAMIENTO_REQUERIDO");
+  if (!isObjectId(plazaId)) throw publicError(409, "PLAZA_REQUERIDA");
+  if (!isObjectId(asignacionId)) throw publicError(409, "ASIGNACION_REQUERIDA");
+
+  const applySession = (query) => (session ? query.session(session) : query);
+  const [alojado, plaza, asignacion] = await Promise.all([
+    applySession(User.findById(alojadoId).select("+tokenVersion")),
+    applySession(AlojamientoPlaza.findOne({ _id: plazaId, activo: { $ne: false } })),
+    applySession(AsignacionAlojamiento.findById(asignacionId)),
+  ]);
+
+  if (!alojado) throw publicError(404, "ALOJADO_NO_DISPONIBLE");
+  const roleAlojado = up(alojado.role);
+  if (roleAlojado !== "POSTULANTE" && roleAlojado !== "ALOJADO") {
+    throw publicError(
+      409,
+      "ROL_NO_MIGRABLE",
+      "No se puede materializar ALOJADO porque el usuario posee un rol institucional no migrable automaticamente"
+    );
+  }
+
+  if (!plaza) throw publicError(404, "PLAZA_NO_DISPONIBLE");
+  if (!sameId(plaza.alojamiento, alojamientoId)) throw publicError(409, "PLAZA_INCONSISTENTE");
+  const plazaEstado = up(plaza.estado);
+  if (plazaEstado !== "RESERVADA" && plazaEstado !== "OCUPADA") {
+    throw publicError(409, "PLAZA_NO_RESERVADA");
+  }
+  if (plaza.alojadoActual && !sameId(plaza.alojadoActual, alojadoId)) {
+    throw publicError(409, "PLAZA_OCUPADA_POR_OTRO_USUARIO");
+  }
+  if (plaza.reservaActual?.usuario && !sameId(plaza.reservaActual.usuario, alojadoId)) {
+    throw publicError(409, "RESERVA_INCONSISTENTE");
+  }
+  if (plaza.reservaActual?.anexoId && !sameId(plaza.reservaActual.anexoId, documento.derivadoDe)) {
+    throw publicError(409, "RESERVA_DOCUMENTAL_INCONSISTENTE");
+  }
+
+  if (!asignacion) throw publicError(404, "ASIGNACION_NO_DISPONIBLE");
+  if (!sameId(asignacion.alojado, alojadoId)) throw publicError(409, "ASIGNACION_ALOJADO_INCONSISTENTE");
+  if (!sameId(asignacion.alojamiento, alojamientoId)) throw publicError(409, "ASIGNACION_ALOJAMIENTO_INCONSISTENTE");
+  if (!sameId(asignacion.plaza, plazaId)) throw publicError(409, "ASIGNACION_PLAZA_INCONSISTENTE");
+  const asignacionEstado = up(asignacion.estado);
+  if (asignacionEstado !== "RESERVADA" && asignacionEstado !== "ACTIVA") {
+    throw publicError(409, "ASIGNACION_ESTADO_INVALIDO");
+  }
+
+  const yaMaterializado =
+    roleAlojado === "ALOJADO" &&
+    up(alojado.estadoHabitacional) === "ALOJADO_ACTIVO" &&
+    sameId(alojado.alojamientoAsignado, alojamientoId) &&
+    up(plaza.estado) === "OCUPADA" &&
+    sameId(plaza.alojadoActual, alojadoId) &&
+    !plaza.reservaActual?.usuario &&
+    asignacionEstado === "ACTIVA" &&
+    Boolean(asignacion.fechaInicio);
+  if (yaMaterializado) return { alojado, plaza, asignacion, yaMaterializado: true };
+
+  const now = new Date();
+  const actorId = isObjectId(adminUser?._id) ? adminUser._id : null;
+
+  if (roleAlojado === "POSTULANTE") alojado.role = "ALOJADO";
+  alojado.estadoHabitacional = "ALOJADO_ACTIVO";
+  alojado.alojamientoAsignado = alojamientoId;
+  if (typeof alojado.tokenVersion === "number") alojado.tokenVersion += 1;
+  await alojado.save({ session });
+
+  const estadoPlazaAnterior = plaza.estado;
+  plaza.estado = "OCUPADA";
+  plaza.alojadoActual = alojadoId;
+  plaza.reservaActual = null;
+  plaza.historial = Array.isArray(plaza.historial) ? plaza.historial : [];
+  plaza.historial.push({
+    fecha: now,
+    accion: modoRegularizacion ? "REGULARIZACION_ANEXO_23" : "OCUPACION_ANEXO_23",
+    alojado: alojadoId,
+    estadoAnterior: estadoPlazaAnterior,
+    estadoNuevo: "OCUPADA",
+    anexoId: documento._id,
+    realizadoPor: actorId,
+    observacion: modoRegularizacion
+      ? "Ocupacion regularizada desde ANEXO_23 cerrado."
+      : "Ocupacion materializada por cierre ADMIN_GENERAL ANEXO_23.",
+  });
+  await plaza.save({ session });
+
+  const estadoAsignacionAnterior = asignacion.estado;
+  asignacion.estado = "ACTIVA";
+  asignacion.fechaInicio = asignacion.fechaInicio || now;
+  asignacion.actualizadoPor = actorId;
+  asignacion.auditoria = Array.isArray(asignacion.auditoria) ? asignacion.auditoria : [];
+  asignacion.auditoria.push({
+    fecha: now,
+    accion: modoRegularizacion ? "REGULARIZACION_ANEXO_23" : "ACTIVACION_ANEXO_23",
+    actor: actorId,
+    estadoAnterior: estadoAsignacionAnterior,
+    estadoNuevo: "ACTIVA",
+    observacion: modoRegularizacion
+      ? "Asignacion regularizada desde ANEXO_23 cerrado."
+      : "Asignacion activada por cierre ADMIN_GENERAL ANEXO_23.",
+  });
+  await asignacion.save({ session });
+
+  return { alojado, plaza, asignacion };
+}
+
 module.exports = {
   generarDesdeAnexo22,
   actualizarDatos,
   enviar,
   conformidadAlojado,
   cerrarAnexo23,
+  materializarAlojadoDesdeAnexo23,
 };
