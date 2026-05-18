@@ -108,9 +108,22 @@ async function conformidadAlojado(req, res) {
   }
 }
 
+async function cerrarAnexo23(req, res) {
+  try {
+    const result = await anexo23Service.cerrarAnexo23(req.params.id, req.body || {}, req.user);
+    return sendResult(res, result);
+  } catch {
+    return res.status(500).json({
+      ok: false,
+      error: "No es posible procesar la solicitud.",
+    });
+  }
+}
+
 module.exports = {
   generarDesdeAnexo22,
   actualizarDatos,
   enviar,
   conformidadAlojado,
+  cerrarAnexo23,
 };

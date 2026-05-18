@@ -191,6 +191,7 @@ export default function AlojamientoDocumentoDetalle() {
   const [plazaSeleccionada, setPlazaSeleccionada] = useState("");
   const [generandoAnexo22, setGenerandoAnexo22] = useState(false);
   const [cerrandoAnexo22, setCerrandoAnexo22] = useState(false);
+  const [cerrandoAnexo23, setCerrandoAnexo23] = useState(false);
   const [descargandoPdf, setDescargandoPdf] = useState(false);
   const [infoMsg, setInfoMsg] = useState("");
   const [plazasError, setPlazasError] = useState("");
@@ -199,9 +200,12 @@ export default function AlojamientoDocumentoDetalle() {
   const datos = documento?.datos || {};
   const adjuntos = useMemo(() => adjuntosFromDatos(datos), [datos]);
   const esAnexo22 = up(documento?.codigo) === "ANEXO_22";
+  const esAnexo23 = up(documento?.codigo) === "ANEXO_23";
   const conformidadPostulante = conformidadPorTipo(documento, "POSTULANTE");
+  const conformidadAlojado = conformidadPorTipo(documento, "ALOJADO");
   const conformidadAdminGeneral = conformidadPorTipo(documento, "ADMIN_GENERAL");
   const signerPostulante = signerPorTipo(documento, "POSTULANTE");
+  const signerAlojado = signerPorTipo(documento, "ALOJADO");
   const signerAdminGeneral = signerPorTipo(documento, "ADMIN_GENERAL");
   const puedePrepararAnexo22 =
     up(documento?.codigo) === "ANEXO_21" && ["ENVIADO", "EN_REVISION"].includes(up(documento?.estado));
@@ -209,6 +213,11 @@ export default function AlojamientoDocumentoDetalle() {
     esAnexo22 &&
     up(documento?.estado) === "EN_REVISION" &&
     Boolean(conformidadPostulante) &&
+    !conformidadAdminGeneral;
+  const puedeCerrarAnexo23 =
+    esAnexo23 &&
+    up(documento?.estado) === "EN_REVISION" &&
+    Boolean(conformidadAlojado) &&
     !conformidadAdminGeneral;
 
   async function cargarPlazasElegibles() {
@@ -295,6 +304,26 @@ export default function AlojamientoDocumentoDetalle() {
       setErrorMsg("No es posible cerrar el ANEXO_22 en este momento.");
     } finally {
       setCerrandoAnexo22(false);
+    }
+  }
+
+  async function cerrarTramiteAnexo23() {
+    if (!documento?._id || !puedeCerrarAnexo23 || cerrandoAnexo23) return;
+    const confirmado = window.confirm("Confirma el cierre ADMIN_GENERAL del ANEXO_23?");
+    if (!confirmado) return;
+
+    setCerrandoAnexo23(true);
+    setInfoMsg("");
+    setErrorMsg("");
+
+    try {
+      await http.post(`/alojamientos-documentos/${documento._id}/cerrar-anexo-23`, {});
+      setInfoMsg("ANEXO_23 cerrado correctamente.");
+      await cargar();
+    } catch {
+      setErrorMsg("No es posible cerrar el ANEXO_23 en este momento.");
+    } finally {
+      setCerrandoAnexo23(false);
     }
   }
 
@@ -640,6 +669,57 @@ export default function AlojamientoDocumentoDetalle() {
                         onClick={cerrarTramiteAnexo22}
                       >
                         {cerrandoAnexo22 ? "Cerrando..." : "Cerrar trámite"}
+                      </button>
+                    </div>
+                  ) : null}
+                </section>
+              )}
+
+              {esAnexo23 && (
+                <section style={{ ...softCardStyle, marginTop: 16 }}>
+                  <h3 style={{ marginTop: 0, color: "#ffffff" }}>Conformidades</h3>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                      gap: 14,
+                    }}
+                  >
+                    <Field
+                      label="Alojado"
+                      value={conformidadAlojado ? "Conformado" : "Pendiente"}
+                    />
+                    <Field
+                      label="Fecha alojado"
+                      value={fmtDate(conformidadAlojado?.fecha)}
+                    />
+                    <Field
+                      label="Firmante alojado"
+                      value={signerAlojado?.nombre || conformidadAlojado?.rol}
+                    />
+                    <Field
+                      label="Admin General"
+                      value={conformidadAdminGeneral ? "Conformado" : "Pendiente"}
+                    />
+                    <Field
+                      label="Fecha admin"
+                      value={fmtDate(conformidadAdminGeneral?.fecha)}
+                    />
+                    <Field
+                      label="Firmante admin"
+                      value={signerAdminGeneral?.nombre || conformidadAdminGeneral?.rol}
+                    />
+                  </div>
+
+                  {puedeCerrarAnexo23 ? (
+                    <div style={{ marginTop: 14 }}>
+                      <button
+                        type="button"
+                        style={primaryButtonStyle}
+                        disabled={cerrandoAnexo23}
+                        onClick={cerrarTramiteAnexo23}
+                      >
+                        {cerrandoAnexo23 ? "Cerrando..." : "Cerrar trámite"}
                       </button>
                     </div>
                   ) : null}

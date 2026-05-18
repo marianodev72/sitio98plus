@@ -120,6 +120,12 @@ function hasConformidadAlojado(documento, user) {
   );
 }
 
+function hasConformidadTipo(documento, tipo) {
+  const tipoUp = up(tipo);
+  const conformidades = Array.isArray(documento?.conformidades) ? documento.conformidades : [];
+  return conformidades.some((item) => up(item?.tipo) === tipoUp && item?.ok === true);
+}
+
 function alojamientoSnapshotFrom(origen) {
   const datos = origen?.datos || {};
   const alojamiento = origen?.alojamiento && typeof origen.alojamiento === "object"
@@ -503,9 +509,65 @@ async function conformidadAlojado(id, payload = {}, user) {
   }
 }
 
+async function cerrarAnexo23(id, payload = {}, user) {
+  if (!isObjectId(user?._id)) return publicError(403, "USUARIO_NO_AUTORIZADO");
+  if (!isAdminGeneral(user)) return publicError(404, "DOCUMENTO_NO_DISPONIBLE");
+  if (!isObjectId(id)) return publicError(404, "DOCUMENTO_NO_DISPONIBLE");
+
+  const documento = await AlojamientoDocumento.findOne({
+    _id: id,
+    codigo: "ANEXO_23",
+    activo: { $ne: false },
+  });
+
+  if (!documento) return publicError(404, "DOCUMENTO_NO_DISPONIBLE");
+  if (up(documento.estado) !== "EN_REVISION") return publicError(409, "ESTADO_INVALIDO");
+  if (!hasConformidadTipo(documento, "ALOJADO")) return publicError(409, "CONFORMIDAD_ALOJADO_REQUERIDA");
+  if (hasConformidadTipo(documento, "ADMIN_GENERAL")) return publicError(409, "CIERRE_DUPLICADO");
+
+  const observacion = trimText(payload?.observacion, 1000);
+  const conformidad = registrarConformidad(documento, {
+    tipo: "ADMIN_GENERAL",
+    usuario: user._id,
+    rol: "ADMIN_GENERAL",
+    ok: true,
+    observacion,
+  });
+  if (!conformidad.ok) return publicError(400, "CONFORMIDAD_INVALIDA");
+
+  documento.signers = Array.isArray(documento.signers) ? documento.signers : [];
+  documento.signers.push({
+    tipo: "ADMIN_GENERAL",
+    usuario: user._id,
+    nombre: nombreDesdeUsuario(user),
+    rol: "ADMIN_GENERAL",
+    fecha: new Date(),
+    fuente: "CIERRE_ADMIN_GENERAL_ANEXO_23",
+  });
+
+  const transition = registrarCambioEstado(documento, {
+    estadoNuevo: "CERRADO",
+    actorId: user._id,
+    rolActor: "ADMIN_GENERAL",
+    observacion: "Cierre ADMIN_GENERAL ANEXO_23.",
+  });
+  if (!transition.ok) return publicError(409, "TRANSICION_INVALIDA");
+
+  documento.estadoInstitucional = "CERRADO_ADMIN_GENERAL";
+  documento.actualizadoPor = idValue(user?._id);
+
+  try {
+    await documento.save();
+    return { ok: true, status: 200, documento: toResponse(documento) };
+  } catch {
+    return publicError(500, "ERROR_INTERNO");
+  }
+}
+
 module.exports = {
   generarDesdeAnexo22,
   actualizarDatos,
   enviar,
   conformidadAlojado,
+  cerrarAnexo23,
 };
