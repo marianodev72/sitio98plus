@@ -3,7 +3,6 @@ const mongoose = require("mongoose");
 const AlojamientoDocumento = require("../../models/AlojamientoDocumento");
 const AlojamientoPlaza = require("../../models/AlojamientoPlaza");
 const AsignacionAlojamiento = require("../../models/AsignacionAlojamiento");
-const { User } = require("../../../../models/user");
 const {
   agregarInterviniente,
   registrarCambioEstado,
@@ -658,86 +657,19 @@ async function cerrarAnexo23(id, payload = {}, user) {
       if (!isObjectId(plazaId)) throw publicError(409, "PLAZA_REQUERIDA");
       if (!isObjectId(asignacionId)) throw publicError(409, "ASIGNACION_REQUERIDA");
 
-      const [alojado, plaza, asignacion] = await Promise.all([
-        User.findById(alojadoId).select("+tokenVersion").session(session),
-        AlojamientoPlaza.findOne({ _id: plazaId, activo: { $ne: false } }).session(session),
-        AsignacionAlojamiento.findById(asignacionId).session(session),
-      ]);
+      const materializacion = await materializarAlojadoDesdeAnexo23(documento, user, { session });
+      const { alojado, plaza, asignacion } = materializacion;
 
-      if (!alojado) throw publicError(404, "ALOJADO_NO_DISPONIBLE");
-      const roleAlojado = up(alojado.role);
-      if (roleAlojado !== "POSTULANTE" && roleAlojado !== "ALOJADO") {
-        throw publicError(
-          409,
-          "ROL_NO_MIGRABLE",
-          "No se puede materializar ALOJADO porque el usuario posee un rol institucional no migrable automáticamente"
-        );
-      }
-
-      if (!plaza) throw publicError(404, "PLAZA_NO_DISPONIBLE");
-      if (!sameId(plaza.alojamiento, alojamientoId)) throw publicError(409, "PLAZA_INCONSISTENTE");
-      const plazaEstado = up(plaza.estado);
-      if (plazaEstado !== "RESERVADA" && plazaEstado !== "OCUPADA") {
-        throw publicError(409, "PLAZA_NO_RESERVADA");
-      }
-      if (plaza.alojadoActual && !sameId(plaza.alojadoActual, alojadoId)) {
-        throw publicError(409, "PLAZA_OCUPADA_POR_OTRO_USUARIO");
-      }
-      if (plaza.reservaActual?.usuario && !sameId(plaza.reservaActual.usuario, alojadoId)) {
-        throw publicError(409, "RESERVA_INCONSISTENTE");
-      }
-      if (plaza.reservaActual?.anexoId && !sameId(plaza.reservaActual.anexoId, documento.derivadoDe)) {
-        throw publicError(409, "RESERVA_DOCUMENTAL_INCONSISTENTE");
-      }
-
-      if (!asignacion) throw publicError(404, "ASIGNACION_NO_DISPONIBLE");
-      if (!sameId(asignacion.alojado, alojadoId)) throw publicError(409, "ASIGNACION_ALOJADO_INCONSISTENTE");
-      if (!sameId(asignacion.alojamiento, alojamientoId)) throw publicError(409, "ASIGNACION_ALOJAMIENTO_INCONSISTENTE");
-      if (!sameId(asignacion.plaza, plazaId)) throw publicError(409, "ASIGNACION_PLAZA_INCONSISTENTE");
-      const asignacionEstado = up(asignacion.estado);
-      if (asignacionEstado !== "RESERVADA" && asignacionEstado !== "ACTIVA") {
-        throw publicError(409, "ASIGNACION_ESTADO_INVALIDO");
+      if (
+        up(alojado?.role) !== "ALOJADO" ||
+        up(alojado?.estadoHabitacional) !== "ALOJADO_ACTIVO" ||
+        up(plaza?.estado) !== "OCUPADA" ||
+        up(asignacion?.estado) !== "ACTIVA"
+      ) {
+        throw publicError(409, "MATERIALIZACION_INCOMPLETA");
       }
 
       const now = new Date();
-
-      if (roleAlojado === "POSTULANTE") alojado.role = "ALOJADO";
-      alojado.estadoHabitacional = "ALOJADO_ACTIVO";
-      alojado.alojamientoAsignado = alojamientoId;
-      if (typeof alojado.tokenVersion === "number") alojado.tokenVersion += 1;
-      await alojado.save({ session });
-
-      const estadoPlazaAnterior = plaza.estado;
-      plaza.estado = "OCUPADA";
-      plaza.alojadoActual = alojadoId;
-      plaza.reservaActual = null;
-      plaza.historial = Array.isArray(plaza.historial) ? plaza.historial : [];
-      plaza.historial.push({
-        fecha: now,
-        accion: "OCUPACION_ANEXO_23",
-        alojado: alojadoId,
-        estadoAnterior: estadoPlazaAnterior,
-        estadoNuevo: "OCUPADA",
-        anexoId: documento._id,
-        realizadoPor: user._id,
-        observacion: "Ocupacion materializada por cierre ADMIN_GENERAL ANEXO_23.",
-      });
-      await plaza.save({ session });
-
-      const estadoAsignacionAnterior = asignacion.estado;
-      asignacion.estado = "ACTIVA";
-      asignacion.fechaInicio = asignacion.fechaInicio || now;
-      asignacion.actualizadoPor = user._id;
-      asignacion.auditoria = Array.isArray(asignacion.auditoria) ? asignacion.auditoria : [];
-      asignacion.auditoria.push({
-        fecha: now,
-        accion: "ACTIVACION_ANEXO_23",
-        actor: user._id,
-        estadoAnterior: estadoAsignacionAnterior,
-        estadoNuevo: "ACTIVA",
-        observacion: "Asignacion activada por cierre ADMIN_GENERAL ANEXO_23.",
-      });
-      await asignacion.save({ session });
 
       const conformidad = registrarConformidad(documento, {
         tipo: "ADMIN_GENERAL",
