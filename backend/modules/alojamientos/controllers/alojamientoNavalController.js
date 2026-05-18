@@ -49,6 +49,80 @@ function buildLugarFilter(lugares) {
   return lugares.map((lugar) => new RegExp(`^${escapeRegex(lugar)}$`, "i"));
 }
 
+function estadoOperativoDesdePlazas(estadoOriginal, counts) {
+  const original = up(estadoOriginal);
+  if (["MANTENIMIENTO", "FUERA_SERVICIO", "INHABILITADO", "BAJA"].includes(original)) {
+    return original;
+  }
+
+  const totales = Number(counts?.plazasTotales || 0);
+  const ocupadas = Number(counts?.plazasOcupadas || 0);
+  const reservadas = Number(counts?.plazasReservadas || 0);
+  const libres = Number(counts?.plazasLibres || 0);
+
+  if (totales > 0 && ocupadas >= totales) return "OCUPADO";
+  if (ocupadas > 0 || reservadas > 0) return "PARCIALMENTE_OCUPADO";
+  if (libres > 0) return "DISPONIBLE";
+  return original || "DISPONIBLE";
+}
+
+async function buildOcupacionMap(alojamientoIds) {
+  const ids = (alojamientoIds || []).filter(Boolean);
+  if (!ids.length) return new Map();
+
+  const rows = await AlojamientoPlaza.aggregate([
+    {
+      $match: {
+        alojamiento: { $in: ids },
+        activo: { $ne: false },
+      },
+    },
+    {
+      $group: {
+        _id: "$alojamiento",
+        plazasTotales: { $sum: 1 },
+        plazasOcupadas: {
+          $sum: { $cond: [{ $eq: ["$estado", "OCUPADA"] }, 1, 0] },
+        },
+        plazasReservadas: {
+          $sum: { $cond: [{ $eq: ["$estado", "RESERVADA"] }, 1, 0] },
+        },
+        plazasLibres: {
+          $sum: { $cond: [{ $eq: ["$estado", "LIBRE"] }, 1, 0] },
+        },
+      },
+    },
+  ]);
+
+  return new Map(rows.map((row) => [String(row._id), row]));
+}
+
+async function withOcupacionReal(alojamientos) {
+  const list = Array.isArray(alojamientos) ? alojamientos : [];
+  const map = await buildOcupacionMap(list.map((item) => item?._id));
+
+  return list.map((item) => {
+    const counts = map.get(String(item?._id)) || {
+      plazasTotales: 0,
+      plazasOcupadas: 0,
+      plazasReservadas: 0,
+      plazasLibres: 0,
+    };
+    const ocupacionActual = {
+      plazasTotales: Number(counts.plazasTotales || 0),
+      plazasOcupadas: Number(counts.plazasOcupadas || 0),
+      plazasReservadas: Number(counts.plazasReservadas || 0),
+      plazasLibres: Number(counts.plazasLibres || 0),
+    };
+
+    return {
+      ...item,
+      estado: estadoOperativoDesdePlazas(item.estado, ocupacionActual),
+      ocupacionActual,
+    };
+  });
+}
+
 function puedeVerAlojamiento(user, alojamiento) {
   if (isAdminLike(user)) return true;
   if (!isInspectorAlojamientos(user)) return false;
@@ -103,7 +177,9 @@ async function listar(req, res) {
       AlojamientoNaval.countDocuments(filtro),
     ]);
 
-    return res.json({ ok: true, page, limit, total, alojamientos: items });
+    const alojamientos = await withOcupacionReal(items);
+
+    return res.json({ ok: true, page, limit, total, alojamientos });
   } catch (err) {
     console.error("[alojamientos] listar error:", err);
     return res.status(500).json({ message: "Error interno al listar alojamientos navales" });
@@ -120,7 +196,9 @@ async function obtenerPorId(req, res) {
     if (!alojamiento) return deny(res);
     if (!puedeVerAlojamiento(req.user, alojamiento)) return deny(res);
 
-    return res.json({ ok: true, alojamiento });
+    const [alojamientoConOcupacion] = await withOcupacionReal([alojamiento]);
+
+    return res.json({ ok: true, alojamiento: alojamientoConOcupacion });
   } catch (err) {
     console.error("[alojamientos] obtenerPorId error:", err);
     return res.status(500).json({ message: "Error interno al obtener alojamiento naval" });
