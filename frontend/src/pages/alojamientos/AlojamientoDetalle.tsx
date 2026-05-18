@@ -38,11 +38,10 @@ type Plaza = {
   numeroPlaza: number;
   estado: string;
   activo: boolean;
+  alojadoActualNombre?: string;
   alojadoActual?: {
-    _id?: string;
     nombre?: string;
     apellido?: string;
-    email?: string;
   } | string | null;
 };
 
@@ -62,9 +61,8 @@ function safe(v: unknown, fallback = "-") {
 
 function alojadoLabel(value: Plaza["alojadoActual"]) {
   if (!value) return "-";
-  if (typeof value === "string") return value;
-  const full = `${safe(value.apellido, "")} ${safe(value.nombre, "")}`.trim();
-  return full || safe(value.email);
+  if (typeof value === "string") return "Alojado no identificado";
+  return safe(value.nombre, "Alojado no identificado");
 }
 
 const labelStyle: CSSProperties = {
@@ -246,7 +244,7 @@ export default function AlojamientoDetalle() {
                     <td style={tdStyle}>{Number(p.numeroPlaza || 0)}</td>
                     <td style={tdStyle}><span style={badgeStyle}>{safe(p.estado)}</span></td>
                     <td style={tdStyle}>{p.activo ? "SI" : "NO"}</td>
-                    <td style={tdStyle}>{alojadoLabel(p.alojadoActual)}</td>
+                    <td style={tdStyle}>{safe(p.alojadoActualNombre, alojadoLabel(p.alojadoActual))}</td>
                   </tr>
                 ))}
               </tbody>

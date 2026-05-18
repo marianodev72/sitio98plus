@@ -74,6 +74,18 @@ function nombreHumano(user) {
   return full || "Alojado no identificado";
 }
 
+function alojadoActualSeguro(value) {
+  if (!value) return null;
+  if (typeof value === "object") {
+    return {
+      nombre: nombreHumano(value),
+    };
+  }
+  return {
+    nombre: "Alojado no identificado",
+  };
+}
+
 async function buildOcupacionMap(alojamientoIds) {
   const ids = (alojamientoIds || []).filter(Boolean);
   if (!ids.length) return new Map();
@@ -294,10 +306,17 @@ async function listarPlazas(req, res) {
     if (!puedeVerAlojamiento(req.user, alojamiento)) return deny(res);
 
     const plazas = await AlojamientoPlaza.find({ alojamiento: id })
+      .populate({ path: "alojadoActual", select: "nombre apellido" })
       .sort({ numeroPlaza: 1 })
       .lean();
 
-    return res.json({ ok: true, alojamiento, plazas });
+    const plazasSeguras = plazas.map((plaza) => ({
+      ...plaza,
+      alojadoActualNombre: plaza.alojadoActual ? alojadoActualSeguro(plaza.alojadoActual).nombre : "",
+      alojadoActual: alojadoActualSeguro(plaza.alojadoActual),
+    }));
+
+    return res.json({ ok: true, alojamiento, plazas: plazasSeguras });
   } catch (err) {
     console.error("[alojamientos] listarPlazas error:", err);
     return res.status(500).json({ message: "Error interno al listar plazas" });
