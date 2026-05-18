@@ -60,6 +60,15 @@ function up(value: unknown) {
   return String(value || "").trim().toUpperCase();
 }
 
+function idValue(value: unknown) {
+  if (!value) return "";
+  if (typeof value === "object") {
+    const obj = value as { _id?: unknown; id?: unknown };
+    return String(obj._id || obj.id || "").trim();
+  }
+  return String(value).trim();
+}
+
 function personaFromRef(value: UsuarioRef) {
   if (!value || typeof value === "string") return "";
   const nombre = [value.apellido, value.nombre].filter(Boolean).join(" ").trim();
@@ -72,7 +81,8 @@ function personaLabel(doc: AlojamientoDocumento | null) {
     safe(datos.apellidoNombre, "") ||
     safe(datos.nombreCompleto, "") ||
     safe(datos.postulanteNombre, "") ||
-    safe(datos.titularNombre, "");
+    safe(datos.titularNombre, "") ||
+    safe(datos.huesped?.nombre, "");
   if (datosLabel) return datosLabel;
 
   const usuarioLabel = [doc?.usuario?.apellido, doc?.usuario?.nombre].filter(Boolean).join(" ").trim();
@@ -87,8 +97,11 @@ function alojamientoLabel(doc: AlojamientoDocumento | null) {
     datos.alojamientoLabel,
     datos.alojamientoCodigo,
     datos.alojamiento?.codigo,
+    datos.alojamientoSnapshot?.alojamientoCodigo,
     datos.lugar || datos.alojamientoLugar,
+    datos.alojamientoSnapshot?.lugar,
     datos.plazaNumero ? `Plaza ${datos.plazaNumero}` : "",
+    datos.plazaSnapshot?.numeroPlaza ? `Plaza ${datos.plazaSnapshot.numeroPlaza}` : "",
   ]
     .map((item) => safe(item, ""))
     .filter(Boolean);
@@ -229,6 +242,11 @@ export default function AlojamientoDocumentoDetalleInspector() {
   const [documento, setDocumento] = useState<AlojamientoDocumento | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
+  const [accionMsg, setAccionMsg] = useState("");
+  const [anexo23ExistenteId, setAnexo23ExistenteId] = useState("");
+  const [anexo23Verificado, setAnexo23Verificado] = useState(false);
+  const [verificandoAnexo23, setVerificandoAnexo23] = useState(false);
+  const [generandoAnexo23, setGenerandoAnexo23] = useState(false);
 
   const datos = documento?.datos || {};
   const conformidades = useMemo(
@@ -247,20 +265,72 @@ export default function AlojamientoDocumentoDetalleInspector() {
     () => (Array.isArray(documento?.intervenciones) ? documento?.intervenciones || [] : []),
     [documento]
   );
+  const esAnexo22Cerrado = up(documento?.codigo) === "ANEXO_22" && up(documento?.estado) === "CERRADO";
+  const puedeGenerarAnexo23 =
+    esAnexo22Cerrado && anexo23Verificado && !verificandoAnexo23 && !anexo23ExistenteId;
+
+  async function verificarAnexo23Existente(doc: AlojamientoDocumento | null) {
+    setAnexo23ExistenteId("");
+    setAnexo23Verificado(false);
+    if (!doc || up(doc.codigo) !== "ANEXO_22" || up(doc.estado) !== "CERRADO") return;
+
+    setVerificandoAnexo23(true);
+    try {
+      const res = await http.get("/alojamientos-documentos", {
+        params: { codigo: "ANEXO_23", limit: 100 },
+      });
+      const documentos = Array.isArray(res.data?.documentos) ? res.data.documentos : [];
+      const derivado = documentos.find(
+        (item: Record<string, any>) => idValue(item.derivadoDe) === doc._id
+      );
+      setAnexo23ExistenteId(idValue(derivado?._id));
+      setAnexo23Verificado(true);
+    } catch {
+      setAccionMsg("No fue posible verificar si ya existe un ANEXO_23 derivado.");
+    } finally {
+      setVerificandoAnexo23(false);
+    }
+  }
 
   async function cargar() {
     if (!id) return;
     setLoading(true);
     setErrorMsg("");
+    setAccionMsg("");
 
     try {
       const res = await http.get(`/alojamientos-documentos/${id}`);
-      setDocumento(res.data?.documento || null);
+      const doc = res.data?.documento || null;
+      setDocumento(doc);
+      await verificarAnexo23Existente(doc);
     } catch {
       setDocumento(null);
       setErrorMsg("No es posible acceder al documento solicitado.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function generarAnexo23() {
+    if (!documento?._id || !puedeGenerarAnexo23) return;
+    const ok = window.confirm("Se generara un ANEXO_23 readonly inicial desde este ANEXO_22 cerrado. ¿Continuar?");
+    if (!ok) return;
+
+    setGenerandoAnexo23(true);
+    setAccionMsg("");
+    try {
+      const res = await http.post(`/alojamientos-documentos/${documento._id}/generar-anexo-23`);
+      const nuevoId = idValue(res.data?.documento?._id);
+      if (!nuevoId) {
+        setAccionMsg("ANEXO_23 generado, pero no fue posible abrir el detalle automaticamente.");
+        await verificarAnexo23Existente(documento);
+        return;
+      }
+      navigate(`${basePath}/documentos/${nuevoId}`);
+    } catch {
+      setAccionMsg("No fue posible generar el ANEXO_23.");
+    } finally {
+      setGenerandoAnexo23(false);
     }
   }
 
@@ -278,17 +348,44 @@ export default function AlojamientoDocumentoDetalleInspector() {
             Consulta readonly territorial. Las acciones administrativas no estan habilitadas para este perfil.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => navigate(`${basePath}/documentos`)}
-          style={{ ...badgeStyle, minHeight: 36, cursor: "pointer" }}
-        >
-          Volver
-        </button>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          {anexo23ExistenteId && (
+            <button
+              type="button"
+              onClick={() => navigate(`${basePath}/documentos/${anexo23ExistenteId}`)}
+              style={{ ...badgeStyle, minHeight: 36, cursor: "pointer" }}
+            >
+              Ver ANEXO_23
+            </button>
+          )}
+          {puedeGenerarAnexo23 && (
+            <button
+              type="button"
+              onClick={generarAnexo23}
+              disabled={generandoAnexo23}
+              style={{
+                ...badgeStyle,
+                minHeight: 36,
+                cursor: generandoAnexo23 ? "not-allowed" : "pointer",
+                opacity: generandoAnexo23 ? 0.65 : 1,
+              }}
+            >
+              {generandoAnexo23 ? "Generando..." : "Generar ANEXO_23"}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => navigate(`${basePath}/documentos`)}
+            style={{ ...badgeStyle, minHeight: 36, cursor: "pointer" }}
+          >
+            Volver
+          </button>
+        </div>
       </header>
 
       {loading && <div style={{ ...softCardStyle, marginTop: 16 }}>Cargando documento...</div>}
       {errorMsg && <div style={{ ...softCardStyle, marginTop: 16, color: "#fecaca" }}>{errorMsg}</div>}
+      {accionMsg && <div style={{ ...softCardStyle, marginTop: 16 }}>{accionMsg}</div>}
 
       {!loading && documento && (
         <>
@@ -306,24 +403,24 @@ export default function AlojamientoDocumentoDetalleInspector() {
           <Section title="Postulante / alojado">
             <div style={gridStyle}>
               <Field label="Nombre" value={personaLabel(documento)} />
-              <Field label="MR" value={datos.mr || datos.matricula || datos.numeroRegistro} />
-              <Field label="Grado" value={datos.grado} />
+              <Field label="MR" value={datos.mr || datos.huesped?.mr || datos.matricula || datos.numeroRegistro} />
+              <Field label="Grado" value={datos.grado || datos.huesped?.gradoEscalafon} />
               <Field label="Escalafon" value={datos.escalafon} />
-              <Field label="Destino" value={datos.destinoActual || datos.destino} />
-              <Field label="Genero" value={datos.genero || datos.sexo} />
+              <Field label="Destino" value={datos.destinoActual || datos.destino || datos.huesped?.destino} />
+              <Field label="Genero" value={datos.genero || datos.sexo || datos.huesped?.genero} />
             </div>
           </Section>
 
           <Section title="Alojamiento / plaza">
             <div style={gridStyle}>
               <Field label="Referencia" value={alojamientoLabel(documento)} />
-              <Field label="Lugar" value={datos.lugar || datos.alojamientoLugar || datos.alojamiento?.lugar} />
-              <Field label="Dependencia" value={datos.dependencia || datos.alojamiento?.dependencia} />
-              <Field label="Sector" value={datos.sector || datos.alojamiento?.sector} />
-              <Field label="Tipo" value={datos.tipo || datos.alojamiento?.tipo} />
-              <Field label="Clase" value={datos.clase || datos.alojamiento?.clase} />
-              <Field label="Plaza" value={datos.plazaNumero ? `Plaza ${datos.plazaNumero}` : ""} />
-              <Field label="Genero permitido" value={datos.generoPermitido || datos.alojamiento?.generoPermitido} />
+              <Field label="Lugar" value={datos.lugar || datos.alojamientoLugar || datos.alojamiento?.lugar || datos.alojamientoSnapshot?.lugar} />
+              <Field label="Dependencia" value={datos.dependencia || datos.alojamiento?.dependencia || datos.alojamientoSnapshot?.dependencia} />
+              <Field label="Sector" value={datos.sector || datos.alojamiento?.sector || datos.alojamientoSnapshot?.sector} />
+              <Field label="Tipo" value={datos.tipo || datos.alojamiento?.tipo || datos.alojamientoSnapshot?.tipo} />
+              <Field label="Clase" value={datos.clase || datos.alojamiento?.clase || datos.alojamientoSnapshot?.clase} />
+              <Field label="Plaza" value={datos.plazaNumero ? `Plaza ${datos.plazaNumero}` : datos.plazaSnapshot?.numeroPlaza ? `Plaza ${datos.plazaSnapshot.numeroPlaza}` : ""} />
+              <Field label="Genero permitido" value={datos.generoPermitido || datos.alojamiento?.generoPermitido || datos.alojamientoSnapshot?.generoPermitido} />
             </div>
           </Section>
 
