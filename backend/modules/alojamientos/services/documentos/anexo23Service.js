@@ -784,6 +784,7 @@ async function cerrarAnexo23(id, payload = {}, user) {
 
 async function materializarAlojadoDesdeAnexo23(documento, adminUser, options = {}) {
   const { session = null, modoRegularizacion = false } = options;
+  const { User: UserModel } = require("../../../../models/user");
   if (!documento) throw publicError(404, "DOCUMENTO_NO_DISPONIBLE");
   if (up(documento.codigo) !== "ANEXO_23") throw publicError(409, "CODIGO_INVALIDO");
   if (modoRegularizacion) {
@@ -810,7 +811,7 @@ async function materializarAlojadoDesdeAnexo23(documento, adminUser, options = {
 
   const applySession = (query) => (session ? query.session(session) : query);
   const [alojado, plaza, asignacion] = await Promise.all([
-    applySession(User.findById(alojadoId).select("+tokenVersion")),
+    applySession(UserModel.findById(alojadoId).select("+tokenVersion")),
     applySession(AlojamientoPlaza.findOne({ _id: plazaId, activo: { $ne: false } })),
     applySession(AsignacionAlojamiento.findById(asignacionId)),
   ]);
