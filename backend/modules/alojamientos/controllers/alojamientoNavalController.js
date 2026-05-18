@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 
 const AlojamientoNaval = require("../models/AlojamientoNaval");
 const AlojamientoPlaza = require("../models/AlojamientoPlaza");
+const { User } = require("../../../models/user");
 const { importAlojamientosCsv } = require("../services/alojamientoImportService");
 
 function deny(res) {
@@ -66,35 +67,69 @@ function estadoOperativoDesdePlazas(estadoOriginal, counts) {
   return original || "DISPONIBLE";
 }
 
+function nombreHumano(user) {
+  const apellido = String(user?.apellido || "").trim();
+  const nombre = String(user?.nombre || "").trim();
+  const full = [apellido, nombre].filter(Boolean).join(", ");
+  return full || "Alojado no identificado";
+}
+
 async function buildOcupacionMap(alojamientoIds) {
   const ids = (alojamientoIds || []).filter(Boolean);
   if (!ids.length) return new Map();
 
-  const rows = await AlojamientoPlaza.aggregate([
-    {
-      $match: {
-        alojamiento: { $in: ids },
-        activo: { $ne: false },
-      },
-    },
-    {
-      $group: {
-        _id: "$alojamiento",
-        plazasTotales: { $sum: 1 },
-        plazasOcupadas: {
-          $sum: { $cond: [{ $eq: ["$estado", "OCUPADA"] }, 1, 0] },
-        },
-        plazasReservadas: {
-          $sum: { $cond: [{ $eq: ["$estado", "RESERVADA"] }, 1, 0] },
-        },
-        plazasLibres: {
-          $sum: { $cond: [{ $eq: ["$estado", "LIBRE"] }, 1, 0] },
-        },
-      },
-    },
-  ]);
+  const plazas = await AlojamientoPlaza.find({
+    alojamiento: { $in: ids },
+    activo: { $ne: false },
+  })
+    .select("alojamiento estado alojadoActual")
+    .lean();
 
-  return new Map(rows.map((row) => [String(row._id), row]));
+  const userIds = Array.from(
+    new Set(
+      plazas
+        .filter((plaza) => up(plaza.estado) === "OCUPADA" && plaza.alojadoActual)
+        .map((plaza) => String(plaza.alojadoActual))
+    )
+  );
+
+  const users = userIds.length
+    ? await User.find({ _id: { $in: userIds } }).select("nombre apellido").lean()
+    : [];
+  const userMap = new Map(users.map((user) => [String(user._id), nombreHumano(user)]));
+  const map = new Map();
+
+  for (const plaza of plazas) {
+    const key = String(plaza.alojamiento);
+    const row = map.get(key) || {
+      plazasTotales: 0,
+      plazasOcupadas: 0,
+      plazasReservadas: 0,
+      plazasLibres: 0,
+      alojadosMap: new Map(),
+    };
+    const estado = up(plaza.estado);
+
+    row.plazasTotales += 1;
+    if (estado === "OCUPADA") {
+      row.plazasOcupadas += 1;
+      const alojadoId = String(plaza.alojadoActual || "");
+      if (alojadoId) {
+        row.alojadosMap.set(alojadoId, { nombre: userMap.get(alojadoId) || "Alojado no identificado" });
+      }
+    }
+    if (estado === "RESERVADA") row.plazasReservadas += 1;
+    if (estado === "LIBRE") row.plazasLibres += 1;
+
+    map.set(key, row);
+  }
+
+  for (const row of map.values()) {
+    row.alojados = Array.from(row.alojadosMap.values());
+    delete row.alojadosMap;
+  }
+
+  return map;
 }
 
 async function withOcupacionReal(alojamientos) {
@@ -107,12 +142,14 @@ async function withOcupacionReal(alojamientos) {
       plazasOcupadas: 0,
       plazasReservadas: 0,
       plazasLibres: 0,
+      alojados: [],
     };
     const ocupacionActual = {
       plazasTotales: Number(counts.plazasTotales || 0),
       plazasOcupadas: Number(counts.plazasOcupadas || 0),
       plazasReservadas: Number(counts.plazasReservadas || 0),
       plazasLibres: Number(counts.plazasLibres || 0),
+      alojados: Array.isArray(counts.alojados) ? counts.alojados : [],
     };
 
     return {
