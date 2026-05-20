@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import http from "../../api/http";
 import { useAuth } from "../../auth/useAuth";
 
@@ -22,6 +23,14 @@ type OcupacionActual = {
     estado?: string;
     generoPermitido?: string;
   };
+};
+
+type DocumentoResumen = {
+  token: string;
+  codigo: string;
+  estado: string;
+  estadoInstitucional?: string | null;
+  updatedAt?: string;
 };
 
 function fmt(value: unknown) {
@@ -59,30 +68,52 @@ function Field({ label, value }: { label: string; value: unknown }) {
 
 export default function AlojadoDashboard() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [ocupacion, setOcupacion] = useState<OcupacionActual | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [ultimaGestion, setUltimaGestion] = useState<DocumentoResumen | null>(null);
+  const [loadingOcupacion, setLoadingOcupacion] = useState(true);
+  const [loadingGestion, setLoadingGestion] = useState(true);
+  const [errorOcupacion, setErrorOcupacion] = useState("");
+  const [errorGestion, setErrorGestion] = useState("");
 
   useEffect(() => {
     let alive = true;
 
-    async function load() {
+    async function loadOcupacion() {
       try {
-        setLoading(true);
-        setError("");
+        setLoadingOcupacion(true);
+        setErrorOcupacion("");
         const res = await http.get("/alojamientos-mi/ocupacion-actual");
         if (!alive) return;
         setOcupacion(res.data?.ocupacion || null);
       } catch (err: any) {
         if (!alive) return;
         setOcupacion(null);
-        setError(err?.response?.data?.message || "No se pudo obtener la ocupacion actual.");
+        setErrorOcupacion(err?.response?.data?.message || "No se pudo obtener la ocupacion actual.");
       } finally {
-        if (alive) setLoading(false);
+        if (alive) setLoadingOcupacion(false);
       }
     }
 
-    load();
+    async function loadGestion() {
+      try {
+        setLoadingGestion(true);
+        setErrorGestion("");
+        const docs = await http.get("/alojamientos-mi/documentos");
+        if (!alive) return;
+        const documentos = Array.isArray(docs.data?.documentos) ? docs.data.documentos : [];
+        setUltimaGestion(documentos[0] || null);
+      } catch {
+        if (!alive) return;
+        setUltimaGestion(null);
+        setErrorGestion("No se pudo obtener la ultima gestion.");
+      } finally {
+        if (alive) setLoadingGestion(false);
+      }
+    }
+
+    loadOcupacion();
+    loadGestion();
     return () => {
       alive = false;
     };
@@ -122,11 +153,90 @@ export default function AlojadoDashboard() {
           padding: "clamp(14px, 2vw, 20px)",
         }}
       >
-        {loading ? (
+        <h2 style={{ margin: "0 0 12px", color: "#ffffff", fontSize: 18 }}>
+          Ultima gestion alojamientos
+        </h2>
+        {loadingGestion ? (
+          <p style={{ margin: 0, color: "rgba(255,255,255,0.76)" }}>Consultando gestiones...</p>
+        ) : errorGestion ? (
+          <p style={{ margin: 0, color: "#fecaca" }}>{errorGestion}</p>
+        ) : ultimaGestion ? (
+          <div style={{ display: "grid", gap: 12 }}>
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+                flexWrap: "wrap",
+                alignItems: "center",
+                color: "#ffffff",
+                fontWeight: 800,
+              }}
+            >
+              <span>{ultimaGestion.codigo}</span>
+              <span
+                style={{
+                  border: "1px solid rgba(255,255,255,0.14)",
+                  borderRadius: 999,
+                  padding: "4px 10px",
+                  background: "rgba(255,255,255,0.08)",
+                }}
+              >
+                {ultimaGestion.estado}
+              </span>
+              {ultimaGestion.estadoInstitucional ? (
+                <span
+                  style={{
+                    border: "1px solid rgba(255,255,255,0.14)",
+                    borderRadius: 999,
+                    padding: "4px 10px",
+                    background: "rgba(255,255,255,0.08)",
+                  }}
+                >
+                  {ultimaGestion.estadoInstitucional}
+                </span>
+              ) : null}
+            </div>
+            <div style={{ color: "rgba(255,255,255,0.68)", fontSize: 12 }}>
+              Actualizado: {fmtDate(ultimaGestion.updatedAt)}
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={() => navigate("/app/alojado/anexos")}
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: 10,
+                  border: "none",
+                  background: "#2563eb",
+                  color: "#ffffff",
+                  fontWeight: 800,
+                  cursor: "pointer",
+                }}
+              >
+                Ir a Mis Anexos
+              </button>
+            </div>
+          </div>
+        ) : (
+          <p style={{ margin: 0, color: "rgba(255,255,255,0.76)" }}>
+            Sin gestiones recientes.
+          </p>
+        )}
+      </section>
+
+      <section
+        style={{
+          border: "1px solid rgba(255,255,255,0.14)",
+          background: "rgba(255,255,255,0.06)",
+          borderRadius: 14,
+          padding: "clamp(14px, 2vw, 20px)",
+        }}
+      >
+        {loadingOcupacion ? (
           <p style={{ margin: 0, color: "rgba(255,255,255,0.76)" }}>
             Consultando ocupacion actual...
           </p>
-        ) : error ? (
+        ) : errorOcupacion ? (
           <div
             style={{
               border: "1px solid rgba(248,113,113,0.45)",
@@ -137,7 +247,7 @@ export default function AlojadoDashboard() {
               fontWeight: 800,
             }}
           >
-            {error}
+            {errorOcupacion}
           </div>
         ) : !ocupacion ? (
           <div

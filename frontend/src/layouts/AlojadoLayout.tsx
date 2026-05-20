@@ -1,12 +1,13 @@
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { Navigate, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
+import { panelPathForUser } from "../routes/panelPathForUser";
 
 function up(v: unknown) {
   return String(v || "").toUpperCase().trim();
 }
 
 function canAccessAlojado(user: any) {
-  return up(user?.role) === "ALOJADO" || Boolean(user?.alojamientoAsignado);
+  return up(user?.role) === "ALOJADO";
 }
 
 function linkStyle({ isActive }: { isActive: boolean }) {
@@ -32,12 +33,8 @@ export default function AlojadoLayout() {
   const { user, logout } = useAuth();
 
   if (!canAccessAlojado(user)) {
-    return (
-      <div style={{ minHeight: "100vh", background: "#0b1220", color: "#ffffff", padding: 24 }}>
-        <h2 style={{ marginTop: 0 }}>La pagina solicitada no esta disponible.</h2>
-        <p style={{ color: "rgba(255,255,255,0.76)" }}>Por favor, contacte al administrador.</p>
-      </div>
-    );
+    const target = user ? panelPathForUser(user) : "/login";
+    return <Navigate to={target === "/app/alojado" ? "/app" : target} replace />;
   }
 
   async function handleLogout() {
@@ -112,6 +109,9 @@ export default function AlojadoLayout() {
         <nav style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap", overflowX: "auto" }}>
           <NavLink to="." end style={linkStyle}>
             Inicio
+          </NavLink>
+          <NavLink to="anexos" style={linkStyle}>
+            Mis Anexos
           </NavLink>
         </nav>
       </header>

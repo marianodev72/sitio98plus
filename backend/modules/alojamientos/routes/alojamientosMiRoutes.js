@@ -9,5 +9,9 @@ const router = express.Router();
 router.use(authRequired, refreshUserPrivileges);
 
 router.get("/ocupacion-actual", controller.ocupacionActual);
+router.get("/documentos", controller.listarDocumentos);
+router.get("/documentos/:token", controller.obtenerDocumento);
+router.get("/documentos/:token/pdf", controller.descargarDocumentoPdf);
+router.post("/documentos/:token/conformidad-anexo-23", controller.conformidadAnexo23);
 
 module.exports = router;
