@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useState } from "react";
 import http from "../../api/http";
+import { useNavigate } from "react-router-dom";
 
 type DatosDeclarados = {
   identidad?: {
@@ -35,6 +36,14 @@ type DatosDeclarados = {
     fecha?: string | null;
   } | null;
 };
+
+type ActualizacionResumen = {
+  token?: string;
+  createdAt?: string | null;
+  motivo?: string;
+  resumen?: string;
+  estado?: string;
+} | null;
 
 function fmt(value: unknown) {
   const text = String(value ?? "").trim();
@@ -104,7 +113,9 @@ function Section({
 }
 
 export default function DatosDeclaradosAlojado() {
+  const navigate = useNavigate();
   const [datos, setDatos] = useState<DatosDeclarados | null>(null);
+  const [ultimaActualizacion, setUltimaActualizacion] = useState<ActualizacionResumen>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -118,9 +129,11 @@ export default function DatosDeclaradosAlojado() {
         const res = await http.get("/alojamientos-mi/datos-declarados");
         if (!alive) return;
         setDatos(res.data?.datos || null);
+        setUltimaActualizacion(res.data?.ultimaActualizacion || null);
       } catch (err: any) {
         if (!alive) return;
         setDatos(null);
+        setUltimaActualizacion(null);
         setError(err?.response?.data?.message || "No se pudieron obtener los datos declarados.");
       } finally {
         if (alive) setLoading(false);
@@ -150,8 +163,40 @@ export default function DatosDeclaradosAlojado() {
           Mis datos
         </h1>
         <p style={{ margin: "10px 0 0", color: "rgba(255,255,255,0.76)", lineHeight: 1.6 }}>
-          Consulta readonly de datos institucionales declarados para alojamientos.
+          Consulta institucional de datos propios declarados para alojamientos.
         </p>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
+          <button
+            type="button"
+            onClick={() => navigate("/app/alojado/datos/actualizar")}
+            style={{
+              border: "1px solid rgba(59,130,246,0.9)",
+              background: "linear-gradient(180deg, rgba(59,130,246,0.95), rgba(37,99,235,0.95))",
+              color: "#fff",
+              padding: "10px 14px",
+              borderRadius: 10,
+              fontWeight: 800,
+              cursor: "pointer",
+            }}
+          >
+            Actualizar
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate("/app/alojado/datos/historial")}
+            style={{
+              border: "1px solid rgba(255,255,255,0.14)",
+              background: "rgba(255,255,255,0.06)",
+              color: "#fff",
+              padding: "10px 14px",
+              borderRadius: 10,
+              fontWeight: 800,
+              cursor: "pointer",
+            }}
+          >
+            Historial
+          </button>
+        </div>
       </section>
 
       {loading ? (
@@ -183,6 +228,21 @@ export default function DatosDeclaradosAlojado() {
             <Field label="Genero" value={identidad.genero} />
             <Field label="Grado / escalafon" value={identidad.gradoEscalafon} />
           </Section>
+
+          {ultimaActualizacion ? (
+            <section style={sectionStyle}>
+              <h2 style={{ margin: "0 0 12px", color: "#ffffff", fontSize: 18 }}>
+                Ultima actualizacion registrada
+              </h2>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                <strong style={{ color: "#ffffff" }}>{fmt(ultimaActualizacion.resumen)}</strong>
+                <span style={badgeStyle}>{fmt(ultimaActualizacion.estado)}</span>
+                <span style={{ color: "rgba(255,255,255,0.68)", fontSize: 12, fontWeight: 800 }}>
+                  Fecha: {fmtDate(ultimaActualizacion.createdAt)}
+                </span>
+              </div>
+            </section>
+          ) : null}
 
           <Section title="Destino">
             <Field label="Actual" value={destino.actual} />

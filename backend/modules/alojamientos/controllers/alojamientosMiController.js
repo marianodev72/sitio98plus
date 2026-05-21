@@ -4,6 +4,7 @@ const AsignacionAlojamiento = require("../models/AsignacionAlojamiento");
 const AlojamientoDocumento = require("../models/AlojamientoDocumento");
 const { User } = require("../../../models/user");
 const { Liquidacion } = require("../../../models/Liquidacion");
+const MisDatosDeclaradosUpdate = require("../../../models/MisDatosDeclaradosUpdate");
 const anexo23Service = require("../services/documentos/anexo23Service");
 const alojamientoDocumentoPdfService = require("../services/documentos/alojamientoDocumentoPdfService");
 const { renderAnexo22Pdf } = require("../pdf/anexo22PdfRenderer");
@@ -340,6 +341,118 @@ function publicDatosDeclarados({ documento = null, asignacion = null } = {}) {
   };
 }
 
+function mergeDatosDeclarados(base = {}, update = {}) {
+  const out = JSON.parse(JSON.stringify(base || {}));
+  const identidad = update?.identidad && typeof update.identidad === "object" ? update.identidad : {};
+  const destino = update?.destino && typeof update.destino === "object" ? update.destino : {};
+  out.identidad = { ...(out.identidad || {}) };
+  out.destino = { ...(out.destino || {}) };
+
+  for (const key of ["apellido", "nombres", "genero", "gradoEscalafon"]) {
+    const value = firstString(identidad[key]);
+    if (value) out.identidad[key] = value;
+  }
+  out.identidad.nombreCompleto = firstString(
+    identidad.nombreCompleto,
+    [out.identidad.apellido, out.identidad.nombres].filter(Boolean).join(", "),
+    out.identidad.nombreCompleto
+  );
+  for (const key of ["actual", "futuro"]) {
+    const value = firstString(destino[key]);
+    if (value) out.destino[key] = value;
+  }
+  return out;
+}
+
+function sanitizeDatosDeclaradosUpdate(payload = {}) {
+  const identidad = payload?.identidad && typeof payload.identidad === "object" ? payload.identidad : {};
+  const destino = payload?.destino && typeof payload.destino === "object" ? payload.destino : {};
+  const clean = (value) => String(value || "").trim().slice(0, 180);
+  const out = {
+    identidad: {
+      apellido: clean(identidad.apellido),
+      nombres: clean(identidad.nombres),
+      genero: clean(identidad.genero),
+      gradoEscalafon: clean(identidad.gradoEscalafon),
+    },
+    destino: {
+      actual: clean(destino.actual),
+      futuro: clean(destino.futuro),
+    },
+  };
+  out.identidad.nombreCompleto = [out.identidad.apellido, out.identidad.nombres]
+    .filter(Boolean)
+    .join(", ");
+  return out;
+}
+
+function resumenDatosDeclarados(datos = {}) {
+  const partes = [];
+  const identidad = datos.identidad || {};
+  const destino = datos.destino || {};
+  if (firstString(identidad.apellido, identidad.nombres)) partes.push("identidad institucional");
+  if (firstString(identidad.genero, identidad.gradoEscalafon)) partes.push("perfil institucional");
+  if (firstString(destino.actual, destino.futuro)) partes.push("destino");
+  return partes.length ? `Actualizacion de ${partes.join(", ")}` : "Actualizacion de datos declarados";
+}
+
+function publicDatosDeclaradosUpdateItem(item = {}) {
+  return {
+    token: encodeDocToken(item._id),
+    createdAt: item.createdAt || null,
+    updatedAt: item.updatedAt || null,
+    motivo: item.motivo || "",
+    resumen: item.resumen || "",
+    estado: item.estado || "",
+  };
+}
+
+function publicDatosDeclaradosEditableSnapshot(datos = {}) {
+  const identidad = datos?.identidad && typeof datos.identidad === "object" ? datos.identidad : {};
+  const destino = datos?.destino && typeof datos.destino === "object" ? datos.destino : {};
+  return {
+    identidad: {
+      apellido: firstString(identidad.apellido),
+      nombres: firstString(identidad.nombres),
+      genero: firstString(identidad.genero),
+      gradoEscalafon: firstString(identidad.gradoEscalafon),
+      nombreCompleto: firstString(
+        identidad.nombreCompleto,
+        [identidad.apellido, identidad.nombres].filter(Boolean).join(", ")
+      ),
+    },
+    destino: {
+      actual: firstString(destino.actual),
+      futuro: firstString(destino.futuro),
+    },
+  };
+}
+
+function publicDatosDeclaradosUpdateDetail(item = {}) {
+  return {
+    ...publicDatosDeclaradosUpdateItem(item),
+    datos: publicDatosDeclaradosEditableSnapshot(
+      item.datosActualizados && typeof item.datosActualizados === "object" ? item.datosActualizados : {}
+    ),
+    base: publicDatosDeclaradosEditableSnapshot(
+      item.baseDatos && typeof item.baseDatos === "object" ? item.baseDatos : {}
+    ),
+  };
+}
+
+async function findMiDatosDeclaradosUpdate(user, token) {
+  const publicToken = String(token || "").trim();
+  if (!/^[a-f\d]{64}$/i.test(publicToken) || !canUsePanelAlojado(user)) return null;
+
+  const items = await MisDatosDeclaradosUpdate.find({ usuario: user._id })
+    .select("baseDatos datosActualizados motivo resumen estado createdAt updatedAt")
+    .sort({ createdAt: -1, _id: -1 })
+    .limit(200)
+    .lean();
+
+  return items.find((item) => sameToken(encodeDocToken(item._id), publicToken)) || null;
+}
+
 async function resolveAlojadoMr(userId) {
   if (!userId) return "";
   const user = await User.findById(userId)
@@ -590,13 +703,121 @@ async function obtenerDatosDeclarados(req, res) {
     if (asignacion && !sameId(asignacion.alojado, userId)) return deny(res);
     if (documento && !isUsuarioVinculado(req.user, documento)) return deny(res);
 
+    const base = publicDatosDeclarados({ documento, asignacion });
+    const ultimaActualizacion = await MisDatosDeclaradosUpdate.findOne({ usuario: userId })
+      .select("datosActualizados motivo resumen estado createdAt updatedAt")
+      .sort({ createdAt: -1, _id: -1 })
+      .lean();
+
     return res.json({
       ok: true,
-      datos: publicDatosDeclarados({ documento, asignacion }),
+      datos: ultimaActualizacion ? mergeDatosDeclarados(base, ultimaActualizacion.datosActualizados) : base,
+      ultimaActualizacion: ultimaActualizacion
+        ? publicDatosDeclaradosUpdateItem(ultimaActualizacion)
+        : null,
     });
   } catch (err) {
     console.error("[alojamientos-mi] obtenerDatosDeclarados error:", err?.message || "Error controlado");
     return res.status(500).json({ message: "Error interno al obtener datos declarados" });
+  }
+}
+
+async function actualizarDatosDeclarados(req, res) {
+  try {
+    if (!canUsePanelAlojado(req.user)) return deny(res);
+
+    const userId = req.user?._id;
+    if (!userId) return deny(res);
+
+    const documento = await AlojamientoDocumento.findOne({
+      codigo: "ANEXO_23",
+      activo: { $ne: false },
+      $or: [
+        { alojado: userId },
+        { solicitante: userId },
+        { "intervinientes.userId": userId },
+      ],
+    })
+      .select(
+        "codigo estado solicitante alojado intervinientes.userId datos.huesped datos.postulanteNombre datos.nombreCompleto datos.apellido datos.nombres datos.genero datos.sexo datos.gradoEscalafon datos.grado datos.destinoActual datos.destinoFuturo datos.alojamientoSnapshot datos.plazaSnapshot datos.alojamientoCodigo datos.lugar datos.dependencia datos.sector datos.tipo datos.clase datos.numeroPlaza datos.plazaCodigo createdAt updatedAt"
+      )
+      .sort({ updatedAt: -1, createdAt: -1, _id: -1 })
+      .lean();
+
+    const asignacion = await AsignacionAlojamiento.findOne({
+      alojado: userId,
+      estado: "ACTIVA",
+    })
+      .select("estado fechaInicio alojamiento plaza alojado")
+      .populate({ path: "alojamiento", select: "codigo lugar dependencia sector tipo clase" })
+      .populate({ path: "plaza", select: "numeroPlaza codigo" })
+      .lean();
+
+    if (!documento && !asignacion) return deny(res);
+    if (asignacion && !sameId(asignacion.alojado, userId)) return deny(res);
+    if (documento && !isUsuarioVinculado(req.user, documento)) return deny(res);
+
+    const datosActualizados = sanitizeDatosDeclaradosUpdate(req.body?.datos || req.body || {});
+    const baseDatos = publicDatosDeclarados({ documento, asignacion });
+    const baseDatosAllowlist = publicDatosDeclaradosEditableSnapshot(baseDatos);
+    const motivo = String(req.body?.motivo || "").trim().slice(0, 300);
+
+    const item = await MisDatosDeclaradosUpdate.create({
+      usuario: userId,
+      baseAnexoId: null,
+      baseDatos: baseDatosAllowlist,
+      datosActualizados,
+      motivo,
+      resumen: resumenDatosDeclarados(datosActualizados),
+      estado: "REGISTRADO",
+    });
+
+    return res.json({
+      ok: true,
+      item: publicDatosDeclaradosUpdateDetail(item.toObject ? item.toObject() : item),
+      datos: mergeDatosDeclarados(baseDatos, datosActualizados),
+    });
+  } catch (err) {
+    console.error("[alojamientos-mi] actualizarDatosDeclarados error:", err?.message || "Error controlado");
+    return res.status(500).json({ message: "Error interno al actualizar datos declarados" });
+  }
+}
+
+async function historialDatosDeclarados(req, res) {
+  try {
+    if (!canUsePanelAlojado(req.user)) return deny(res);
+
+    const userId = req.user?._id;
+    if (!userId) return deny(res);
+
+    let limit = Number.parseInt(String(req.query?.limit || "50"), 10);
+    if (Number.isNaN(limit) || limit < 1) limit = 50;
+    limit = Math.min(limit, 100);
+
+    const items = await MisDatosDeclaradosUpdate.find({ usuario: userId })
+      .select("motivo resumen estado createdAt updatedAt")
+      .sort({ createdAt: -1, _id: -1 })
+      .limit(limit)
+      .lean();
+
+    return res.json({ ok: true, items: items.map(publicDatosDeclaradosUpdateItem) });
+  } catch (err) {
+    console.error("[alojamientos-mi] historialDatosDeclarados error:", err?.message || "Error controlado");
+    return res.status(500).json({ message: "Error interno al listar historial" });
+  }
+}
+
+async function obtenerDatosDeclaradosUpdate(req, res) {
+  try {
+    if (!canUsePanelAlojado(req.user)) return deny(res);
+
+    const item = await findMiDatosDeclaradosUpdate(req.user, req.params.token);
+    if (!item) return deny(res);
+
+    return res.json({ ok: true, item: publicDatosDeclaradosUpdateDetail(item) });
+  } catch (err) {
+    console.error("[alojamientos-mi] obtenerDatosDeclaradosUpdate error:", err?.message || "Error controlado");
+    return res.status(500).json({ message: "Error interno al obtener actualizacion" });
   }
 }
 
@@ -707,6 +928,9 @@ module.exports = {
   obtenerUltimaLiquidacion,
   listarNovedades,
   obtenerDatosDeclarados,
+  actualizarDatosDeclarados,
+  historialDatosDeclarados,
+  obtenerDatosDeclaradosUpdate,
   listarDocumentos,
   obtenerDocumento,
   descargarDocumentoPdf,
