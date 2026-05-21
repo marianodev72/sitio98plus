@@ -272,10 +272,10 @@ export default function AlojadoDashboard() {
   const tipoClase = [alojamiento.tipo, alojamiento.clase].filter(Boolean).join(" / ");
   const ultimoPdf = documentos.find((doc) => doc.canDownloadPdf);
   const ultimaNovedad = novedades[0] || null;
-  const anexosPresentes = ["ANEXO_21", "ANEXO_22", "ANEXO_23"].filter((codigo) =>
+  const anexosPresentes = ["ANEXO_21", "ANEXO_22", "ANEXO_23", "ANEXO_24"].filter((codigo) =>
     documentos.some((doc) => doc.codigo === codigo)
   );
-  const anexosFaltantes = ["ANEXO_21", "ANEXO_22", "ANEXO_23"].filter(
+  const anexosFaltantes = ["ANEXO_21", "ANEXO_22", "ANEXO_23", "ANEXO_24"].filter(
     (codigo) => !documentos.some((doc) => doc.codigo === codigo)
   );
   const totalLiquidacion = ultimaLiquidacion
@@ -283,7 +283,7 @@ export default function AlojadoDashboard() {
     : "";
   const trazabilidad = useMemo(
     () =>
-      ["ANEXO_21", "ANEXO_22", "ANEXO_23"]
+      ["ANEXO_21", "ANEXO_22", "ANEXO_23", "ANEXO_24"]
         .map((codigo) => documentos.find((doc) => doc.codigo === codigo))
         .filter(Boolean) as DocumentoResumen[],
     [documentos]

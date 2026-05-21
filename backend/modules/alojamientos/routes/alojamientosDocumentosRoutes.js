@@ -6,6 +6,7 @@ const controller = require("../controllers/documentos/alojamientosDocumentosCont
 const anexo21Controller = require("../controllers/documentos/anexo21Controller");
 const anexo22Controller = require("../controllers/documentos/anexo22Controller");
 const anexo23Controller = require("../controllers/documentos/anexo23Controller");
+const anexo24Controller = require("../controllers/documentos/anexo24Controller");
 const {
   uploadAlojamientoDocumento,
 } = require("../middleware/alojamientoDocumentoUpload");
@@ -20,8 +21,11 @@ router.post("/anexo-21/:id/enviar", anexo21Controller.enviar);
 router.post("/anexo-21/:id/anular", anexo21Controller.anular);
 router.patch("/anexo-23/:id", anexo23Controller.actualizarDatos);
 router.post("/anexo-23/:id/enviar", anexo23Controller.enviar);
+router.patch("/anexo-24/:id", anexo24Controller.actualizarDatos);
+router.post("/anexo-24/:id/enviar", anexo24Controller.enviar);
 router.post("/:id/conformidad-alojado-23", anexo23Controller.conformidadAlojado);
 router.post("/:id/cerrar-anexo-23", anexo23Controller.cerrarAnexo23);
+router.post("/:id/cerrar-anexo-24", anexo24Controller.cerrarAnexo24);
 router.post(
   "/anexo-21/:id/adjuntos/:campo",
   uploadAlojamientoDocumento,
@@ -32,6 +36,7 @@ router.get("/:id/adjuntos/:campo", anexo21Controller.descargarAdjunto);
 router.get("/:id/pdf", anexo22Controller.descargarPdf);
 router.post("/:id/generar-anexo-22", anexo22Controller.generarDesdeAnexo21);
 router.post("/:id/generar-anexo-23", anexo23Controller.generarDesdeAnexo22);
+router.post("/:id/generar-anexo-24", anexo24Controller.generarDesdeAnexo23);
 router.post("/:id/conformidad-postulante", anexo22Controller.conformidadPostulante);
 router.post("/:id/cerrar-anexo-22", anexo22Controller.cerrarAnexo22);
 

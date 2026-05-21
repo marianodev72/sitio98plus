@@ -68,6 +68,13 @@ function canDownloadAnexo23(user, documento) {
   return isUsuarioVinculado(user, documento);
 }
 
+function canDownloadAnexo24(user, documento) {
+  if (!user || !documento) return false;
+  if (isAdminGeneral(user)) return true;
+  if (isInspectorAlojamientos(user)) return puedeVerDocumento(user, documento);
+  return isUsuarioVinculado(user, documento);
+}
+
 async function obtenerPayloadAnexo22({ id, user }) {
   if (!user?._id || !isObjectId(id)) return publicError(404, "NO_DISPONIBLE");
 
@@ -135,6 +142,35 @@ async function obtenerPayloadAnexo23({ id, user }) {
   };
 }
 
+async function obtenerPayloadAnexo24({ id, user }) {
+  if (!user?._id || !isObjectId(id)) return publicError(404, "NO_DISPONIBLE");
+
+  const documento = await AlojamientoDocumento.findOne({
+    _id: id,
+    codigo: "ANEXO_24",
+    activo: { $ne: false },
+  }).lean();
+
+  if (!documento) return publicError(404, "NO_DISPONIBLE");
+  if (!canDownloadAnexo24(user, documento)) return publicError(404, "NO_DISPONIBLE");
+
+  let origen = null;
+  if (documento.derivadoDe && isObjectId(documento.derivadoDe)) {
+    origen = await AlojamientoDocumento.findOne({
+      _id: documento.derivadoDe,
+      codigo: "ANEXO_23",
+      activo: { $ne: false },
+    }).lean();
+  }
+
+  return {
+    ok: true,
+    status: 200,
+    documento,
+    origen,
+  };
+}
+
 async function obtenerPayloadDocumentoPdf({ id, user }) {
   if (!user?._id || !isObjectId(id)) return publicError(404, "NO_DISPONIBLE");
 
@@ -148,11 +184,13 @@ async function obtenerPayloadDocumentoPdf({ id, user }) {
   if (!base) return publicError(404, "NO_DISPONIBLE");
   if (up(base.codigo) === "ANEXO_22") return obtenerPayloadAnexo22({ id, user });
   if (up(base.codigo) === "ANEXO_23") return obtenerPayloadAnexo23({ id, user });
+  if (up(base.codigo) === "ANEXO_24") return obtenerPayloadAnexo24({ id, user });
   return publicError(404, "NO_DISPONIBLE");
 }
 
 module.exports = {
   obtenerPayloadAnexo22,
   obtenerPayloadAnexo23,
+  obtenerPayloadAnexo24,
   obtenerPayloadDocumentoPdf,
 };

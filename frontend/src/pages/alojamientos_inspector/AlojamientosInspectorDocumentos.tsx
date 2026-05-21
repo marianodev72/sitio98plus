@@ -39,7 +39,7 @@ type AlojamientoDocumento = {
   };
 };
 
-const CODIGOS = ["ANEXO_21", "ANEXO_22", "ANEXO_23"];
+const CODIGOS = ["ANEXO_21", "ANEXO_22", "ANEXO_23", "ANEXO_24"];
 const ESTADOS = ["BORRADOR", "ANULADO", "ENVIADO", "EN_REVISION", "CERRADO"];
 
 function safe(value: unknown, fallback = "-") {
@@ -67,6 +67,8 @@ function personaFromRef(value: UsuarioRef) {
 function personaLabel(doc: AlojamientoDocumento) {
   const datos = doc.datos || {};
   const datosLabel =
+    safe(datos.huesped?.nombreCompleto, "") ||
+    safe(datos.huesped?.postulanteNombre, "") ||
     safe(datos.apellidoNombre, "") ||
     safe(datos.nombreCompleto, "") ||
     safe(datos.postulanteNombre, "") ||
@@ -85,8 +87,11 @@ function alojamientoLabel(doc: AlojamientoDocumento) {
     datos.alojamientoLabel,
     datos.alojamientoCodigo,
     datos.alojamiento?.codigo,
+    datos.alojamientoSnapshot?.alojamientoCodigo,
     datos.lugar || datos.alojamientoLugar,
+    datos.alojamientoSnapshot?.lugar,
     datos.plazaNumero ? `Plaza ${datos.plazaNumero}` : "",
+    datos.plazaSnapshot?.numeroPlaza ? `Plaza ${datos.plazaSnapshot.numeroPlaza}` : "",
   ]
     .map((item) => safe(item, ""))
     .filter(Boolean);

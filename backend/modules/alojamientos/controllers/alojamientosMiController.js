@@ -9,6 +9,7 @@ const anexo23Service = require("../services/documentos/anexo23Service");
 const alojamientoDocumentoPdfService = require("../services/documentos/alojamientoDocumentoPdfService");
 const { renderAnexo22Pdf } = require("../pdf/anexo22PdfRenderer");
 const { renderAnexo23Pdf } = require("../pdf/anexo23PdfRenderer");
+const { renderAnexo24Pdf } = require("../pdf/anexo24PdfRenderer");
 
 function up(value) {
   return String(value || "").toUpperCase().trim();
@@ -118,7 +119,7 @@ function publicDocumentoListItem(doc) {
     estadoInstitucional: doc.estadoInstitucional || null,
     readonly: true,
     canView: true,
-    canDownloadPdf: doc.codigo === "ANEXO_22" || doc.codigo === "ANEXO_23",
+    canDownloadPdf: doc.codigo === "ANEXO_22" || doc.codigo === "ANEXO_23" || doc.codigo === "ANEXO_24",
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
   };
@@ -141,8 +142,6 @@ function publicDocumentoDetail(doc, user) {
           fecha: item.fecha,
           estadoAnterior: item.estadoAnterior,
           estadoNuevo: item.estadoNuevo,
-          observacion: item.observacion,
-          rolActor: item.rolActor,
         }))
       : [],
     conformidades: Array.isArray(doc.conformidades)
@@ -163,7 +162,7 @@ async function findMiDocumento(user, token) {
 
   const userId = user._id;
   const docs = await AlojamientoDocumento.find({
-    codigo: { $in: ["ANEXO_21", "ANEXO_22", "ANEXO_23"] },
+    codigo: { $in: ["ANEXO_21", "ANEXO_22", "ANEXO_23", "ANEXO_24"] },
     activo: { $ne: false },
     $or: [
       { solicitante: userId },
@@ -829,7 +828,7 @@ async function listarDocumentos(req, res) {
     const codigo = up(req.query?.codigo);
     const filter = {
       activo: { $ne: false },
-      codigo: { $in: ["ANEXO_21", "ANEXO_22", "ANEXO_23"] },
+      codigo: { $in: ["ANEXO_21", "ANEXO_22", "ANEXO_23", "ANEXO_24"] },
       $or: [
         { solicitante: userId },
         { alojado: userId },
@@ -838,7 +837,7 @@ async function listarDocumentos(req, res) {
       ],
     };
     if (codigo) {
-      if (!["ANEXO_21", "ANEXO_22", "ANEXO_23"].includes(codigo)) return deny(res);
+      if (!["ANEXO_21", "ANEXO_22", "ANEXO_23", "ANEXO_24"].includes(codigo)) return deny(res);
       filter.codigo = codigo;
     }
 
@@ -869,7 +868,7 @@ async function obtenerDocumento(req, res) {
 async function descargarDocumentoPdf(req, res) {
   try {
     const documento = await findMiDocumento(req.user, req.params.token);
-    if (!documento || !["ANEXO_22", "ANEXO_23"].includes(up(documento.codigo))) return deny(res);
+    if (!documento || !["ANEXO_22", "ANEXO_23", "ANEXO_24"].includes(up(documento.codigo))) return deny(res);
 
     const result = await alojamientoDocumentoPdfService.obtenerPayloadDocumentoPdf({
       id: documento._id,
@@ -891,6 +890,12 @@ async function descargarDocumentoPdf(req, res) {
         documento: result.documento,
         anexo22: result.anexo22,
         anexo21: result.anexo21,
+      });
+    }
+    if (codigo === "ANEXO_24") {
+      return renderAnexo24Pdf(res, {
+        documento: result.documento,
+        origen: result.origen,
       });
     }
     return deny(res);

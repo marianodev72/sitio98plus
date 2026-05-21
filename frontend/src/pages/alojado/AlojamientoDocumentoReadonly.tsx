@@ -254,6 +254,18 @@ export default function AlojamientoDocumentoReadonlyAlojado() {
               </>
             ) : null}
 
+            {up(documento.codigo) === "ANEXO_24" ? (
+              <section style={{ ...cardStyle, marginTop: 12 }}>
+                <h2 style={sectionTitleStyle}>Ampliacion de novedades</h2>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
+                  <Field label="Lugar firma" value={datos.lugarFirma} />
+                  <Field label="Fecha firma" value={datos.fechaFirma} />
+                  <Field label="Novedades adicionales" value={datos.novedadesTexto} />
+                  <Field label="Observaciones inspector" value={datos.observacionesInspector} />
+                </div>
+              </section>
+            ) : null}
+
             <section style={{ ...cardStyle, marginTop: 12 }}>
               <h2 style={sectionTitleStyle}>Historial</h2>
               {(documento.historialEstados || []).length === 0 ? (

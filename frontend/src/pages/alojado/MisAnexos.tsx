@@ -114,7 +114,7 @@ export default function MisAnexosAlojado() {
 
         <section style={cardStyle}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-            <h2 style={sectionTitleStyle}>ANEXO_21 / ANEXO_22 / ANEXO_23</h2>
+            <h2 style={sectionTitleStyle}>ANEXO_21 / ANEXO_22 / ANEXO_23 / ANEXO_24</h2>
             <button type="button" style={secondaryButtonStyle} onClick={cargar} disabled={loading}>
               {loading ? "Cargando..." : "Actualizar"}
             </button>

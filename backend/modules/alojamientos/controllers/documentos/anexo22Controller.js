@@ -2,6 +2,7 @@ const anexo22Service = require("../../services/documentos/anexo22Service");
 const alojamientoDocumentoPdfService = require("../../services/documentos/alojamientoDocumentoPdfService");
 const { renderAnexo22Pdf } = require("../../pdf/anexo22PdfRenderer");
 const { renderAnexo23Pdf } = require("../../pdf/anexo23PdfRenderer");
+const { renderAnexo24Pdf } = require("../../pdf/anexo24PdfRenderer");
 
 function sendResult(res, result) {
   if (result?.ok) {
@@ -98,6 +99,13 @@ async function descargarPdf(req, res) {
         documento: result.documento,
         anexo22: result.anexo22,
         anexo21: result.anexo21,
+      });
+    }
+
+    if (codigo === "ANEXO_24") {
+      return renderAnexo24Pdf(res, {
+        documento: result.documento,
+        origen: result.origen,
       });
     }
 
