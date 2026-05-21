@@ -38,6 +38,11 @@ type DocumentoDetalle = DocumentoResumen & {
   canConformarAnexo23?: boolean;
 };
 
+type LiquidacionResumen = {
+  periodo?: string;
+  estado?: string;
+};
+
 function fmt(value: unknown) {
   const text = String(value ?? "").trim();
   return text || "-";
@@ -122,6 +127,7 @@ export default function AlojadoDashboard() {
   const [ultimaGestion, setUltimaGestion] = useState<DocumentoResumen | null>(null);
   const [documentos, setDocumentos] = useState<DocumentoResumen[]>([]);
   const [accionConformidad, setAccionConformidad] = useState<DocumentoDetalle | null>(null);
+  const [ultimaLiquidacion, setUltimaLiquidacion] = useState<LiquidacionResumen | null>(null);
   const [loadingOcupacion, setLoadingOcupacion] = useState(true);
   const [loadingGestion, setLoadingGestion] = useState(true);
   const [errorOcupacion, setErrorOcupacion] = useState("");
@@ -185,8 +191,18 @@ export default function AlojadoDashboard() {
       }
     }
 
+    async function loadLiquidacion() {
+      try {
+        const res = await http.get("/alojamientos-mi/liquidaciones/ultima");
+        if (alive) setUltimaLiquidacion(res.data?.liquidacion || null);
+      } catch {
+        if (alive) setUltimaLiquidacion(null);
+      }
+    }
+
     loadOcupacion();
     loadGestion();
+    loadLiquidacion();
     return () => {
       alive = false;
     };
@@ -268,6 +284,14 @@ export default function AlojadoDashboard() {
           </button>
           <button type="button" style={buttonStyle} onClick={() => navigate("/app/alojado/ocupaciones")}>
             Historial de ocupacion
+          </button>
+          <button
+            type="button"
+            style={{ ...buttonStyle, opacity: ultimaLiquidacion ? 1 : 0.55, cursor: ultimaLiquidacion ? "pointer" : "not-allowed" }}
+            onClick={() => ultimaLiquidacion && navigate("/app/alojado/liquidaciones")}
+            disabled={!ultimaLiquidacion}
+          >
+            Mis Liquidaciones
           </button>
         </div>
       </section>

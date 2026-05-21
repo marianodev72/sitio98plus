@@ -3,6 +3,7 @@ const crypto = require("crypto");
 const AsignacionAlojamiento = require("../models/AsignacionAlojamiento");
 const AlojamientoDocumento = require("../models/AlojamientoDocumento");
 const { User } = require("../../../models/user");
+const { Liquidacion } = require("../../../models/Liquidacion");
 const anexo23Service = require("../services/documentos/anexo23Service");
 const alojamientoDocumentoPdfService = require("../services/documentos/alojamientoDocumentoPdfService");
 const { renderAnexo22Pdf } = require("../pdf/anexo22PdfRenderer");
@@ -10,6 +11,10 @@ const { renderAnexo23Pdf } = require("../pdf/anexo23PdfRenderer");
 
 function up(value) {
   return String(value || "").toUpperCase().trim();
+}
+
+function normMR(value) {
+  return String(value || "").replace(/\s+/g, "").toUpperCase();
 }
 
 function sameId(a, b) {
@@ -228,6 +233,49 @@ function publicOcupacionItem(asignacion, documentoByAsignacion) {
   };
 }
 
+function moneyPair(value = {}) {
+  return {
+    cod457: Number(value?.cod457 || 0),
+    cod411: Number(value?.cod411 || 0),
+  };
+}
+
+function publicLiquidacionItem(liq = {}) {
+  const principal = moneyPair(liq.principal);
+  const descuentosParticulares = moneyPair(liq.descuentosParticulares);
+  const reintegrosParticulares = moneyPair(liq.reintegrosParticulares);
+  const total = {
+    cod457: principal.cod457 - reintegrosParticulares.cod457,
+    cod411: principal.cod411 - reintegrosParticulares.cod411,
+  };
+
+  return {
+    periodo: liq.periodo || "",
+    estado: liq.estadoEntrega || "",
+    fecha: liq.updatedAt || liq.createdAt || null,
+    conceptos: {
+      principal,
+      descuentosParticulares,
+      reintegrosParticulares,
+    },
+    total: {
+      ...total,
+      etiqueta457: total.cod457 > 0 ? "DESCUENTO" : total.cod457 < 0 ? "REINTEGRO" : "0",
+      etiqueta411: total.cod411 > 0 ? "DESCUENTO" : total.cod411 < 0 ? "REINTEGRO" : "0",
+    },
+  };
+}
+
+async function resolveAlojadoMr(userId) {
+  if (!userId) return "";
+  const user = await User.findById(userId)
+    .select("_id role matricula activo bloqueado archivado")
+    .lean();
+  if (!user || !canUsePanelAlojado(user)) return "";
+  if (user.activo === false || user.bloqueado === true || user.archivado === true) return "";
+  return normMR(user.matricula);
+}
+
 async function ocupacionActual(req, res) {
   try {
     const userId = req.user?._id;
@@ -337,6 +385,59 @@ async function listarOcupaciones(req, res) {
   }
 }
 
+async function listarLiquidaciones(req, res) {
+  try {
+    if (!canUsePanelAlojado(req.user)) return deny(res);
+
+    const userId = req.user?._id;
+    const mr = await resolveAlojadoMr(userId);
+    if (!mr) return deny(res);
+
+    const liquidaciones = await Liquidacion.find({
+      mr,
+      $or: [{ userId }, { userId: null }],
+    })
+      .select("periodo principal descuentosParticulares reintegrosParticulares estadoEntrega createdAt updatedAt")
+      .sort({ periodo: -1, updatedAt: -1, createdAt: -1 })
+      .limit(24)
+      .lean();
+
+    return res.json({
+      ok: true,
+      liquidaciones: liquidaciones.map(publicLiquidacionItem),
+    });
+  } catch (err) {
+    console.error("[alojamientos-mi] listarLiquidaciones error:", err?.message || "Error controlado");
+    return res.status(500).json({ message: "Error interno al listar liquidaciones" });
+  }
+}
+
+async function obtenerUltimaLiquidacion(req, res) {
+  try {
+    if (!canUsePanelAlojado(req.user)) return deny(res);
+
+    const userId = req.user?._id;
+    const mr = await resolveAlojadoMr(userId);
+    if (!mr) return deny(res);
+
+    const liquidacion = await Liquidacion.findOne({
+      mr,
+      $or: [{ userId }, { userId: null }],
+    })
+      .select("periodo principal descuentosParticulares reintegrosParticulares estadoEntrega createdAt updatedAt")
+      .sort({ periodo: -1, updatedAt: -1, createdAt: -1 })
+      .lean();
+
+    return res.json({
+      ok: true,
+      liquidacion: liquidacion ? publicLiquidacionItem(liquidacion) : null,
+    });
+  } catch (err) {
+    console.error("[alojamientos-mi] obtenerUltimaLiquidacion error:", err?.message || "Error controlado");
+    return res.status(500).json({ message: "Error interno al obtener liquidacion" });
+  }
+}
+
 async function listarDocumentos(req, res) {
   try {
     if (!canUsePanelAlojado(req.user)) return deny(res);
@@ -440,6 +541,8 @@ async function conformidadAnexo23(req, res) {
 module.exports = {
   ocupacionActual,
   listarOcupaciones,
+  listarLiquidaciones,
+  obtenerUltimaLiquidacion,
   listarDocumentos,
   obtenerDocumento,
   descargarDocumentoPdf,
