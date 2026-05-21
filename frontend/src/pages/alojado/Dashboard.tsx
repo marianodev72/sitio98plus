@@ -357,7 +357,7 @@ export default function AlojadoDashboard() {
       </section>
 
       <section style={sectionStyle}>
-        <h2 style={{ margin: "0 0 12px", color: "#ffffff", fontSize: 18 }}>Accesos rapidos</h2>
+        <h2 style={{ margin: "0 0 12px", color: "#ffffff", fontSize: 18 }}>Modulos</h2>
         {errorDescarga ? <p style={{ margin: "0 0 10px", color: "#fecaca" }}>{errorDescarga}</p> : null}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 10 }}>
           <button type="button" style={primaryButtonStyle} onClick={() => navigate("/app/alojado/anexos")}>
@@ -402,6 +402,9 @@ export default function AlojadoDashboard() {
           </button>
           <button type="button" style={buttonStyle} onClick={() => navigate("/app/alojado/datos")}>
             Mis Datos
+          </button>
+          <button type="button" style={buttonStyle} onClick={() => navigate("/app/alojado/comunicaciones")}>
+            Mis Comunicaciones
           </button>
         </div>
       </section>

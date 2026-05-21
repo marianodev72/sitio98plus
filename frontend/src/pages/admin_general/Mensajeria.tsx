@@ -21,6 +21,7 @@ type Usuario = {
   role?: string;
   permisos?: string[];
   barrioAsignado?: string;
+  territoriosAlojamiento?: { tipo?: string; valor?: string }[];
   activo?: boolean;
   archivado?: boolean;
   viviendaLabel?: string;
@@ -52,6 +53,7 @@ type Tab = "entrada" | "enviados" | "nuevo";
 type MensajeriaProps = {
   lockedBarrio?: string;
   hideBarrioSelect?: boolean;
+  contexto?: "PERMISIONARIO" | "ALOJADO";
 };
 
 function safe(v: unknown) {
@@ -86,11 +88,22 @@ function etiquetaRol(u?: Usuario | null) {
   if (role === "ADMIN_GENERAL") return "ADMIN_GENERAL";
   if (role === "ADMIN") return "ADMIN";
   if (role === "PERMISIONARIO") {
+    if (perms.includes("INSPECTOR_ALOJAMIENTOS")) return "INSPECTOR DE ALOJAMIENTO";
     if (perms.includes("JEFE_DE_BARRIO")) return "JEFE DE BARRIO";
     if (perms.includes("INSPECTOR")) return "INSPECTOR DE BARRIO";
     return "PERMISIONARIO";
   }
   return role || "-";
+}
+
+function ambitoUsuario(u?: Usuario | null) {
+  const territorios = Array.isArray(u?.territoriosAlojamiento) ? u?.territoriosAlojamiento : [];
+  const lugares = territorios
+    .filter((t) => String(t?.tipo || "").toUpperCase() === "LUGAR")
+    .map((t) => String(t?.valor || "").trim())
+    .filter(Boolean);
+  if (lugares.length) return lugares.join(", ");
+  return u?.barrioAsignado || "-";
 }
 
 function claveRolFiltro(u?: Usuario | null) {
@@ -100,6 +113,7 @@ function claveRolFiltro(u?: Usuario | null) {
   if (role === "ADMIN_GENERAL") return "ADMIN_GENERAL";
   if (role === "ADMIN") return "ADMIN";
   if (role === "PERMISIONARIO") {
+    if (perms.includes("INSPECTOR_ALOJAMIENTOS")) return "INSPECTOR_ALOJAMIENTOS";
     if (perms.includes("JEFE_DE_BARRIO")) return "JEFE_DE_BARRIO";
     if (perms.includes("INSPECTOR")) return "INSPECTOR";
     return "PERMISIONARIO";
@@ -349,6 +363,7 @@ fileButton: {
 };
 
 export default function Mensajeria(props: MensajeriaProps = {}) {
+  const esAlojado = props.contexto === "ALOJADO";
   const [tab, setTab] = useState<Tab>("entrada");
 
   const [loading, setLoading] = useState(false);
@@ -385,8 +400,9 @@ export default function Mensajeria(props: MensajeriaProps = {}) {
   }, [props.lockedBarrio]);
 
   const rolesDisponibles = useMemo(() => {
+    if (esAlojado) return ["ADMIN_GENERAL", "ADMIN", "INSPECTOR_ALOJAMIENTOS"];
     return ["ADMIN_GENERAL", "ADMIN", "INSPECTOR", "JEFE_DE_BARRIO", "PERMISIONARIO"];
-  }, []);
+  }, [esAlojado]);
 
   const barriosDisponibles = useMemo(() => {
     const set = new Set<string>();
@@ -428,12 +444,15 @@ export default function Mensajeria(props: MensajeriaProps = {}) {
         const blob = [
           u.nombre,
           u.apellido,
-          u.email,
-          u.dni,
-          u.matricula,
+          esAlojado ? "" : u.email,
+          esAlojado ? "" : u.dni,
+          esAlojado ? "" : u.matricula,
           u.role,
           u.barrioAsignado,
           u.viviendaLabel,
+          ...(Array.isArray(u.territoriosAlojamiento)
+            ? u.territoriosAlojamiento.map((t) => t?.valor)
+            : []),
         ]
           .filter(Boolean)
           .join(" ")
@@ -446,7 +465,7 @@ export default function Mensajeria(props: MensajeriaProps = {}) {
           String(b.apellido || "") + String(b.nombre || "")
         )
       );
-  }, [usuarios, buscaUsuario, filtroRole, filtroBarrio, props.lockedBarrio]);
+  }, [usuarios, buscaUsuario, filtroRole, filtroBarrio, props.lockedBarrio, esAlojado]);
 
   const usuariosVisibles = useMemo(() => {
     return usuariosFiltrados.slice(0, limiteVisible);
@@ -873,7 +892,7 @@ export default function Mensajeria(props: MensajeriaProps = {}) {
                   }}
                 >
                   <input
-                    placeholder="Buscar destinatario (nombre/email/dni/matrícula)"
+                    placeholder={esAlojado ? "Buscar destinatario institucional" : "Buscar destinatario (nombre/email/dni/matrícula)"}
                     value={buscaUsuario}
                     onChange={(e) => setBuscaUsuario(e.target.value)}
                     style={{ ...styles.input, flex: 1, minWidth: 260 }}
@@ -895,6 +914,8 @@ export default function Mensajeria(props: MensajeriaProps = {}) {
         ? "ADMIN_GENERAL"
         : r === "ADMIN"
         ? "ADMIN"
+        : r === "INSPECTOR_ALOJAMIENTOS"
+        ? "INSPECTOR DE ALOJAMIENTO"
         : r === "INSPECTOR"
         ? "INSPECTOR DE BARRIO"
         : r === "JEFE_DE_BARRIO"
@@ -955,8 +976,8 @@ export default function Mensajeria(props: MensajeriaProps = {}) {
                         </th>
                         <th style={styles.th}>Usuario</th>
                         <th style={styles.th}>Rol</th>
-                        <th style={styles.th}>Barrio</th>
-                        <th style={styles.th}>Vivienda</th>
+                        <th style={styles.th}>{esAlojado ? "Ambito" : "Barrio"}</th>
+                        <th style={styles.th}>{esAlojado ? "Referencia" : "Vivienda"}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -975,8 +996,8 @@ export default function Mensajeria(props: MensajeriaProps = {}) {
                             </td>
                             <td style={styles.td}>{nombreUsuario(u)}</td>
                             <td style={styles.td}>{etiquetaRol(u)}</td>
-                            <td style={styles.td}>{safe(u.barrioAsignado)}</td>
-                            <td style={styles.td}>{u.viviendaLabel || "-"}</td>
+                            <td style={styles.td}>{esAlojado ? ambitoUsuario(u) : safe(u.barrioAsignado)}</td>
+                            <td style={styles.td}>{esAlojado ? etiquetaRol(u) : u.viviendaLabel || "-"}</td>
                           </tr>
                         );
                       })}

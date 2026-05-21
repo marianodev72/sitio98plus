@@ -119,6 +119,9 @@ export default function AlojadoLayout() {
           <NavLink to="datos" style={linkStyle}>
             Mis Datos
           </NavLink>
+          <NavLink to="comunicaciones" style={linkStyle}>
+            Comunicaciones
+          </NavLink>
           <NavLink to="liquidaciones" style={linkStyle}>
             Mis Liquidaciones
           </NavLink>

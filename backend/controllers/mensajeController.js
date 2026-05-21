@@ -1,7 +1,8 @@
 // backend/controllers/mensajeController.js
-const Mensaje = require("../models/mensaje");
+const Mensaje = require("../models/Mensaje");
 const { User } = require("../models/user");
 const mongoose = require("mongoose");
+const AsignacionAlojamiento = require("../modules/alojamientos/models/AsignacionAlojamiento");
 
 function up(v) {
   return String(v || "").toUpperCase().trim();
@@ -19,6 +20,41 @@ function uniqStrings(list) {
   );
 }
 
+function permisosList(user) {
+  return Array.isArray(user?.permisos) ? user.permisos.map(up) : [];
+}
+
+function hasPermiso(user, permiso) {
+  return permisosList(user).includes(up(permiso));
+}
+
+function territorioValores(user) {
+  return Array.isArray(user?.territoriosAlojamiento)
+    ? user.territoriosAlojamiento
+        .filter((item) => up(item?.tipo) === "LUGAR")
+        .map((item) => up(item?.valor))
+        .filter(Boolean)
+    : [];
+}
+
+async function lugarAlojamientoActivo(userId) {
+  if (!userId) return "";
+  const asignacion = await AsignacionAlojamiento.findOne({
+    alojado: userId,
+    estado: "ACTIVA",
+  })
+    .populate({ path: "alojamiento", select: "lugar" })
+    .lean();
+  return up(asignacion?.alojamiento?.lugar);
+}
+
+function esInspectorAlojamientosCorrespondiente(user, lugar) {
+  if (up(user?.role) !== "PERMISIONARIO") return false;
+  if (!hasPermiso(user, "INSPECTOR_ALOJAMIENTOS")) return false;
+  if (!lugar) return false;
+  return territorioValores(user).includes(lugar);
+}
+
 // ==========================
 // AGENDA TERRITORIAL
 // ==========================
@@ -26,7 +62,7 @@ async function getAgenda(req, res) {
   try {
     const role = up(req.user?.role);
     const barrioAsignado = String(req.user?.barrioAsignado || "").trim();
-    const misPermisos = Array.isArray(req.user?.permisos) ? req.user.permisos.map(up) : [];
+    const misPermisos = permisosList(req.user);
 
     const esTerritorial =
       role === "PERMISIONARIO" &&
@@ -48,6 +84,40 @@ async function getAgenda(req, res) {
     }
 
     let query;
+
+    if (role === "ALOJADO") {
+      const lugar = await lugarAlojamientoActivo(req.user?._id);
+      const admins = await User.find({
+        activo: true,
+        bloqueado: false,
+        archivado: false,
+        role: { $in: ["ADMIN_GENERAL", "ADMIN"] },
+      })
+        .select("_id nombre apellido role permisos activo archivado")
+        .sort({ apellido: 1, nombre: 1 })
+        .lean();
+
+      const inspectores = lugar
+        ? await User.find({
+            activo: true,
+            bloqueado: false,
+            archivado: false,
+            role: "PERMISIONARIO",
+            permisos: "INSPECTOR_ALOJAMIENTOS",
+            territoriosAlojamiento: {
+              $elemMatch: {
+                tipo: "LUGAR",
+                valor: new RegExp(`^${lugar.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"),
+              },
+            },
+          })
+            .select("_id nombre apellido role permisos territoriosAlojamiento activo archivado")
+            .sort({ apellido: 1, nombre: 1 })
+            .lean()
+        : [];
+
+      return res.json({ usuarios: [...admins, ...inspectores] });
+    }
 
     // PERMISIONARIO común: ve admins + autoridades territoriales (permisionario con permisos INSPECTOR/JEFE)
     if (role === "PERMISIONARIO" && !esTerritorial) {
@@ -193,7 +263,7 @@ async function enviarMensaje(req, res) {
     const remitenteId = String(req.user?._id || "").trim();
     if (!remitenteId) return res.status(401).json({ message: "No autenticado" });
 
-    const misPermisos = Array.isArray(req.user?.permisos) ? req.user.permisos.map(up) : [];
+    const misPermisos = permisosList(req.user);
     const soyAutoridadTerritorial =
       role === "PERMISIONARIO" &&
       (misPermisos.includes("INSPECTOR") || misPermisos.includes("JEFE_DE_BARRIO"));
@@ -226,11 +296,33 @@ async function enviarMensaje(req, res) {
 
     // Cargar destinatarios (incluye permisos para poder evaluar autoridad territorial)
     const destinatarios = await User.find({ _id: { $in: paraIds } })
-      .select("_id role permisos barrioAsignado activo bloqueado archivado")
+      .select("_id role permisos barrioAsignado territoriosAlojamiento activo bloqueado archivado")
       .lean();
 
     if (!Array.isArray(destinatarios) || destinatarios.length === 0) {
       return res.status(404).json({ message: "No es posible procesar su solicitud" });
+    }
+    if (destinatarios.length !== paraIds.length) {
+      return res.status(404).json({ message: "No es posible procesar su solicitud" });
+    }
+
+    if (role === "ALOJADO") {
+      const lugar = await lugarAlojamientoActivo(req.user?._id);
+      for (const u of destinatarios) {
+        if (!u || u.activo === false || u.bloqueado === true || u.archivado === true) {
+          return res.status(404).json({ message: "No es posible procesar su solicitud" });
+        }
+
+        const r = up(u.role);
+        const permitido =
+          r === "ADMIN_GENERAL" ||
+          r === "ADMIN" ||
+          esInspectorAlojamientosCorrespondiente(u, lugar);
+
+        if (!permitido) {
+          return res.status(403).json({ message: "No es posible procesar su solicitud" });
+        }
+      }
     }
 
     // Reglas PERMISIONARIO (conservadoras y territoriales)
