@@ -13,6 +13,7 @@ router.get("/ocupaciones", controller.listarOcupaciones);
 router.get("/liquidaciones", controller.listarLiquidaciones);
 router.get("/liquidaciones/ultima", controller.obtenerUltimaLiquidacion);
 router.get("/novedades", controller.listarNovedades);
+router.get("/datos-declarados", controller.obtenerDatosDeclarados);
 router.get("/documentos", controller.listarDocumentos);
 router.get("/documentos/:token", controller.obtenerDocumento);
 router.get("/documentos/:token/pdf", controller.descargarDocumentoPdf);

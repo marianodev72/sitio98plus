@@ -275,6 +275,71 @@ function publicNovedadItem(doc = {}) {
   };
 }
 
+function firstString(...values) {
+  for (const value of values) {
+    const text = String(value || "").trim();
+    if (text) return text;
+  }
+  return "";
+}
+
+function publicDatosDeclarados({ documento = null, asignacion = null } = {}) {
+  const datos = documento?.datos && typeof documento.datos === "object" ? documento.datos : {};
+  const huesped = datos.huesped && typeof datos.huesped === "object" ? datos.huesped : {};
+  const alojamientoSnapshot =
+    datos.alojamientoSnapshot && typeof datos.alojamientoSnapshot === "object"
+      ? datos.alojamientoSnapshot
+      : {};
+  const plazaSnapshot =
+    datos.plazaSnapshot && typeof datos.plazaSnapshot === "object" ? datos.plazaSnapshot : {};
+  const alojamiento = asignacion?.alojamiento || {};
+  const plaza = asignacion?.plaza || {};
+  const apellido = firstString(huesped.apellido, datos.apellido);
+  const nombres = firstString(huesped.nombres, datos.nombres);
+
+  return {
+    identidad: {
+      nombreCompleto: firstString(
+        huesped.nombreCompleto,
+        datos.nombreCompleto,
+        datos.postulanteNombre,
+        [apellido, nombres].filter(Boolean).join(", ")
+      ),
+      apellido,
+      nombres,
+      genero: firstString(huesped.genero, datos.genero, datos.sexo),
+      gradoEscalafon: firstString(huesped.gradoEscalafon, datos.gradoEscalafon, huesped.grado, datos.grado),
+    },
+    destino: {
+      actual: firstString(huesped.destinoActual, datos.destinoActual, huesped.destino),
+      futuro: firstString(huesped.destinoFuturo, datos.destinoFuturo),
+    },
+    ocupacion: {
+      estado: asignacion?.estado || "",
+      fechaInicio: asignacion?.fechaInicio || null,
+    },
+    alojamiento: {
+      codigo: firstString(alojamiento.codigo, alojamientoSnapshot.alojamientoCodigo, datos.alojamientoCodigo),
+      lugar: firstString(alojamiento.lugar, alojamientoSnapshot.lugar, datos.lugar),
+      dependencia: firstString(alojamiento.dependencia, alojamientoSnapshot.dependencia, datos.dependencia),
+      sector: firstString(alojamiento.sector, alojamientoSnapshot.sector, datos.sector),
+      tipo: firstString(alojamiento.tipo, alojamientoSnapshot.tipo, datos.tipo),
+      clase: firstString(alojamiento.clase, alojamientoSnapshot.clase, datos.clase),
+    },
+    plaza: {
+      numero: plaza?.numeroPlaza ?? plazaSnapshot.numeroPlaza ?? datos.numeroPlaza ?? null,
+      codigoPublico: firstString(plaza.codigo, plazaSnapshot.plazaCodigo, datos.plazaCodigo),
+    },
+    origenDocumental: documento
+      ? {
+          codigo: documento.codigo || "",
+          estado: documento.estado || "",
+          fecha: documento.updatedAt || documento.createdAt || null,
+        }
+      : null,
+  };
+}
+
 async function resolveAlojadoMr(userId) {
   if (!userId) return "";
   const user = await User.findById(userId)
@@ -481,6 +546,60 @@ async function listarNovedades(req, res) {
   }
 }
 
+async function obtenerDatosDeclarados(req, res) {
+  try {
+    if (!canUsePanelAlojado(req.user)) return deny(res);
+
+    const userId = req.user?._id;
+    if (!userId) return deny(res);
+
+    const documento = await AlojamientoDocumento.findOne({
+      codigo: "ANEXO_23",
+      activo: { $ne: false },
+      $or: [
+        { alojado: userId },
+        { solicitante: userId },
+        { "intervinientes.userId": userId },
+      ],
+    })
+      .select(
+        "codigo estado solicitante alojado intervinientes.userId datos.huesped datos.postulanteNombre datos.nombreCompleto datos.apellido datos.nombres datos.genero datos.sexo datos.gradoEscalafon datos.grado datos.destinoActual datos.destinoFuturo datos.alojamientoSnapshot datos.plazaSnapshot datos.alojamientoCodigo datos.lugar datos.dependencia datos.sector datos.tipo datos.clase datos.numeroPlaza datos.plazaCodigo createdAt updatedAt"
+      )
+      .sort({ updatedAt: -1, createdAt: -1, _id: -1 })
+      .lean();
+
+    const asignacion = await AsignacionAlojamiento.findOne({
+      alojado: userId,
+      estado: "ACTIVA",
+    })
+      .select("estado fechaInicio alojamiento plaza alojado")
+      .populate({
+        path: "alojamiento",
+        select: "codigo lugar dependencia sector tipo clase",
+      })
+      .populate({
+        path: "plaza",
+        select: "numeroPlaza codigo",
+      })
+      .lean();
+
+    if (!documento && !asignacion) {
+      return res.json({ ok: true, datos: null });
+    }
+
+    if (asignacion && !sameId(asignacion.alojado, userId)) return deny(res);
+    if (documento && !isUsuarioVinculado(req.user, documento)) return deny(res);
+
+    return res.json({
+      ok: true,
+      datos: publicDatosDeclarados({ documento, asignacion }),
+    });
+  } catch (err) {
+    console.error("[alojamientos-mi] obtenerDatosDeclarados error:", err?.message || "Error controlado");
+    return res.status(500).json({ message: "Error interno al obtener datos declarados" });
+  }
+}
+
 async function listarDocumentos(req, res) {
   try {
     if (!canUsePanelAlojado(req.user)) return deny(res);
@@ -587,6 +706,7 @@ module.exports = {
   listarLiquidaciones,
   obtenerUltimaLiquidacion,
   listarNovedades,
+  obtenerDatosDeclarados,
   listarDocumentos,
   obtenerDocumento,
   descargarDocumentoPdf,

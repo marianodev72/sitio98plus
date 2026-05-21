@@ -116,6 +116,9 @@ export default function AlojadoLayout() {
           <NavLink to="ocupaciones" style={linkStyle}>
             Historial de ocupacion
           </NavLink>
+          <NavLink to="datos" style={linkStyle}>
+            Mis Datos
+          </NavLink>
           <NavLink to="liquidaciones" style={linkStyle}>
             Mis Liquidaciones
           </NavLink>
