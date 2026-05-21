@@ -164,8 +164,9 @@ export default function ActualizarDatosDeclaradosAlojado() {
       <section style={styles.hero}>
         <h1 style={styles.title}>Actualizar mis datos</h1>
         <p style={styles.subtitle}>
-          Registro institucional de datos propios del alojado. No incluye datos sensibles,
-          familiares, convivientes ni observaciones internas.
+          La informacion declarada visible corresponde al registro institucional vigente del modulo
+          Alojamientos. Las actualizaciones que realices generan un nuevo registro auditable de
+          datos declarados, sin modificar documentos cerrados ni el perfil general del usuario.
         </p>
         <div style={styles.row}>
           <button type="button" style={styles.secondary} onClick={() => navigate("/app/alojado/datos")}>

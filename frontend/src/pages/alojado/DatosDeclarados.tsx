@@ -163,7 +163,9 @@ export default function DatosDeclaradosAlojado() {
           Mis datos
         </h1>
         <p style={{ margin: "10px 0 0", color: "rgba(255,255,255,0.76)", lineHeight: 1.6 }}>
-          Consulta institucional de datos propios declarados para alojamientos.
+          La informacion declarada visible corresponde al registro institucional vigente del modulo
+          Alojamientos. Las actualizaciones que realices generan un nuevo registro auditable de
+          datos declarados, sin modificar documentos cerrados ni el perfil general del usuario.
         </p>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
           <button

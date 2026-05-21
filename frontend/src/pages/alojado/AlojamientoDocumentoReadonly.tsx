@@ -25,8 +25,6 @@ type Documento = {
     fecha?: string;
     estadoAnterior?: string;
     estadoNuevo?: string;
-    observacion?: string;
-    rolActor?: string;
   }>;
   conformidades?: Array<{ tipo?: string; ok?: boolean; rol?: string; fecha?: string }>;
   canDownloadPdf?: boolean;
@@ -264,11 +262,13 @@ export default function AlojamientoDocumentoReadonlyAlojado() {
                 <div style={{ display: "grid", gap: 8 }}>
                   {(documento.historialEstados || []).map((item, index) => (
                     <div key={`${item.fecha || ""}-${index}`} style={softCardStyle}>
-                      <strong>{safe(item.estadoNuevo)}</strong>
+                      <strong>{safe(item.estadoNuevo || documento.estado)}</strong>
                       <div style={{ marginTop: 4, color: "rgba(255,255,255,0.72)" }}>
-                        {fmtDate(item.fecha)} - {safe(item.rolActor)}
+                        Fecha: {fmtDate(item.fecha)}
                       </div>
-                      {item.observacion ? <div style={{ marginTop: 4 }}>{item.observacion}</div> : null}
+                      <div style={{ marginTop: 4, color: "rgba(255,255,255,0.72)" }}>
+                        {safe(item.estadoAnterior)} - {safe(item.estadoNuevo || documento.estado)}
+                      </div>
                     </div>
                   ))}
                 </div>
