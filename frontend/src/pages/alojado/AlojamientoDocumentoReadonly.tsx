@@ -29,8 +29,18 @@ type Documento = {
   conformidades?: Array<{ tipo?: string; ok?: boolean; rol?: string; fecha?: string }>;
   canDownloadPdf?: boolean;
   canConformarAnexo23?: boolean;
+  canGenerarAnexo24?: boolean;
+  anexo24Vencido?: boolean;
+  anexo24FechaLimite?: string | null;
+  anexo24ExistenteToken?: string;
   createdAt?: string;
   updatedAt?: string;
+};
+
+type Anexo24Form = {
+  novedadesTexto: string;
+  lugarFirma: string;
+  fechaFirma: string;
 };
 
 function safe(value: unknown) {
@@ -81,6 +91,11 @@ export default function AlojamientoDocumentoReadonlyAlojado() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
+  const [anexo24Form, setAnexo24Form] = useState<Anexo24Form>({
+    novedadesTexto: "",
+    lugarFirma: "",
+    fechaFirma: "",
+  });
 
   async function cargar() {
     if (!token) return;
@@ -131,10 +146,76 @@ export default function AlojamientoDocumentoReadonlyAlojado() {
     }
   }
 
+  async function generarAnexo24() {
+    if (!token || !documento?.canGenerarAnexo24 || busy) return;
+    setBusy(true);
+    setError("");
+    setInfo("");
+    try {
+      const res = await http.post(`/alojamientos-mi/documentos/${token}/generar-anexo-24`, {});
+      const nuevo = res.data?.documento || null;
+      if (nuevo?.token) {
+        setInfo("ANEXO_24 generado correctamente.");
+        navigate(`/app/alojado/anexos/${nuevo.token}`, { replace: true });
+        return;
+      }
+      setDocumento(nuevo);
+      setInfo("ANEXO_24 generado correctamente.");
+    } catch {
+      setError("No fue posible generar el ANEXO_24.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function guardarAnexo24() {
+    if (!token || up(documento?.codigo) !== "ANEXO_24" || up(documento?.estado) !== "BORRADOR" || busy) return;
+    setBusy(true);
+    setError("");
+    setInfo("");
+    try {
+      const res = await http.patch(`/alojamientos-mi/documentos/${token}/anexo-24`, anexo24Form);
+      setDocumento(res.data?.documento || null);
+      setInfo("ANEXO_24 guardado correctamente.");
+    } catch {
+      setError("No fue posible guardar el ANEXO_24.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function enviarAnexo24() {
+    if (!token || up(documento?.codigo) !== "ANEXO_24" || up(documento?.estado) !== "BORRADOR" || busy) return;
+    const ok = window.confirm("Confirma el envio del ANEXO_24?");
+    if (!ok) return;
+    setBusy(true);
+    setError("");
+    setInfo("");
+    try {
+      const res = await http.post(`/alojamientos-mi/documentos/${token}/enviar-anexo-24`, {});
+      setDocumento(res.data?.documento || null);
+      setInfo("ANEXO_24 enviado correctamente.");
+    } catch {
+      setError("No fue posible enviar el ANEXO_24.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   useEffect(() => {
     cargar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
+
+  useEffect(() => {
+    const datosAnexo24 = documento?.datos || {};
+    if (up(documento?.codigo) !== "ANEXO_24") return;
+    setAnexo24Form({
+      novedadesTexto: String(datosAnexo24.novedadesTexto || ""),
+      lugarFirma: String(datosAnexo24.lugarFirma || ""),
+      fechaFirma: String(datosAnexo24.fechaFirma || ""),
+    });
+  }, [documento]);
 
   const datos = documento?.datos || {};
   const huesped = datos.huesped || {};
@@ -251,18 +332,136 @@ export default function AlojamientoDocumentoReadonlyAlojado() {
                     <p style={subtitleStyle}>No hay acciones disponibles para este documento.</p>
                   )}
                 </section>
+
+                <section style={{ ...cardStyle, marginTop: 12 }}>
+                  <h2 style={sectionTitleStyle}>ANEXO_24</h2>
+                  {documento.canGenerarAnexo24 ? (
+                    <div style={{ display: "grid", gap: 10 }}>
+                      <p style={subtitleStyle}>
+                        Puede registrar novedades adicionales dentro de los 10 dias corridos desde el cierre del
+                        ANEXO_23.
+                      </p>
+                      <button type="button" style={primaryButtonStyle} onClick={generarAnexo24} disabled={busy}>
+                        {busy ? "Procesando..." : "Generar ANEXO_24"}
+                      </button>
+                    </div>
+                  ) : documento.anexo24ExistenteToken ? (
+                    <button
+                      type="button"
+                      style={secondaryButtonStyle}
+                      onClick={() => navigate(`/app/alojado/anexos/${documento.anexo24ExistenteToken}`)}
+                    >
+                      Ver ANEXO_24
+                    </button>
+                  ) : documento.anexo24Vencido ? (
+                    <p style={subtitleStyle}>
+                      El plazo para generar ANEXO_24 vencio el {fmtDate(documento.anexo24FechaLimite || undefined)}.
+                    </p>
+                  ) : (
+                    <p style={subtitleStyle}>No hay acciones disponibles para ANEXO_24.</p>
+                  )}
+                </section>
               </>
             ) : null}
 
             {up(documento.codigo) === "ANEXO_24" ? (
               <section style={{ ...cardStyle, marginTop: 12 }}>
                 <h2 style={sectionTitleStyle}>Ampliacion de novedades</h2>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
-                  <Field label="Lugar firma" value={datos.lugarFirma} />
-                  <Field label="Fecha firma" value={datos.fechaFirma} />
-                  <Field label="Novedades adicionales" value={datos.novedadesTexto} />
-                  <Field label="Observaciones inspector" value={datos.observacionesInspector} />
-                </div>
+                {up(documento.estado) === "BORRADOR" ? (
+                  <div style={{ display: "grid", gap: 12 }}>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                        gap: 10,
+                      }}
+                    >
+                      <label style={softCardStyle}>
+                        <span style={{ color: "rgba(255,255,255,0.64)", fontSize: 12, fontWeight: 800 }}>
+                          Lugar firma
+                        </span>
+                        <input
+                          value={anexo24Form.lugarFirma}
+                          onChange={(e) => setAnexo24Form((prev) => ({ ...prev, lugarFirma: e.target.value }))}
+                          style={{
+                            width: "100%",
+                            marginTop: 8,
+                            minHeight: 40,
+                            padding: "8px 10px",
+                            borderRadius: 8,
+                            border: "1px solid rgba(255,255,255,0.16)",
+                            background: "rgba(255,255,255,0.05)",
+                            color: "#fff",
+                            boxSizing: "border-box",
+                          }}
+                        />
+                      </label>
+                      <label style={softCardStyle}>
+                        <span style={{ color: "rgba(255,255,255,0.64)", fontSize: 12, fontWeight: 800 }}>
+                          Fecha firma
+                        </span>
+                        <input
+                          type="date"
+                          value={anexo24Form.fechaFirma}
+                          onChange={(e) => setAnexo24Form((prev) => ({ ...prev, fechaFirma: e.target.value }))}
+                          style={{
+                            width: "100%",
+                            marginTop: 8,
+                            minHeight: 40,
+                            padding: "8px 10px",
+                            borderRadius: 8,
+                            border: "1px solid rgba(255,255,255,0.16)",
+                            background: "rgba(255,255,255,0.05)",
+                            color: "#fff",
+                            colorScheme: "dark",
+                            boxSizing: "border-box",
+                          }}
+                        />
+                      </label>
+                    </div>
+                    <label style={softCardStyle}>
+                      <span style={{ color: "rgba(255,255,255,0.64)", fontSize: 12, fontWeight: 800 }}>
+                        Novedades adicionales
+                      </span>
+                      <textarea
+                        value={anexo24Form.novedadesTexto}
+                        onChange={(e) => setAnexo24Form((prev) => ({ ...prev, novedadesTexto: e.target.value }))}
+                        rows={7}
+                        style={{
+                          width: "100%",
+                          marginTop: 8,
+                          padding: "10px 12px",
+                          borderRadius: 8,
+                          border: "1px solid rgba(255,255,255,0.16)",
+                          background: "rgba(255,255,255,0.05)",
+                          color: "#fff",
+                          resize: "vertical",
+                          boxSizing: "border-box",
+                        }}
+                      />
+                    </label>
+                    <div style={buttonRowStyle}>
+                      <button type="button" style={secondaryButtonStyle} onClick={guardarAnexo24} disabled={busy}>
+                        {busy ? "Procesando..." : "Guardar"}
+                      </button>
+                      <button type="button" style={primaryButtonStyle} onClick={enviarAnexo24} disabled={busy}>
+                        {busy ? "Procesando..." : "Enviar ANEXO_24"}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                      gap: 10,
+                    }}
+                  >
+                    <Field label="Lugar firma" value={datos.lugarFirma} />
+                    <Field label="Fecha firma" value={datos.fechaFirma} />
+                    <Field label="Novedades adicionales" value={datos.novedadesTexto} />
+                  </div>
+                )}
               </section>
             ) : null}
 

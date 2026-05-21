@@ -6,6 +6,7 @@ const { User } = require("../../../models/user");
 const { Liquidacion } = require("../../../models/Liquidacion");
 const MisDatosDeclaradosUpdate = require("../../../models/MisDatosDeclaradosUpdate");
 const anexo23Service = require("../services/documentos/anexo23Service");
+const anexo24Service = require("../services/documentos/anexo24Service");
 const alojamientoDocumentoPdfService = require("../services/documentos/alojamientoDocumentoPdfService");
 const { renderAnexo22Pdf } = require("../pdf/anexo22PdfRenderer");
 const { renderAnexo23Pdf } = require("../pdf/anexo23PdfRenderer");
@@ -69,7 +70,7 @@ function isUsuarioVinculado(user, documento) {
 
 function redactDatos(datos = {}) {
   if (!datos || typeof datos !== "object" || Array.isArray(datos)) return {};
-  const sensitiveKey = /(^_id$|id$|^dni$|email|telefono|tel[eé]fono|^mr$|matricula|matr[ií]cula|numeromatricula|nromatricula|registro|legajo)/i;
+  const sensitiveKey = /(^_id$|id$|^dni$|email|telefono|tel[eé]fono|^mr$|matricula|matr[ií]cula|numeromatricula|nromatricula|registro|legajo|observacionesInspector|observacionInspector)/i;
   const redactObjectIds = (value, key = "") => {
     if (sensitiveKey.test(key)) return undefined;
     if (typeof value === "string" && /^[a-f\d]{24}$/i.test(value)) return undefined;
@@ -153,6 +154,35 @@ function publicDocumentoDetail(doc, user) {
         }))
       : [],
     canConformarAnexo23,
+  };
+}
+
+async function enrichAnexo24Disponibilidad(detail, doc, user) {
+  if (up(doc?.codigo) !== "ANEXO_23" || up(doc?.estado) !== "CERRADO") {
+    return detail;
+  }
+
+  const plazo = await anexo24Service.getPlazoAnexo24(doc);
+  const existente = await AlojamientoDocumento.findOne({
+    codigo: "ANEXO_24",
+    derivadoDe: doc._id,
+    alojado: user?._id,
+    activo: { $ne: false },
+    $or: [
+      { alojado: user?._id },
+      { solicitante: user?._id },
+      { "intervinientes.userId": user?._id },
+    ],
+  })
+    .select("_id codigo estado")
+    .lean();
+
+  return {
+    ...detail,
+    canGenerarAnexo24: Boolean(plazo?.ok && !plazo.vencido && !existente),
+    anexo24Vencido: Boolean(plazo?.ok && plazo.vencido),
+    anexo24FechaLimite: plazo?.venceAt || null,
+    anexo24ExistenteToken: existente?._id ? encodeDocToken(existente._id) : "",
   };
 }
 
@@ -858,10 +888,78 @@ async function obtenerDocumento(req, res) {
   try {
     const documento = await findMiDocumento(req.user, req.params.token);
     if (!documento) return deny(res);
-    return res.json({ ok: true, documento: publicDocumentoDetail(documento, req.user) });
+    const detail = await enrichAnexo24Disponibilidad(
+      publicDocumentoDetail(documento, req.user),
+      documento,
+      req.user
+    );
+    return res.json({ ok: true, documento: detail });
   } catch (err) {
     console.error("[alojamientos-mi] obtenerDocumento error:", err?.message || "Error controlado");
     return res.status(500).json({ message: "Error interno al obtener documento" });
+  }
+}
+
+async function generarAnexo24(req, res) {
+  try {
+    const origen = await findMiDocumento(req.user, req.params.token);
+    if (!origen || up(origen.codigo) !== "ANEXO_23") return deny(res);
+
+    const result = await anexo24Service.generarDesdeAnexo23(origen, req.user);
+    if (!result?.ok) {
+      return res.status(result?.status || 400).json({
+        ok: false,
+        error: result?.message || "No es posible procesar la solicitud.",
+      });
+    }
+
+    const detail = await enrichAnexo24Disponibilidad(
+      publicDocumentoDetail(result.documento, req.user),
+      result.documento,
+      req.user
+    );
+    return res.status(result.status || 200).json({ ok: true, documento: detail });
+  } catch (err) {
+    console.error("[alojamientos-mi] generarAnexo24 error:", err?.message || "Error controlado");
+    return res.status(500).json({ message: "Error interno al generar anexo" });
+  }
+}
+
+async function actualizarAnexo24(req, res) {
+  try {
+    const documento = await findMiDocumento(req.user, req.params.token);
+    if (!documento || up(documento.codigo) !== "ANEXO_24") return deny(res);
+
+    const result = await anexo24Service.actualizarDatos(documento._id, req.body || {}, req.user);
+    if (!result?.ok) {
+      return res.status(result?.status || 400).json({
+        ok: false,
+        error: result?.message || "No es posible procesar la solicitud.",
+      });
+    }
+    return res.json({ ok: true, documento: publicDocumentoDetail(result.documento, req.user) });
+  } catch (err) {
+    console.error("[alojamientos-mi] actualizarAnexo24 error:", err?.message || "Error controlado");
+    return res.status(500).json({ message: "Error interno al actualizar anexo" });
+  }
+}
+
+async function enviarAnexo24(req, res) {
+  try {
+    const documento = await findMiDocumento(req.user, req.params.token);
+    if (!documento || up(documento.codigo) !== "ANEXO_24") return deny(res);
+
+    const result = await anexo24Service.enviar(documento._id, req.user);
+    if (!result?.ok) {
+      return res.status(result?.status || 400).json({
+        ok: false,
+        error: result?.message || "No es posible procesar la solicitud.",
+      });
+    }
+    return res.json({ ok: true, documento: publicDocumentoDetail(result.documento, req.user) });
+  } catch (err) {
+    console.error("[alojamientos-mi] enviarAnexo24 error:", err?.message || "Error controlado");
+    return res.status(500).json({ message: "Error interno al enviar anexo" });
   }
 }
 
@@ -940,4 +1038,7 @@ module.exports = {
   obtenerDocumento,
   descargarDocumentoPdf,
   conformidadAnexo23,
+  generarAnexo24,
+  actualizarAnexo24,
+  enviarAnexo24,
 };

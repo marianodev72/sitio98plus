@@ -8,14 +8,9 @@ const {
   up,
 } = require("./alojamientoDocumentoStateService");
 const { sanitizeDatosDocumento } = require("./alojamientoDocumentoSanitizer");
-const {
-  puedeVerDocumento,
-  isInspectorAlojamientos,
-} = require("./alojamientoDocumentoVisibilityService");
 
 const EDITABLE_TOP_LEVEL = new Set([
   "novedadesTexto",
-  "observacionesInspector",
   "lugarFirma",
   "fechaFirma",
 ]);
@@ -38,8 +33,12 @@ function isAdminGeneral(user) {
   return up(user?.role) === "ADMIN_GENERAL";
 }
 
+function isAlojado(user) {
+  return up(user?.role) === "ALOJADO";
+}
+
 function canOperateAnexo24(user) {
-  return isInspectorAlojamientos(user);
+  return isAlojado(user);
 }
 
 function stringValue(...values) {
@@ -107,11 +106,12 @@ function snapshotHuesped(origen) {
   };
 }
 
-function inspectorSnapshot(user) {
-  if (!isInspectorAlojamientos(user)) return { nombre: "", grado: "" };
+function inspectorSnapshotFrom(origen) {
+  const datos = origen?.datos || {};
+  const inspector = datos.inspector && typeof datos.inspector === "object" ? datos.inspector : {};
   return {
-    nombre: nombreDesdeUsuario(user),
-    grado: stringValue(user?.grado),
+    nombre: stringValue(inspector.nombre),
+    grado: stringValue(inspector.grado),
   };
 }
 
@@ -143,10 +143,68 @@ async function findEditableAnexo24(id, user) {
   }).populate({ path: "alojamiento", select: "lugar codigo dependencia sector tipo numero" });
 
   if (!documento) return publicError(404, "DOCUMENTO_NO_DISPONIBLE");
-  if (!puedeVerDocumento(user, documento)) return publicError(404, "DOCUMENTO_NO_DISPONIBLE");
+  if (!isUsuarioVinculado(documento, user)) return publicError(404, "DOCUMENTO_NO_DISPONIBLE");
   if (up(documento.estado) !== "BORRADOR") return publicError(409, "ESTADO_INVALIDO");
+  const plazo = await getPlazoAnexo24(documento);
+  if (!plazo.ok || plazo.vencido) return publicError(409, "PLAZO_VENCIDO");
 
   return { ok: true, documento };
+}
+
+function isUsuarioVinculado(documento, user) {
+  const userId = String(user?._id || "");
+  if (!userId || !documento) return false;
+  if (String(idValue(documento.alojado) || "") === userId) return true;
+  if (String(idValue(documento.solicitante) || "") === userId) return true;
+  const intervinientes = Array.isArray(documento.intervinientes) ? documento.intervinientes : [];
+  return intervinientes.some((item) => String(idValue(item?.userId) || "") === userId);
+}
+
+function fechaCierreDocumento(documento) {
+  const historial = Array.isArray(documento?.historialEstados) ? documento.historialEstados : [];
+  const cierres = historial
+    .filter((item) => up(item?.estadoNuevo) === "CERRADO" && item?.fecha)
+    .map((item) => new Date(item.fecha))
+    .filter((date) => !Number.isNaN(date.getTime()))
+    .sort((a, b) => b.getTime() - a.getTime());
+  if (cierres.length) return cierres[0];
+
+  const fallback = new Date(documento?.updatedAt || "");
+  return Number.isNaN(fallback.getTime()) ? null : fallback;
+}
+
+async function getOrigenAnexo23(documento) {
+  const origenId = idValue(documento?.derivadoDe);
+  if (!isObjectId(origenId)) return null;
+  return AlojamientoDocumento.findOne({
+    _id: origenId,
+    codigo: "ANEXO_23",
+    activo: { $ne: false },
+  });
+}
+
+async function getPlazoAnexo24(documentoOrAnexo23) {
+  const origen =
+    up(documentoOrAnexo23?.codigo) === "ANEXO_23"
+      ? documentoOrAnexo23
+      : await getOrigenAnexo23(documentoOrAnexo23);
+  if (!origen || up(origen.codigo) !== "ANEXO_23" || up(origen.estado) !== "CERRADO") {
+    return { ok: false };
+  }
+
+  const fechaCierre = fechaCierreDocumento(origen);
+  if (!fechaCierre) return { ok: false };
+
+  const now = new Date();
+  if (fechaCierre.getTime() > now.getTime()) return { ok: false };
+
+  const venceAt = new Date(fechaCierre.getTime() + 10 * 24 * 60 * 60 * 1000);
+  return {
+    ok: true,
+    fechaCierre,
+    venceAt,
+    vencido: now.getTime() > venceAt.getTime(),
+  };
 }
 
 function toResponse(documento) {
@@ -184,7 +242,10 @@ async function generarDesdeAnexo23(documentoOrigen, user) {
     return publicError(404, "ORIGEN_NO_DISPONIBLE");
   }
   if (up(documentoOrigen.estado) !== "CERRADO") return publicError(409, "ESTADO_ORIGEN_INVALIDO");
-  if (!puedeVerDocumento(user, documentoOrigen)) return publicError(404, "ORIGEN_NO_DISPONIBLE");
+  if (!isUsuarioVinculado(documentoOrigen, user)) return publicError(404, "ORIGEN_NO_DISPONIBLE");
+
+  const plazo = await getPlazoAnexo24(documentoOrigen);
+  if (!plazo.ok || plazo.vencido) return publicError(409, "PLAZO_VENCIDO");
 
   const alojadoId = idValue(documentoOrigen.alojado) || idValue(documentoOrigen.solicitante);
   const alojamientoId = idValue(documentoOrigen.alojamiento);
@@ -193,12 +254,21 @@ async function generarDesdeAnexo23(documentoOrigen, user) {
   if (!isObjectId(alojadoId) || !isObjectId(alojamientoId) || !isObjectId(plazaId) || !isObjectId(asignacionId)) {
     return publicError(409, "ORIGEN_INCOMPLETO");
   }
+  if (String(alojadoId) !== String(user._id)) return publicError(404, "ORIGEN_NO_DISPONIBLE");
 
-  const inspectorId = idValue(user._id);
+  const existente = await AlojamientoDocumento.findOne({
+    codigo: "ANEXO_24",
+    derivadoDe: documentoOrigen._id,
+    alojado: alojadoId,
+    activo: { $ne: false },
+  });
+  if (existente) return { ok: true, status: 200, documento: toResponse(existente) };
+
+  const inspectorId = idValue(documentoOrigen.inspector);
   const alojamientoSnapshot = snapshotAlojamiento(documentoOrigen);
   const plazaSnapshot = snapshotPlaza(documentoOrigen);
   const huesped = snapshotHuesped(documentoOrigen);
-  const inspector = inspectorSnapshot(user);
+  const inspector = inspectorSnapshotFrom(documentoOrigen);
 
   const documento = new AlojamientoDocumento({
     codigo: "ANEXO_24",
@@ -232,10 +302,11 @@ async function generarDesdeAnexo23(documentoOrigen, user) {
   agregarInterviniente(documento, alojadoId, "ALOJADO");
   if (isObjectId(inspectorId)) agregarInterviniente(documento, inspectorId, "INSPECTOR");
   documento.historialEstados.push({
+    fecha: new Date(),
     estadoNuevo: "BORRADOR",
     realizadoPor: user._id,
-    rolActor: "INSPECTOR",
-    observacion: "ANEXO_24 generado desde ANEXO_23.",
+    rolActor: "ALOJADO",
+    observacion: "ANEXO_24 generado por el alojado desde ANEXO_23.",
   });
 
   try {
@@ -262,8 +333,8 @@ async function actualizarDatos(id, payload, user) {
   documento.intervenciones.push({
     tipo: "ACTUALIZACION_ANEXO_24",
     actor: user._id,
-    rolActor: "INSPECTOR",
-    observacion: "Actualizacion de novedades ANEXO_24.",
+    rolActor: "ALOJADO",
+    observacion: "Actualizacion de novedades ANEXO_24 por el alojado.",
   });
 
   try {
@@ -282,16 +353,8 @@ async function enviar(id, user) {
   let transition = registrarCambioEstado(documento, {
     estadoNuevo: "ENVIADO",
     actorId: user._id,
-    rolActor: "INSPECTOR",
-    observacion: "ANEXO_24 enviado para revision.",
-  });
-  if (!transition.ok) return publicError(409, "TRANSICION_INVALIDA");
-
-  transition = registrarCambioEstado(documento, {
-    estadoNuevo: "EN_REVISION",
-    actorId: user._id,
-    rolActor: "INSPECTOR",
-    observacion: "ANEXO_24 en revision administrativa.",
+    rolActor: "ALOJADO",
+    observacion: "ANEXO_24 enviado por el alojado.",
   });
   if (!transition.ok) return publicError(409, "TRANSICION_INVALIDA");
 
@@ -317,7 +380,8 @@ async function cerrarAnexo24(id, payload = {}, user) {
   });
 
   if (!documento) return publicError(404, "DOCUMENTO_NO_DISPONIBLE");
-  if (up(documento.estado) !== "EN_REVISION") return publicError(409, "ESTADO_INVALIDO");
+  const estadoActual = up(documento.estado);
+  if (!["ENVIADO", "EN_REVISION"].includes(estadoActual)) return publicError(409, "ESTADO_INVALIDO");
 
   const observacion = trimText(payload?.observacion, 1000);
   const conformidad = registrarConformidad(documento, {
@@ -338,6 +402,16 @@ async function cerrarAnexo24(id, payload = {}, user) {
     fecha: new Date(),
     fuente: "CIERRE_ADMIN_GENERAL_ANEXO_24",
   });
+
+  if (estadoActual === "ENVIADO") {
+    const revision = registrarCambioEstado(documento, {
+      estadoNuevo: "EN_REVISION",
+      actorId: user._id,
+      rolActor: "ADMIN_GENERAL",
+      observacion: "ANEXO_24 tomado en revision para cierre ADMIN_GENERAL.",
+    });
+    if (!revision.ok) return publicError(409, "TRANSICION_INVALIDA");
+  }
 
   const transition = registrarCambioEstado(documento, {
     estadoNuevo: "CERRADO",
@@ -363,4 +437,5 @@ module.exports = {
   actualizarDatos,
   enviar,
   cerrarAnexo24,
+  getPlazoAnexo24,
 };

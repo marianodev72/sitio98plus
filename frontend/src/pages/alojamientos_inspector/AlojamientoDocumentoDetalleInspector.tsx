@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { http } from "../../api/http";
 import Anexo23InspectorForm from "../../components/alojamientos/Anexo23InspectorForm";
-import Anexo24InspectorForm from "../../components/alojamientos/Anexo24InspectorForm";
 import {
   badgeStyle,
   cardStyle,
@@ -263,7 +262,6 @@ export default function AlojamientoDocumentoDetalleInspector() {
   const [anexo23Verificado, setAnexo23Verificado] = useState(false);
   const [verificandoAnexo23, setVerificandoAnexo23] = useState(false);
   const [generandoAnexo23, setGenerandoAnexo23] = useState(false);
-  const [generandoAnexo24, setGenerandoAnexo24] = useState(false);
   const [descargandoPdf, setDescargandoPdf] = useState(false);
 
   const datos = documento?.datos || {};
@@ -286,7 +284,6 @@ export default function AlojamientoDocumentoDetalleInspector() {
   const esAnexo22Cerrado = up(documento?.codigo) === "ANEXO_22" && up(documento?.estado) === "CERRADO";
   const esAnexo23 = up(documento?.codigo) === "ANEXO_23";
   const esAnexo24 = up(documento?.codigo) === "ANEXO_24";
-  const esAnexo23Cerrado = esAnexo23 && up(documento?.estado) === "CERRADO";
   const puedeGenerarAnexo23 =
     esAnexo22Cerrado && anexo23Verificado && !verificandoAnexo23 && !anexo23ExistenteId;
 
@@ -361,29 +358,6 @@ export default function AlojamientoDocumentoDetalleInspector() {
     }
   }
 
-  async function generarAnexo24() {
-    if (!documento?._id || !esAnexo23Cerrado || generandoAnexo24) return;
-    const ok = window.confirm("Se generara un ANEXO_24 desde este ANEXO_23 cerrado. Continuar?");
-    if (!ok) return;
-
-    setGenerandoAnexo24(true);
-    setAccionMsg("");
-    try {
-      const res = await http.post(`/alojamientos-documentos/${documento._id}/generar-anexo-24`);
-      const nuevoId = idValue(res.data?.documento?._id);
-      if (!nuevoId) {
-        setAccionMsg("ANEXO_24 generado, pero no fue posible abrir el detalle automaticamente.");
-        await verificarAnexo23Existente(documento);
-        return;
-      }
-      navigate(`${basePath}/documentos/${nuevoId}`);
-    } catch {
-      setAccionMsg("No fue posible generar el ANEXO_24.");
-    } finally {
-      setGenerandoAnexo24(false);
-    }
-  }
-
   async function descargarPdfAnexo23() {
     if (!documento?._id || (!esAnexo23 && !esAnexo24) || descargandoPdf) return;
 
@@ -448,21 +422,6 @@ export default function AlojamientoDocumentoDetalleInspector() {
               }}
             >
               {generandoAnexo23 ? "Generando..." : "Generar ANEXO_23"}
-            </button>
-          )}
-          {esAnexo23Cerrado && (
-            <button
-              type="button"
-              onClick={generarAnexo24}
-              disabled={generandoAnexo24}
-              style={{
-                ...badgeStyle,
-                minHeight: 36,
-                cursor: generandoAnexo24 ? "not-allowed" : "pointer",
-                opacity: generandoAnexo24 ? 0.65 : 1,
-              }}
-            >
-              {generandoAnexo24 ? "Generando..." : "Generar ANEXO_24"}
             </button>
           )}
           {(esAnexo23 || esAnexo24) && (
@@ -596,13 +555,6 @@ export default function AlojamientoDocumentoDetalleInspector() {
 
           {esAnexo23 && (
             <Anexo23InspectorForm
-              documento={documento}
-              onUpdated={cargar}
-            />
-          )}
-
-          {esAnexo24 && (
-            <Anexo24InspectorForm
               documento={documento}
               onUpdated={cargar}
             />

@@ -175,9 +175,6 @@ function renderAnexo24Pdf(stream, payload = {}) {
   sectionTitle(doc, "Novedades adicionales");
   paragraph(doc, datos.novedadesTexto);
 
-  sectionTitle(doc, "Observaciones del inspector");
-  paragraph(doc, datos.observacionesInspector);
-
   sectionTitle(doc, "Cierre administrativo");
   renderRows(doc, [
     ["Cierre ADMIN_GENERAL", cierreAdmin ? "SI" : "Pendiente"],

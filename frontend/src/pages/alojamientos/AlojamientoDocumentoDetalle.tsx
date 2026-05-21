@@ -226,7 +226,7 @@ export default function AlojamientoDocumentoDetalle() {
     !conformidadAdminGeneral;
   const puedeCerrarAnexo24 =
     esAnexo24 &&
-    up(documento?.estado) === "EN_REVISION" &&
+    ["ENVIADO", "EN_REVISION"].includes(up(documento?.estado)) &&
     !conformidadAdminGeneral;
 
   async function cargarPlazasElegibles() {
