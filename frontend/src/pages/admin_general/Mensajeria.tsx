@@ -37,7 +37,8 @@ type MensajeAdjunto = {
 
 type Mensaje = {
   _id: string;
-  remitente: string | { _id?: string };
+  remitente: string | { _id?: string; nombre?: string; apellido?: string; nombreCompleto?: string };
+  remitenteDisplay?: string;
   destinatarios: string[];
   asunto?: string;
   cuerpo?: string;
@@ -79,6 +80,11 @@ function idUsuario(x: any): string {
   if (typeof x === "string") return x;
   if (typeof x === "object" && (x as any)._id) return String((x as any)._id);
   return "";
+}
+
+function displaySeguro(v: unknown) {
+  const s = String(v || "").trim();
+  return s || "-";
 }
 
 function etiquetaRol(u?: Usuario | null) {
@@ -621,7 +627,7 @@ export default function Mensajeria(props: MensajeriaProps = {}) {
       "----- Mensaje anterior -----",
       (msg as any)?.creadoEn ? `Fecha: ${formatFecha((msg as any).creadoEn)}` : undefined,
       asuntoBase ? `Asunto: ${asuntoBase}` : undefined,
-      remitenteId ? `Remitente: ${nombreUsuario(usuariosById.get(remitenteId))}` : undefined,
+      remitenteId ? `Remitente: ${nombreRemitente(msg)}` : undefined,
       "",
       String((msg as any)?.cuerpo || ""),
     ]
@@ -636,6 +642,19 @@ export default function Mensajeria(props: MensajeriaProps = {}) {
 
     cerrarMensaje();
     setTab("nuevo");
+  }
+
+  function nombreRemitente(msg?: Mensaje | null) {
+    if (!msg) return "-";
+    const remitenteId = idUsuario(msg.remitente);
+    const desdeAgenda = nombreUsuario(usuariosById.get(remitenteId));
+    if (desdeAgenda !== "-") return desdeAgenda;
+    if (msg.remitenteDisplay) return displaySeguro(msg.remitenteDisplay);
+    if (typeof msg.remitente === "object") {
+      const desdeObjeto = nombreUsuario(msg.remitente as Usuario);
+      if (desdeObjeto !== "-") return desdeObjeto;
+    }
+    return "-";
   }
 
   function archivosPermitidos(files: File[]) {
@@ -761,7 +780,7 @@ export default function Mensajeria(props: MensajeriaProps = {}) {
                           <td style={{ ...styles.td, whiteSpace: "nowrap" }}>{formatFecha(m.creadoEn)}</td>
                           <td style={styles.td}>{resumenMensaje(m)}</td>
                           <td style={styles.td}>
-                            {nombreUsuario(usuariosById.get(idUsuario(m.remitente)))}
+                            {nombreRemitente(m)}
                           </td>
                           <td style={styles.td}>
                             <button
@@ -1080,7 +1099,7 @@ export default function Mensajeria(props: MensajeriaProps = {}) {
                     </p>
                     <p style={styles.metaLine}>
                       <strong>Remitente:</strong>{" "}
-                      {nombreUsuario(usuariosById.get(idUsuario(openMsg.remitente)))}
+                      {nombreRemitente(openMsg)}
                     </p>
                     <p style={styles.metaLine}>
                       <strong>Destinatarios:</strong>{" "}

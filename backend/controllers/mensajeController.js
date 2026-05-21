@@ -55,6 +55,37 @@ function esInspectorAlojamientosCorrespondiente(user, lugar) {
   return territorioValores(user).includes(lugar);
 }
 
+function nombreDisplaySeguro(user, fallback = "Usuario institucional") {
+  if (!user) return fallback;
+  const nombreCompleto = String(user.nombreCompleto || "").trim();
+  if (nombreCompleto) return nombreCompleto;
+  const apellidoNombre = `${user.apellido || ""} ${user.nombre || ""}`.trim();
+  if (apellidoNombre) return apellidoNombre;
+  if (up(user.role) === "ALOJADO") return "Alojado";
+  return fallback;
+}
+
+async function agregarRemitenteDisplay(mensajes) {
+  const lista = Array.isArray(mensajes) ? mensajes : [];
+  const remitenteIds = uniqStrings(lista.map((m) => m?.remitente)).filter((id) =>
+    mongoose.Types.ObjectId.isValid(id)
+  );
+  if (!remitenteIds.length) return lista;
+
+  const usuarios = await User.find({ _id: { $in: remitenteIds } })
+    .select("_id nombre apellido role")
+    .lean();
+  const usuariosById = new Map((usuarios || []).map((u) => [String(u._id), u]));
+
+  return lista.map((m) => {
+    const remitenteId = String(m?.remitente || "");
+    return {
+      ...m,
+      remitenteDisplay: nombreDisplaySeguro(usuariosById.get(remitenteId), "Alojado"),
+    };
+  });
+}
+
 // ==========================
 // AGENDA TERRITORIAL
 // ==========================
@@ -173,7 +204,8 @@ async function getEntrada(req, res) {
       .sort({ creadoEn: -1, createdAt: -1 })
       .lean();
 
-    return res.json({ mensajes: Array.isArray(mensajes) ? mensajes : [] });
+    const mensajesConDisplay = await agregarRemitenteDisplay(mensajes);
+    return res.json({ mensajes: mensajesConDisplay });
   } catch (error) {
     console.error("[mensajes][entrada] error:", error);
     return res.status(500).json({ message: "No es posible procesar su solicitud" });
@@ -192,7 +224,8 @@ async function getEnviados(req, res) {
       .sort({ creadoEn: -1, createdAt: -1 })
       .lean();
 
-    return res.json({ mensajes: Array.isArray(mensajes) ? mensajes : [] });
+    const mensajesConDisplay = await agregarRemitenteDisplay(mensajes);
+    return res.json({ mensajes: mensajesConDisplay });
   } catch (error) {
     console.error("[mensajes][enviados] error:", error);
     return res.status(500).json({ message: "No es posible procesar su solicitud" });
@@ -217,7 +250,8 @@ async function getMensaje(req, res) {
     const participa = remitenteId === myId || dests.includes(myId);
     if (!participa) return res.status(404).json({ message: "No es posible procesar su solicitud" });
 
-    return res.json({ mensaje });
+    const [mensajeConDisplay] = await agregarRemitenteDisplay([mensaje]);
+    return res.json({ mensaje: mensajeConDisplay || mensaje });
   } catch (error) {
     console.error("[mensajes][get] error:", error);
     return res.status(404).json({ message: "No es posible procesar su solicitud" });
