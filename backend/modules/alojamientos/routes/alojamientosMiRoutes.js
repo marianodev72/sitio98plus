@@ -9,6 +9,7 @@ const router = express.Router();
 router.use(authRequired, refreshUserPrivileges);
 
 router.get("/ocupacion-actual", controller.ocupacionActual);
+router.get("/ocupaciones", controller.listarOcupaciones);
 router.get("/documentos", controller.listarDocumentos);
 router.get("/documentos/:token", controller.obtenerDocumento);
 router.get("/documentos/:token/pdf", controller.descargarDocumentoPdf);

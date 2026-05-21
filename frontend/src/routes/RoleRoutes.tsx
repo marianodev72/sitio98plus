@@ -100,6 +100,7 @@ import AlojamientoDocumentoReadonly from "../pages/postulante/AlojamientoDocumen
 import AlojadoDashboard from "../pages/alojado/Dashboard";
 import MisAnexosAlojado from "../pages/alojado/MisAnexos";
 import AlojamientoDocumentoReadonlyAlojado from "../pages/alojado/AlojamientoDocumentoReadonly";
+import HistorialOcupacionAlojado from "../pages/alojado/HistorialOcupacion";
 
 /* Canonical */
 import { panelPathForUser } from "./panelPathForUser";
@@ -207,6 +208,7 @@ export default function RoleRoutes() {
           <Route index element={<AlojadoDashboard />} />
           <Route path="anexos" element={<MisAnexosAlojado />} />
           <Route path="anexos/:token" element={<AlojamientoDocumentoReadonlyAlojado />} />
+          <Route path="ocupaciones" element={<HistorialOcupacionAlojado />} />
           <Route path="*" element={<GenericUnavailable />} />
         </Route>
 

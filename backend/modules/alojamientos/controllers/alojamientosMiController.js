@@ -197,6 +197,37 @@ function pickPlaza(plaza, alojamiento) {
   };
 }
 
+function publicOcupacionItem(asignacion, documentoByAsignacion) {
+  const alojamiento = asignacion?.alojamiento || {};
+  const plaza = asignacion?.plaza || {};
+  const documento = documentoByAsignacion.get(String(asignacion?._id || "")) || null;
+
+  return {
+    estado: asignacion?.estado || "",
+    fechaInicio: asignacion?.fechaInicio || null,
+    fechaFin: asignacion?.fechaFin || null,
+    alojamiento: {
+      codigo: alojamiento?.codigo || "",
+      lugar: alojamiento?.lugar || "",
+      dependencia: alojamiento?.dependencia || "",
+      sector: alojamiento?.sector || "",
+      tipo: alojamiento?.tipo || "",
+      clase: alojamiento?.clase || "",
+    },
+    plaza: {
+      numero: plaza?.numeroPlaza ?? null,
+      codigoPublico: plaza?.codigo || "",
+    },
+    origenDocumental: documento
+      ? {
+          codigo: documento.codigo || "",
+          estado: documento.estado || "",
+          fecha: documento.updatedAt || documento.createdAt || null,
+        }
+      : null,
+  };
+}
+
 async function ocupacionActual(req, res) {
   try {
     const userId = req.user?._id;
@@ -249,6 +280,60 @@ async function ocupacionActual(req, res) {
   } catch (err) {
     console.error("[alojamientos-mi] ocupacionActual error:", err?.message || "Error controlado");
     return res.status(500).json({ message: "Error interno al obtener ocupacion actual" });
+  }
+}
+
+async function listarOcupaciones(req, res) {
+  try {
+    if (!canUsePanelAlojado(req.user)) return deny(res);
+
+    const userId = req.user?._id;
+    if (!userId) return deny(res);
+
+    const asignaciones = await AsignacionAlojamiento.find({ alojado: userId })
+      .select("estado fechaInicio fechaFin alojamiento plaza")
+      .populate({
+        path: "alojamiento",
+        select: "codigo lugar dependencia sector tipo clase",
+      })
+      .populate({
+        path: "plaza",
+        select: "numeroPlaza codigo",
+      })
+      .sort({ fechaInicio: -1, updatedAt: -1, createdAt: -1 })
+      .limit(100)
+      .lean();
+
+    const asignacionIds = asignaciones.map((item) => item._id).filter(Boolean);
+    const documentos = asignacionIds.length
+      ? await AlojamientoDocumento.find({
+          asignacion: { $in: asignacionIds },
+          codigo: { $in: ["ANEXO_22", "ANEXO_23"] },
+          activo: { $ne: false },
+          $or: [
+            { alojado: userId },
+            { solicitante: userId },
+            { "intervinientes.userId": userId },
+          ],
+        })
+          .select("codigo estado asignacion createdAt updatedAt")
+          .sort({ updatedAt: -1, createdAt: -1, _id: -1 })
+          .lean()
+      : [];
+
+    const documentoByAsignacion = new Map();
+    for (const doc of documentos) {
+      const key = String(doc.asignacion || "");
+      if (key && !documentoByAsignacion.has(key)) documentoByAsignacion.set(key, doc);
+    }
+
+    return res.json({
+      ok: true,
+      ocupaciones: asignaciones.map((item) => publicOcupacionItem(item, documentoByAsignacion)),
+    });
+  } catch (err) {
+    console.error("[alojamientos-mi] listarOcupaciones error:", err?.message || "Error controlado");
+    return res.status(500).json({ message: "Error interno al listar ocupaciones" });
   }
 }
 
@@ -354,6 +439,7 @@ async function conformidadAnexo23(req, res) {
 
 module.exports = {
   ocupacionActual,
+  listarOcupaciones,
   listarDocumentos,
   obtenerDocumento,
   descargarDocumentoPdf,

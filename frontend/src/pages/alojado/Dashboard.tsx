@@ -266,6 +266,9 @@ export default function AlojadoDashboard() {
           >
             Ver ultima gestion
           </button>
+          <button type="button" style={buttonStyle} onClick={() => navigate("/app/alojado/ocupaciones")}>
+            Historial de ocupacion
+          </button>
         </div>
       </section>
 
