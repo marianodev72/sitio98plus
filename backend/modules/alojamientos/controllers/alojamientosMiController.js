@@ -266,6 +266,15 @@ function publicLiquidacionItem(liq = {}) {
   };
 }
 
+function publicNovedadItem(doc = {}) {
+  return {
+    codigoDocumento: doc.codigo || "",
+    estado: doc.estado || "",
+    fecha: doc.updatedAt || doc.createdAt || null,
+    novedadesTexto: String(doc?.datos?.novedadesTexto || "").trim(),
+  };
+}
+
 async function resolveAlojadoMr(userId) {
   if (!userId) return "";
   const user = await User.findById(userId)
@@ -438,6 +447,40 @@ async function obtenerUltimaLiquidacion(req, res) {
   }
 }
 
+async function listarNovedades(req, res) {
+  try {
+    if (!canUsePanelAlojado(req.user)) return deny(res);
+
+    const userId = req.user?._id;
+    if (!userId) return deny(res);
+
+    const documentos = await AlojamientoDocumento.find({
+      codigo: "ANEXO_23",
+      activo: { $ne: false },
+      $or: [
+        { alojado: userId },
+        { solicitante: userId },
+        { creadoPor: userId },
+        { "intervinientes.userId": userId },
+      ],
+    })
+      .select("codigo estado datos.novedadesTexto createdAt updatedAt")
+      .sort({ updatedAt: -1, createdAt: -1, _id: -1 })
+      .limit(50)
+      .lean();
+
+    return res.json({
+      ok: true,
+      novedades: documentos
+        .map(publicNovedadItem)
+        .filter((item) => item.novedadesTexto.length > 0),
+    });
+  } catch (err) {
+    console.error("[alojamientos-mi] listarNovedades error:", err?.message || "Error controlado");
+    return res.status(500).json({ message: "Error interno al listar novedades" });
+  }
+}
+
 async function listarDocumentos(req, res) {
   try {
     if (!canUsePanelAlojado(req.user)) return deny(res);
@@ -543,6 +586,7 @@ module.exports = {
   listarOcupaciones,
   listarLiquidaciones,
   obtenerUltimaLiquidacion,
+  listarNovedades,
   listarDocumentos,
   obtenerDocumento,
   descargarDocumentoPdf,
