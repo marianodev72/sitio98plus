@@ -41,6 +41,19 @@ type DocumentoDetalle = DocumentoResumen & {
 type LiquidacionResumen = {
   periodo?: string;
   estado?: string;
+  total?: {
+    cod457?: number;
+    cod411?: number;
+    etiqueta457?: string;
+    etiqueta411?: string;
+  };
+};
+
+type NovedadResumen = {
+  codigoDocumento?: string;
+  estado?: string;
+  fecha?: string | null;
+  novedadesTexto?: string;
 };
 
 function fmt(value: unknown) {
@@ -53,6 +66,12 @@ function fmtDate(value?: string | null) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return fmt(value);
   return date.toLocaleDateString("es-AR");
+}
+
+function fmtMoney(value: unknown) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return "0,00";
+  return num.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function Field({ label, value }: { label: string; value: unknown }) {
@@ -72,6 +91,34 @@ function Field({ label, value }: { label: string; value: unknown }) {
       <div style={{ marginTop: 6, color: "#ffffff", fontWeight: 800, wordBreak: "break-word" }}>
         {fmt(value)}
       </div>
+    </div>
+  );
+}
+
+function StatusCard({ title, value, meta }: { title: string; value: unknown; meta?: unknown }) {
+  return (
+    <div
+      style={{
+        border: "1px solid rgba(255,255,255,0.12)",
+        borderRadius: 12,
+        padding: 14,
+        background: "rgba(255,255,255,0.045)",
+        minWidth: 0,
+        display: "grid",
+        gap: 8,
+      }}
+    >
+      <div style={{ fontSize: 12, color: "rgba(255,255,255,0.68)", fontWeight: 900 }}>
+        {title}
+      </div>
+      <div style={{ color: "#ffffff", fontWeight: 900, fontSize: 18, wordBreak: "break-word" }}>
+        {fmt(value)}
+      </div>
+      {meta ? (
+        <div style={{ color: "rgba(255,255,255,0.68)", fontSize: 12, lineHeight: 1.4 }}>
+          {fmt(meta)}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -128,6 +175,7 @@ export default function AlojadoDashboard() {
   const [documentos, setDocumentos] = useState<DocumentoResumen[]>([]);
   const [accionConformidad, setAccionConformidad] = useState<DocumentoDetalle | null>(null);
   const [ultimaLiquidacion, setUltimaLiquidacion] = useState<LiquidacionResumen | null>(null);
+  const [novedades, setNovedades] = useState<NovedadResumen[]>([]);
   const [loadingOcupacion, setLoadingOcupacion] = useState(true);
   const [loadingGestion, setLoadingGestion] = useState(true);
   const [errorOcupacion, setErrorOcupacion] = useState("");
@@ -200,9 +248,19 @@ export default function AlojadoDashboard() {
       }
     }
 
+    async function loadNovedades() {
+      try {
+        const res = await http.get("/alojamientos-mi/novedades");
+        if (alive) setNovedades(Array.isArray(res.data?.novedades) ? res.data.novedades : []);
+      } catch {
+        if (alive) setNovedades([]);
+      }
+    }
+
     loadOcupacion();
     loadGestion();
     loadLiquidacion();
+    loadNovedades();
     return () => {
       alive = false;
     };
@@ -213,6 +271,16 @@ export default function AlojadoDashboard() {
   const ubicacion = [alojamiento.localidad, alojamiento.provincia].filter(Boolean).join(" / ");
   const tipoClase = [alojamiento.tipo, alojamiento.clase].filter(Boolean).join(" / ");
   const ultimoPdf = documentos.find((doc) => doc.canDownloadPdf);
+  const ultimaNovedad = novedades[0] || null;
+  const anexosPresentes = ["ANEXO_21", "ANEXO_22", "ANEXO_23"].filter((codigo) =>
+    documentos.some((doc) => doc.codigo === codigo)
+  );
+  const anexosFaltantes = ["ANEXO_21", "ANEXO_22", "ANEXO_23"].filter(
+    (codigo) => !documentos.some((doc) => doc.codigo === codigo)
+  );
+  const totalLiquidacion = ultimaLiquidacion
+    ? `457: ${fmtMoney(ultimaLiquidacion.total?.cod457)} / 411: ${fmtMoney(ultimaLiquidacion.total?.cod411)}`
+    : "";
   const trazabilidad = useMemo(
     () =>
       ["ANEXO_21", "ANEXO_22", "ANEXO_23"]
@@ -250,6 +318,42 @@ export default function AlojadoDashboard() {
         <p style={{ margin: "10px 0 0", color: "rgba(255,255,255,0.76)", lineHeight: 1.6 }}>
           {user?.nombre} {user?.apellido} - <b>{user?.role}</b>
         </p>
+      </section>
+
+      <section style={sectionStyle}>
+        <h2 style={{ margin: "0 0 12px", color: "#ffffff", fontSize: 18 }}>Estado funcional</h2>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
+          <StatusCard
+            title="Estado de ocupacion"
+            value={loadingOcupacion ? "Consultando..." : ocupacion ? "Activa" : "Sin ocupacion activa"}
+            meta={
+              ocupacion
+                ? `${fmt(alojamiento.codigo)} / ${plaza.numero ? `Plaza ${plaza.numero}` : fmt(plaza.codigo)} / ${fmtDate(ocupacion.fechaInicio)}`
+                : ""
+            }
+          />
+          <StatusCard
+            title="Estado documental"
+            value={loadingGestion ? "Consultando..." : ultimaGestion ? ultimaGestion.codigo : "Sin documentos"}
+            meta={
+              accionConformidad
+                ? "ANEXO_23 pendiente de conformidad"
+                : `Presentes: ${anexosPresentes.length ? anexosPresentes.join(", ") : "-"}${
+                    anexosFaltantes.length ? ` / Pendientes: ${anexosFaltantes.join(", ")}` : ""
+                  }`
+            }
+          />
+          <StatusCard
+            title="Estado economico"
+            value={ultimaLiquidacion ? `Periodo ${fmt(ultimaLiquidacion.periodo)}` : "Sin liquidacion disponible"}
+            meta={ultimaLiquidacion ? `${fmt(ultimaLiquidacion.estado)} / ${totalLiquidacion}` : ""}
+          />
+          <StatusCard
+            title="Estado de novedades"
+            value={`${novedades.length} disponibles`}
+            meta={ultimaNovedad ? `${fmtDate(ultimaNovedad.fecha)} / ${fmt(ultimaNovedad.estado)}` : "Sin novedades"}
+          />
+        </div>
       </section>
 
       <section style={sectionStyle}>
@@ -292,6 +396,12 @@ export default function AlojadoDashboard() {
             disabled={!ultimaLiquidacion}
           >
             Mis Liquidaciones
+          </button>
+          <button type="button" style={buttonStyle} onClick={() => navigate("/app/alojado/novedades")}>
+            Novedades
+          </button>
+          <button type="button" style={buttonStyle} onClick={() => navigate("/app/alojado/datos")}>
+            Mis Datos
           </button>
         </div>
       </section>
