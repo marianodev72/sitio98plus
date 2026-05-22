@@ -1,6 +1,9 @@
 const mongoose = require("mongoose");
 
 const AlojamientoDocumento = require("../../models/AlojamientoDocumento");
+const AlojamientoNaval = require("../../models/AlojamientoNaval");
+const AlojamientoPlaza = require("../../models/AlojamientoPlaza");
+const AsignacionAlojamiento = require("../../models/AsignacionAlojamiento");
 const {
   agregarInterviniente,
   registrarCambioEstado,
@@ -80,6 +83,10 @@ function idValue(value) {
   if (!value) return null;
   if (typeof value === "object" && value._id) return value._id;
   return value;
+}
+
+function sameId(a, b) {
+  return String(idValue(a) || "") === String(idValue(b) || "");
 }
 
 function isAdminGeneral(user) {
@@ -479,69 +486,262 @@ async function conformidadAlojado(id, payload = {}, user) {
   }
 }
 
+async function actualizarOcupacionAlojamiento({ alojamientoId, alojadoId, plazaId, anexoId, actorId, now, session }) {
+  const alojamiento = await AlojamientoNaval.findOne({
+    _id: alojamientoId,
+    activo: { $ne: false },
+  }).session(session);
+
+  if (!alojamiento) throw publicError(404, "ALOJAMIENTO_NO_DISPONIBLE");
+
+  const plazas = await AlojamientoPlaza.find({
+    alojamiento: alojamientoId,
+    activo: { $ne: false },
+  })
+    .select("estado alojadoActual")
+    .session(session)
+    .lean();
+
+  const alojados = plazas
+    .filter((item) => up(item?.estado) === "OCUPADA" && item?.alojadoActual)
+    .map((item) => item.alojadoActual);
+
+  alojamiento.ocupacionActual = {
+    ...(alojamiento.ocupacionActual || {}),
+    plazasTotales: plazas.length,
+    plazasOcupadas: alojados.length,
+    plazasReservadas: plazas.filter((item) => up(item?.estado) === "RESERVADA").length,
+    alojados,
+    actualizadoEn: now,
+  };
+
+  alojamiento.historialOcupacion = Array.isArray(alojamiento.historialOcupacion)
+    ? alojamiento.historialOcupacion
+    : [];
+  const yaRegistrado = alojamiento.historialOcupacion.some(
+    (item) => up(item?.accion) === "LIBERACION_ANEXO_26" && sameId(item?.anexoId, anexoId)
+  );
+  if (!yaRegistrado) {
+    alojamiento.historialOcupacion.push({
+      fecha: now,
+      accion: "LIBERACION_ANEXO_26",
+      alojado: alojadoId,
+      plaza: plazaId,
+      estadoAnterior: "OCUPADA",
+      estadoNuevo: "LIBRE",
+      anexoId,
+      realizadoPor: actorId,
+      observacion: "Ocupacion finalizada por cierre ADMIN_GENERAL ANEXO_26.",
+    });
+  }
+
+  await alojamiento.save({ session });
+}
+
+async function liberarOcupacionDesdeAnexo26(documento, adminUser, { session, now }) {
+  const { User: UserModel } = require("../../../../models/user");
+  const alojadoId = idValue(documento?.alojado);
+  const alojamientoId = idValue(documento?.alojamiento);
+  const plazaId = idValue(documento?.plaza);
+  const asignacionId = idValue(documento?.asignacion);
+  const actorId = idValue(adminUser?._id);
+
+  if (!isObjectId(alojadoId)) throw publicError(409, "ALOJADO_REQUERIDO");
+  if (!isObjectId(alojamientoId)) throw publicError(409, "ALOJAMIENTO_REQUERIDO");
+  if (!isObjectId(plazaId)) throw publicError(409, "PLAZA_REQUERIDA");
+  if (!isObjectId(asignacionId)) throw publicError(409, "ASIGNACION_REQUERIDA");
+
+  const asignacion = await AsignacionAlojamiento.findById(asignacionId).session(session);
+  const plaza = await AlojamientoPlaza.findOne({ _id: plazaId, activo: { $ne: false } }).session(session);
+  const alojado = await UserModel.findById(alojadoId).select("+tokenVersion").session(session);
+
+  if (!asignacion) throw publicError(404, "ASIGNACION_NO_DISPONIBLE");
+  if (!plaza) throw publicError(404, "PLAZA_NO_DISPONIBLE");
+  if (!alojado) throw publicError(404, "ALOJADO_NO_DISPONIBLE");
+
+  if (!sameId(asignacion.alojado, alojadoId)) throw publicError(409, "ASIGNACION_ALOJADO_INCONSISTENTE");
+  if (!sameId(asignacion.alojamiento, alojamientoId)) throw publicError(409, "ASIGNACION_ALOJAMIENTO_INCONSISTENTE");
+  if (!sameId(asignacion.plaza, plazaId)) throw publicError(409, "ASIGNACION_PLAZA_INCONSISTENTE");
+  if (!sameId(plaza.alojamiento, alojamientoId)) throw publicError(409, "PLAZA_ALOJAMIENTO_INCONSISTENTE");
+
+  const asignacionEstado = up(asignacion.estado);
+  const plazaEstado = up(plaza.estado);
+  const userRole = up(alojado.role);
+  const userEstadoHabitacional = up(alojado.estadoHabitacional);
+  const reservaVacia = !plaza.reservaActual || (!plaza.reservaActual.usuario && !plaza.reservaActual.anexoId);
+  const finalizacionPorEsteAnexo = Array.isArray(asignacion.auditoria) && asignacion.auditoria.some(
+    (item) => up(item?.accion) === "FINALIZACION_ANEXO_26" && String(item?.observacion || "").includes(String(documento._id))
+  );
+
+  const yaFinalizada = asignacionEstado === "FINALIZADA";
+  const plazaYaLibre = plazaEstado === "LIBRE" && !plaza.alojadoActual && reservaVacia;
+  const usuarioYaPostulante =
+    userRole === "POSTULANTE" &&
+    userEstadoHabitacional === "POSTULANTE" &&
+    !alojado.alojamientoAsignado;
+
+  if (!yaFinalizada && asignacionEstado !== "ACTIVA") throw publicError(409, "ASIGNACION_ESTADO_INVALIDO");
+  if (yaFinalizada && !finalizacionPorEsteAnexo) throw publicError(409, "ASIGNACION_FINALIZADA_SIN_EVIDENCIA_ANEXO_26");
+  if (!plazaYaLibre) {
+    if (plazaEstado !== "OCUPADA") throw publicError(409, "PLAZA_ESTADO_INVALIDO");
+    if (!sameId(plaza.alojadoActual, alojadoId)) throw publicError(409, "PLAZA_OCUPADA_POR_OTRO_USUARIO");
+    if (!reservaVacia) throw publicError(409, "PLAZA_CON_RESERVA_ACTIVA");
+  }
+  if (!usuarioYaPostulante) {
+    if (userRole !== "ALOJADO" && userRole !== "POSTULANTE") throw publicError(409, "ROL_NO_MIGRABLE");
+    if (alojado.alojamientoAsignado && !sameId(alojado.alojamientoAsignado, alojamientoId)) {
+      throw publicError(409, "ALOJAMIENTO_USUARIO_INCONSISTENTE");
+    }
+  }
+
+  if (!yaFinalizada) {
+    asignacion.estado = "FINALIZADA";
+    asignacion.fechaFin = asignacion.fechaFin || now;
+    asignacion.actualizadoPor = actorId;
+  } else if (!asignacion.fechaFin) {
+    asignacion.fechaFin = now;
+  }
+  asignacion.auditoria = Array.isArray(asignacion.auditoria) ? asignacion.auditoria : [];
+  const auditoriaExiste = finalizacionPorEsteAnexo;
+  if (!auditoriaExiste) {
+    asignacion.auditoria.push({
+      fecha: now,
+      accion: "FINALIZACION_ANEXO_26",
+      actor: actorId,
+      estadoAnterior: yaFinalizada ? "FINALIZADA" : asignacionEstado,
+      estadoNuevo: "FINALIZADA",
+      observacion: `Asignacion finalizada por cierre ADMIN_GENERAL ANEXO_26 ${documento._id}.`,
+    });
+  }
+  await asignacion.save({ session });
+
+  if (!plazaYaLibre) {
+    plaza.estado = "LIBRE";
+    plaza.alojadoActual = null;
+    plaza.reservaActual = null;
+  }
+  plaza.historial = Array.isArray(plaza.historial) ? plaza.historial : [];
+  const historialPlazaExiste = plaza.historial.some(
+    (item) => up(item?.accion) === "LIBERACION_ANEXO_26" && sameId(item?.anexoId, documento._id)
+  );
+  if (!historialPlazaExiste) {
+    plaza.historial.push({
+      fecha: now,
+      accion: "LIBERACION_ANEXO_26",
+      alojado: alojadoId,
+      estadoAnterior: plazaYaLibre ? "LIBRE" : plazaEstado,
+      estadoNuevo: "LIBRE",
+      anexoId: documento._id,
+      realizadoPor: actorId,
+      observacion: "Plaza liberada por cierre ADMIN_GENERAL ANEXO_26.",
+    });
+  }
+  await plaza.save({ session });
+
+  if (!usuarioYaPostulante) {
+    alojado.role = "POSTULANTE";
+    alojado.estadoHabitacional = "POSTULANTE";
+    alojado.alojamientoAsignado = null;
+    if (typeof alojado.tokenVersion === "number") alojado.tokenVersion += 1;
+  }
+  await alojado.save({ session });
+
+  await actualizarOcupacionAlojamiento({
+    alojamientoId,
+    alojadoId,
+    plazaId,
+    anexoId: documento._id,
+    actorId,
+    now,
+    session,
+  });
+}
+
 async function cerrarAnexo26(id, payload = {}, user) {
   if (!isObjectId(user?._id)) return publicError(403, "USUARIO_NO_AUTORIZADO");
   if (!isAdminGeneral(user)) return publicError(404, "DOCUMENTO_NO_DISPONIBLE");
   if (!isObjectId(id)) return publicError(404, "DOCUMENTO_NO_DISPONIBLE");
 
-  const documento = await AlojamientoDocumento.findOne({
-    _id: id,
-    codigo: "ANEXO_26",
-    activo: { $ne: false },
-  });
-
-  if (!documento) return publicError(404, "DOCUMENTO_NO_DISPONIBLE");
-  if (up(documento.estado) !== "EN_REVISION") return publicError(409, "ESTADO_INVALIDO");
-  const conformidadOk = documento.datos?.conformidadAlojado?.ok;
-  if (typeof conformidadOk !== "boolean") return publicError(409, "CONFORMIDAD_ALOJADO_REQUERIDA");
-
   const observacion = trimText(payload?.observacion || payload?.datos?.observacionesAdminGeneral, 1000);
-  if (conformidadOk === false && !observacion) return publicError(400, "OBSERVACION_CRITICA_REQUERIDA");
-  documento.datos = {
-    ...(documento.datos || {}),
-    observacionesAdminGeneral: observacion,
-    conformidadAdminGeneral: {
-      ok: true,
-      fecha: new Date(),
-      usuario: user._id,
-      observacion,
-    },
-  };
-
-  const conformidad = registrarConformidad(documento, {
-    tipo: "ADMIN_GENERAL",
-    usuario: user._id,
-    rol: "ADMIN_GENERAL",
-    ok: true,
-    observacion,
-  });
-  if (!conformidad.ok) return publicError(400, "CONFORMIDAD_INVALIDA");
-
-  documento.signers.push({
-    tipo: "ADMIN_GENERAL",
-    usuario: user._id,
-    nombre: nombreDesdeUsuario(user),
-    rol: "ADMIN_GENERAL",
-    fecha: new Date(),
-    fuente: "CIERRE_ADMIN_GENERAL_ANEXO_26",
-  });
-
-  const transition = registrarCambioEstado(documento, {
-    estadoNuevo: "CERRADO",
-    actorId: user._id,
-    rolActor: "ADMIN_GENERAL",
-    observacion: conformidadOk === false ? "Cierre ADMIN_GENERAL ANEXO_26 con novedades." : "Cierre ADMIN_GENERAL ANEXO_26.",
-  });
-  if (!transition.ok) return publicError(409, "TRANSICION_INVALIDA");
-
-  documento.estadoInstitucional = conformidadOk === false ? "CON_NOVEDADES" : "CERRADO_ADMIN_GENERAL";
-  documento.actualizadoPor = idValue(user?._id);
+  const session = await AlojamientoDocumento.startSession();
 
   try {
-    await documento.save();
-    return { ok: true, status: 200, documento: toResponse(documento) };
-  } catch {
+    let cerrado = null;
+
+    await session.withTransaction(async () => {
+      const documento = await AlojamientoDocumento.findOne({
+        _id: id,
+        codigo: "ANEXO_26",
+        activo: { $ne: false },
+      }).session(session);
+
+      if (!documento) throw publicError(404, "DOCUMENTO_NO_DISPONIBLE");
+      if (up(documento.codigo) !== "ANEXO_26") throw publicError(404, "DOCUMENTO_NO_DISPONIBLE");
+      if (up(documento.estado) !== "EN_REVISION") throw publicError(409, "ESTADO_INVALIDO");
+      if (documento.datos?.conformidadAlojado?.ok !== true) {
+        throw publicError(409, "CONFORMIDAD_ALOJADO_REQUERIDA");
+      }
+
+      const now = new Date();
+
+      await liberarOcupacionDesdeAnexo26(documento, user, { session, now });
+
+      documento.datos = {
+        ...(documento.datos || {}),
+        observacionesAdminGeneral: observacion,
+        conformidadAdminGeneral: {
+          ok: true,
+          fecha: now,
+          usuario: user._id,
+          observacion: observacion || "Cierre ADMIN_GENERAL del ANEXO_26 y liberacion de ocupacion.",
+        },
+      };
+
+      const conformidad = registrarConformidad(documento, {
+        tipo: "ADMIN_GENERAL",
+        usuario: user._id,
+        rol: "ADMIN_GENERAL",
+        ok: true,
+        observacion: observacion || "Cierre ADMIN_GENERAL del ANEXO_26 y liberacion de ocupacion.",
+      });
+      if (!conformidad.ok) throw publicError(400, "CONFORMIDAD_INVALIDA");
+
+      documento.signers = Array.isArray(documento.signers) ? documento.signers : [];
+      const signerExiste = documento.signers.some(
+        (item) => up(item?.tipo) === "ADMIN_GENERAL" && up(item?.fuente) === "CIERRE_ADMIN_GENERAL_ANEXO_26"
+      );
+      if (!signerExiste) {
+        documento.signers.push({
+          tipo: "ADMIN_GENERAL",
+          usuario: user._id,
+          nombre: nombreDesdeUsuario(user),
+          rol: "ADMIN_GENERAL",
+          fecha: now,
+          fuente: "CIERRE_ADMIN_GENERAL_ANEXO_26",
+        });
+      }
+
+      const transition = registrarCambioEstado(documento, {
+        estadoNuevo: "CERRADO",
+        actorId: user._id,
+        rolActor: "ADMIN_GENERAL",
+        observacion: "Cierre ADMIN_GENERAL ANEXO_26 y liberacion de ocupacion.",
+      });
+      if (!transition.ok) throw publicError(409, "TRANSICION_INVALIDA");
+
+      documento.estadoInstitucional = "CERRADO_ADMIN_GENERAL";
+      documento.actualizadoPor = idValue(user?._id);
+
+      await documento.save({ session });
+      cerrado = documento;
+    });
+
+    return { ok: true, status: 200, documento: toResponse(cerrado) };
+  } catch (err) {
+    if (err?.ok === false) return err;
     return publicError(500, "ERROR_INTERNO");
+  } finally {
+    session.endSession();
   }
 }
 
