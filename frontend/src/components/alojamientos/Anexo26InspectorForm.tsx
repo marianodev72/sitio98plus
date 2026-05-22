@@ -48,6 +48,19 @@ const inputStyle: CSSProperties = {
   colorScheme: "dark",
 };
 
+const selectStyle: CSSProperties = {
+  ...inputStyle,
+  background: "#374151",
+  color: "#f9fafb",
+  border: "1px solid rgba(255,255,255,0.20)",
+  colorScheme: "dark",
+};
+
+const optionStyle: CSSProperties = {
+  backgroundColor: "#374151",
+  color: "#f9fafb",
+};
+
 const labelStyle: CSSProperties = {
   display: "block",
   color: "rgba(255,255,255,0.64)",
@@ -136,11 +149,11 @@ export default function Anexo26InspectorForm({ value, onChange, onGuardar, readO
                 value={safe(datos[group]?.[key])}
                 disabled={readOnly}
                 onChange={(e) => setNested(group, key, e.target.value)}
-                style={inputStyle}
+                style={selectStyle}
               >
-                <option value="">Seleccionar</option>
-                <option value="SI">SI</option>
-                <option value="NO">NO</option>
+                <option value="" style={optionStyle}>Seleccionar</option>
+                <option value="SI" style={optionStyle}>SI</option>
+                <option value="NO" style={optionStyle}>NO</option>
               </select>
             </label>
           ))}
@@ -211,13 +224,13 @@ export default function Anexo26InspectorForm({ value, onChange, onGuardar, readO
                 value={safe(datos.estadoSistemas?.[key])}
                 disabled={readOnly}
                 onChange={(e) => setNested("estadoSistemas", key, e.target.value)}
-                style={inputStyle}
+                style={selectStyle}
               >
-                <option value="">Seleccionar</option>
-                <option value="MB">MB</option>
-                <option value="B">B</option>
-                <option value="R">R</option>
-                <option value="M">M</option>
+                <option value="" style={optionStyle}>Seleccionar</option>
+                <option value="MB" style={optionStyle}>MB</option>
+                <option value="B" style={optionStyle}>B</option>
+                <option value="R" style={optionStyle}>R</option>
+                <option value="M" style={optionStyle}>M</option>
               </select>
             </label>
           ))}
