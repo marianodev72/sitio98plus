@@ -7,10 +7,12 @@ const { Liquidacion } = require("../../../models/Liquidacion");
 const MisDatosDeclaradosUpdate = require("../../../models/MisDatosDeclaradosUpdate");
 const anexo23Service = require("../services/documentos/anexo23Service");
 const anexo24Service = require("../services/documentos/anexo24Service");
+const anexo25Service = require("../services/documentos/anexo25Service");
 const alojamientoDocumentoPdfService = require("../services/documentos/alojamientoDocumentoPdfService");
 const { renderAnexo22Pdf } = require("../pdf/anexo22PdfRenderer");
 const { renderAnexo23Pdf } = require("../pdf/anexo23PdfRenderer");
 const { renderAnexo24Pdf } = require("../pdf/anexo24PdfRenderer");
+const { renderAnexo25Pdf } = require("../pdf/anexo25PdfRenderer");
 
 function up(value) {
   return String(value || "").toUpperCase().trim();
@@ -120,7 +122,7 @@ function publicDocumentoListItem(doc) {
     estadoInstitucional: doc.estadoInstitucional || null,
     readonly: true,
     canView: true,
-    canDownloadPdf: doc.codigo === "ANEXO_22" || doc.codigo === "ANEXO_23" || doc.codigo === "ANEXO_24",
+    canDownloadPdf: doc.codigo === "ANEXO_22" || doc.codigo === "ANEXO_23" || doc.codigo === "ANEXO_24" || doc.codigo === "ANEXO_25",
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
   };
@@ -129,8 +131,14 @@ function publicDocumentoListItem(doc) {
 function publicDocumentoDetail(doc, user) {
   const userId = String(user?._id || "");
   const esAnexo23 = up(doc?.codigo) === "ANEXO_23";
+  const esAnexo25 = up(doc?.codigo) === "ANEXO_25";
   const canConformarAnexo23 =
     esAnexo23 &&
+    up(doc?.estado) === "ENVIADO" &&
+    isUsuarioVinculado(user, doc) &&
+    !hasConformidadAlojado(doc, userId);
+  const canConformarAnexo25 =
+    esAnexo25 &&
     up(doc?.estado) === "ENVIADO" &&
     isUsuarioVinculado(user, doc) &&
     !hasConformidadAlojado(doc, userId);
@@ -154,6 +162,7 @@ function publicDocumentoDetail(doc, user) {
         }))
       : [],
     canConformarAnexo23,
+    canConformarAnexo25,
   };
 }
 
@@ -192,7 +201,7 @@ async function findMiDocumento(user, token) {
 
   const userId = user._id;
   const docs = await AlojamientoDocumento.find({
-    codigo: { $in: ["ANEXO_21", "ANEXO_22", "ANEXO_23", "ANEXO_24"] },
+    codigo: { $in: ["ANEXO_21", "ANEXO_22", "ANEXO_23", "ANEXO_24", "ANEXO_25"] },
     activo: { $ne: false },
     $or: [
       { solicitante: userId },
@@ -858,7 +867,7 @@ async function listarDocumentos(req, res) {
     const codigo = up(req.query?.codigo);
     const filter = {
       activo: { $ne: false },
-      codigo: { $in: ["ANEXO_21", "ANEXO_22", "ANEXO_23", "ANEXO_24"] },
+      codigo: { $in: ["ANEXO_21", "ANEXO_22", "ANEXO_23", "ANEXO_24", "ANEXO_25"] },
       $or: [
         { solicitante: userId },
         { alojado: userId },
@@ -867,7 +876,7 @@ async function listarDocumentos(req, res) {
       ],
     };
     if (codigo) {
-      if (!["ANEXO_21", "ANEXO_22", "ANEXO_23", "ANEXO_24"].includes(codigo)) return deny(res);
+      if (!["ANEXO_21", "ANEXO_22", "ANEXO_23", "ANEXO_24", "ANEXO_25"].includes(codigo)) return deny(res);
       filter.codigo = codigo;
     }
 
@@ -966,7 +975,7 @@ async function enviarAnexo24(req, res) {
 async function descargarDocumentoPdf(req, res) {
   try {
     const documento = await findMiDocumento(req.user, req.params.token);
-    if (!documento || !["ANEXO_22", "ANEXO_23", "ANEXO_24"].includes(up(documento.codigo))) return deny(res);
+    if (!documento || !["ANEXO_22", "ANEXO_23", "ANEXO_24", "ANEXO_25"].includes(up(documento.codigo))) return deny(res);
 
     const result = await alojamientoDocumentoPdfService.obtenerPayloadDocumentoPdf({
       id: documento._id,
@@ -992,6 +1001,12 @@ async function descargarDocumentoPdf(req, res) {
     }
     if (codigo === "ANEXO_24") {
       return renderAnexo24Pdf(res, {
+        documento: result.documento,
+        origen: result.origen,
+      });
+    }
+    if (codigo === "ANEXO_25") {
+      return renderAnexo25Pdf(res, {
         documento: result.documento,
         origen: result.origen,
       });
@@ -1024,6 +1039,26 @@ async function conformidadAnexo23(req, res) {
   }
 }
 
+async function conformidadAnexo25(req, res) {
+  try {
+    const documento = await findMiDocumento(req.user, req.params.token);
+    if (!documento || up(documento.codigo) !== "ANEXO_25") return deny(res);
+
+    const result = await anexo25Service.conformidadAlojado(documento._id, req.body || {}, req.user);
+    if (!result?.ok) {
+      return res.status(result?.status || 400).json({
+        ok: false,
+        error: result?.message || "No es posible procesar la solicitud.",
+      });
+    }
+
+    return res.json({ ok: true, documento: publicDocumentoDetail(result.documento, req.user) });
+  } catch (err) {
+    console.error("[alojamientos-mi] conformidadAnexo25 error:", err?.message || "Error controlado");
+    return res.status(500).json({ message: "Error interno al registrar conformidad" });
+  }
+}
+
 module.exports = {
   ocupacionActual,
   listarOcupaciones,
@@ -1038,6 +1073,7 @@ module.exports = {
   obtenerDocumento,
   descargarDocumentoPdf,
   conformidadAnexo23,
+  conformidadAnexo25,
   generarAnexo24,
   actualizarAnexo24,
   enviarAnexo24,

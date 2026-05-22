@@ -29,6 +29,7 @@ type Documento = {
   conformidades?: Array<{ tipo?: string; ok?: boolean; rol?: string; fecha?: string }>;
   canDownloadPdf?: boolean;
   canConformarAnexo23?: boolean;
+  canConformarAnexo25?: boolean;
   canGenerarAnexo24?: boolean;
   anexo24Vencido?: boolean;
   anexo24FechaLimite?: string | null;
@@ -137,6 +138,24 @@ export default function AlojamientoDocumentoReadonlyAlojado() {
     setInfo("");
     try {
       const res = await http.post(`/alojamientos-mi/documentos/${token}/conformidad-anexo-23`, {});
+      setDocumento(res.data?.documento || null);
+      setInfo("Conformidad registrada correctamente.");
+    } catch {
+      setError("No fue posible registrar la conformidad.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function prestarConformidadAnexo25() {
+    if (!token || !documento?.canConformarAnexo25 || busy) return;
+    const ok = window.confirm("Confirma que presta conformidad sobre el ANEXO_25?");
+    if (!ok) return;
+    setBusy(true);
+    setError("");
+    setInfo("");
+    try {
+      const res = await http.post(`/alojamientos-mi/documentos/${token}/conformidad-anexo-25`, {});
       setDocumento(res.data?.documento || null);
       setInfo("Conformidad registrada correctamente.");
     } catch {
@@ -462,6 +481,35 @@ export default function AlojamientoDocumentoReadonlyAlojado() {
                     <Field label="Novedades adicionales" value={datos.novedadesTexto} />
                   </div>
                 )}
+              </section>
+            ) : null}
+
+            {up(documento.codigo) === "ANEXO_25" ? (
+              <section style={{ ...cardStyle, marginTop: 12 }}>
+                <h2 style={sectionTitleStyle}>Inspeccion previa</h2>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
+                  <Field label="Lugar inspeccion" value={datos.lugarInspeccion} />
+                  <Field label="Fecha inspeccion" value={fmtDate(datos.fechaInspeccion)} />
+                  <Field label="Reparaciones alcaldia" value={Array.isArray(datos.reparacionesArmada) ? datos.reparacionesArmada.join(" / ") : ""} />
+                  <Field label="Reparaciones huesped" value={Array.isArray(datos.reparacionesAlojado) ? datos.reparacionesAlojado.join(" / ") : ""} />
+                  <Field label="Lugar firma" value={datos.lugarFirma} />
+                  <Field label="Fecha firma" value={datos.fechaFirma} />
+                </div>
+                <section style={{ ...softCardStyle, marginTop: 12 }}>
+                  <h3 style={{ marginTop: 0, color: "#fff" }}>Conformidad del alojado</h3>
+                  {conformidadAlojado ? (
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
+                      <Field label="Estado" value="Conformidad registrada" />
+                      <Field label="Fecha" value={fmtDate(conformidadAlojado.fecha)} />
+                    </div>
+                  ) : documento.canConformarAnexo25 ? (
+                    <button type="button" style={primaryButtonStyle} onClick={prestarConformidadAnexo25} disabled={busy}>
+                      {busy ? "Procesando..." : "Prestar conformidad ANEXO_25"}
+                    </button>
+                  ) : (
+                    <p style={subtitleStyle}>No hay acciones disponibles para este documento.</p>
+                  )}
+                </section>
               </section>
             ) : null}
 
