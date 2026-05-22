@@ -5,6 +5,7 @@ import { useAuth } from "../../auth/useAuth";
 import Anexo23InspectorForm from "../../components/alojamientos/Anexo23InspectorForm";
 import Anexo25InspectorForm, { type Anexo25Datos } from "../../components/alojamientos/Anexo25InspectorForm";
 import Anexo26InspectorForm, { type Anexo26Datos } from "../../components/alojamientos/Anexo26InspectorForm";
+import Anexo28InspectorForm, { type Anexo28InspectorDatos } from "../../components/alojamientos/Anexo28InspectorForm";
 import {
   badgeStyle,
   cardStyle,
@@ -46,6 +47,7 @@ type AlojamientoDocumento = {
   historialEstados?: Array<Record<string, any>>;
   intervenciones?: Array<Record<string, any>>;
   derivadoDe?: string | Record<string, any> | null;
+  asignacion?: string | Record<string, any> | null;
 };
 
 function safe(value: unknown, fallback = "-") {
@@ -275,8 +277,10 @@ export default function AlojamientoDocumentoDetalleInspector() {
   const [generandoAnexo23, setGenerandoAnexo23] = useState(false);
   const [generandoAnexo25, setGenerandoAnexo25] = useState(false);
   const [generandoAnexo26, setGenerandoAnexo26] = useState(false);
+  const [generandoAnexo28, setGenerandoAnexo28] = useState(false);
   const [guardandoAnexo25, setGuardandoAnexo25] = useState(false);
   const [guardandoAnexo26, setGuardandoAnexo26] = useState(false);
+  const [guardandoAnexo28, setGuardandoAnexo28] = useState(false);
   const [descargandoPdf, setDescargandoPdf] = useState(false);
   const [revisandoAnexo24, setRevisandoAnexo24] = useState(false);
   const [observacionesInspector, setObservacionesInspector] = useState("");
@@ -303,6 +307,7 @@ export default function AlojamientoDocumentoDetalleInspector() {
   const esAnexo24 = up(documento?.codigo) === "ANEXO_24";
   const esAnexo25 = up(documento?.codigo) === "ANEXO_25";
   const esAnexo26 = up(documento?.codigo) === "ANEXO_26";
+  const esAnexo28 = up(documento?.codigo) === "ANEXO_28";
   const esInspectorAlojamientos = up(user?.role) === "INSPECTOR_ALOJAMIENTOS" || hasPerm(user, "INSPECTOR_ALOJAMIENTOS");
   const puedeRevisarAnexo24 =
     esAnexo24 &&
@@ -314,6 +319,9 @@ export default function AlojamientoDocumentoDetalleInspector() {
   const puedeGenerarAnexo26 =
     esAnexo25 && up(documento?.estado) === "CERRADO" && anexo23Verificado && !verificandoAnexo23 && !anexo26ExistenteId;
   const puedeEditarAnexo26 = esAnexo26 && up(documento?.estado) === "ENVIADO" && esInspectorAlojamientos;
+  const puedeGenerarAnexo28 = !esAnexo28 && esInspectorAlojamientos && Boolean(idValue(documento?.asignacion));
+  const puedeEditarAnexo28 =
+    esAnexo28 && ["ENVIADO", "DEVUELTO_A_INSPECTOR"].includes(up(documento?.estado)) && esInspectorAlojamientos;
   const puedeGenerarAnexo23 =
     esAnexo22Cerrado && anexo23Verificado && !verificandoAnexo23 && !anexo23ExistenteId;
 
@@ -400,7 +408,7 @@ export default function AlojamientoDocumentoDetalleInspector() {
   }
 
   async function descargarPdfAnexo23() {
-    if (!documento?._id || (!esAnexo23 && !esAnexo24 && !esAnexo25 && !esAnexo26) || descargandoPdf) return;
+    if (!documento?._id || (!esAnexo23 && !esAnexo24 && !esAnexo25 && !esAnexo26 && !esAnexo28) || descargandoPdf) return;
 
     setDescargandoPdf(true);
     setAccionMsg("");
@@ -545,6 +553,67 @@ export default function AlojamientoDocumentoDetalleInspector() {
     }
   }
 
+  async function generarAnexo28() {
+    if (!documento || !puedeGenerarAnexo28 || generandoAnexo28) return;
+    const ok = window.confirm("Confirma generar ANEXO_28 sobre la ocupacion vinculada?");
+    if (!ok) return;
+    const descripcion = window.prompt("Descripcion inicial del pedido") || "";
+
+    setGenerandoAnexo28(true);
+    setAccionMsg("");
+    try {
+      const res = await http.post("/alojamientos-documentos/anexo-28", {
+        asignacionId: idValue(documento.asignacion),
+        datos: {
+          solicitaReparacion: true,
+          descripcionSolicitud: descripcion,
+        },
+      });
+      const nuevoId = idValue(res.data?.documento?._id);
+      if (nuevoId) {
+        navigate(`${basePath}/documentos/${nuevoId}`);
+        return;
+      }
+      setAccionMsg("ANEXO_28 generado, pero no fue posible abrir el detalle automaticamente.");
+    } catch {
+      setAccionMsg("No fue posible generar el ANEXO_28.");
+    } finally {
+      setGenerandoAnexo28(false);
+    }
+  }
+
+  async function guardarAnexo28(payload: Anexo28InspectorDatos) {
+    if (!documento?._id || !puedeEditarAnexo28 || guardandoAnexo28) return;
+    const payloadSeguro: Anexo28InspectorDatos = {
+      emergencia: payload.emergencia,
+      correspondeAlojado: payload.correspondeAlojado,
+      novedadesActaAnterior: payload.novedadesActaAnterior,
+      descripcionTrabajo: payload.descripcionTrabajo,
+      cargoAlojado: payload.cargoAlojado,
+      cargoAlcaldia: payload.cargoAlcaldia,
+      razonSeguridad: payload.razonSeguridad,
+      razonPreservacion: payload.razonPreservacion,
+      razonPresentacion: payload.razonPresentacion,
+      observacionesInspector: payload.observacionesInspector,
+      informeTecnico: payload.informeTecnico,
+      estimacion: payload.estimacion,
+      autorizacion: payload.autorizacion,
+      verificacionInspector: payload.verificacionInspector,
+    };
+    setGuardandoAnexo28(true);
+    setAccionMsg("");
+    try {
+      const res = await http.patch(`/alojamientos-documentos/anexo-28/${documento._id}/inspector`, { datos: payloadSeguro });
+      setDocumento(res.data?.documento || null);
+      setAccionMsg("Revision ANEXO_28 registrada correctamente.");
+      await cargar();
+    } catch {
+      setAccionMsg("No fue posible registrar la revision ANEXO_28.");
+    } finally {
+      setGuardandoAnexo28(false);
+    }
+  }
+
   useEffect(() => {
     cargar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -641,7 +710,22 @@ export default function AlojamientoDocumentoDetalleInspector() {
               {generandoAnexo26 ? "Generando..." : "Generar ANEXO_26"}
             </button>
           )}
-          {(esAnexo23 || esAnexo24 || esAnexo25) && (
+          {puedeGenerarAnexo28 && (
+            <button
+              type="button"
+              onClick={generarAnexo28}
+              disabled={generandoAnexo28}
+              style={{
+                ...badgeStyle,
+                minHeight: 36,
+                cursor: generandoAnexo28 ? "not-allowed" : "pointer",
+                opacity: generandoAnexo28 ? 0.65 : 1,
+              }}
+            >
+              {generandoAnexo28 ? "Generando..." : "Generar ANEXO_28"}
+            </button>
+          )}
+          {(esAnexo23 || esAnexo24 || esAnexo25 || esAnexo26 || esAnexo28) && (
             <button
               type="button"
               onClick={descargarPdfAnexo23}
@@ -837,6 +921,95 @@ export default function AlojamientoDocumentoDetalleInspector() {
                 readOnly={!puedeEditarAnexo26}
                 busy={guardandoAnexo26}
               />
+            </Section>
+          )}
+
+          {esAnexo28 && (
+            <Section title="Pedido de trabajo ANEXO_28">
+              <Anexo28InspectorForm
+                value={{
+                  emergencia: datos.bloqueInspector?.emergencia,
+                  correspondeAlojado: datos.bloqueInspector?.correspondeAlojado,
+                  novedadesActaAnterior: datos.bloqueInspector?.novedadesActaAnterior,
+                  descripcionTrabajo: datos.bloqueInspector?.descripcionTrabajo,
+                  cargoAlojado: datos.bloqueAdministrativo?.cargoAlojado,
+                  cargoAlcaldia: datos.bloqueAdministrativo?.cargoAlcaldia,
+                  razonSeguridad: datos.bloqueAdministrativo?.razonSeguridad,
+                  razonPreservacion: datos.bloqueAdministrativo?.razonPreservacion,
+                  razonPresentacion: datos.bloqueAdministrativo?.razonPresentacion,
+                  observacionesInspector: datos.observacionesInspector,
+                  informeTecnico: datos.informeTecnico,
+                  estimacion: datos.estimacion,
+                  autorizacion: datos.autorizacion,
+                  verificacionInspector: datos.verificacionInspector,
+                }}
+                onChange={(next) =>
+                  setDocumento((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          datos: {
+                            ...(prev.datos || {}),
+                            bloqueInspector: {
+                              ...((prev.datos || {}).bloqueInspector || {}),
+                              emergencia: next.emergencia,
+                              correspondeAlojado: next.correspondeAlojado,
+                              novedadesActaAnterior: next.novedadesActaAnterior,
+                              descripcionTrabajo: next.descripcionTrabajo,
+                            },
+                            bloqueAdministrativo: {
+                              ...((prev.datos || {}).bloqueAdministrativo || {}),
+                              cargoAlojado: next.cargoAlojado,
+                              cargoAlcaldia: next.cargoAlcaldia,
+                              razonSeguridad: next.razonSeguridad,
+                              razonPreservacion: next.razonPreservacion,
+                              razonPresentacion: next.razonPresentacion,
+                            },
+                            observacionesInspector: next.observacionesInspector,
+                            informeTecnico: next.informeTecnico,
+                            estimacion: next.estimacion,
+                            autorizacion: next.autorizacion,
+                            verificacionInspector: next.verificacionInspector,
+                          },
+                        }
+                      : prev
+                  )
+                }
+                readOnly={!puedeEditarAnexo28}
+              />
+              {puedeEditarAnexo28 ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    guardarAnexo28({
+                      emergencia: datos.bloqueInspector?.emergencia,
+                      correspondeAlojado: datos.bloqueInspector?.correspondeAlojado,
+                      novedadesActaAnterior: datos.bloqueInspector?.novedadesActaAnterior,
+                      descripcionTrabajo: datos.bloqueInspector?.descripcionTrabajo,
+                      cargoAlojado: datos.bloqueAdministrativo?.cargoAlojado,
+                      cargoAlcaldia: datos.bloqueAdministrativo?.cargoAlcaldia,
+                      razonSeguridad: datos.bloqueAdministrativo?.razonSeguridad,
+                      razonPreservacion: datos.bloqueAdministrativo?.razonPreservacion,
+                      razonPresentacion: datos.bloqueAdministrativo?.razonPresentacion,
+                      observacionesInspector: datos.observacionesInspector,
+                      informeTecnico: datos.informeTecnico,
+                      estimacion: datos.estimacion,
+                      autorizacion: datos.autorizacion,
+                      verificacionInspector: datos.verificacionInspector,
+                    })
+                  }
+                  disabled={guardandoAnexo28}
+                  style={{
+                    ...badgeStyle,
+                    minHeight: 40,
+                    marginTop: 12,
+                    cursor: guardandoAnexo28 ? "not-allowed" : "pointer",
+                    opacity: guardandoAnexo28 ? 0.65 : 1,
+                  }}
+                >
+                  {guardandoAnexo28 ? "Registrando..." : "Registrar revision"}
+                </button>
+              ) : null}
             </Section>
           )}
 

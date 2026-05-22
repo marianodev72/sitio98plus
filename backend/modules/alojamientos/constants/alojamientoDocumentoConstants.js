@@ -12,6 +12,7 @@ const ALOJAMIENTO_DOCUMENTO_ESTADOS = Object.freeze([
   "BORRADOR",
   "ENVIADO",
   "EN_REVISION",
+  "DEVUELTO_A_INSPECTOR",
   "CERRADO",
   "RECHAZADO",
   "ANULADO",
@@ -28,7 +29,8 @@ const ALOJAMIENTO_DOCUMENTO_ROLES = Object.freeze([
 const ALOJAMIENTO_DOCUMENTO_TRANSICIONES = Object.freeze({
   BORRADOR: Object.freeze(["ENVIADO", "ANULADO"]),
   ENVIADO: Object.freeze(["EN_REVISION", "RECHAZADO", "ANULADO"]),
-  EN_REVISION: Object.freeze(["CERRADO", "RECHAZADO", "ANULADO"]),
+  EN_REVISION: Object.freeze(["CERRADO", "DEVUELTO_A_INSPECTOR", "RECHAZADO", "ANULADO"]),
+  DEVUELTO_A_INSPECTOR: Object.freeze(["EN_REVISION", "RECHAZADO", "ANULADO"]),
   CERRADO: Object.freeze([]),
   RECHAZADO: Object.freeze([]),
   ANULADO: Object.freeze([]),

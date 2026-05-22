@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import http from "../../api/http";
+import Anexo28PedidoForm, { type Anexo28PedidoDatos } from "../../components/alojamientos/Anexo28PedidoForm";
 import {
   badgeStyle,
   buttonRowStyle,
@@ -32,6 +33,8 @@ type Documento = {
   canConformarAnexo25?: boolean;
   canConformarAnexo26?: boolean;
   canGenerarAnexo24?: boolean;
+  canEditarAnexo28?: boolean;
+  canEnviarAnexo28?: boolean;
   anexo24Vencido?: boolean;
   anexo24FechaLimite?: string | null;
   anexo24ExistenteToken?: string;
@@ -55,6 +58,13 @@ function fmtDate(value?: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
   return date.toLocaleString("es-AR");
+}
+
+function dateInputValue(value: unknown) {
+  if (!value) return "";
+  const date = new Date(String(value));
+  if (!Number.isNaN(date.getTime())) return date.toISOString().slice(0, 10);
+  return String(value).slice(0, 10);
 }
 
 function up(value: unknown) {
@@ -95,6 +105,15 @@ export default function AlojamientoDocumentoReadonlyAlojado() {
   const [info, setInfo] = useState("");
   const [anexo24Form, setAnexo24Form] = useState<Anexo24Form>({
     novedadesTexto: "",
+    lugarFirma: "",
+    fechaFirma: "",
+  });
+  const [anexo28Form, setAnexo28Form] = useState<Anexo28PedidoDatos>({
+    solicitaCambio: false,
+    solicitaReparacion: false,
+    solicitaVerificacion: false,
+    solicitaProvision: false,
+    descripcionSolicitud: "",
     lugarFirma: "",
     fechaFirma: "",
   });
@@ -240,6 +259,40 @@ export default function AlojamientoDocumentoReadonlyAlojado() {
     }
   }
 
+  async function guardarAnexo28() {
+    if (!token || !documento?.canEditarAnexo28 || busy) return;
+    setBusy(true);
+    setError("");
+    setInfo("");
+    try {
+      const res = await http.patch(`/alojamientos-mi/documentos/${token}/anexo-28`, { datos: anexo28Form });
+      setDocumento(res.data?.documento || null);
+      setInfo("ANEXO_28 guardado correctamente.");
+    } catch {
+      setError("No fue posible guardar el ANEXO_28.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function enviarAnexo28() {
+    if (!token || !documento?.canEnviarAnexo28 || busy) return;
+    const ok = window.confirm("Confirma el envio del ANEXO_28?");
+    if (!ok) return;
+    setBusy(true);
+    setError("");
+    setInfo("");
+    try {
+      const res = await http.post(`/alojamientos-mi/documentos/${token}/enviar-anexo-28`, {});
+      setDocumento(res.data?.documento || null);
+      setInfo("ANEXO_28 enviado correctamente.");
+    } catch {
+      setError("No fue posible enviar el ANEXO_28.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   useEffect(() => {
     cargar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -252,6 +305,21 @@ export default function AlojamientoDocumentoReadonlyAlojado() {
       novedadesTexto: String(datosAnexo24.novedadesTexto || ""),
       lugarFirma: String(datosAnexo24.lugarFirma || ""),
       fechaFirma: String(datosAnexo24.fechaFirma || ""),
+    });
+  }, [documento]);
+
+  useEffect(() => {
+    const datosAnexo28 = documento?.datos || {};
+    if (up(documento?.codigo) !== "ANEXO_28") return;
+    const solicita = datosAnexo28.solicita || {};
+    setAnexo28Form({
+      solicitaCambio: solicita.cambio === true,
+      solicitaReparacion: solicita.reparacion === true,
+      solicitaVerificacion: solicita.verificacion === true,
+      solicitaProvision: solicita.provision === true,
+      descripcionSolicitud: String(datosAnexo28.descripcionSolicitud || ""),
+      lugarFirma: String(datosAnexo28.lugarFirma || ""),
+      fechaFirma: dateInputValue(datosAnexo28.fechaFirma),
     });
   }, [documento]);
 
@@ -559,6 +627,36 @@ export default function AlojamientoDocumentoReadonlyAlojado() {
                     <p style={subtitleStyle}>No hay acciones disponibles para este documento.</p>
                   )}
                 </section>
+              </section>
+            ) : null}
+
+            {up(documento.codigo) === "ANEXO_28" ? (
+              <section style={{ ...cardStyle, marginTop: 12 }}>
+                <h2 style={sectionTitleStyle}>Pedido de trabajo</h2>
+                {documento.canEditarAnexo28 ? (
+                  <div style={{ display: "grid", gap: 12 }}>
+                    <Anexo28PedidoForm value={anexo28Form} onChange={setAnexo28Form} readOnly={busy} />
+                    <div style={buttonRowStyle}>
+                      <button type="button" style={secondaryButtonStyle} onClick={guardarAnexo28} disabled={busy}>
+                        {busy ? "Procesando..." : "Guardar"}
+                      </button>
+                      <button type="button" style={primaryButtonStyle} onClick={enviarAnexo28} disabled={busy}>
+                        {busy ? "Procesando..." : "Enviar ANEXO_28"}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
+                    <Field label="Promotor" value={`${safe(datos.promotor?.tipo)} - ${safe(datos.promotor?.nombre)}`} />
+                    <Field label="Cambio" value={datos.solicita?.cambio === true ? "SI" : "NO"} />
+                    <Field label="Reparacion" value={datos.solicita?.reparacion === true ? "SI" : "NO"} />
+                    <Field label="Verificacion" value={datos.solicita?.verificacion === true ? "SI" : "NO"} />
+                    <Field label="Provision" value={datos.solicita?.provision === true ? "SI" : "NO"} />
+                    <Field label="Descripcion" value={datos.descripcionSolicitud} />
+                    <Field label="Estado inspector" value={datos.bloqueInspector?.descripcionTrabajo ? "Revisado" : "Pendiente"} />
+                    <Field label="Observaciones" value={datos.observacionesAdminGeneral || datos.observacionesInspector} />
+                  </div>
+                )}
               </section>
             ) : null}
 

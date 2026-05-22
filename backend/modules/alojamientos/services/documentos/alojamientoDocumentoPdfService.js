@@ -89,6 +89,13 @@ function canDownloadAnexo26(user, documento) {
   return isUsuarioVinculado(user, documento);
 }
 
+function canDownloadAnexo28(user, documento) {
+  if (!user || !documento) return false;
+  if (isAdminGeneral(user)) return true;
+  if (isInspectorAlojamientos(user)) return puedeVerDocumento(user, documento);
+  return isUsuarioVinculado(user, documento);
+}
+
 async function obtenerPayloadAnexo22({ id, user }) {
   if (!user?._id || !isObjectId(id)) return publicError(404, "NO_DISPONIBLE");
 
@@ -243,6 +250,25 @@ async function obtenerPayloadAnexo26({ id, user }) {
   };
 }
 
+async function obtenerPayloadAnexo28({ id, user }) {
+  if (!user?._id || !isObjectId(id)) return publicError(404, "NO_DISPONIBLE");
+
+  const documento = await AlojamientoDocumento.findOne({
+    _id: id,
+    codigo: "ANEXO_28",
+    activo: { $ne: false },
+  }).lean();
+
+  if (!documento) return publicError(404, "NO_DISPONIBLE");
+  if (!canDownloadAnexo28(user, documento)) return publicError(404, "NO_DISPONIBLE");
+
+  return {
+    ok: true,
+    status: 200,
+    documento,
+  };
+}
+
 async function obtenerPayloadDocumentoPdf({ id, user }) {
   if (!user?._id || !isObjectId(id)) return publicError(404, "NO_DISPONIBLE");
 
@@ -259,6 +285,7 @@ async function obtenerPayloadDocumentoPdf({ id, user }) {
   if (up(base.codigo) === "ANEXO_24") return obtenerPayloadAnexo24({ id, user });
   if (up(base.codigo) === "ANEXO_25") return obtenerPayloadAnexo25({ id, user });
   if (up(base.codigo) === "ANEXO_26") return obtenerPayloadAnexo26({ id, user });
+  if (up(base.codigo) === "ANEXO_28") return obtenerPayloadAnexo28({ id, user });
   return publicError(404, "NO_DISPONIBLE");
 }
 
@@ -268,5 +295,6 @@ module.exports = {
   obtenerPayloadAnexo24,
   obtenerPayloadAnexo25,
   obtenerPayloadAnexo26,
+  obtenerPayloadAnexo28,
   obtenerPayloadDocumentoPdf,
 };

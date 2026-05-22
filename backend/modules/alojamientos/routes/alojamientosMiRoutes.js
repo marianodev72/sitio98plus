@@ -18,6 +18,7 @@ router.post("/datos-declarados/actualizar", controller.actualizarDatosDeclarados
 router.get("/datos-declarados/historial", controller.historialDatosDeclarados);
 router.get("/datos-declarados/historial/:token", controller.obtenerDatosDeclaradosUpdate);
 router.get("/documentos", controller.listarDocumentos);
+router.post("/documentos/anexo-28", controller.crearAnexo28);
 router.get("/documentos/:token", controller.obtenerDocumento);
 router.get("/documentos/:token/pdf", controller.descargarDocumentoPdf);
 router.post("/documentos/:token/conformidad-anexo-23", controller.conformidadAnexo23);
@@ -26,5 +27,7 @@ router.post("/documentos/:token/conformidad-anexo-26", controller.conformidadAne
 router.post("/documentos/:token/generar-anexo-24", controller.generarAnexo24);
 router.patch("/documentos/:token/anexo-24", controller.actualizarAnexo24);
 router.post("/documentos/:token/enviar-anexo-24", controller.enviarAnexo24);
+router.patch("/documentos/:token/anexo-28", controller.actualizarAnexo28);
+router.post("/documentos/:token/enviar-anexo-28", controller.enviarAnexo28);
 
 module.exports = router;

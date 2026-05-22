@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import http from "../../api/http";
+import Anexo28PedidoForm, { type Anexo28PedidoDatos } from "../../components/alojamientos/Anexo28PedidoForm";
 import {
   badgeStyle,
   buttonRowStyle,
@@ -54,7 +55,18 @@ export default function MisAnexosAlojado() {
   const [documentos, setDocumentos] = useState<Documento[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
   const [downloading, setDownloading] = useState("");
+  const [creandoAnexo28, setCreandoAnexo28] = useState(false);
+  const [anexo28, setAnexo28] = useState<Anexo28PedidoDatos>({
+    solicitaCambio: false,
+    solicitaReparacion: false,
+    solicitaVerificacion: false,
+    solicitaProvision: false,
+    descripcionSolicitud: "",
+    lugarFirma: "",
+    fechaFirma: "",
+  });
 
   async function cargar() {
     setLoading(true);
@@ -67,6 +79,27 @@ export default function MisAnexosAlojado() {
       setError("No es posible obtener sus anexos de alojamiento.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function crearAnexo28() {
+    if (creandoAnexo28) return;
+    setCreandoAnexo28(true);
+    setError("");
+    setInfo("");
+    try {
+      const res = await http.post("/alojamientos-mi/documentos/anexo-28", { datos: anexo28 });
+      const nuevo = res.data?.documento;
+      if (nuevo?.token) {
+        navigate(`/app/alojado/anexos/${nuevo.token}`);
+        return;
+      }
+      setInfo("ANEXO_28 creado correctamente.");
+      await cargar();
+    } catch {
+      setError("No fue posible crear el ANEXO_28. Verifique que tenga una ocupacion activa.");
+    } finally {
+      setCreandoAnexo28(false);
     }
   }
 
@@ -111,10 +144,28 @@ export default function MisAnexosAlojado() {
             {error}
           </div>
         ) : null}
+        {info ? (
+          <div style={{ ...cardStyle, marginBottom: 12, color: "#bbf7d0" }}>{info}</div>
+        ) : null}
+
+        <section style={{ ...cardStyle, marginBottom: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+            <div>
+              <h2 style={sectionTitleStyle}>Nuevo ANEXO_28</h2>
+              <p style={subtitleStyle}>Pedido de trabajo sobre su ocupacion activa.</p>
+            </div>
+            <button type="button" style={primaryButtonStyle} onClick={crearAnexo28} disabled={creandoAnexo28}>
+              {creandoAnexo28 ? "Creando..." : "Crear ANEXO_28"}
+            </button>
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <Anexo28PedidoForm value={anexo28} onChange={setAnexo28} readOnly={creandoAnexo28} />
+          </div>
+        </section>
 
         <section style={cardStyle}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-            <h2 style={sectionTitleStyle}>ANEXO_21 / ANEXO_22 / ANEXO_23 / ANEXO_24 / ANEXO_25 / ANEXO_26</h2>
+            <h2 style={sectionTitleStyle}>ANEXO_21 / ANEXO_22 / ANEXO_23 / ANEXO_24 / ANEXO_25 / ANEXO_26 / ANEXO_28</h2>
             <button type="button" style={secondaryButtonStyle} onClick={cargar} disabled={loading}>
               {loading ? "Cargando..." : "Actualizar"}
             </button>
