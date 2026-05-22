@@ -61,6 +61,10 @@ function findSigner(documento, tipo) {
   return signers.find((item) => up(item?.tipo) === tipoUp) || null;
 }
 
+function textOrEmpty(value) {
+  return String(value ?? "").trim();
+}
+
 function renderHistorial(doc, documento) {
   const historial = Array.isArray(documento?.historialEstados) ? documento.historialEstados : [];
 
@@ -79,29 +83,30 @@ function renderHistorial(doc, documento) {
   });
 }
 
-function renderFirmas(doc, documento, datos) {
-  const huesped = datos.huesped || {};
-  const inspector = datos.inspector || {};
-  const signerAdmin = findSigner(documento, "ADMIN_GENERAL");
+function renderFirmaCompacta(doc, label, source) {
+  const nombre = textOrEmpty(source?.nombre);
+  const fecha = textOrEmpty(fmtDate(source?.fecha)).replace(/^--$/, "");
+  const estado = source?.ok === true ? "Conformado" : "";
 
+  doc.font("Helvetica-Bold").fontSize(9).text(label);
+  if (nombre) field(doc, "Firmante", nombre);
+  if (estado) field(doc, "Estado", estado);
+  if (fecha) field(doc, "Fecha", fecha);
+  doc.moveDown(0.25);
+}
+
+function renderFirmas(doc, documento) {
+  const firmas = [
+    ["Huesped / alojado", findSigner(documento, "ALOJADO") || findSigner(documento, "HUESPED") || findConformidad(documento, "ALOJADO") || findConformidad(documento, "HUESPED")],
+    ["Inspector", findSigner(documento, "INSPECTOR") || findConformidad(documento, "INSPECTOR")],
+    ["Jefe organismo administrador", findSigner(documento, "ADMIN_GENERAL") || findConformidad(documento, "ADMIN_GENERAL")],
+  ].filter(([, source]) => Boolean(source));
+
+  if (!firmas.length) return;
+
+  ensureSpace(doc, 46 + firmas.length * 42);
   sectionTitle(doc, "Firmas");
-  ensureSpace(doc, 120);
-  const width = (doc.page.width - doc.page.margins.left - doc.page.margins.right - 24) / 3;
-  const y = doc.y + 28;
-  const x = doc.page.margins.left;
-  const labels = [
-    ["Huesped / alojado", huesped.nombreCompleto || huesped.nombre],
-    ["Inspector", inspector.nombre],
-    ["Jefe organismo administrador", signerAdmin?.nombre],
-  ];
-
-  labels.forEach(([label, name], index) => {
-    const left = x + index * (width + 12);
-    doc.moveTo(left, y).lineTo(left + width, y).stroke();
-    doc.font("Helvetica-Bold").fontSize(8).text(label, left, y + 6, { width, align: "center" });
-    doc.font("Helvetica").fontSize(8).text(safe(name), left, y + 20, { width, align: "center" });
-  });
-  doc.y = y + 52;
+  firmas.forEach(([label, source]) => renderFirmaCompacta(doc, label, source));
 }
 
 function renderAnexo24Pdf(stream, payload = {}) {
@@ -192,7 +197,7 @@ function renderAnexo24Pdf(stream, payload = {}) {
     ["Fecha cierre", fmtDate(cierreAdmin?.fecha)],
   ]);
 
-  renderFirmas(doc, documento, datos);
+  renderFirmas(doc, documento);
   renderHistorial(doc, documento);
 
   const range = doc.bufferedPageRange();
