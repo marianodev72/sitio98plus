@@ -41,7 +41,8 @@ function isAlojado(user) {
 }
 
 function isInspectorAlojamientosRole(user) {
-  return up(user?.role) === "INSPECTOR_ALOJAMIENTOS";
+  const permisos = Array.isArray(user?.permisos) ? user.permisos.map(up) : [];
+  return up(user?.role) === "INSPECTOR_ALOJAMIENTOS" || permisos.includes("INSPECTOR_ALOJAMIENTOS");
 }
 
 function canOperateAnexo24(user) {

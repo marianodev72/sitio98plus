@@ -62,6 +62,11 @@ function up(value: unknown) {
   return String(value || "").trim().toUpperCase();
 }
 
+function hasPerm(user: any, permiso: string) {
+  const permisos = Array.isArray(user?.permisos) ? user.permisos.map(up) : [];
+  return permisos.includes(up(permiso));
+}
+
 function idValue(value: unknown) {
   if (!value) return "";
   if (typeof value === "object") {
@@ -289,7 +294,9 @@ export default function AlojamientoDocumentoDetalleInspector() {
   const esAnexo23 = up(documento?.codigo) === "ANEXO_23";
   const esAnexo24 = up(documento?.codigo) === "ANEXO_24";
   const puedeRevisarAnexo24 =
-    esAnexo24 && up(documento?.estado) === "ENVIADO" && up(user?.role) === "INSPECTOR_ALOJAMIENTOS";
+    esAnexo24 &&
+    up(documento?.estado) === "ENVIADO" &&
+    (up(user?.role) === "INSPECTOR_ALOJAMIENTOS" || hasPerm(user, "INSPECTOR_ALOJAMIENTOS"));
   const puedeGenerarAnexo23 =
     esAnexo22Cerrado && anexo23Verificado && !verificandoAnexo23 && !anexo23ExistenteId;
 
