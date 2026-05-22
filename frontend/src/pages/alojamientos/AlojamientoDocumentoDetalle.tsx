@@ -194,6 +194,7 @@ export default function AlojamientoDocumentoDetalle() {
   const [cerrandoAnexo23, setCerrandoAnexo23] = useState(false);
   const [cerrandoAnexo24, setCerrandoAnexo24] = useState(false);
   const [cerrandoAnexo25, setCerrandoAnexo25] = useState(false);
+  const [cerrandoAnexo26, setCerrandoAnexo26] = useState(false);
   const [descargandoPdf, setDescargandoPdf] = useState(false);
   const [infoMsg, setInfoMsg] = useState("");
   const [plazasError, setPlazasError] = useState("");
@@ -208,6 +209,7 @@ export default function AlojamientoDocumentoDetalle() {
   const esAnexo23 = up(documento?.codigo) === "ANEXO_23";
   const esAnexo24 = up(documento?.codigo) === "ANEXO_24";
   const esAnexo25 = up(documento?.codigo) === "ANEXO_25";
+  const esAnexo26 = up(documento?.codigo) === "ANEXO_26";
   const conformidadPostulante = conformidadPorTipo(documento, "POSTULANTE");
   const conformidadAlojado = conformidadPorTipo(documento, "ALOJADO");
   const conformidadInspector =
@@ -238,6 +240,11 @@ export default function AlojamientoDocumentoDetalle() {
     esAnexo25 &&
     up(documento?.estado) === "EN_REVISION" &&
     Boolean(conformidadAlojado) &&
+    !conformidadAdminGeneral;
+  const puedeCerrarAnexo26 =
+    esAnexo26 &&
+    up(documento?.estado) === "EN_REVISION" &&
+    typeof datos.conformidadAlojado?.ok === "boolean" &&
     !conformidadAdminGeneral;
 
   async function cargarPlazasElegibles() {
@@ -387,8 +394,28 @@ export default function AlojamientoDocumentoDetalle() {
     }
   }
 
+  async function cerrarTramiteAnexo26() {
+    if (!documento?._id || !puedeCerrarAnexo26 || cerrandoAnexo26) return;
+    const confirmado = window.confirm("Confirma el cierre ADMIN_GENERAL del ANEXO_26?");
+    if (!confirmado) return;
+
+    setCerrandoAnexo26(true);
+    setInfoMsg("");
+    setErrorMsg("");
+
+    try {
+      await http.post(`/alojamientos-documentos/${documento._id}/cerrar-anexo-26`, {});
+      setInfoMsg("ANEXO_26 cerrado correctamente.");
+      await cargar();
+    } catch {
+      setErrorMsg("No es posible cerrar el ANEXO_26 en este momento.");
+    } finally {
+      setCerrandoAnexo26(false);
+    }
+  }
+
   async function descargarPdfDocumento() {
-    if (!documento?._id || (!esAnexo22 && !esAnexo23 && !esAnexo24 && !esAnexo25) || descargandoPdf) return;
+    if (!documento?._id || (!esAnexo22 && !esAnexo23 && !esAnexo24 && !esAnexo25 && !esAnexo26) || descargandoPdf) return;
 
     setDescargandoPdf(true);
     setInfoMsg("");
@@ -398,7 +425,7 @@ export default function AlojamientoDocumentoDetalle() {
       const res = await http.get(`/alojamientos-documentos/${documento._id}/pdf`, {
         responseType: "blob",
       });
-      const codigo = esAnexo25 ? "ANEXO_25" : esAnexo24 ? "ANEXO_24" : esAnexo23 ? "ANEXO_23" : "ANEXO_22";
+      const codigo = esAnexo26 ? "ANEXO_26" : esAnexo25 ? "ANEXO_25" : esAnexo24 ? "ANEXO_24" : esAnexo23 ? "ANEXO_23" : "ANEXO_22";
       descargarBlob(new Blob([res.data], { type: "application/pdf" }), `${codigo}_${documento._id}.pdf`);
       setInfoMsg("PDF descargado correctamente.");
     } catch {
@@ -450,7 +477,7 @@ export default function AlojamientoDocumentoDetalle() {
             <button type="button" style={secondaryButtonStyle} onClick={cargar} disabled={loading}>
               {loading ? "Cargando..." : "Recargar"}
             </button>
-            {esAnexo22 || esAnexo23 || esAnexo24 || esAnexo25 ? (
+            {esAnexo22 || esAnexo23 || esAnexo24 || esAnexo25 || esAnexo26 ? (
               <button
                 type="button"
                 style={secondaryButtonStyle}
@@ -867,6 +894,43 @@ export default function AlojamientoDocumentoDetalle() {
                         onClick={cerrarTramiteAnexo25}
                       >
                         {cerrandoAnexo25 ? "Cerrando..." : "Cerrar tramite"}
+                      </button>
+                    </div>
+                  ) : null}
+                </section>
+              )}
+
+              {esAnexo26 && (
+                <section style={{ ...softCardStyle, marginTop: 16 }}>
+                  <h3 style={{ marginTop: 0, color: "#ffffff" }}>ANEXO_26</h3>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                      gap: 14,
+                    }}
+                  >
+                    <Field label="Lugar entrega" value={datos.lugarEntrega} />
+                    <Field label="Fecha entrega" value={fmtDate(datos.fechaEntrega)} />
+                    <Field label="Proximo destino" value={datos.proximoDestinoAlojado} />
+                    <Field label="Novedades" value={datos.novedadesTexto} />
+                    <Field label="Observaciones inspector" value={datos.observacionesInspector} />
+                    <Field label="Alojado" value={conformidadAlojado ? "Conformado" : "Pendiente"} />
+                    <Field label="Fecha alojado" value={fmtDate(conformidadAlojado?.fecha)} />
+                    <Field label="Admin General" value={conformidadAdminGeneral ? "Conformado" : "Pendiente"} />
+                    <Field label="Fecha admin" value={fmtDate(conformidadAdminGeneral?.fecha)} />
+                    <Field label="Firmante admin" value={signerAdminGeneral?.nombre || conformidadAdminGeneral?.rol} />
+                  </div>
+
+                  {puedeCerrarAnexo26 ? (
+                    <div style={{ marginTop: 14 }}>
+                      <button
+                        type="button"
+                        style={primaryButtonStyle}
+                        disabled={cerrandoAnexo26}
+                        onClick={cerrarTramiteAnexo26}
+                      >
+                        {cerrandoAnexo26 ? "Cerrando..." : "Cerrar tramite"}
                       </button>
                     </div>
                   ) : null}

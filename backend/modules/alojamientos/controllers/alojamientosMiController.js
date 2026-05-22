@@ -8,11 +8,13 @@ const MisDatosDeclaradosUpdate = require("../../../models/MisDatosDeclaradosUpda
 const anexo23Service = require("../services/documentos/anexo23Service");
 const anexo24Service = require("../services/documentos/anexo24Service");
 const anexo25Service = require("../services/documentos/anexo25Service");
+const anexo26Service = require("../services/documentos/anexo26Service");
 const alojamientoDocumentoPdfService = require("../services/documentos/alojamientoDocumentoPdfService");
 const { renderAnexo22Pdf } = require("../pdf/anexo22PdfRenderer");
 const { renderAnexo23Pdf } = require("../pdf/anexo23PdfRenderer");
 const { renderAnexo24Pdf } = require("../pdf/anexo24PdfRenderer");
 const { renderAnexo25Pdf } = require("../pdf/anexo25PdfRenderer");
+const { renderAnexo26Pdf } = require("../pdf/anexo26PdfRenderer");
 
 function up(value) {
   return String(value || "").toUpperCase().trim();
@@ -115,6 +117,7 @@ function hasConformidadAlojado(documento, userId) {
 }
 
 function publicDocumentoListItem(doc) {
+  const codigo = up(doc.codigo);
   return {
     token: encodeDocToken(doc._id),
     codigo: doc.codigo,
@@ -122,7 +125,7 @@ function publicDocumentoListItem(doc) {
     estadoInstitucional: doc.estadoInstitucional || null,
     readonly: true,
     canView: true,
-    canDownloadPdf: doc.codigo === "ANEXO_22" || doc.codigo === "ANEXO_23" || doc.codigo === "ANEXO_24" || doc.codigo === "ANEXO_25",
+    canDownloadPdf: ["ANEXO_22", "ANEXO_23", "ANEXO_24", "ANEXO_25", "ANEXO_26"].includes(codigo),
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
   };
@@ -132,6 +135,7 @@ function publicDocumentoDetail(doc, user) {
   const userId = String(user?._id || "");
   const esAnexo23 = up(doc?.codigo) === "ANEXO_23";
   const esAnexo25 = up(doc?.codigo) === "ANEXO_25";
+  const esAnexo26 = up(doc?.codigo) === "ANEXO_26";
   const canConformarAnexo23 =
     esAnexo23 &&
     up(doc?.estado) === "ENVIADO" &&
@@ -139,6 +143,11 @@ function publicDocumentoDetail(doc, user) {
     !hasConformidadAlojado(doc, userId);
   const canConformarAnexo25 =
     esAnexo25 &&
+    up(doc?.estado) === "ENVIADO" &&
+    isUsuarioVinculado(user, doc) &&
+    !hasConformidadAlojado(doc, userId);
+  const canConformarAnexo26 =
+    esAnexo26 &&
     up(doc?.estado) === "ENVIADO" &&
     isUsuarioVinculado(user, doc) &&
     !hasConformidadAlojado(doc, userId);
@@ -163,6 +172,7 @@ function publicDocumentoDetail(doc, user) {
       : [],
     canConformarAnexo23,
     canConformarAnexo25,
+    canConformarAnexo26,
   };
 }
 
@@ -201,7 +211,7 @@ async function findMiDocumento(user, token) {
 
   const userId = user._id;
   const docs = await AlojamientoDocumento.find({
-    codigo: { $in: ["ANEXO_21", "ANEXO_22", "ANEXO_23", "ANEXO_24", "ANEXO_25"] },
+    codigo: { $in: ["ANEXO_21", "ANEXO_22", "ANEXO_23", "ANEXO_24", "ANEXO_25", "ANEXO_26"] },
     activo: { $ne: false },
     $or: [
       { solicitante: userId },
@@ -867,7 +877,7 @@ async function listarDocumentos(req, res) {
     const codigo = up(req.query?.codigo);
     const filter = {
       activo: { $ne: false },
-      codigo: { $in: ["ANEXO_21", "ANEXO_22", "ANEXO_23", "ANEXO_24", "ANEXO_25"] },
+      codigo: { $in: ["ANEXO_21", "ANEXO_22", "ANEXO_23", "ANEXO_24", "ANEXO_25", "ANEXO_26"] },
       $or: [
         { solicitante: userId },
         { alojado: userId },
@@ -876,7 +886,7 @@ async function listarDocumentos(req, res) {
       ],
     };
     if (codigo) {
-      if (!["ANEXO_21", "ANEXO_22", "ANEXO_23", "ANEXO_24", "ANEXO_25"].includes(codigo)) return deny(res);
+      if (!["ANEXO_21", "ANEXO_22", "ANEXO_23", "ANEXO_24", "ANEXO_25", "ANEXO_26"].includes(codigo)) return deny(res);
       filter.codigo = codigo;
     }
 
@@ -975,7 +985,7 @@ async function enviarAnexo24(req, res) {
 async function descargarDocumentoPdf(req, res) {
   try {
     const documento = await findMiDocumento(req.user, req.params.token);
-    if (!documento || !["ANEXO_22", "ANEXO_23", "ANEXO_24", "ANEXO_25"].includes(up(documento.codigo))) return deny(res);
+    if (!documento || !["ANEXO_22", "ANEXO_23", "ANEXO_24", "ANEXO_25", "ANEXO_26"].includes(up(documento.codigo))) return deny(res);
 
     const result = await alojamientoDocumentoPdfService.obtenerPayloadDocumentoPdf({
       id: documento._id,
@@ -1007,6 +1017,12 @@ async function descargarDocumentoPdf(req, res) {
     }
     if (codigo === "ANEXO_25") {
       return renderAnexo25Pdf(res, {
+        documento: result.documento,
+        origen: result.origen,
+      });
+    }
+    if (codigo === "ANEXO_26") {
+      return renderAnexo26Pdf(res, {
         documento: result.documento,
         origen: result.origen,
       });
@@ -1059,6 +1075,26 @@ async function conformidadAnexo25(req, res) {
   }
 }
 
+async function conformidadAnexo26(req, res) {
+  try {
+    const documento = await findMiDocumento(req.user, req.params.token);
+    if (!documento || up(documento.codigo) !== "ANEXO_26") return deny(res);
+
+    const result = await anexo26Service.conformidadAlojado(documento._id, req.body || {}, req.user);
+    if (!result?.ok) {
+      return res.status(result?.status || 400).json({
+        ok: false,
+        error: result?.message || "No es posible procesar la solicitud.",
+      });
+    }
+
+    return res.json({ ok: true, documento: publicDocumentoDetail(result.documento, req.user) });
+  } catch (err) {
+    console.error("[alojamientos-mi] conformidadAnexo26 error:", err?.message || "Error controlado");
+    return res.status(500).json({ message: "Error interno al registrar conformidad" });
+  }
+}
+
 module.exports = {
   ocupacionActual,
   listarOcupaciones,
@@ -1074,6 +1110,7 @@ module.exports = {
   descargarDocumentoPdf,
   conformidadAnexo23,
   conformidadAnexo25,
+  conformidadAnexo26,
   generarAnexo24,
   actualizarAnexo24,
   enviarAnexo24,

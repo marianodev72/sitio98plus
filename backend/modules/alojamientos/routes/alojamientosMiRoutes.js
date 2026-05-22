@@ -22,6 +22,7 @@ router.get("/documentos/:token", controller.obtenerDocumento);
 router.get("/documentos/:token/pdf", controller.descargarDocumentoPdf);
 router.post("/documentos/:token/conformidad-anexo-23", controller.conformidadAnexo23);
 router.post("/documentos/:token/conformidad-anexo-25", controller.conformidadAnexo25);
+router.post("/documentos/:token/conformidad-anexo-26", controller.conformidadAnexo26);
 router.post("/documentos/:token/generar-anexo-24", controller.generarAnexo24);
 router.patch("/documentos/:token/anexo-24", controller.actualizarAnexo24);
 router.post("/documentos/:token/enviar-anexo-24", controller.enviarAnexo24);

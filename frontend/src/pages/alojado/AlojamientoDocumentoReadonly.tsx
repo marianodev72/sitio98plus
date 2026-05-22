@@ -30,6 +30,7 @@ type Documento = {
   canDownloadPdf?: boolean;
   canConformarAnexo23?: boolean;
   canConformarAnexo25?: boolean;
+  canConformarAnexo26?: boolean;
   canGenerarAnexo24?: boolean;
   anexo24Vencido?: boolean;
   anexo24FechaLimite?: string | null;
@@ -156,6 +157,24 @@ export default function AlojamientoDocumentoReadonlyAlojado() {
     setInfo("");
     try {
       const res = await http.post(`/alojamientos-mi/documentos/${token}/conformidad-anexo-25`, {});
+      setDocumento(res.data?.documento || null);
+      setInfo("Conformidad registrada correctamente.");
+    } catch {
+      setError("No fue posible registrar la conformidad.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function prestarConformidadAnexo26() {
+    if (!token || !documento?.canConformarAnexo26 || busy) return;
+    const ok = window.confirm("Confirma que presta conformidad sobre el ANEXO_26?");
+    if (!ok) return;
+    setBusy(true);
+    setError("");
+    setInfo("");
+    try {
+      const res = await http.post(`/alojamientos-mi/documentos/${token}/conformidad-anexo-26`, { ok: true });
       setDocumento(res.data?.documento || null);
       setInfo("Conformidad registrada correctamente.");
     } catch {
@@ -505,6 +524,36 @@ export default function AlojamientoDocumentoReadonlyAlojado() {
                   ) : documento.canConformarAnexo25 ? (
                     <button type="button" style={primaryButtonStyle} onClick={prestarConformidadAnexo25} disabled={busy}>
                       {busy ? "Procesando..." : "Prestar conformidad ANEXO_25"}
+                    </button>
+                  ) : (
+                    <p style={subtitleStyle}>No hay acciones disponibles para este documento.</p>
+                  )}
+                </section>
+              </section>
+            ) : null}
+
+            {up(documento.codigo) === "ANEXO_26" ? (
+              <section style={{ ...cardStyle, marginTop: 12 }}>
+                <h2 style={sectionTitleStyle}>Entrega</h2>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
+                  <Field label="Lugar entrega" value={datos.lugarEntrega} />
+                  <Field label="Fecha entrega" value={fmtDate(datos.fechaEntrega)} />
+                  <Field label="Proximo destino" value={datos.proximoDestinoAlojado} />
+                  <Field label="Novedades" value={datos.novedadesTexto} />
+                  <Field label="Lugar firma" value={datos.lugarFirma} />
+                  <Field label="Fecha firma" value={datos.fechaFirma} />
+                  <Field label="Hora firma" value={datos.horaFirma} />
+                </div>
+                <section style={{ ...softCardStyle, marginTop: 12 }}>
+                  <h3 style={{ marginTop: 0, color: "#fff" }}>Conformidad del alojado</h3>
+                  {conformidadAlojado ? (
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
+                      <Field label="Estado" value="Conformidad registrada" />
+                      <Field label="Fecha" value={fmtDate(conformidadAlojado.fecha)} />
+                    </div>
+                  ) : documento.canConformarAnexo26 ? (
+                    <button type="button" style={primaryButtonStyle} onClick={prestarConformidadAnexo26} disabled={busy}>
+                      {busy ? "Procesando..." : "Prestar conformidad ANEXO_26"}
                     </button>
                   ) : (
                     <p style={subtitleStyle}>No hay acciones disponibles para este documento.</p>

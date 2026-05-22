@@ -4,6 +4,7 @@ import { http } from "../../api/http";
 import { useAuth } from "../../auth/useAuth";
 import Anexo23InspectorForm from "../../components/alojamientos/Anexo23InspectorForm";
 import Anexo25InspectorForm, { type Anexo25Datos } from "../../components/alojamientos/Anexo25InspectorForm";
+import Anexo26InspectorForm, { type Anexo26Datos } from "../../components/alojamientos/Anexo26InspectorForm";
 import {
   badgeStyle,
   cardStyle,
@@ -268,11 +269,14 @@ export default function AlojamientoDocumentoDetalleInspector() {
   const [anexo23ExistenteId, setAnexo23ExistenteId] = useState("");
   const [anexo24ExistenteId, setAnexo24ExistenteId] = useState("");
   const [anexo25ExistenteId, setAnexo25ExistenteId] = useState("");
+  const [anexo26ExistenteId, setAnexo26ExistenteId] = useState("");
   const [anexo23Verificado, setAnexo23Verificado] = useState(false);
   const [verificandoAnexo23, setVerificandoAnexo23] = useState(false);
   const [generandoAnexo23, setGenerandoAnexo23] = useState(false);
   const [generandoAnexo25, setGenerandoAnexo25] = useState(false);
+  const [generandoAnexo26, setGenerandoAnexo26] = useState(false);
   const [guardandoAnexo25, setGuardandoAnexo25] = useState(false);
+  const [guardandoAnexo26, setGuardandoAnexo26] = useState(false);
   const [descargandoPdf, setDescargandoPdf] = useState(false);
   const [revisandoAnexo24, setRevisandoAnexo24] = useState(false);
   const [observacionesInspector, setObservacionesInspector] = useState("");
@@ -298,6 +302,7 @@ export default function AlojamientoDocumentoDetalleInspector() {
   const esAnexo23 = up(documento?.codigo) === "ANEXO_23";
   const esAnexo24 = up(documento?.codigo) === "ANEXO_24";
   const esAnexo25 = up(documento?.codigo) === "ANEXO_25";
+  const esAnexo26 = up(documento?.codigo) === "ANEXO_26";
   const esInspectorAlojamientos = up(user?.role) === "INSPECTOR_ALOJAMIENTOS" || hasPerm(user, "INSPECTOR_ALOJAMIENTOS");
   const puedeRevisarAnexo24 =
     esAnexo24 &&
@@ -306,6 +311,9 @@ export default function AlojamientoDocumentoDetalleInspector() {
   const puedeGenerarAnexo25 =
     esAnexo23 && up(documento?.estado) === "CERRADO" && anexo23Verificado && !verificandoAnexo23 && !anexo25ExistenteId;
   const puedeEditarAnexo25 = esAnexo25 && up(documento?.estado) === "ENVIADO" && esInspectorAlojamientos;
+  const puedeGenerarAnexo26 =
+    esAnexo25 && up(documento?.estado) === "CERRADO" && anexo23Verificado && !verificandoAnexo23 && !anexo26ExistenteId;
+  const puedeEditarAnexo26 = esAnexo26 && up(documento?.estado) === "ENVIADO" && esInspectorAlojamientos;
   const puedeGenerarAnexo23 =
     esAnexo22Cerrado && anexo23Verificado && !verificandoAnexo23 && !anexo23ExistenteId;
 
@@ -313,9 +321,10 @@ export default function AlojamientoDocumentoDetalleInspector() {
     setAnexo23ExistenteId("");
     setAnexo24ExistenteId("");
     setAnexo25ExistenteId("");
+    setAnexo26ExistenteId("");
     setAnexo23Verificado(false);
     if (!doc) return;
-    if (up(doc.codigo) !== "ANEXO_22" && up(doc.codigo) !== "ANEXO_23") return;
+    if (!["ANEXO_22", "ANEXO_23", "ANEXO_25"].includes(up(doc.codigo))) return;
     if (up(doc.estado) !== "CERRADO") return;
 
     setVerificandoAnexo23(true);
@@ -325,7 +334,7 @@ export default function AlojamientoDocumentoDetalleInspector() {
         const documentos = Array.isArray(res.data?.documentos) ? res.data.documentos : [];
         const derivado = documentos.find((item: Record<string, any>) => idValue(item.derivadoDe) === doc._id);
         setAnexo23ExistenteId(idValue(derivado?._id));
-      } else {
+      } else if (up(doc.codigo) === "ANEXO_23") {
         const [res24, res25] = await Promise.all([
           http.get("/alojamientos-documentos", { params: { codigo: "ANEXO_24", limit: 100 } }),
           http.get("/alojamientos-documentos", { params: { codigo: "ANEXO_25", limit: 100 } }),
@@ -334,6 +343,10 @@ export default function AlojamientoDocumentoDetalleInspector() {
         const docs25 = Array.isArray(res25.data?.documentos) ? res25.data.documentos : [];
         setAnexo24ExistenteId(idValue(docs24.find((item: Record<string, any>) => idValue(item.derivadoDe) === doc._id)?._id));
         setAnexo25ExistenteId(idValue(docs25.find((item: Record<string, any>) => idValue(item.derivadoDe) === doc._id)?._id));
+      } else {
+        const res26 = await http.get("/alojamientos-documentos", { params: { codigo: "ANEXO_26", limit: 100 } });
+        const docs26 = Array.isArray(res26.data?.documentos) ? res26.data.documentos : [];
+        setAnexo26ExistenteId(idValue(docs26.find((item: Record<string, any>) => idValue(item.derivadoDe) === doc._id)?._id));
       }
       setAnexo23Verificado(true);
     } catch {
@@ -387,7 +400,7 @@ export default function AlojamientoDocumentoDetalleInspector() {
   }
 
   async function descargarPdfAnexo23() {
-    if (!documento?._id || (!esAnexo23 && !esAnexo24 && !esAnexo25) || descargandoPdf) return;
+    if (!documento?._id || (!esAnexo23 && !esAnexo24 && !esAnexo25 && !esAnexo26) || descargandoPdf) return;
 
     setDescargandoPdf(true);
     setAccionMsg("");
@@ -478,6 +491,60 @@ export default function AlojamientoDocumentoDetalleInspector() {
     }
   }
 
+  async function generarAnexo26() {
+    if (!documento?._id || !puedeGenerarAnexo26 || generandoAnexo26) return;
+    const ok = window.confirm("Confirma generar ANEXO_26 desde este ANEXO_25 cerrado?");
+    if (!ok) return;
+
+    setGenerandoAnexo26(true);
+    setAccionMsg("");
+    try {
+      const res = await http.post(`/alojamientos-documentos/${documento._id}/generar-anexo-26`);
+      const nuevoId = idValue(res.data?.documento?._id);
+      if (nuevoId) {
+        navigate(`${basePath}/documentos/${nuevoId}`);
+        return;
+      }
+      setAccionMsg("ANEXO_26 generado, pero no fue posible abrir el detalle automaticamente.");
+      await verificarAnexo23Existente(documento);
+    } catch {
+      setAccionMsg("No fue posible generar el ANEXO_26.");
+    } finally {
+      setGenerandoAnexo26(false);
+    }
+  }
+
+  async function guardarAnexo26(payload: Anexo26Datos) {
+    if (!documento?._id || !puedeEditarAnexo26 || guardandoAnexo26) return;
+    const payloadSeguro: Anexo26Datos = {
+      gradoAlojado: payload.gradoAlojado,
+      lugarEntrega: payload.lugarEntrega,
+      fechaEntrega: payload.fechaEntrega,
+      material: payload.material,
+      documentacion: payload.documentacion,
+      medidores: payload.medidores,
+      estadoSistemas: payload.estadoSistemas,
+      novedadesTexto: payload.novedadesTexto,
+      observacionesInspector: payload.observacionesInspector,
+      proximoDestinoAlojado: payload.proximoDestinoAlojado,
+      lugarFirma: payload.lugarFirma,
+      fechaFirma: payload.fechaFirma,
+      horaFirma: payload.horaFirma,
+    };
+    setGuardandoAnexo26(true);
+    setAccionMsg("");
+    try {
+      const res = await http.patch(`/alojamientos-documentos/anexo-26/${documento._id}`, { datos: payloadSeguro });
+      setDocumento(res.data?.documento || null);
+      setAccionMsg("ANEXO_26 guardado correctamente.");
+      await cargar();
+    } catch {
+      setAccionMsg("No fue posible guardar el ANEXO_26.");
+    } finally {
+      setGuardandoAnexo26(false);
+    }
+  }
+
   useEffect(() => {
     cargar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -520,6 +587,15 @@ export default function AlojamientoDocumentoDetalleInspector() {
               Ver ANEXO_25
             </button>
           )}
+          {anexo26ExistenteId && (
+            <button
+              type="button"
+              onClick={() => navigate(`${basePath}/documentos/${anexo26ExistenteId}`)}
+              style={{ ...badgeStyle, minHeight: 36, cursor: "pointer" }}
+            >
+              Ver ANEXO_26
+            </button>
+          )}
           {puedeGenerarAnexo23 && (
             <button
               type="button"
@@ -548,6 +624,21 @@ export default function AlojamientoDocumentoDetalleInspector() {
               }}
             >
               {generandoAnexo25 ? "Generando..." : "Generar ANEXO_25"}
+            </button>
+          )}
+          {puedeGenerarAnexo26 && (
+            <button
+              type="button"
+              onClick={generarAnexo26}
+              disabled={generandoAnexo26}
+              style={{
+                ...badgeStyle,
+                minHeight: 36,
+                cursor: generandoAnexo26 ? "not-allowed" : "pointer",
+                opacity: generandoAnexo26 ? 0.65 : 1,
+              }}
+            >
+              {generandoAnexo26 ? "Generando..." : "Generar ANEXO_26"}
             </button>
           )}
           {(esAnexo23 || esAnexo24 || esAnexo25) && (
@@ -733,6 +824,18 @@ export default function AlojamientoDocumentoDetalleInspector() {
                 onGuardar={() => guardarAnexo25((documento?.datos || {}) as Anexo25Datos)}
                 readOnly={!puedeEditarAnexo25}
                 busy={guardandoAnexo25}
+              />
+            </Section>
+          )}
+
+          {esAnexo26 && (
+            <Section title="Entrega ANEXO_26">
+              <Anexo26InspectorForm
+                value={(datos || {}) as Anexo26Datos}
+                onChange={(next) => setDocumento((prev) => (prev ? { ...prev, datos: next } : prev))}
+                onGuardar={() => guardarAnexo26((documento?.datos || {}) as Anexo26Datos)}
+                readOnly={!puedeEditarAnexo26}
+                busy={guardandoAnexo26}
               />
             </Section>
           )}
