@@ -452,10 +452,22 @@ export default function AlojamientoDocumentoDetalleInspector() {
 
   async function guardarAnexo25(payload: Anexo25Datos) {
     if (!documento?._id || !puedeEditarAnexo25 || guardandoAnexo25) return;
+    const payloadSeguro: Anexo25Datos = {
+      gradoAlojado: payload.gradoAlojado,
+      lugarInspeccion: payload.lugarInspeccion,
+      fechaInspeccion: payload.fechaInspeccion,
+      reparacionesArmada: payload.reparacionesArmada,
+      reparacionesAlojado: payload.reparacionesAlojado,
+      representante1: payload.representante1,
+      representante2: payload.representante2,
+      observacionesInspector: payload.observacionesInspector,
+      lugarFirma: payload.lugarFirma,
+      fechaFirma: payload.fechaFirma,
+    };
     setGuardandoAnexo25(true);
     setAccionMsg("");
     try {
-      const res = await http.patch(`/alojamientos-documentos/anexo-25/${documento._id}`, { datos: payload });
+      const res = await http.patch(`/alojamientos-documentos/anexo-25/${documento._id}`, { datos: payloadSeguro });
       setDocumento(res.data?.documento || null);
       setAccionMsg("ANEXO_25 guardado correctamente.");
       await cargar();
