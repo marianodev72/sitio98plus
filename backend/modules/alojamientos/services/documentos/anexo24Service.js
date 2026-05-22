@@ -8,6 +8,9 @@ const {
   up,
 } = require("./alojamientoDocumentoStateService");
 const { sanitizeDatosDocumento } = require("./alojamientoDocumentoSanitizer");
+const {
+  puedeVerDocumentoPorTerritorio,
+} = require("./alojamientoDocumentoVisibilityService");
 
 const EDITABLE_TOP_LEVEL = new Set([
   "novedadesTexto",
@@ -35,6 +38,10 @@ function isAdminGeneral(user) {
 
 function isAlojado(user) {
   return up(user?.role) === "ALOJADO";
+}
+
+function isInspectorAlojamientosRole(user) {
+  return up(user?.role) === "INSPECTOR_ALOJAMIENTOS";
 }
 
 function canOperateAnexo24(user) {
@@ -158,6 +165,22 @@ function isUsuarioVinculado(documento, user) {
   if (String(idValue(documento.solicitante) || "") === userId) return true;
   const intervinientes = Array.isArray(documento.intervinientes) ? documento.intervinientes : [];
   return intervinientes.some((item) => String(idValue(item?.userId) || "") === userId);
+}
+
+function isInspectorInterviniente(documento, user) {
+  const userId = String(user?._id || "");
+  if (!userId || !documento) return false;
+  if (String(idValue(documento.inspector) || "") === userId) return true;
+  const intervinientes = Array.isArray(documento.intervinientes) ? documento.intervinientes : [];
+  return intervinientes.some(
+    (item) => String(idValue(item?.userId) || "") === userId && up(item?.rol) === "INSPECTOR"
+  );
+}
+
+function canReviewAnexo24(user, documento) {
+  if (!isObjectId(user?._id)) return false;
+  if (!isInspectorAlojamientosRole(user)) return false;
+  return isInspectorInterviniente(documento, user) || puedeVerDocumentoPorTerritorio(user, documento);
 }
 
 function fechaCierreDocumento(documento) {
@@ -368,6 +391,81 @@ async function enviar(id, user) {
   }
 }
 
+async function revisarPorInspector(id, payload = {}, user) {
+  if (!isObjectId(user?._id)) return publicError(403, "USUARIO_NO_AUTORIZADO");
+  if (!isInspectorAlojamientosRole(user)) return publicError(404, "DOCUMENTO_NO_DISPONIBLE");
+  if (!isObjectId(id)) return publicError(404, "DOCUMENTO_NO_DISPONIBLE");
+
+  const documento = await AlojamientoDocumento.findOne({
+    _id: id,
+    codigo: "ANEXO_24",
+    activo: { $ne: false },
+  }).populate({ path: "alojamiento", select: "lugar codigo dependencia sector tipo numero" });
+
+  if (!documento) return publicError(404, "DOCUMENTO_NO_DISPONIBLE");
+  if (!canReviewAnexo24(user, documento)) return publicError(404, "DOCUMENTO_NO_DISPONIBLE");
+  if (up(documento.estado) !== "ENVIADO") return publicError(409, "ESTADO_INVALIDO");
+
+  const source =
+    payload?.datos && typeof payload.datos === "object" && !Array.isArray(payload.datos)
+      ? payload.datos
+      : payload;
+  const observacion = trimText(source?.observacionesInspector, 4000);
+
+  documento.datos = {
+    ...(documento.datos || {}),
+    observacionesInspector: observacion,
+    conformidadInspector: {
+      ok: true,
+      fecha: new Date(),
+      usuario: user._id,
+      observacion: observacion || "Revision del inspector de alojamientos previa a cierre ADMIN_GENERAL.",
+    },
+  };
+
+  const conformidad = registrarConformidad(documento, {
+    tipo: "INSPECTOR",
+    usuario: user._id,
+    rol: "INSPECTOR_ALOJAMIENTOS",
+    ok: true,
+    observacion,
+  });
+  if (!conformidad.ok) return publicError(400, "CONFORMIDAD_INVALIDA");
+
+  documento.signers = Array.isArray(documento.signers) ? documento.signers : [];
+  documento.signers.push({
+    tipo: "INSPECTOR",
+    usuario: user._id,
+    nombre: nombreDesdeUsuario(user),
+    rol: "INSPECTOR_ALOJAMIENTOS",
+    fecha: new Date(),
+    fuente: "REVISION_INSPECTOR_ANEXO_24",
+  });
+
+  const transition = registrarCambioEstado(documento, {
+    estadoNuevo: "EN_REVISION",
+    actorId: user._id,
+    rolActor: "INSPECTOR_ALOJAMIENTOS",
+    observacion: "Revision / observaciones del inspector de alojamientos (ANEXO_24).",
+  });
+  if (!transition.ok) return publicError(409, "TRANSICION_INVALIDA");
+
+  documento.actualizadoPor = idValue(user?._id);
+  documento.intervenciones.push({
+    tipo: "REVISION_INSPECTOR_ANEXO_24",
+    actor: user._id,
+    rolActor: "INSPECTOR_ALOJAMIENTOS",
+    observacion: observacion || "Revision inspector ANEXO_24.",
+  });
+
+  try {
+    await documento.save();
+    return { ok: true, status: 200, documento: toResponse(documento) };
+  } catch {
+    return publicError(500, "ERROR_INTERNO");
+  }
+}
+
 async function cerrarAnexo24(id, payload = {}, user) {
   if (!isObjectId(user?._id)) return publicError(403, "USUARIO_NO_AUTORIZADO");
   if (!isAdminGeneral(user)) return publicError(404, "DOCUMENTO_NO_DISPONIBLE");
@@ -381,7 +479,10 @@ async function cerrarAnexo24(id, payload = {}, user) {
 
   if (!documento) return publicError(404, "DOCUMENTO_NO_DISPONIBLE");
   const estadoActual = up(documento.estado);
-  if (!["ENVIADO", "EN_REVISION"].includes(estadoActual)) return publicError(409, "ESTADO_INVALIDO");
+  if (estadoActual !== "EN_REVISION") return publicError(409, "ESTADO_INVALIDO");
+  if (documento.datos?.conformidadInspector?.ok !== true) {
+    return publicError(409, "REVISION_INSPECTOR_REQUERIDA");
+  }
 
   const observacion = trimText(payload?.observacion, 1000);
   const conformidad = registrarConformidad(documento, {
@@ -402,16 +503,6 @@ async function cerrarAnexo24(id, payload = {}, user) {
     fecha: new Date(),
     fuente: "CIERRE_ADMIN_GENERAL_ANEXO_24",
   });
-
-  if (estadoActual === "ENVIADO") {
-    const revision = registrarCambioEstado(documento, {
-      estadoNuevo: "EN_REVISION",
-      actorId: user._id,
-      rolActor: "ADMIN_GENERAL",
-      observacion: "ANEXO_24 tomado en revision para cierre ADMIN_GENERAL.",
-    });
-    if (!revision.ok) return publicError(409, "TRANSICION_INVALIDA");
-  }
 
   const transition = registrarCambioEstado(documento, {
     estadoNuevo: "CERRADO",
@@ -436,6 +527,7 @@ module.exports = {
   generarDesdeAnexo23,
   actualizarDatos,
   enviar,
+  revisarPorInspector,
   cerrarAnexo24,
   getPlazoAnexo24,
 };

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { http } from "../../api/http";
+import { useAuth } from "../../auth/useAuth";
 import Anexo23InspectorForm from "../../components/alojamientos/Anexo23InspectorForm";
 import {
   badgeStyle,
@@ -252,6 +253,7 @@ function SimpleTable({
 export default function AlojamientoDocumentoDetalleInspector() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const basePath = "/app/permisionario/alojamientos-inspector";
   const [documento, setDocumento] = useState<AlojamientoDocumento | null>(null);
   const [loading, setLoading] = useState(true);
@@ -263,6 +265,8 @@ export default function AlojamientoDocumentoDetalleInspector() {
   const [verificandoAnexo23, setVerificandoAnexo23] = useState(false);
   const [generandoAnexo23, setGenerandoAnexo23] = useState(false);
   const [descargandoPdf, setDescargandoPdf] = useState(false);
+  const [revisandoAnexo24, setRevisandoAnexo24] = useState(false);
+  const [observacionesInspector, setObservacionesInspector] = useState("");
 
   const datos = documento?.datos || {};
   const conformidades = useMemo(
@@ -284,6 +288,8 @@ export default function AlojamientoDocumentoDetalleInspector() {
   const esAnexo22Cerrado = up(documento?.codigo) === "ANEXO_22" && up(documento?.estado) === "CERRADO";
   const esAnexo23 = up(documento?.codigo) === "ANEXO_23";
   const esAnexo24 = up(documento?.codigo) === "ANEXO_24";
+  const puedeRevisarAnexo24 =
+    esAnexo24 && up(documento?.estado) === "ENVIADO" && up(user?.role) === "INSPECTOR_ALOJAMIENTOS";
   const puedeGenerarAnexo23 =
     esAnexo22Cerrado && anexo23Verificado && !verificandoAnexo23 && !anexo23ExistenteId;
 
@@ -326,6 +332,7 @@ export default function AlojamientoDocumentoDetalleInspector() {
       const res = await http.get(`/alojamientos-documentos/${id}`);
       const doc = res.data?.documento || null;
       setDocumento(doc);
+      setObservacionesInspector(String(doc?.datos?.observacionesInspector || ""));
       await verificarAnexo23Existente(doc);
     } catch {
       setDocumento(null);
@@ -373,6 +380,29 @@ export default function AlojamientoDocumentoDetalleInspector() {
       setAccionMsg("No fue posible descargar el PDF.");
     } finally {
       setDescargandoPdf(false);
+    }
+  }
+
+  async function revisarAnexo24() {
+    if (!documento?._id || !puedeRevisarAnexo24 || revisandoAnexo24) return;
+    const ok = window.confirm("Confirma registrar la revision del inspector para ANEXO_24?");
+    if (!ok) return;
+
+    setRevisandoAnexo24(true);
+    setAccionMsg("");
+    try {
+      const res = await http.patch(`/alojamientos-documentos/anexo-24/${documento._id}/revision-inspector`, {
+        datos: {
+          observacionesInspector,
+        },
+      });
+      setDocumento(res.data?.documento || null);
+      setAccionMsg("Revision inspector registrada correctamente.");
+      await cargar();
+    } catch {
+      setAccionMsg("No fue posible registrar la revision inspector.");
+    } finally {
+      setRevisandoAnexo24(false);
     }
   }
 
@@ -558,6 +588,45 @@ export default function AlojamientoDocumentoDetalleInspector() {
               documento={documento}
               onUpdated={cargar}
             />
+          )}
+
+          {puedeRevisarAnexo24 && (
+            <Section title="Revision inspector ANEXO_24">
+              <div style={{ display: "grid", gap: 12 }}>
+                <label style={fieldStyle}>
+                  <span style={labelStyle}>Observaciones del inspector</span>
+                  <textarea
+                    value={observacionesInspector}
+                    onChange={(e) => setObservacionesInspector(e.target.value)}
+                    rows={6}
+                    style={{
+                      width: "100%",
+                      marginTop: 8,
+                      padding: "10px 12px",
+                      borderRadius: 8,
+                      border: "1px solid rgba(255,255,255,0.16)",
+                      background: "rgba(255,255,255,0.05)",
+                      color: "#fff",
+                      resize: "vertical",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={revisarAnexo24}
+                  disabled={revisandoAnexo24}
+                  style={{
+                    ...badgeStyle,
+                    minHeight: 40,
+                    cursor: revisandoAnexo24 ? "not-allowed" : "pointer",
+                    opacity: revisandoAnexo24 ? 0.65 : 1,
+                  }}
+                >
+                  {revisandoAnexo24 ? "Registrando..." : "Registrar revision"}
+                </button>
+              </div>
+            </Section>
           )}
 
           <p style={{ ...metaStyle, marginTop: 16 }}>

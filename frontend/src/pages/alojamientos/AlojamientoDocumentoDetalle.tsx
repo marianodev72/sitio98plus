@@ -208,6 +208,9 @@ export default function AlojamientoDocumentoDetalle() {
   const esAnexo24 = up(documento?.codigo) === "ANEXO_24";
   const conformidadPostulante = conformidadPorTipo(documento, "POSTULANTE");
   const conformidadAlojado = conformidadPorTipo(documento, "ALOJADO");
+  const conformidadInspector =
+    conformidadPorTipo(documento, "INSPECTOR") ||
+    (datos.conformidadInspector?.ok === true ? datos.conformidadInspector : null);
   const conformidadAdminGeneral = conformidadPorTipo(documento, "ADMIN_GENERAL");
   const signerPostulante = signerPorTipo(documento, "POSTULANTE");
   const signerAlojado = signerPorTipo(documento, "ALOJADO");
@@ -226,7 +229,8 @@ export default function AlojamientoDocumentoDetalle() {
     !conformidadAdminGeneral;
   const puedeCerrarAnexo24 =
     esAnexo24 &&
-    ["ENVIADO", "EN_REVISION"].includes(up(documento?.estado)) &&
+    up(documento?.estado) === "EN_REVISION" &&
+    Boolean(conformidadInspector) &&
     !conformidadAdminGeneral;
 
   async function cargarPlazasElegibles() {
@@ -775,6 +779,11 @@ export default function AlojamientoDocumentoDetalle() {
                   >
                     <Field label="Novedades adicionales" value={datos.novedadesTexto} />
                     <Field label="Observaciones inspector" value={datos.observacionesInspector} />
+                    <Field
+                      label="Revision inspector"
+                      value={conformidadInspector ? "Conformada" : "Pendiente"}
+                    />
+                    <Field label="Fecha inspector" value={fmtDate(conformidadInspector?.fecha)} />
                     <Field label="Lugar firma" value={datos.lugarFirma} />
                     <Field label="Fecha firma" value={datos.fechaFirma} />
                     <Field

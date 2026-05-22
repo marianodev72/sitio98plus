@@ -26,6 +26,19 @@ async function cerrarAnexo24(req, res) {
   }
 }
 
+async function revisarAnexo24(req, res) {
+  try {
+    const result = await anexo24Service.revisarPorInspector(req.params.id, req.body || {}, req.user);
+    return sendResult(res, result);
+  } catch {
+    return res.status(500).json({
+      ok: false,
+      error: "No es posible procesar la solicitud.",
+    });
+  }
+}
+
 module.exports = {
+  revisarAnexo24,
   cerrarAnexo24,
 };

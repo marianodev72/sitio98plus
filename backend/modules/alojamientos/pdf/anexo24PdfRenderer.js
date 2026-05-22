@@ -112,6 +112,7 @@ function renderAnexo24Pdf(stream, payload = {}) {
   const alojamiento = datos.alojamientoSnapshot || {};
   const plaza = datos.plazaSnapshot || {};
   const inspector = datos.inspector || {};
+  const revisionInspector = findConformidad(documento, "INSPECTOR") || datos.conformidadInspector || null;
   const cierreAdmin = findConformidad(documento, "ADMIN_GENERAL");
 
   const doc = new PDFDocument({ size: "A4", margin: 48, bufferPages: true });
@@ -174,6 +175,16 @@ function renderAnexo24Pdf(stream, payload = {}) {
 
   sectionTitle(doc, "Novedades adicionales");
   paragraph(doc, datos.novedadesTexto);
+
+  sectionTitle(doc, "Intervencion del inspector");
+  renderRows(doc, [
+    ["Inspector", inspector.nombre],
+    ["Revision", revisionInspector?.ok ? "SI" : "Pendiente"],
+    ["Fecha revision", fmtDate(revisionInspector?.fecha)],
+  ]);
+  if (revisionInspector?.observacion || datos.observacionesInspector) {
+    paragraph(doc, revisionInspector?.observacion || datos.observacionesInspector);
+  }
 
   sectionTitle(doc, "Cierre administrativo");
   renderRows(doc, [

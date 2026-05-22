@@ -21,6 +21,7 @@ router.post("/anexo-21/:id/enviar", anexo21Controller.enviar);
 router.post("/anexo-21/:id/anular", anexo21Controller.anular);
 router.patch("/anexo-23/:id", anexo23Controller.actualizarDatos);
 router.post("/anexo-23/:id/enviar", anexo23Controller.enviar);
+router.patch("/anexo-24/:id/revision-inspector", anexo24Controller.revisarAnexo24);
 router.post("/:id/conformidad-alojado-23", anexo23Controller.conformidadAlojado);
 router.post("/:id/cerrar-anexo-23", anexo23Controller.cerrarAnexo23);
 router.post("/:id/cerrar-anexo-24", anexo24Controller.cerrarAnexo24);
