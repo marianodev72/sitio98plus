@@ -190,6 +190,7 @@ function chartRowsFromCounts(rows: CountRow[], keys: string[] = []) {
 
 function MiniBarChart({ rows, emptyText }: { rows: { label: string; value: number }[]; emptyText: string }) {
   const max = Math.max(...rows.map((row) => row.value), 0);
+  const totalSerie = rows.reduce((acc, row) => acc + n(row.value), 0);
 
   if (!rows.length || max <= 0) {
     return <p style={{ ...subtitleStyle, margin: 0 }}>{emptyText}</p>;
@@ -199,6 +200,7 @@ function MiniBarChart({ rows, emptyText }: { rows: { label: string; value: numbe
     <div style={chartGridStyle}>
       {rows.map((row, index) => {
         const width = Math.max(4, Math.round((row.value / max) * 100));
+        const pct = totalSerie > 0 ? Math.round((n(row.value) / totalSerie) * 100) : 0;
         const color = CHART_COLORS[index % CHART_COLORS.length];
         return (
           <div key={`${row.label}:${index}`} style={{ display: "grid", gap: 5 }}>
@@ -206,7 +208,9 @@ function MiniBarChart({ rows, emptyText }: { rows: { label: string; value: numbe
               <span style={{ color: "rgba(255,255,255,0.86)", fontSize: 13, overflowWrap: "anywhere" }}>
                 {safe(row.label, "SIN_DATO")}
               </span>
-              <strong style={{ color: "#ffffff", fontSize: 13 }}>{n(row.value)}</strong>
+              <strong style={{ color: "#ffffff", fontSize: 13 }}>
+                {n(row.value)} ({pct}%)
+              </strong>
             </div>
             <div style={barTrackStyle} aria-label={`${row.label}: ${row.value}`}>
               <div
