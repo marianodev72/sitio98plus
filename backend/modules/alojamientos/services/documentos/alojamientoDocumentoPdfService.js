@@ -15,6 +15,10 @@ function isAdminGeneral(user) {
   return up(user?.role) === "ADMIN_GENERAL";
 }
 
+function isAdminReadonly(user) {
+  return isAdminGeneral(user) || up(user?.role) === "ADMIN";
+}
+
 function isPostulante(user) {
   return up(user?.role) === "POSTULANTE";
 }
@@ -36,7 +40,7 @@ function publicError(status, code = "NO_DISPONIBLE") {
 
 function canDownloadAnexo22(user, documento) {
   if (!user || !documento) return false;
-  if (isAdminGeneral(user)) return true;
+  if (isAdminReadonly(user)) return true;
   if (isPostulante(user)) return canPostulanteDownloadAnexo22(user, documento);
   return false;
 }
@@ -63,35 +67,35 @@ function isUsuarioVinculado(user, documento) {
 
 function canDownloadAnexo23(user, documento) {
   if (!user || !documento) return false;
-  if (isAdminGeneral(user)) return true;
+  if (isAdminReadonly(user)) return true;
   if (isInspectorAlojamientos(user)) return puedeVerDocumento(user, documento);
   return isUsuarioVinculado(user, documento);
 }
 
 function canDownloadAnexo24(user, documento) {
   if (!user || !documento) return false;
-  if (isAdminGeneral(user)) return true;
+  if (isAdminReadonly(user)) return true;
   if (isInspectorAlojamientos(user)) return puedeVerDocumento(user, documento);
   return isUsuarioVinculado(user, documento);
 }
 
 function canDownloadAnexo25(user, documento) {
   if (!user || !documento) return false;
-  if (isAdminGeneral(user)) return true;
+  if (isAdminReadonly(user)) return true;
   if (isInspectorAlojamientos(user)) return puedeVerDocumento(user, documento);
   return isUsuarioVinculado(user, documento);
 }
 
 function canDownloadAnexo26(user, documento) {
   if (!user || !documento) return false;
-  if (isAdminGeneral(user)) return true;
+  if (isAdminReadonly(user)) return true;
   if (isInspectorAlojamientos(user)) return puedeVerDocumento(user, documento);
   return isUsuarioVinculado(user, documento);
 }
 
 function canDownloadAnexo28(user, documento) {
   if (!user || !documento) return false;
-  if (isAdminGeneral(user)) return true;
+  if (isAdminReadonly(user)) return true;
   if (isInspectorAlojamientos(user)) return puedeVerDocumento(user, documento);
   return isUsuarioVinculado(user, documento);
 }

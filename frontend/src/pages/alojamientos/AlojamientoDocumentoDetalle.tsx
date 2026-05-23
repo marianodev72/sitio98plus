@@ -86,7 +86,8 @@ function formatBytes(value?: number) {
 }
 
 function roleAllowed(role: unknown) {
-  return up(role) === "ADMIN_GENERAL";
+  const rol = up(role);
+  return rol === "ADMIN_GENERAL" || rol === "ADMIN";
 }
 
 function adjuntosFromDatos(datos?: Record<string, any>): AdjuntoPublico[] {
@@ -202,6 +203,7 @@ export default function AlojamientoDocumentoDetalle() {
   const [plazasError, setPlazasError] = useState("");
 
   const allowed = roleAllowed(user?.role);
+  const esAdminGeneral = up(user?.role) === "ADMIN_GENERAL";
   const datos = documento?.datos || {};
   const huesped = datos.huesped || {};
   const alojamientoSnapshot = datos.alojamientoSnapshot || {};
@@ -223,33 +225,40 @@ export default function AlojamientoDocumentoDetalle() {
   const signerAlojado = signerPorTipo(documento, "ALOJADO");
   const signerAdminGeneral = signerPorTipo(documento, "ADMIN_GENERAL");
   const puedePrepararAnexo22 =
+    esAdminGeneral &&
     up(documento?.codigo) === "ANEXO_21" && ["ENVIADO", "EN_REVISION"].includes(up(documento?.estado));
   const puedeCerrarAnexo22 =
+    esAdminGeneral &&
     esAnexo22 &&
     up(documento?.estado) === "EN_REVISION" &&
     Boolean(conformidadPostulante) &&
     !conformidadAdminGeneral;
   const puedeCerrarAnexo23 =
+    esAdminGeneral &&
     esAnexo23 &&
     up(documento?.estado) === "EN_REVISION" &&
     Boolean(conformidadAlojado) &&
     !conformidadAdminGeneral;
   const puedeCerrarAnexo24 =
+    esAdminGeneral &&
     esAnexo24 &&
     up(documento?.estado) === "EN_REVISION" &&
     Boolean(conformidadInspector) &&
     !conformidadAdminGeneral;
   const puedeCerrarAnexo25 =
+    esAdminGeneral &&
     esAnexo25 &&
     up(documento?.estado) === "EN_REVISION" &&
     Boolean(conformidadAlojado) &&
     !conformidadAdminGeneral;
   const puedeCerrarAnexo26 =
+    esAdminGeneral &&
     esAnexo26 &&
     up(documento?.estado) === "EN_REVISION" &&
     typeof datos.conformidadAlojado?.ok === "boolean" &&
     !conformidadAdminGeneral;
   const puedeCerrarAnexo28 =
+    esAdminGeneral &&
     esAnexo28 &&
     up(documento?.estado) === "EN_REVISION" &&
     datos.conformidadInspector?.ok === true &&

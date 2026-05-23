@@ -392,6 +392,7 @@ export default function RoleRoutes() {
           />
           <Route path="alojamientos/:id" element={<AlojamientoDetalle />} />
           <Route path="gestiones" element={<GestionesAdmin />} />
+          <Route path="gestiones/alojamientos/:id" element={<AlojamientoDocumentoDetalle />} />
           <Route path="mensajeria" element={<MensajeriaAdmin />} />
           <Route path="liquidaciones" element={<LiquidacionesAdmin />} />
           <Route path="servicios" element={<ServiciosAdmin />} />

@@ -1,5 +1,6 @@
 // frontend/src/pages/admin/GestionesAdmin.tsx
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useNavigate } from "react-router-dom";
 import { http } from "../../api/http";
 import { useAuth } from "../../auth/useAuth";
 
@@ -11,6 +12,8 @@ type Anexo = {
   createdAt?: string;
   updatedAt?: string;
   datos?: any;
+  solicitante?: string | { _id?: string; nombre?: string; apellido?: string; email?: string } | null;
+  alojado?: string | { _id?: string; nombre?: string; apellido?: string; email?: string } | null;
   usuario?: {
     _id?: string;
     nombre?: string;
@@ -101,6 +104,28 @@ function viviendaLabel(a: Anexo): string {
   return "—";
 }
 
+function alojamientoLabel(a: Anexo): string {
+  const d = a.datos || {};
+
+  const label =
+    (typeof d.alojamientoLabel === "string" && d.alojamientoLabel.trim()) ||
+    (typeof d.alojamientoCodigo === "string" && d.alojamientoCodigo.trim()) ||
+    (typeof d.lugar === "string" && d.lugar.trim()) ||
+    (typeof d.alojamiento?.codigo === "string" && d.alojamiento.codigo.trim()) ||
+    (typeof d.alojamientoSnapshot?.codigo === "string" && d.alojamientoSnapshot.codigo.trim()) ||
+    "";
+
+  if (label) return label;
+
+  const plaza =
+    (typeof d.plazaCodigo === "string" && d.plazaCodigo.trim()) ||
+    (typeof d.plaza?.codigoPublico === "string" && d.plaza.codigoPublico.trim()) ||
+    (typeof d.plazaSnapshot?.codigoPublico === "string" && d.plazaSnapshot.codigoPublico.trim()) ||
+    "";
+
+  return plaza || "-";
+}
+
 function personaLabel(a: Anexo): string {
   const d = a.datos || {};
 
@@ -108,6 +133,14 @@ function personaLabel(a: Anexo): string {
   if (typeof d.permisionarioNombre === "string" && d.permisionarioNombre.trim()) return d.permisionarioNombre.trim();
   if (typeof d.postulanteNombre === "string" && d.postulanteNombre.trim()) return d.postulanteNombre.trim();
   if (typeof d.titularNombre === "string" && d.titularNombre.trim()) return d.titularNombre.trim();
+
+  const alojado = typeof a.alojado === "object" && a.alojado ? a.alojado : null;
+  const alojadoNombre = [alojado?.apellido, alojado?.nombre].filter(Boolean).join(" ").trim();
+  if (alojadoNombre) return alojadoNombre;
+
+  const solicitante = typeof a.solicitante === "object" && a.solicitante ? a.solicitante : null;
+  const solicitanteNombre = [solicitante?.apellido, solicitante?.nombre].filter(Boolean).join(" ").trim();
+  if (solicitanteNombre) return solicitanteNombre;
 
   const ape = a.usuario?.apellido ? String(a.usuario.apellido).trim() : "";
   const nom = a.usuario?.nombre ? String(a.usuario.nombre).trim() : "";
@@ -117,6 +150,7 @@ function personaLabel(a: Anexo): string {
 
 export default function GestionesAdmin() {
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   const [panel, setPanel] = useState<Panel>("PERMISIONARIOS");
   const anexosDisponibles = useMemo(
@@ -147,6 +181,14 @@ export default function GestionesAdmin() {
       if (!codigo) return;
 
       if (esAdmin) {
+        if (panel === "ALOJADOS") {
+          const res = await http.get("/alojamientos-documentos", {
+            params: { codigo, limit: 50, page: 1 },
+          });
+          setItems(Array.isArray(res.data?.documentos) ? res.data.documentos : []);
+          return;
+        }
+
         const res = await http.get(`/formularios/anexo/${codigo}`);
         setItems(Array.isArray(res.data?.anexos) ? res.data.anexos : []);
       } else {
@@ -167,7 +209,10 @@ export default function GestionesAdmin() {
     setErrorMsg("");
 
     try {
-      const res = await http.get(`/formularios/${id}/pdf`, { responseType: "blob" });
+      const res =
+        panel === "ALOJADOS"
+          ? await http.get(`/alojamientos-documentos/${id}/pdf`, { responseType: "blob" })
+          : await http.get(`/formularios/${id}/pdf`, { responseType: "blob" });
 
       const blob = new Blob([res.data], { type: "application/pdf" });
       const url = window.URL.createObjectURL(blob);
@@ -191,7 +236,7 @@ export default function GestionesAdmin() {
   useEffect(() => {
     cargarLista();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [codigo, esAdmin]);
+  }, [codigo, esAdmin, panel]);
 
   const pageStyle: CSSProperties = {
     padding: 24,
@@ -280,6 +325,8 @@ export default function GestionesAdmin() {
     verticalAlign: "middle",
   };
 
+  const isAlojados = panel === "ALOJADOS";
+
   return (
     <div style={pageStyle}>
       <h1 style={{ marginTop: 0, marginBottom: 16, color: "#ffffff" }}>
@@ -352,8 +399,12 @@ export default function GestionesAdmin() {
                 <tr>
                   <th style={thStyle}>Código</th>
                   <th style={thStyle}>Estado</th>
-                  <th style={thStyle}>Vivienda / Unidad</th>
-                  <th style={thStyle}>Postulante / Permisionario</th>
+                  <th style={thStyle}>
+                    {isAlojados ? "Alojamiento / Unidad" : "Vivienda / Unidad"}
+                  </th>
+                  <th style={thStyle}>
+                    {isAlojados ? "Postulante / Alojado" : "Postulante / Permisionario"}
+                  </th>
                   <th style={thStyle}>Fecha</th>
                   <th style={thStyle}>Acciones</th>
                 </tr>
@@ -369,17 +420,30 @@ export default function GestionesAdmin() {
                         {safe(an.estado)}
                         {an.estadoInstitucional ? ` / ${safe(an.estadoInstitucional)}` : ""}
                       </td>
-                      <td style={tdStyle}>{viviendaLabel(an)}</td>
+                      <td style={tdStyle}>
+                        {isAlojados ? alojamientoLabel(an) : viviendaLabel(an)}
+                      </td>
                       <td style={tdStyle}>{personaLabel(an)}</td>
                       <td style={tdStyle}>{fmtDate(an.updatedAt || an.createdAt)}</td>
                       <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
-                        <button
-                          disabled={busy}
-                          onClick={() => descargarPdf(an._id, up(an.codigo))}
-                          style={buttonStyle}
-                        >
-                          PDF
-                        </button>
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          {isAlojados ? (
+                            <button
+                              disabled={busy}
+                              onClick={() => navigate(`/app/admin/gestiones/alojamientos/${an._id}`)}
+                              style={buttonStyle}
+                            >
+                              Ver
+                            </button>
+                          ) : null}
+                          <button
+                            disabled={busy}
+                            onClick={() => descargarPdf(an._id, up(an.codigo))}
+                            style={buttonStyle}
+                          >
+                            PDF
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
