@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import http from "../../api/http";
+import AlojamientosDashboard from "../alojamientos/AlojamientosDashboard";
 
 /* ================= UTILIDADES ================= */
 
@@ -97,6 +98,8 @@ const FORMULARIO_ESTADOS = [
   "CERRADO",
   "ASIGNADO",
 ];
+
+type DominioStats = "VIVIENDAS" | "ALOJAMIENTOS";
 
 const MONTH_LABELS = [
   "Ene",
@@ -623,6 +626,7 @@ function BarChart({
 /* ================= PAGE ================= */
 
 export default function AdminStats() {
+  const [dominio, setDominio] = useState<DominioStats>("VIVIENDAS");
   const [barrios, setBarrios] = useState<string[]>([]);
   const [barrio, setBarrio] = useState<string>("TODOS");
   const currentYear = new Date().getFullYear();
@@ -638,6 +642,7 @@ export default function AdminStats() {
   const [docEstadoFiltro, setDocEstadoFiltro] = useState("TODOS");
 
   useEffect(() => {
+    if (dominio !== "VIVIENDAS") return;
     let alive = true;
 
     http
@@ -653,9 +658,10 @@ export default function AdminStats() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [dominio]);
 
   useEffect(() => {
+    if (dominio !== "VIVIENDAS") return;
     let alive = true;
     const url =
       barrio === "TODOS"
@@ -685,7 +691,7 @@ export default function AdminStats() {
     return () => {
       alive = false;
     };
-  }, [barrio, year]);
+  }, [barrio, year, dominio]);
 
   useEffect(() => {
     const stamp = new Date();
@@ -699,6 +705,7 @@ export default function AdminStats() {
   }, [barrio, year]);
 
   useEffect(() => {
+    if (dominio !== "VIVIENDAS") return;
     let alive = true;
     const params: Record<string, string | number> = { year };
 
@@ -729,7 +736,7 @@ export default function AdminStats() {
     return () => {
       alive = false;
     };
-  }, [barrio, year, docCodigoFiltro, docEstadoFiltro]);
+  }, [barrio, year, docCodigoFiltro, docEstadoFiltro, dominio]);
 
   const availableYears = useMemo(() => {
     const startYear = 2024;
@@ -1233,7 +1240,65 @@ function onDownloadBoardPDF() {
   setTimeout(() => {
     popup.print();
   }, 300);
-}  return (
+}
+
+  if (dominio === "ALOJAMIENTOS") {
+    return (
+      <div
+        style={{
+          padding: 24,
+          background: "transparent",
+          minHeight: "100vh",
+          color: "#eaf0ff",
+        }}
+      >
+        <div
+          style={{
+            border: "1px solid rgba(255,255,255,0.14)",
+            borderRadius: 12,
+            padding: 18,
+            background: "rgba(255,255,255,0.05)",
+            backdropFilter: "blur(6px)",
+          }}
+        >
+          <div style={{ fontSize: 28, fontWeight: 900, color: "#ffffff", lineHeight: 1.15 }}>
+            {ORG_HEADER}
+          </div>
+          <div
+            style={{
+              marginTop: 6,
+              fontSize: 16,
+              fontWeight: 700,
+              opacity: 0.88,
+              color: "rgba(255,255,255,0.86)",
+              lineHeight: 1.45,
+            }}
+          >
+            {ORG_SUBHEADER}
+          </div>
+          <div style={{ marginTop: 14, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+            <span style={{ fontWeight: 900, fontSize: 18, color: "#ffffff" }}>Dominio:</span>
+            <button
+              type="button"
+              onClick={() => setDominio("VIVIENDAS")}
+              style={{ ...actionBtnStyle, opacity: 0.72 }}
+            >
+              Viviendas
+            </button>
+            <button type="button" onClick={() => setDominio("ALOJAMIENTOS")} style={actionBtnStyle}>
+              Alojamientos
+            </button>
+          </div>
+        </div>
+
+        <div style={{ marginTop: 16 }}>
+          <AlojamientosDashboard basePath="/app/admin-general/alojamientos" />
+        </div>
+      </div>
+    );
+  }
+
+  return (
     <div style={{
   padding: 24,
   background: "transparent",
@@ -1322,6 +1387,20 @@ lineHeight: 1.45,
           </div>
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+  <span style={{ fontWeight: 900, fontSize: 18, color: "#ffffff", alignSelf: "center" }}>Dominio:</span>
+
+  <button type="button" onClick={() => setDominio("VIVIENDAS")} style={actionBtnStyle}>
+    Viviendas
+  </button>
+
+  <button
+    type="button"
+    onClick={() => setDominio("ALOJAMIENTOS")}
+    style={{ ...actionBtnStyle, opacity: 0.72 }}
+  >
+    Alojamientos
+  </button>
+
   <button
     type="button"
     onClick={onDownloadBoardPDF}
