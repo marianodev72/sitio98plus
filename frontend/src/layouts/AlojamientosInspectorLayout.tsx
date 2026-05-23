@@ -78,7 +78,7 @@ export default function AlojamientosInspectorLayout() {
                 background: isActive ? "rgba(37,99,235,0.35)" : badgeStyle.background,
               })}
             >
-              Inventario
+              Alojamientos
             </NavLink>
             <NavLink
               to={`${basePath}/documentos`}
@@ -88,7 +88,17 @@ export default function AlojamientosInspectorLayout() {
                 background: isActive ? "rgba(37,99,235,0.35)" : badgeStyle.background,
               })}
             >
-              Documentos
+              Anexos
+            </NavLink>
+            <NavLink
+              to={`${basePath}/comunicaciones`}
+              style={({ isActive }) => ({
+                ...badgeStyle,
+                textDecoration: "none",
+                background: isActive ? "rgba(37,99,235,0.35)" : badgeStyle.background,
+              })}
+            >
+              Comunicaciones
             </NavLink>
           </nav>
         </section>

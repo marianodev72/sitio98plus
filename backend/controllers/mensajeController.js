@@ -28,6 +28,10 @@ function hasPermiso(user, permiso) {
   return permisosList(user).includes(up(permiso));
 }
 
+function esInspectorAlojamientos(user) {
+  return up(user?.role) === "INSPECTOR_ALOJAMIENTOS" || hasPermiso(user, "INSPECTOR_ALOJAMIENTOS");
+}
+
 function territorioValores(user) {
   return Array.isArray(user?.territoriosAlojamiento)
     ? user.territoriosAlojamiento
@@ -35,6 +39,11 @@ function territorioValores(user) {
         .map((item) => up(item?.valor))
         .filter(Boolean)
     : [];
+}
+
+function getLugaresInspectorAlojamientos(user) {
+  if (!esInspectorAlojamientos(user)) return [];
+  return territorioValores(user);
 }
 
 async function lugarAlojamientoActivo(userId) {
@@ -49,10 +58,80 @@ async function lugarAlojamientoActivo(userId) {
 }
 
 function esInspectorAlojamientosCorrespondiente(user, lugar) {
-  if (up(user?.role) !== "PERMISIONARIO") return false;
-  if (!hasPermiso(user, "INSPECTOR_ALOJAMIENTOS")) return false;
+  if (!esInspectorAlojamientos(user)) return false;
   if (!lugar) return false;
   return territorioValores(user).includes(lugar);
+}
+
+async function alojadosActivosPorTerritorio(user) {
+  const lugares = getLugaresInspectorAlojamientos(user);
+  if (!lugares.length) return [];
+
+  const asignaciones = await AsignacionAlojamiento.find({ estado: "ACTIVA" })
+    .populate({ path: "alojado", select: "_id nombre apellido role activo bloqueado archivado" })
+    .populate({ path: "alojamiento", select: "codigo lugar dependencia sector tipo numero" })
+    .populate({ path: "plaza", select: "numero codigoPublico" })
+    .lean();
+
+  const usuariosById = new Map();
+  for (const asignacion of asignaciones || []) {
+    const alojamiento = asignacion?.alojamiento || {};
+    const alojado = asignacion?.alojado || {};
+    const lugar = up(alojamiento?.lugar);
+    const alojadoId = String(alojado?._id || "");
+    if (!alojadoId || !lugares.includes(lugar)) continue;
+    if (alojado.activo === false || alojado.bloqueado === true || alojado.archivado === true) continue;
+
+    usuariosById.set(alojadoId, {
+      _id: alojado._id,
+      nombre: alojado.nombre,
+      apellido: alojado.apellido,
+      role: "ALOJADO",
+      activo: alojado.activo,
+      archivado: alojado.archivado,
+      territoriosAlojamiento: [{ tipo: "LUGAR", valor: alojamiento?.lugar || "" }].filter((t) => t.valor),
+      viviendaLabel: [
+        alojamiento?.codigo,
+        alojamiento?.lugar,
+        alojamiento?.sector,
+        asignacion?.plaza?.codigoPublico || asignacion?.plaza?.numero,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+    });
+  }
+
+  return Array.from(usuariosById.values()).sort((a, b) =>
+    (`${a.apellido || ""}${a.nombre || ""}`).localeCompare(`${b.apellido || ""}${b.nombre || ""}`)
+  );
+}
+
+async function puedeInspectorAlojamientosEnviarA(user, destinatarioId) {
+  if (!esInspectorAlojamientos(user)) return false;
+  if (!mongoose.Types.ObjectId.isValid(String(destinatarioId || ""))) return false;
+
+  const destinatario = await User.findById(destinatarioId)
+    .select("_id role activo bloqueado archivado")
+    .lean();
+  if (!destinatario || destinatario.activo === false || destinatario.bloqueado === true || destinatario.archivado === true) {
+    return false;
+  }
+
+  const role = up(destinatario.role);
+  if (role === "ADMIN" || role === "ADMIN_GENERAL") return true;
+  if (role !== "ALOJADO") return false;
+
+  const lugares = getLugaresInspectorAlojamientos(user);
+  if (!lugares.length) return false;
+
+  const asignacion = await AsignacionAlojamiento.findOne({
+    alojado: destinatario._id,
+    estado: "ACTIVA",
+  })
+    .populate({ path: "alojamiento", select: "lugar" })
+    .lean();
+
+  return lugares.includes(up(asignacion?.alojamiento?.lugar));
 }
 
 function nombreDisplaySeguro(user, fallback = "Usuario institucional") {
@@ -98,6 +177,21 @@ async function getAgenda(req, res) {
     const esTerritorial =
       role === "PERMISIONARIO" &&
       (misPermisos.includes("INSPECTOR") || misPermisos.includes("JEFE_DE_BARRIO"));
+
+    if (esInspectorAlojamientos(req.user)) {
+      const admins = await User.find({
+        activo: true,
+        bloqueado: false,
+        archivado: false,
+        role: { $in: ["ADMIN_GENERAL", "ADMIN"] },
+      })
+        .select("_id nombre apellido role permisos activo archivado")
+        .sort({ apellido: 1, nombre: 1 })
+        .lean();
+
+      const alojados = await alojadosActivosPorTerritorio(req.user);
+      return res.json({ usuarios: [...(Array.isArray(admins) ? admins : []), ...alojados] });
+    }
 
     // Seguridad: sin barrio no hay territorialidad (pero igual devuelve admins)
     if (role === "PERMISIONARIO" && !barrioAsignado) {
@@ -340,6 +434,15 @@ async function enviarMensaje(req, res) {
       return res.status(404).json({ message: "No es posible procesar su solicitud" });
     }
 
+    if (esInspectorAlojamientos(req.user)) {
+      for (const destinatarioId of paraIds) {
+        const permitido = await puedeInspectorAlojamientosEnviarA(req.user, destinatarioId);
+        if (!permitido) {
+          return res.status(403).json({ message: "No es posible procesar su solicitud" });
+        }
+      }
+    }
+
     if (role === "ALOJADO") {
       const lugar = await lugarAlojamientoActivo(req.user?._id);
       for (const u of destinatarios) {
@@ -360,7 +463,7 @@ async function enviarMensaje(req, res) {
     }
 
     // Reglas PERMISIONARIO (conservadoras y territoriales)
-    if (role === "PERMISIONARIO") {
+    if (role === "PERMISIONARIO" && !esInspectorAlojamientos(req.user)) {
       for (const u of destinatarios) {
         if (!u || u.activo === false || u.bloqueado === true || u.archivado === true) {
           return res.status(404).json({ message: "No es posible procesar su solicitud" });

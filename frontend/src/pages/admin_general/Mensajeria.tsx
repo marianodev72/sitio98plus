@@ -54,7 +54,7 @@ type Tab = "entrada" | "enviados" | "nuevo";
 type MensajeriaProps = {
   lockedBarrio?: string;
   hideBarrioSelect?: boolean;
-  contexto?: "PERMISIONARIO" | "ALOJADO";
+  contexto?: "PERMISIONARIO" | "ALOJADO" | "INSPECTOR_ALOJAMIENTOS";
 };
 
 function safe(v: unknown) {
@@ -370,6 +370,8 @@ fileButton: {
 
 export default function Mensajeria(props: MensajeriaProps = {}) {
   const esAlojado = props.contexto === "ALOJADO";
+  const esInspectorAlojamientos = props.contexto === "INSPECTOR_ALOJAMIENTOS";
+  const usaAgendaAlojamientos = esAlojado || esInspectorAlojamientos;
   const [tab, setTab] = useState<Tab>("entrada");
 
   const [loading, setLoading] = useState(false);
@@ -407,8 +409,9 @@ export default function Mensajeria(props: MensajeriaProps = {}) {
 
   const rolesDisponibles = useMemo(() => {
     if (esAlojado) return ["ADMIN_GENERAL", "ADMIN", "INSPECTOR_ALOJAMIENTOS"];
+    if (esInspectorAlojamientos) return ["ADMIN_GENERAL", "ADMIN", "ALOJADO"];
     return ["ADMIN_GENERAL", "ADMIN", "INSPECTOR", "JEFE_DE_BARRIO", "PERMISIONARIO"];
-  }, [esAlojado]);
+  }, [esAlojado, esInspectorAlojamientos]);
 
   const barriosDisponibles = useMemo(() => {
     const set = new Set<string>();
@@ -450,9 +453,9 @@ export default function Mensajeria(props: MensajeriaProps = {}) {
         const blob = [
           u.nombre,
           u.apellido,
-          esAlojado ? "" : u.email,
-          esAlojado ? "" : u.dni,
-          esAlojado ? "" : u.matricula,
+          usaAgendaAlojamientos ? "" : u.email,
+          usaAgendaAlojamientos ? "" : u.dni,
+          usaAgendaAlojamientos ? "" : u.matricula,
           u.role,
           u.barrioAsignado,
           u.viviendaLabel,
@@ -471,7 +474,7 @@ export default function Mensajeria(props: MensajeriaProps = {}) {
           String(b.apellido || "") + String(b.nombre || "")
         )
       );
-  }, [usuarios, buscaUsuario, filtroRole, filtroBarrio, props.lockedBarrio, esAlojado]);
+  }, [usuarios, buscaUsuario, filtroRole, filtroBarrio, props.lockedBarrio, usaAgendaAlojamientos]);
 
   const usuariosVisibles = useMemo(() => {
     return usuariosFiltrados.slice(0, limiteVisible);
@@ -911,7 +914,7 @@ export default function Mensajeria(props: MensajeriaProps = {}) {
                   }}
                 >
                   <input
-                    placeholder={esAlojado ? "Buscar destinatario institucional" : "Buscar destinatario (nombre/email/dni/matrícula)"}
+                    placeholder={usaAgendaAlojamientos ? "Buscar destinatario institucional" : "Buscar destinatario (nombre/email/dni/matrícula)"}
                     value={buscaUsuario}
                     onChange={(e) => setBuscaUsuario(e.target.value)}
                     style={{ ...styles.input, flex: 1, minWidth: 260 }}
@@ -995,8 +998,8 @@ export default function Mensajeria(props: MensajeriaProps = {}) {
                         </th>
                         <th style={styles.th}>Usuario</th>
                         <th style={styles.th}>Rol</th>
-                        <th style={styles.th}>{esAlojado ? "Ambito" : "Barrio"}</th>
-                        <th style={styles.th}>{esAlojado ? "Referencia" : "Vivienda"}</th>
+                        <th style={styles.th}>{usaAgendaAlojamientos ? "Ambito" : "Barrio"}</th>
+                        <th style={styles.th}>{usaAgendaAlojamientos ? "Referencia" : "Vivienda"}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1015,8 +1018,8 @@ export default function Mensajeria(props: MensajeriaProps = {}) {
                             </td>
                             <td style={styles.td}>{nombreUsuario(u)}</td>
                             <td style={styles.td}>{etiquetaRol(u)}</td>
-                            <td style={styles.td}>{esAlojado ? ambitoUsuario(u) : safe(u.barrioAsignado)}</td>
-                            <td style={styles.td}>{esAlojado ? etiquetaRol(u) : u.viviendaLabel || "-"}</td>
+                            <td style={styles.td}>{usaAgendaAlojamientos ? ambitoUsuario(u) : safe(u.barrioAsignado)}</td>
+                            <td style={styles.td}>{usaAgendaAlojamientos ? u.viviendaLabel || etiquetaRol(u) : u.viviendaLabel || "-"}</td>
                           </tr>
                         );
                       })}

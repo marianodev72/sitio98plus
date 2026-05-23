@@ -68,7 +68,7 @@ export default function AlojamientosInspectorDashboard() {
             onClick={() => navigate(`${basePath}/inventario`)}
             style={moduleButtonStyle}
           >
-            Inventario
+            Alojamientos
             <div style={metaStyle}>Consulta territorial readonly</div>
           </button>
           <button
@@ -76,8 +76,16 @@ export default function AlojamientosInspectorDashboard() {
             onClick={() => navigate(`${basePath}/documentos`)}
             style={moduleButtonStyle}
           >
-            Documentos
+            Anexos
             <div style={metaStyle}>Consulta documental readonly</div>
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate(`${basePath}/comunicaciones`)}
+            style={moduleButtonStyle}
+          >
+            Comunicaciones
+            <div style={metaStyle}>Mensajeria territorial</div>
           </button>
         </div>
       </div>
