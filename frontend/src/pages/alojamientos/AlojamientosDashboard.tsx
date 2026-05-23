@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
 import { http } from "../../api/http";
 import { useAuth } from "../../auth/useAuth";
@@ -68,6 +68,8 @@ const PLAZA_ESTADOS = [
   "BAJA",
 ];
 
+const CHART_COLORS = ["#38bdf8", "#22c55e", "#f59e0b", "#a78bfa", "#f87171", "#14b8a6", "#e879f9", "#94a3b8"];
+
 function up(value: unknown) {
   return String(value || "").toUpperCase().trim();
 }
@@ -130,19 +132,18 @@ const rowStyle: CSSProperties = {
   minWidth: 0,
 };
 
-function estadoTone(value: string): CSSProperties {
-  const s = up(value);
-  if (s === "DISPONIBLE" || s === "LIBRE") {
-    return { borderColor: "rgba(34,197,94,0.34)", color: "#bbf7d0" };
-  }
-  if (s === "OCUPADO" || s === "OCUPADA" || s === "INHABILITADO" || s === "INHABILITADA" || s === "BAJA") {
-    return { borderColor: "rgba(248,113,113,0.36)", color: "#fecaca" };
-  }
-  if (s === "PARCIALMENTE_OCUPADO" || s === "RESERVADO" || s === "RESERVADA" || s === "MANTENIMIENTO") {
-    return { borderColor: "rgba(251,191,36,0.36)", color: "#fde68a" };
-  }
-  return { borderColor: "rgba(148,163,184,0.32)", color: "#e5e7eb" };
-}
+const chartGridStyle: CSSProperties = {
+  display: "grid",
+  gap: 10,
+};
+
+const barTrackStyle: CSSProperties = {
+  position: "relative",
+  height: 10,
+  borderRadius: 999,
+  background: "rgba(255,255,255,0.08)",
+  overflow: "hidden",
+};
 
 function alertaTone(severidad: string): CSSProperties {
   const s = up(severidad);
@@ -177,45 +178,49 @@ function normalizeMap(data: Record<string, number>, keys: string[] = []) {
   return [...rows, ...extras];
 }
 
-function CountList({ rows, emptyText, requiredKeys = [] }: { rows: CountRow[]; emptyText: string; requiredKeys?: string[] }) {
-  const normalizedRows = useMemo(() => normalizeRows(rows, requiredKeys), [rows, requiredKeys]);
-
-  if (!normalizedRows.length) {
-    return <p style={{ ...subtitleStyle, margin: 0 }}>{emptyText}</p>;
-  }
-
-  return (
-    <div>
-      {normalizedRows.map((row) => (
-        <div key={safe(row._id)} style={rowStyle}>
-          <span style={{ color: "rgba(255,255,255,0.86)", overflowWrap: "anywhere", minWidth: 0 }}>
-            {safe(row._id, "SIN_DATO")}
-          </span>
-          <strong style={{ color: "#ffffff" }}>{n(row.count)}</strong>
-        </div>
-      ))}
-    </div>
-  );
+function chartRowsFromMap(data: Record<string, number>, keys: string[] = []) {
+  return normalizeMap(data, keys).map(([label, value]) => ({ label, value })).filter((row) => row.value > 0);
 }
 
-function MapList({ data, emptyText, requiredKeys = [] }: { data: Record<string, number>; emptyText: string; requiredKeys?: string[] }) {
-  const rows = useMemo(
-    () => normalizeMap(data, requiredKeys),
-    [data, requiredKeys]
-  );
+function chartRowsFromCounts(rows: CountRow[], keys: string[] = []) {
+  return normalizeRows(rows || [], keys)
+    .map((row) => ({ label: safe(row._id, "SIN_DATO"), value: n(row.count) }))
+    .filter((row) => row.value > 0);
+}
 
-  if (!rows.length) {
+function MiniBarChart({ rows, emptyText }: { rows: { label: string; value: number }[]; emptyText: string }) {
+  const max = Math.max(...rows.map((row) => row.value), 0);
+
+  if (!rows.length || max <= 0) {
     return <p style={{ ...subtitleStyle, margin: 0 }}>{emptyText}</p>;
   }
 
   return (
-    <div>
-      {rows.map(([key, value]) => (
-        <div key={key} style={rowStyle}>
-          <span style={{ ...badgeStyle, ...estadoTone(key) }}>{safe(key, "SIN_DATO")}</span>
-          <strong style={{ color: "#ffffff" }}>{n(value)}</strong>
-        </div>
-      ))}
+    <div style={chartGridStyle}>
+      {rows.map((row, index) => {
+        const width = Math.max(4, Math.round((row.value / max) * 100));
+        const color = CHART_COLORS[index % CHART_COLORS.length];
+        return (
+          <div key={`${row.label}:${index}`} style={{ display: "grid", gap: 5 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
+              <span style={{ color: "rgba(255,255,255,0.86)", fontSize: 13, overflowWrap: "anywhere" }}>
+                {safe(row.label, "SIN_DATO")}
+              </span>
+              <strong style={{ color: "#ffffff", fontSize: 13 }}>{n(row.value)}</strong>
+            </div>
+            <div style={barTrackStyle} aria-label={`${row.label}: ${row.value}`}>
+              <div
+                style={{
+                  width: `${width}%`,
+                  height: "100%",
+                  borderRadius: 999,
+                  background: `linear-gradient(90deg, ${color}, rgba(255,255,255,0.72))`,
+                }}
+              />
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -276,6 +281,11 @@ export default function AlojamientosDashboard({ basePath }: Props) {
   }
 
   const alertas = Array.isArray(resumen?.alertas) ? resumen.alertas : [];
+  const alojamientosEstadoChart = resumen ? chartRowsFromMap(resumen.alojamientosPorEstado, ALOJAMIENTO_ESTADOS) : [];
+  const plazasEstadoChart = resumen ? chartRowsFromMap(resumen.plazasPorEstado, PLAZA_ESTADOS) : [];
+  const lugarChart = resumen ? chartRowsFromCounts(resumen.distribucionPorLugar || []) : [];
+  const claseChart = resumen ? chartRowsFromCounts(resumen.distribucionPorClase || [], CLASES_OFICIALES) : [];
+  const generoChart = resumen ? chartRowsFromCounts(resumen.distribucionPorGeneroPermitido || [], GENEROS_OFICIALES) : [];
 
   return (
     <div style={{ width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box", overflow: "hidden" }}>
@@ -346,38 +356,22 @@ export default function AlojamientosDashboard({ basePath }: Props) {
           >
             <section style={cardStyle}>
               <h2 style={sectionTitleStyle}>Alojamientos por estado</h2>
-              <MapList
-                data={resumen.alojamientosPorEstado}
-                emptyText="Sin estados registrados."
-                requiredKeys={ALOJAMIENTO_ESTADOS}
-              />
+              <MiniBarChart rows={alojamientosEstadoChart} emptyText="Sin estados registrados." />
             </section>
 
             <section style={cardStyle}>
               <h2 style={sectionTitleStyle}>Plazas por estado</h2>
-              <MapList
-                data={resumen.plazasPorEstado}
-                emptyText="Sin estados registrados."
-                requiredKeys={PLAZA_ESTADOS}
-              />
+              <MiniBarChart rows={plazasEstadoChart} emptyText="Sin estados registrados." />
             </section>
 
             <section style={cardStyle}>
               <h2 style={sectionTitleStyle}>Por clase</h2>
-              <CountList
-                rows={resumen.distribucionPorClase || []}
-                emptyText="Sin clases registradas."
-                requiredKeys={CLASES_OFICIALES}
-              />
+              <MiniBarChart rows={claseChart} emptyText="Sin clases registradas." />
             </section>
 
             <section style={cardStyle}>
               <h2 style={sectionTitleStyle}>Por genero permitido</h2>
-              <CountList
-                rows={resumen.distribucionPorGeneroPermitido || []}
-                emptyText="Sin restricciones registradas."
-                requiredKeys={GENEROS_OFICIALES}
-              />
+              <MiniBarChart rows={generoChart} emptyText="Sin restricciones registradas." />
             </section>
           </div>
 
@@ -395,7 +389,7 @@ export default function AlojamientosDashboard({ basePath }: Props) {
           >
             <section style={cardStyle}>
               <h2 style={sectionTitleStyle}>Distribucion por lugar</h2>
-              <CountList rows={resumen.distribucionPorLugar || []} emptyText="Sin lugares registrados." />
+              <MiniBarChart rows={lugarChart} emptyText="Sin lugares registrados." />
             </section>
 
             <section style={cardStyle}>
