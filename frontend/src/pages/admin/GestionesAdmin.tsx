@@ -25,7 +25,7 @@ type Anexo = {
 
 type Panel = "PERMISIONARIOS" | "ALOJADOS";
 
-const ANEXOS_PERMISIONARIO = [
+const VIVIENDAS_CODES = [
   "ANEXO_01",
   "ANEXO_02",
   "ANEXO_03",
@@ -36,7 +36,7 @@ const ANEXOS_PERMISIONARIO = [
   "ANEXO_11",
 ];
 
-const ANEXOS_ALOJADO = [
+const ALOJAMIENTOS_CODES = [
   "ANEXO_21",
   "ANEXO_22",
   "ANEXO_23",
@@ -45,6 +45,9 @@ const ANEXOS_ALOJADO = [
   "ANEXO_26",
   "ANEXO_28",
 ];
+
+const ANEXOS_PERMISIONARIO = VIVIENDAS_CODES;
+const ANEXOS_ALOJADO = ALOJAMIENTOS_CODES;
 
 function safe(v: unknown) {
   return v === null || v === undefined || v === "" ? "-" : String(v);
@@ -168,9 +171,9 @@ export default function GestionesAdmin() {
   const esAdmin = myRole === "ADMIN" || myRole === "ADMIN_GENERAL";
 
   useEffect(() => {
-    const first = panel === "PERMISIONARIOS" ? ANEXOS_PERMISIONARIO[0] : ANEXOS_ALOJADO[0];
-    setCodigo(first);
-  }, [panel]);
+    const codes = panel === "PERMISIONARIOS" ? VIVIENDAS_CODES : ALOJAMIENTOS_CODES;
+    if (!codes.includes(codigo)) setCodigo(codes[0]);
+  }, [codigo, panel]);
 
   async function cargarLista() {
     setLoading(true);
@@ -182,10 +185,20 @@ export default function GestionesAdmin() {
 
       if (esAdmin) {
         if (panel === "ALOJADOS") {
+          if (!ALOJAMIENTOS_CODES.includes(codigo)) {
+            setCodigo(ALOJAMIENTOS_CODES[0]);
+            return;
+          }
+
           const res = await http.get("/alojamientos-documentos", {
             params: { codigo, limit: 50, page: 1 },
           });
           setItems(Array.isArray(res.data?.documentos) ? res.data.documentos : []);
+          return;
+        }
+
+        if (!VIVIENDAS_CODES.includes(codigo)) {
+          setCodigo(VIVIENDAS_CODES[0]);
           return;
         }
 
