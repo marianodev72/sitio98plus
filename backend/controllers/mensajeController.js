@@ -3,6 +3,7 @@ const Mensaje = require("../models/Mensaje");
 const { User } = require("../models/user");
 const mongoose = require("mongoose");
 const AsignacionAlojamiento = require("../modules/alojamientos/models/AsignacionAlojamiento");
+const Vivienda = require("../models/vivienda");
 
 function up(v) {
   return String(v || "").toUpperCase().trim();
@@ -142,6 +143,102 @@ function nombreDisplaySeguro(user, fallback = "Usuario institucional") {
   if (apellidoNombre) return apellidoNombre;
   if (up(user.role) === "ALOJADO") return "Alojado";
   return fallback;
+}
+
+function contextoGeneral() {
+  return { origen: "General", codigo: "—", label: "General" };
+}
+
+function contextoLabel(ctx) {
+  const origen = String(ctx?.origen || "General").trim() || "General";
+  const codigo = String(ctx?.codigo || "—").trim() || "—";
+  return codigo === "—" ? origen : `${origen}: ${codigo}`;
+}
+
+async function resolverContextoOperacionalUsuario(userId, cache = new Map()) {
+  const id = String(userId || "").trim();
+  if (!mongoose.Types.ObjectId.isValid(id)) return contextoGeneral();
+  if (cache.has(id)) return cache.get(id);
+
+  try {
+    const user = await User.findById(id).select("_id role viviendaAsignada").lean();
+    if (!user) {
+      const general = contextoGeneral();
+      cache.set(id, general);
+      return general;
+    }
+
+    const role = up(user.role);
+    if (role === "ADMIN" || role === "ADMIN_GENERAL") {
+      const general = contextoGeneral();
+      cache.set(id, general);
+      return general;
+    }
+
+    let vivienda = null;
+    if (mongoose.Types.ObjectId.isValid(String(user.viviendaAsignada || ""))) {
+      vivienda = await Vivienda.findById(user.viviendaAsignada).select("codigo").lean();
+    }
+    if (!vivienda) {
+      vivienda = await Vivienda.findOne({ "ocupacionActual.permisionario": user._id }).select("codigo").lean();
+    }
+    if (vivienda) {
+      const ctx = { origen: "Vivienda", codigo: String(vivienda.codigo || "—").trim() || "—" };
+      ctx.label = contextoLabel(ctx);
+      cache.set(id, ctx);
+      return ctx;
+    }
+
+    const asignacion = await AsignacionAlojamiento.findOne({ alojado: user._id, estado: "ACTIVA" })
+      .populate({ path: "alojamiento", select: "codigo" })
+      .populate({ path: "plaza", select: "codigo numeroPlaza" })
+      .lean();
+    if (asignacion) {
+      const alojamientoCodigo = String(asignacion?.alojamiento?.codigo || "").trim();
+      const plazaCodigo = String(asignacion?.plaza?.codigo || asignacion?.plaza?.numeroPlaza || "").trim();
+      const codigo = [alojamientoCodigo, plazaCodigo].filter(Boolean).join(" - ") || "—";
+      const ctx = { origen: "Alojamiento", codigo };
+      ctx.label = contextoLabel(ctx);
+      cache.set(id, ctx);
+      return ctx;
+    }
+  } catch (_) {
+    // Fail-safe: no bloquear mensajeria por contexto operacional.
+  }
+
+  const general = contextoGeneral();
+  cache.set(id, general);
+  return general;
+}
+
+function mismoContexto(a, b) {
+  return String(a?.origen || "") === String(b?.origen || "") && String(a?.codigo || "") === String(b?.codigo || "");
+}
+
+async function resolverContextoDestinatarios(destinatarios, cache) {
+  const ids = uniqStrings(destinatarios).filter((id) => mongoose.Types.ObjectId.isValid(id));
+  if (!ids.length) return contextoGeneral();
+  const contextos = [];
+  for (const id of ids) {
+    contextos.push(await resolverContextoOperacionalUsuario(id, cache));
+  }
+  const primero = contextos[0] || contextoGeneral();
+  if (contextos.every((ctx) => mismoContexto(ctx, primero))) return primero;
+  return contextoGeneral();
+}
+
+async function agregarContextoOperacional(mensajes, modo = "remitente") {
+  const lista = Array.isArray(mensajes) ? mensajes : [];
+  const cache = new Map();
+  const result = [];
+  for (const mensaje of lista) {
+    const contextoOperacional =
+      modo === "destinatarios"
+        ? await resolverContextoDestinatarios(mensaje?.destinatarios, cache)
+        : await resolverContextoOperacionalUsuario(mensaje?.remitente, cache);
+    result.push({ ...mensaje, contextoOperacional });
+  }
+  return result;
 }
 
 async function agregarRemitenteDisplay(mensajes) {
@@ -299,7 +396,8 @@ async function getEntrada(req, res) {
       .lean();
 
     const mensajesConDisplay = await agregarRemitenteDisplay(mensajes);
-    return res.json({ mensajes: mensajesConDisplay });
+    const mensajesConContexto = await agregarContextoOperacional(mensajesConDisplay, "remitente");
+    return res.json({ mensajes: mensajesConContexto });
   } catch (error) {
     console.error("[mensajes][entrada] error:", error);
     return res.status(500).json({ message: "No es posible procesar su solicitud" });
@@ -319,7 +417,8 @@ async function getEnviados(req, res) {
       .lean();
 
     const mensajesConDisplay = await agregarRemitenteDisplay(mensajes);
-    return res.json({ mensajes: mensajesConDisplay });
+    const mensajesConContexto = await agregarContextoOperacional(mensajesConDisplay, "destinatarios");
+    return res.json({ mensajes: mensajesConContexto });
   } catch (error) {
     console.error("[mensajes][enviados] error:", error);
     return res.status(500).json({ message: "No es posible procesar su solicitud" });
@@ -345,7 +444,9 @@ async function getMensaje(req, res) {
     if (!participa) return res.status(404).json({ message: "No es posible procesar su solicitud" });
 
     const [mensajeConDisplay] = await agregarRemitenteDisplay([mensaje]);
-    return res.json({ mensaje: mensajeConDisplay || mensaje });
+    const modoContexto = remitenteId === myId ? "destinatarios" : "remitente";
+    const [mensajeConContexto] = await agregarContextoOperacional([mensajeConDisplay || mensaje], modoContexto);
+    return res.json({ mensaje: mensajeConContexto || mensajeConDisplay || mensaje });
   } catch (error) {
     console.error("[mensajes][get] error:", error);
     return res.status(404).json({ message: "No es posible procesar su solicitud" });

@@ -2,6 +2,7 @@
 // frontend/src/pages/admin_general/Mensajeria.tsx
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { http } from "../../api/http";
+import { useAuth } from "../../auth/useAuth";
 import {
   cardStyle,
   heroStyle,
@@ -47,6 +48,11 @@ type Mensaje = {
   creadoEn?: string;
   replyTo?: string | null;
   threadId?: string | null;
+  contextoOperacional?: {
+    origen?: string;
+    codigo?: string;
+    label?: string;
+  };
 };
 
 type Tab = "entrada" | "enviados" | "nuevo";
@@ -59,6 +65,20 @@ type MensajeriaProps = {
 
 function safe(v: unknown) {
   return v === null || v === undefined || v === "" ? "-" : String(v);
+}
+
+function up(v: unknown) {
+  return String(v || "").trim().toUpperCase();
+}
+
+function contextoOrigen(m?: Mensaje) {
+  const origen = String(m?.contextoOperacional?.origen || "").trim();
+  return origen || "General";
+}
+
+function contextoCodigo(m?: Mensaje) {
+  const codigo = String(m?.contextoOperacional?.codigo || "").trim();
+  return codigo || "—";
 }
 
 function formatFecha(fecha?: string) {
@@ -369,6 +389,8 @@ fileButton: {
 };
 
 export default function Mensajeria(props: MensajeriaProps = {}) {
+  const { user } = useAuth();
+  const mostrarContextoOperacional = up(user?.role) === "ADMIN_GENERAL";
   const esAlojado = props.contexto === "ALOJADO";
   const esInspectorAlojamientos = props.contexto === "INSPECTOR_ALOJAMIENTOS";
   const usaAgendaAlojamientos = esAlojado || esInspectorAlojamientos;
@@ -774,6 +796,8 @@ export default function Mensajeria(props: MensajeriaProps = {}) {
                         <th style={styles.th}>Fecha</th>
                         <th style={styles.th}>Asunto / resumen</th>
                         <th style={styles.th}>Remitente</th>
+                        {mostrarContextoOperacional ? <th style={styles.th}>Origen</th> : null}
+                        {mostrarContextoOperacional ? <th style={styles.th}>Codigo</th> : null}
                         <th style={styles.th}>Acción</th>
                       </tr>
                     </thead>
@@ -785,6 +809,8 @@ export default function Mensajeria(props: MensajeriaProps = {}) {
                           <td style={styles.td}>
                             {nombreRemitente(m)}
                           </td>
+                          {mostrarContextoOperacional ? <td style={styles.td}>{contextoOrigen(m)}</td> : null}
+                          {mostrarContextoOperacional ? <td style={styles.td}>{contextoCodigo(m)}</td> : null}
                           <td style={styles.td}>
                             <button
                               onClick={() => abrirMensaje(m._id, "entrada")}
@@ -820,6 +846,8 @@ export default function Mensajeria(props: MensajeriaProps = {}) {
                         <th style={styles.th}>Fecha</th>
                         <th style={styles.th}>Asunto / resumen</th>
                         <th style={styles.th}>Destinatarios</th>
+                        {mostrarContextoOperacional ? <th style={styles.th}>Origen</th> : null}
+                        {mostrarContextoOperacional ? <th style={styles.th}>Codigo</th> : null}
                         <th style={styles.th}>Acción</th>
                       </tr>
                     </thead>
@@ -831,6 +859,8 @@ export default function Mensajeria(props: MensajeriaProps = {}) {
                           <td style={{ ...styles.td, textAlign: "center" }}>
                             {Array.isArray(m.destinatarios) ? m.destinatarios.length : 0}
                           </td>
+                          {mostrarContextoOperacional ? <td style={styles.td}>{contextoOrigen(m)}</td> : null}
+                          {mostrarContextoOperacional ? <td style={styles.td}>{contextoCodigo(m)}</td> : null}
                           <td style={styles.td}>
                             <button
                               onClick={() => abrirMensaje(m._id, "enviados")}
