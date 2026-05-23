@@ -5,6 +5,7 @@ const { renderAnexo23Pdf } = require("../../pdf/anexo23PdfRenderer");
 const { renderAnexo24Pdf } = require("../../pdf/anexo24PdfRenderer");
 const { renderAnexo25Pdf } = require("../../pdf/anexo25PdfRenderer");
 const { renderAnexo26Pdf } = require("../../pdf/anexo26PdfRenderer");
+const { renderAnexo28Pdf } = require("../../pdf/anexo28PdfRenderer");
 
 function sendResult(res, result) {
   if (result?.ok) {
@@ -122,6 +123,12 @@ async function descargarPdf(req, res) {
       return renderAnexo26Pdf(res, {
         documento: result.documento,
         origen: result.origen,
+      });
+    }
+
+    if (codigo === "ANEXO_28") {
+      return renderAnexo28Pdf(res, {
+        documento: result.documento,
       });
     }
 
