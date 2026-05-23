@@ -626,11 +626,55 @@ export default function AlojamientoDocumentoDetalleInspector() {
     }
   }
 
-  async function enviarRevisionAnexo28() {
+  function payloadSeguroAnexo28(payload: Anexo28InspectorDatos): Anexo28InspectorDatos {
+    return {
+      emergencia: payload.emergencia,
+      correspondeAlojado: payload.correspondeAlojado,
+      novedadesActaAnterior: payload.novedadesActaAnterior,
+      descripcionTrabajo: payload.descripcionTrabajo,
+      cargoAlojado: payload.cargoAlojado,
+      cargoAlcaldia: payload.cargoAlcaldia,
+      razonSeguridad: payload.razonSeguridad,
+      razonPreservacion: payload.razonPreservacion,
+      razonPresentacion: payload.razonPresentacion,
+      observacionesInspector: payload.observacionesInspector,
+      informeTecnico: payload.informeTecnico,
+      estimacion: payload.estimacion,
+      autorizacion: payload.autorizacion,
+      verificacionInspector: payload.verificacionInspector,
+      prioridadInspector: payload.prioridadInspector,
+      decisionInspector: payload.decisionInspector,
+      motivoRechazo: payload.motivoRechazo,
+      visitasProgramadas: payload.visitasProgramadas,
+      nuevaVisita: payload.nuevaVisita,
+      fechaProgramadaTrabajo: payload.fechaProgramadaTrabajo,
+      responsableTrabajo: payload.responsableTrabajo,
+      descripcionTecnicaTrabajo: payload.descripcionTecnicaTrabajo,
+      trabajoFinalizadoInspector: payload.trabajoFinalizadoInspector,
+      fechaFinalizacionInspector: payload.fechaFinalizacionInspector,
+      observacionFinalInspector: payload.observacionFinalInspector,
+    };
+  }
+
+  function tieneGestionMinimaAnexo28(payload: Anexo28InspectorDatos) {
+    return Boolean(
+      String(payload.descripcionTrabajo || "").trim() ||
+        String(payload.observacionesInspector || "").trim() ||
+        String(payload.decisionInspector || "").trim()
+    );
+  }
+
+  async function enviarRevisionAnexo28(payload: Anexo28InspectorDatos) {
     if (!documento?._id || !puedeEditarAnexo28 || enviandoRevisionAnexo28) return;
+    const payloadSeguro = payloadSeguroAnexo28(payload);
+    if (!tieneGestionMinimaAnexo28(payloadSeguro)) {
+      setAccionMsg("Completá una descripcion del trabajo, observacion o decision antes de enviar a revision.");
+      return;
+    }
     setEnviandoRevisionAnexo28(true);
     setAccionMsg("");
     try {
+      await http.patch(`/alojamientos-documentos/anexo-28/${documento._id}/gestion-inspector`, { datos: payloadSeguro });
       const res = await http.post(`/alojamientos-documentos/anexo-28/${documento._id}/enviar-revision`, {});
       setDocumento(res.data?.documento || null);
       setAccionMsg("ANEXO_28 enviado a revision ADMIN_GENERAL.");
@@ -1027,35 +1071,7 @@ export default function AlojamientoDocumentoDetalleInspector() {
                 }
                 readOnly={!puedeEditarAnexo28}
                 busy={guardandoAnexo28 || enviandoRevisionAnexo28}
-                onGuardar={() =>
-                  guardarAnexo28({
-                    emergencia: datos.bloqueInspector?.emergencia,
-                    correspondeAlojado: datos.bloqueInspector?.correspondeAlojado,
-                    novedadesActaAnterior: datos.bloqueInspector?.novedadesActaAnterior,
-                    descripcionTrabajo: datos.bloqueInspector?.descripcionTrabajo,
-                    cargoAlojado: datos.bloqueAdministrativo?.cargoAlojado,
-                    cargoAlcaldia: datos.bloqueAdministrativo?.cargoAlcaldia,
-                    razonSeguridad: datos.bloqueAdministrativo?.razonSeguridad,
-                    razonPreservacion: datos.bloqueAdministrativo?.razonPreservacion,
-                    razonPresentacion: datos.bloqueAdministrativo?.razonPresentacion,
-                    observacionesInspector: datos.observacionesInspector,
-                    informeTecnico: datos.informeTecnico,
-                    estimacion: datos.estimacion,
-                    autorizacion: datos.autorizacion,
-                    verificacionInspector: datos.verificacionInspector,
-                    prioridadInspector: datos.prioridadInspector,
-                    decisionInspector: datos.decisionInspector,
-                    motivoRechazo: datos.motivoRechazo,
-                    visitasProgramadas: datos.visitasProgramadas,
-                    nuevaVisita: datos.nuevaVisita,
-                    fechaProgramadaTrabajo: datos.fechaProgramadaTrabajo,
-                    responsableTrabajo: datos.responsableTrabajo,
-                    descripcionTecnicaTrabajo: datos.descripcionTecnicaTrabajo,
-                    trabajoFinalizadoInspector: datos.trabajoFinalizadoInspector,
-                    fechaFinalizacionInspector: datos.fechaFinalizacionInspector,
-                    observacionFinalInspector: datos.observacionFinalInspector,
-                  })
-                }
+                onGuardar={guardarAnexo28}
                 onEnviarRevision={enviarRevisionAnexo28}
               />
             </Section>

@@ -91,8 +91,8 @@ export default function Anexo28InspectorForm({
   onChange: (next: Anexo28InspectorDatos) => void;
   readOnly?: boolean;
   busy?: boolean;
-  onGuardar?: () => void;
-  onEnviarRevision?: () => void;
+  onGuardar?: (value: Anexo28InspectorDatos) => void;
+  onEnviarRevision?: (value: Anexo28InspectorDatos) => void;
 }) {
   const update = (patch: Partial<Anexo28InspectorDatos>) => onChange({ ...value, ...patch });
   const nuevaVisita = value.nuevaVisita || {};
@@ -244,10 +244,10 @@ export default function Anexo28InspectorForm({
 
       {!readOnly ? (
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button type="button" onClick={onGuardar} disabled={busy} style={secondaryButtonStyle}>
+          <button type="button" onClick={() => onGuardar?.(value)} disabled={busy} style={secondaryButtonStyle}>
             {busy ? "Guardando..." : "Guardar gestion"}
           </button>
-          <button type="button" onClick={onEnviarRevision} disabled={busy} style={primaryButtonStyle}>
+          <button type="button" onClick={() => onEnviarRevision?.(value)} disabled={busy} style={primaryButtonStyle}>
             {busy ? "Procesando..." : "Enviar a revision ADMIN_GENERAL"}
           </button>
         </div>
