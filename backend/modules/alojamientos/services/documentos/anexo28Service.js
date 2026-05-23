@@ -39,6 +39,17 @@ const EDITABLE_INSPECTOR = new Set([
   "estimacion",
   "autorizacion",
   "verificacionInspector",
+  "prioridadInspector",
+  "decisionInspector",
+  "motivoRechazo",
+  "visitasProgramadas",
+  "nuevaVisita",
+  "fechaProgramadaTrabajo",
+  "responsableTrabajo",
+  "descripcionTecnicaTrabajo",
+  "trabajoFinalizadoInspector",
+  "fechaFinalizacionInspector",
+  "observacionFinalInspector",
 ]);
 
 function publicError(status, code = "NO_DISPONIBLE", message = "No es posible procesar el ANEXO_28 en este momento.") {
@@ -86,6 +97,27 @@ function trimText(value, max = 4000) {
 
 function boolValue(value) {
   return value === true;
+}
+
+function sanitizeList(value, max = 30) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .slice(0, max)
+    .map((item) => trimText(item, 500))
+    .filter(Boolean);
+}
+
+function sanitizeVisita(value, userId) {
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const fechaProgramada = trimText(source.fechaProgramada, 40);
+  const observacion = trimText(source.observacion, 1000);
+  if (!fechaProgramada && !observacion) return null;
+  return {
+    fechaProgramada: fechaProgramada || null,
+    observacion,
+    creadoPor: userId || null,
+    fechaRegistro: new Date().toISOString(),
+  };
 }
 
 function nombreDesdeUsuario(user) {
@@ -141,6 +173,23 @@ function sanitizeInspectorPayload(payload = {}) {
     estimacion: trimText(source.estimacion, 1000),
     autorizacion: trimText(source.autorizacion, 1000),
     verificacionInspector: trimText(source.verificacionInspector, 1000),
+    prioridadInspector: ["URGENTE", "ALTA", "MEDIA", "BAJA"].includes(up(source.prioridadInspector))
+      ? up(source.prioridadInspector)
+      : "",
+    decisionInspector: ["APROBADO", "RECHAZADO", "OBSERVADO"].includes(up(source.decisionInspector))
+      ? up(source.decisionInspector)
+      : "",
+    motivoRechazo: trimText(source.motivoRechazo, 1000),
+    visitasProgramadas: Array.isArray(source.visitasProgramadas)
+      ? source.visitasProgramadas.map((item) => sanitizeVisita(item)).filter(Boolean).slice(0, 50)
+      : null,
+    nuevaVisita: sanitizeVisita(source.nuevaVisita, null),
+    fechaProgramadaTrabajo: trimText(source.fechaProgramadaTrabajo, 40),
+    responsableTrabajo: trimText(source.responsableTrabajo, 180),
+    descripcionTecnicaTrabajo: trimText(source.descripcionTecnicaTrabajo, 3000),
+    trabajoFinalizadoInspector: source.trabajoFinalizadoInspector === true,
+    fechaFinalizacionInspector: trimText(source.fechaFinalizacionInspector, 40),
+    observacionFinalInspector: trimText(source.observacionFinalInspector, 2000),
   };
 }
 
@@ -186,6 +235,35 @@ function solicitudTieneContenido(datos = {}) {
       solicita.verificacion ||
       solicita.provision
   );
+}
+
+function gestionTecnicaMinima(datos = {}) {
+  return Boolean(
+    trimText(datos?.bloqueInspector?.descripcionTrabajo, 1) ||
+      trimText(datos?.observacionesInspector, 1) ||
+      trimText(datos?.decisionInspector, 1)
+  );
+}
+
+function addInspectorHistory(documento, datos, user) {
+  const partes = [
+    datos.decisionInspector ? `Decision: ${datos.decisionInspector}` : "",
+    datos.prioridadInspector ? `Prioridad: ${datos.prioridadInspector}` : "",
+    datos.observacionesInspector ? `Obs: ${datos.observacionesInspector}` : "",
+    datos.bloqueInspector?.descripcionTrabajo ? `Trabajo: ${datos.bloqueInspector.descripcionTrabajo}` : "",
+    datos.trabajoFinalizadoInspector ? "Trabajo finalizado" : "",
+  ].filter(Boolean);
+  if (!partes.length) return;
+
+  const historial = Array.isArray(documento.datos?.observacionesInspectorHistorial)
+    ? documento.datos.observacionesInspectorHistorial
+    : [];
+  historial.push({
+    fecha: new Date().toISOString(),
+    texto: partes.join(" | "),
+    usuario: user?._id || null,
+  });
+  documento.datos.observacionesInspectorHistorial = historial.slice(-80);
 }
 
 function buildNumero() {
@@ -455,7 +533,7 @@ async function enviar(id, user) {
   }
 }
 
-async function revisarPorInspector(id, payload, user) {
+async function guardarGestionInspector(id, payload, user) {
   if (!isObjectId(user?._id) || !isInspectorAlojamientos(user)) return publicError(404, "DOCUMENTO_NO_DISPONIBLE");
   if (!isObjectId(id)) return publicError(404, "DOCUMENTO_NO_DISPONIBLE");
   const datos = sanitizeInspectorPayload(payload);
@@ -469,9 +547,66 @@ async function revisarPorInspector(id, payload, user) {
     return publicError(409, "ESTADO_INVALIDO");
   }
 
+  const visitasActuales = Array.isArray(documento.datos?.visitasProgramadas) ? documento.datos.visitasProgramadas : [];
+  const visitasProgramadas = Array.isArray(datos.visitasProgramadas) ? datos.visitasProgramadas : visitasActuales;
+  if (datos.nuevaVisita) visitasProgramadas.push({ ...datos.nuevaVisita, creadoPor: user._id });
+
   documento.datos = {
     ...(documento.datos || {}),
-    ...datos,
+    bloqueInspector: datos.bloqueInspector,
+    bloqueAdministrativo: datos.bloqueAdministrativo,
+    observacionesInspector: datos.observacionesInspector,
+    informeTecnico: datos.informeTecnico,
+    estimacion: datos.estimacion,
+    autorizacion: datos.autorizacion,
+    verificacionInspector: datos.verificacionInspector,
+    prioridadInspector: datos.prioridadInspector,
+    decisionInspector: datos.decisionInspector,
+    motivoRechazo: datos.motivoRechazo,
+    visitasProgramadas: visitasProgramadas.slice(0, 50),
+    fechaProgramadaTrabajo: datos.fechaProgramadaTrabajo,
+    responsableTrabajo: datos.responsableTrabajo,
+    descripcionTecnicaTrabajo: datos.descripcionTecnicaTrabajo,
+    trabajoFinalizadoInspector: datos.trabajoFinalizadoInspector,
+    fechaFinalizacionInspector: datos.fechaFinalizacionInspector,
+    observacionFinalInspector: datos.observacionFinalInspector,
+    inspector: {
+      nombre: nombreDesdeUsuario(user) || "Inspector de alojamiento",
+    },
+  };
+  addInspectorHistory(documento, documento.datos, user);
+  agregarInterviniente(documento, user._id, "INSPECTOR");
+  documento.intervenciones.push({
+    tipo: "GESTION_INSPECTOR_ANEXO_28",
+    actor: user._id,
+    rolActor: "INSPECTOR_ALOJAMIENTOS",
+    observacion: "Gestion tecnica ANEXO_28 guardada por inspector de alojamientos.",
+  });
+  documento.actualizadoPor = user._id;
+
+  try {
+    await documento.save();
+    return { ok: true, status: 200, documento: toResponse(documento) };
+  } catch {
+    return publicError(500, "ERROR_INTERNO");
+  }
+}
+
+async function enviarRevisionInspector(id, user) {
+  if (!isObjectId(user?._id) || !isInspectorAlojamientos(user)) return publicError(404, "DOCUMENTO_NO_DISPONIBLE");
+  if (!isObjectId(id)) return publicError(404, "DOCUMENTO_NO_DISPONIBLE");
+
+  const documento = await AlojamientoDocumento.findOne({ _id: id, codigo: "ANEXO_28", activo: { $ne: false } })
+    .populate({ path: "alojamiento", select: "lugar codigo dependencia sector tipo numero" });
+  if (!documento) return publicError(404, "DOCUMENTO_NO_DISPONIBLE");
+  if (!canInspect(user, documento)) return publicError(404, "DOCUMENTO_NO_DISPONIBLE");
+  if (!["ENVIADO", "DEVUELTO_A_INSPECTOR"].includes(up(documento.estado))) {
+    return publicError(409, "ESTADO_INVALIDO");
+  }
+  if (!gestionTecnicaMinima(documento.datos || {})) return publicError(400, "GESTION_TECNICA_REQUERIDA");
+
+  documento.datos = {
+    ...(documento.datos || {}),
     inspector: {
       nombre: nombreDesdeUsuario(user) || "Inspector de alojamiento",
     },
@@ -479,7 +614,7 @@ async function revisarPorInspector(id, payload, user) {
       ok: true,
       fecha: new Date(),
       usuario: user._id,
-      observacion: datos.observacionesInspector,
+      observacion: documento.datos?.observacionesInspector || documento.datos?.decisionInspector || "",
     },
   };
   agregarInterviniente(documento, user._id, "INSPECTOR");
@@ -488,7 +623,7 @@ async function revisarPorInspector(id, payload, user) {
     usuario: user._id,
     rol: "INSPECTOR_ALOJAMIENTOS",
     ok: true,
-    observacion: datos.observacionesInspector,
+    observacion: documento.datos?.observacionesInspector || documento.datos?.decisionInspector || "",
   });
   documento.signers.push({
     tipo: "INSPECTOR",
@@ -516,6 +651,10 @@ async function revisarPorInspector(id, payload, user) {
   }
 }
 
+async function revisarPorInspector(id, payload, user) {
+  return guardarGestionInspector(id, payload, user);
+}
+
 async function cerrarAnexo28(id, payload = {}, user) {
   if (!isObjectId(user?._id) || !isAdminGeneral(user)) return publicError(404, "DOCUMENTO_NO_DISPONIBLE");
   if (!isObjectId(id)) return publicError(404, "DOCUMENTO_NO_DISPONIBLE");
@@ -526,9 +665,21 @@ async function cerrarAnexo28(id, payload = {}, user) {
   if (documento.datos?.conformidadInspector?.ok !== true) return publicError(409, "REVISION_INSPECTOR_REQUERIDA");
 
   const observacion = trimText(payload?.observacion || payload?.datos?.observacionesAdminGeneral, 1000);
+  const historialAdmin = Array.isArray(documento.datos?.observacionesAdminGeneralHistorial)
+    ? documento.datos.observacionesAdminGeneralHistorial
+    : [];
+  if (observacion) {
+    historialAdmin.push({
+      fecha: new Date().toISOString(),
+      texto: observacion,
+      usuario: user._id,
+      accion: "CERRAR",
+    });
+  }
   documento.datos = {
     ...(documento.datos || {}),
     observacionesAdminGeneral: observacion,
+    observacionesAdminGeneralHistorial: historialAdmin.slice(-80),
     conformidadAdminGeneral: {
       ok: true,
       fecha: new Date(),
@@ -578,9 +729,26 @@ async function devolverAInspector(id, payload = {}, user) {
   if (up(documento.estado) !== "EN_REVISION") return publicError(409, "ESTADO_INVALIDO");
 
   const observacion = trimText(payload?.observacion || payload?.datos?.observacionesAdminGeneral, 1000);
+  const historialAdmin = Array.isArray(documento.datos?.observacionesAdminGeneralHistorial)
+    ? documento.datos.observacionesAdminGeneralHistorial
+    : [];
+  if (observacion) {
+    historialAdmin.push({
+      fecha: new Date().toISOString(),
+      texto: observacion,
+      usuario: user._id,
+      accion: "DEVOLVER_A_INSPECTOR",
+    });
+  }
   documento.datos = {
     ...(documento.datos || {}),
     observacionesAdminGeneral: observacion,
+    observacionesAdminGeneralHistorial: historialAdmin.slice(-80),
+    devueltoAInspector: {
+      ok: true,
+      fecha: new Date(),
+      usuario: user._id,
+    },
   };
   const transition = registrarCambioEstado(documento, {
     estadoNuevo: "DEVUELTO_A_INSPECTOR",
@@ -605,6 +773,8 @@ module.exports = {
   crearPorInspector,
   actualizarBorrador,
   enviar,
+  guardarGestionInspector,
+  enviarRevisionInspector,
   revisarPorInspector,
   cerrarAnexo28,
   devolverAInspector,

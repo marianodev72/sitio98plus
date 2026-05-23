@@ -28,7 +28,9 @@ router.patch("/anexo-24/:id/revision-inspector", anexo24Controller.revisarAnexo2
 router.patch("/anexo-25/:id", anexo25Controller.actualizarDatos);
 router.patch("/anexo-26/:id", anexo26Controller.actualizarDatos);
 router.post("/anexo-28", anexo28Controller.crearPorInspector);
+router.patch("/anexo-28/:id/gestion-inspector", anexo28Controller.guardarGestionInspector);
 router.patch("/anexo-28/:id/inspector", anexo28Controller.revisarPorInspector);
+router.post("/anexo-28/:id/enviar-revision", anexo28Controller.enviarRevisionInspector);
 router.post("/:id/conformidad-alojado-23", anexo23Controller.conformidadAlojado);
 router.post("/:id/cerrar-anexo-23", anexo23Controller.cerrarAnexo23);
 router.post("/:id/cerrar-anexo-24", anexo24Controller.cerrarAnexo24);

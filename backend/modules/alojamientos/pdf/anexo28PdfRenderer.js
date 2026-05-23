@@ -43,6 +43,41 @@ function checkLine(doc, label, value) {
   doc.font("Helvetica").fontSize(9).text(`[${value ? "X" : " "}] ${label}`);
 }
 
+function hasText(value) {
+  return safe(value, "") !== "";
+}
+
+function renderVisitas(doc, visitas) {
+  const items = Array.isArray(visitas)
+    ? visitas.filter((item) => hasText(item?.fechaProgramada) || hasText(item?.observacion))
+    : [];
+  if (!items.length) return;
+
+  section(doc, "Visitas programadas");
+  items.forEach((item) => {
+    line(doc, fmtDate(item.fechaProgramada), item.observacion || "Sin observacion");
+  });
+}
+
+function renderHistorialTecnico(doc, datos) {
+  const historialInspector = Array.isArray(datos?.observacionesInspectorHistorial)
+    ? datos.observacionesInspectorHistorial
+    : [];
+  const historialAdmin = Array.isArray(datos?.observacionesAdminGeneralHistorial)
+    ? datos.observacionesAdminGeneralHistorial
+    : [];
+  const entries = [...historialInspector, ...historialAdmin].filter(
+    (item) => hasText(item?.observacion) || hasText(item?.texto) || hasText(item?.accion)
+  );
+  if (!entries.length) return;
+
+  section(doc, "Historial tecnico y administrativo");
+  entries.forEach((item) => {
+    const partes = [fmtDate(item.fecha), safe(item.accion, ""), safe(item.observacion || item.texto, "")].filter(Boolean);
+    line(doc, "Registro", partes.join(" - "));
+  });
+}
+
 function renderSigners(doc, documento) {
   const signers = Array.isArray(documento?.signers)
     ? documento.signers.filter((item) => safe(item?.nombre, "") && safe(item?.tipo, ""))
@@ -118,6 +153,16 @@ function renderAnexo28Pdf(res, { documento }) {
   checkLine(doc, "Novedades de acta anterior", bloqueInspector.novedadesActaAnterior);
   line(doc, "Descripcion del trabajo", bloqueInspector.descripcionTrabajo);
   line(doc, "Inspector", datos.inspector?.nombre);
+  line(doc, "Prioridad", datos.prioridadInspector);
+  line(doc, "Decision", datos.decisionInspector);
+  line(doc, "Motivo rechazo", datos.motivoRechazo);
+
+  renderVisitas(doc, datos.visitasProgramadas);
+
+  section(doc, "Programacion de trabajo");
+  line(doc, "Fecha programada", fmtDate(datos.fechaProgramadaTrabajo));
+  line(doc, "Responsable", datos.responsableTrabajo);
+  line(doc, "Descripcion tecnica", datos.descripcionTecnicaTrabajo);
 
   section(doc, "Encargado / division / administracion");
   checkLine(doc, "Con cargo a huesped", bloqueAdmin.cargoAlojado);
@@ -130,6 +175,13 @@ function renderAnexo28Pdf(res, { documento }) {
   line(doc, "Estimacion", datos.estimacion);
   line(doc, "Autorizacion", datos.autorizacion);
   line(doc, "Verificacion", datos.verificacionInspector);
+
+  section(doc, "Finalizacion / verificacion");
+  checkLine(doc, "Trabajo finalizado", datos.trabajoFinalizadoInspector);
+  line(doc, "Fecha finalizacion", fmtDate(datos.fechaFinalizacionInspector));
+  line(doc, "Observacion final", datos.observacionFinalInspector);
+
+  renderHistorialTecnico(doc, datos);
 
   renderSigners(doc, documento);
   renderHistorial(doc, documento);

@@ -1001,9 +1001,34 @@ export default function AlojamientoDocumentoDetalle() {
                     <Field label="Emergencia" value={boolLabel(datos.bloqueInspector?.emergencia)} />
                     <Field label="Corresponde huesped" value={boolLabel(datos.bloqueInspector?.correspondeAlojado)} />
                     <Field label="Descripcion trabajo" value={datos.bloqueInspector?.descripcionTrabajo} />
+                    <Field label="Prioridad inspector" value={datos.prioridadInspector} />
+                    <Field label="Decision inspector" value={datos.decisionInspector} />
+                    <Field label="Motivo rechazo" value={datos.motivoRechazo} />
+                    <Field
+                      label="Visitas programadas"
+                      value={
+                        Array.isArray(datos.visitasProgramadas)
+                          ? datos.visitasProgramadas
+                              .map((visita: any) =>
+                                [fmtDate(visita?.fechaProgramada), visita?.observacion].filter(Boolean).join(" - ")
+                              )
+                              .join(" / ")
+                          : ""
+                      }
+                    />
+                    <Field label="Fecha programada" value={fmtDate(datos.fechaProgramadaTrabajo)} />
+                    <Field label="Responsable" value={datos.responsableTrabajo} />
+                    <Field label="Descripcion tecnica" value={datos.descripcionTecnicaTrabajo} />
                     <Field label="Cargo huesped" value={boolLabel(datos.bloqueAdministrativo?.cargoAlojado)} />
                     <Field label="Cargo alcaldia" value={boolLabel(datos.bloqueAdministrativo?.cargoAlcaldia)} />
                     <Field label="Observaciones inspector" value={datos.observacionesInspector} />
+                    <Field label="Trabajo finalizado" value={boolLabel(datos.trabajoFinalizadoInspector)} />
+                    <Field label="Fecha finalizacion" value={fmtDate(datos.fechaFinalizacionInspector)} />
+                    <Field label="Observacion final" value={datos.observacionFinalInspector} />
+                    <Field label="Informe tecnico" value={datos.informeTecnico} />
+                    <Field label="Estimacion" value={datos.estimacion} />
+                    <Field label="Autorizacion" value={datos.autorizacion} />
+                    <Field label="Verificacion inspector" value={datos.verificacionInspector} />
                     <Field label="Admin General" value={conformidadAdminGeneral ? "Conformado" : "Pendiente"} />
                     <Field label="Fecha admin" value={fmtDate(conformidadAdminGeneral?.fecha)} />
                     <Field label="Firmante admin" value={signerAdminGeneral?.nombre || conformidadAdminGeneral?.rol} />

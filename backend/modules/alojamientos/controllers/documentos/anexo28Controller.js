@@ -34,6 +34,26 @@ async function revisarPorInspector(req, res) {
   }
 }
 
+async function guardarGestionInspector(req, res) {
+  try {
+    const result = await anexo28Service.guardarGestionInspector(req.params.id, req.body || {}, req.user);
+    return sendResult(res, result);
+  } catch (err) {
+    console.error("[anexo28Controller] guardarGestionInspector error:", err?.message || "Error controlado");
+    return res.status(500).json({ ok: false, message: "Error interno al guardar gestion ANEXO_28" });
+  }
+}
+
+async function enviarRevisionInspector(req, res) {
+  try {
+    const result = await anexo28Service.enviarRevisionInspector(req.params.id, req.user);
+    return sendResult(res, result);
+  } catch (err) {
+    console.error("[anexo28Controller] enviarRevisionInspector error:", err?.message || "Error controlado");
+    return res.status(500).json({ ok: false, message: "Error interno al enviar ANEXO_28 a revision" });
+  }
+}
+
 async function cerrarAnexo28(req, res) {
   try {
     const result = await anexo28Service.cerrarAnexo28(req.params.id, req.body || {}, req.user);
@@ -57,6 +77,8 @@ async function devolverAnexo28(req, res) {
 module.exports = {
   crearPorInspector,
   revisarPorInspector,
+  guardarGestionInspector,
+  enviarRevisionInspector,
   cerrarAnexo28,
   devolverAnexo28,
 };

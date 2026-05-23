@@ -281,6 +281,7 @@ export default function AlojamientoDocumentoDetalleInspector() {
   const [guardandoAnexo25, setGuardandoAnexo25] = useState(false);
   const [guardandoAnexo26, setGuardandoAnexo26] = useState(false);
   const [guardandoAnexo28, setGuardandoAnexo28] = useState(false);
+  const [enviandoRevisionAnexo28, setEnviandoRevisionAnexo28] = useState(false);
   const [descargandoPdf, setDescargandoPdf] = useState(false);
   const [revisandoAnexo24, setRevisandoAnexo24] = useState(false);
   const [observacionesInspector, setObservacionesInspector] = useState("");
@@ -599,18 +600,45 @@ export default function AlojamientoDocumentoDetalleInspector() {
       estimacion: payload.estimacion,
       autorizacion: payload.autorizacion,
       verificacionInspector: payload.verificacionInspector,
+      prioridadInspector: payload.prioridadInspector,
+      decisionInspector: payload.decisionInspector,
+      motivoRechazo: payload.motivoRechazo,
+      visitasProgramadas: payload.visitasProgramadas,
+      nuevaVisita: payload.nuevaVisita,
+      fechaProgramadaTrabajo: payload.fechaProgramadaTrabajo,
+      responsableTrabajo: payload.responsableTrabajo,
+      descripcionTecnicaTrabajo: payload.descripcionTecnicaTrabajo,
+      trabajoFinalizadoInspector: payload.trabajoFinalizadoInspector,
+      fechaFinalizacionInspector: payload.fechaFinalizacionInspector,
+      observacionFinalInspector: payload.observacionFinalInspector,
     };
     setGuardandoAnexo28(true);
     setAccionMsg("");
     try {
-      const res = await http.patch(`/alojamientos-documentos/anexo-28/${documento._id}/inspector`, { datos: payloadSeguro });
+      const res = await http.patch(`/alojamientos-documentos/anexo-28/${documento._id}/gestion-inspector`, { datos: payloadSeguro });
       setDocumento(res.data?.documento || null);
-      setAccionMsg("Revision ANEXO_28 registrada correctamente.");
+      setAccionMsg("Gestion ANEXO_28 guardada correctamente.");
       await cargar();
     } catch {
-      setAccionMsg("No fue posible registrar la revision ANEXO_28.");
+      setAccionMsg("No fue posible guardar la gestion ANEXO_28.");
     } finally {
       setGuardandoAnexo28(false);
+    }
+  }
+
+  async function enviarRevisionAnexo28() {
+    if (!documento?._id || !puedeEditarAnexo28 || enviandoRevisionAnexo28) return;
+    setEnviandoRevisionAnexo28(true);
+    setAccionMsg("");
+    try {
+      const res = await http.post(`/alojamientos-documentos/anexo-28/${documento._id}/enviar-revision`, {});
+      setDocumento(res.data?.documento || null);
+      setAccionMsg("ANEXO_28 enviado a revision ADMIN_GENERAL.");
+      await cargar();
+    } catch {
+      setAccionMsg("No fue posible enviar el ANEXO_28 a revision.");
+    } finally {
+      setEnviandoRevisionAnexo28(false);
     }
   }
 
@@ -942,6 +970,17 @@ export default function AlojamientoDocumentoDetalleInspector() {
                   estimacion: datos.estimacion,
                   autorizacion: datos.autorizacion,
                   verificacionInspector: datos.verificacionInspector,
+                  prioridadInspector: datos.prioridadInspector,
+                  decisionInspector: datos.decisionInspector,
+                  motivoRechazo: datos.motivoRechazo,
+                  visitasProgramadas: datos.visitasProgramadas,
+                  nuevaVisita: datos.nuevaVisita,
+                  fechaProgramadaTrabajo: datos.fechaProgramadaTrabajo,
+                  responsableTrabajo: datos.responsableTrabajo,
+                  descripcionTecnicaTrabajo: datos.descripcionTecnicaTrabajo,
+                  trabajoFinalizadoInspector: datos.trabajoFinalizadoInspector,
+                  fechaFinalizacionInspector: datos.fechaFinalizacionInspector,
+                  observacionFinalInspector: datos.observacionFinalInspector,
                 }}
                 onChange={(next) =>
                   setDocumento((prev) =>
@@ -970,46 +1009,55 @@ export default function AlojamientoDocumentoDetalleInspector() {
                             estimacion: next.estimacion,
                             autorizacion: next.autorizacion,
                             verificacionInspector: next.verificacionInspector,
+                            prioridadInspector: next.prioridadInspector,
+                            decisionInspector: next.decisionInspector,
+                            motivoRechazo: next.motivoRechazo,
+                            visitasProgramadas: next.visitasProgramadas,
+                            nuevaVisita: next.nuevaVisita,
+                            fechaProgramadaTrabajo: next.fechaProgramadaTrabajo,
+                            responsableTrabajo: next.responsableTrabajo,
+                            descripcionTecnicaTrabajo: next.descripcionTecnicaTrabajo,
+                            trabajoFinalizadoInspector: next.trabajoFinalizadoInspector,
+                            fechaFinalizacionInspector: next.fechaFinalizacionInspector,
+                            observacionFinalInspector: next.observacionFinalInspector,
                           },
                         }
                       : prev
                   )
                 }
                 readOnly={!puedeEditarAnexo28}
+                busy={guardandoAnexo28 || enviandoRevisionAnexo28}
+                onGuardar={() =>
+                  guardarAnexo28({
+                    emergencia: datos.bloqueInspector?.emergencia,
+                    correspondeAlojado: datos.bloqueInspector?.correspondeAlojado,
+                    novedadesActaAnterior: datos.bloqueInspector?.novedadesActaAnterior,
+                    descripcionTrabajo: datos.bloqueInspector?.descripcionTrabajo,
+                    cargoAlojado: datos.bloqueAdministrativo?.cargoAlojado,
+                    cargoAlcaldia: datos.bloqueAdministrativo?.cargoAlcaldia,
+                    razonSeguridad: datos.bloqueAdministrativo?.razonSeguridad,
+                    razonPreservacion: datos.bloqueAdministrativo?.razonPreservacion,
+                    razonPresentacion: datos.bloqueAdministrativo?.razonPresentacion,
+                    observacionesInspector: datos.observacionesInspector,
+                    informeTecnico: datos.informeTecnico,
+                    estimacion: datos.estimacion,
+                    autorizacion: datos.autorizacion,
+                    verificacionInspector: datos.verificacionInspector,
+                    prioridadInspector: datos.prioridadInspector,
+                    decisionInspector: datos.decisionInspector,
+                    motivoRechazo: datos.motivoRechazo,
+                    visitasProgramadas: datos.visitasProgramadas,
+                    nuevaVisita: datos.nuevaVisita,
+                    fechaProgramadaTrabajo: datos.fechaProgramadaTrabajo,
+                    responsableTrabajo: datos.responsableTrabajo,
+                    descripcionTecnicaTrabajo: datos.descripcionTecnicaTrabajo,
+                    trabajoFinalizadoInspector: datos.trabajoFinalizadoInspector,
+                    fechaFinalizacionInspector: datos.fechaFinalizacionInspector,
+                    observacionFinalInspector: datos.observacionFinalInspector,
+                  })
+                }
+                onEnviarRevision={enviarRevisionAnexo28}
               />
-              {puedeEditarAnexo28 ? (
-                <button
-                  type="button"
-                  onClick={() =>
-                    guardarAnexo28({
-                      emergencia: datos.bloqueInspector?.emergencia,
-                      correspondeAlojado: datos.bloqueInspector?.correspondeAlojado,
-                      novedadesActaAnterior: datos.bloqueInspector?.novedadesActaAnterior,
-                      descripcionTrabajo: datos.bloqueInspector?.descripcionTrabajo,
-                      cargoAlojado: datos.bloqueAdministrativo?.cargoAlojado,
-                      cargoAlcaldia: datos.bloqueAdministrativo?.cargoAlcaldia,
-                      razonSeguridad: datos.bloqueAdministrativo?.razonSeguridad,
-                      razonPreservacion: datos.bloqueAdministrativo?.razonPreservacion,
-                      razonPresentacion: datos.bloqueAdministrativo?.razonPresentacion,
-                      observacionesInspector: datos.observacionesInspector,
-                      informeTecnico: datos.informeTecnico,
-                      estimacion: datos.estimacion,
-                      autorizacion: datos.autorizacion,
-                      verificacionInspector: datos.verificacionInspector,
-                    })
-                  }
-                  disabled={guardandoAnexo28}
-                  style={{
-                    ...badgeStyle,
-                    minHeight: 40,
-                    marginTop: 12,
-                    cursor: guardandoAnexo28 ? "not-allowed" : "pointer",
-                    opacity: guardandoAnexo28 ? 0.65 : 1,
-                  }}
-                >
-                  {guardandoAnexo28 ? "Registrando..." : "Registrar revision"}
-                </button>
-              ) : null}
             </Section>
           )}
 
