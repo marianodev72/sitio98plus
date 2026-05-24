@@ -46,11 +46,13 @@ function up(v: unknown) {
 
 function safe(v: unknown) {
   const text = String(v ?? "").trim();
+  if (/^[a-fA-F0-9]{24}$/.test(text)) return "Sin asignar";
   return text || "Sin asignar";
 }
 
 function fallback(v: unknown) {
   const text = String(v ?? "").trim();
+  if (/^[a-fA-F0-9]{24}$/.test(text)) return "Sin asignar";
   return text || "Sin asignar";
 }
 
@@ -69,7 +71,9 @@ function territorioKey(t: TerritorioAlojamiento) {
 }
 
 function territorioLabel(t: TerritorioAlojamiento) {
-  return `${t.tipo} - ${t.valor}`;
+  const valor = String(t?.valor || "").trim();
+  if (!valor || /^[a-fA-F0-9]{24}$/.test(valor)) return "Sin asignar";
+  return up(t?.tipo) === "LUGAR" ? `Lugar: ${valor}` : valor;
 }
 
 export default function UsuariosAdminGeneral() {

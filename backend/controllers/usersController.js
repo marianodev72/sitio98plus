@@ -48,6 +48,16 @@ function safeStr(v) {
   return String(v || "").trim();
 }
 
+function isObjectIdLike(value) {
+  return mongoose.Types.ObjectId.isValid(String(value || ""));
+}
+
+function publicLabel(value) {
+  const text = safeStr(value);
+  if (!text || isObjectIdLike(text)) return "Sin asignar";
+  return text;
+}
+
 const TERRITORIOS_ALOJAMIENTO_TIPOS = ["LUGAR"];
 
 function normalizarTerritoriosAlojamiento(value) {
@@ -70,6 +80,24 @@ function normalizarTerritoriosAlojamiento(value) {
   }
 
   return Array.from(unique.values());
+}
+
+function sanitizeUsuarioListItem(user) {
+  if (!user || typeof user !== "object") return user;
+  user.barrioAsignado = publicLabel(user.barrioAsignado);
+  user.viviendaLabel = publicLabel(user.viviendaLabel);
+  user.alojamientoLabel = publicLabel(user.alojamientoLabel);
+  if (Array.isArray(user.territoriosAlojamiento)) {
+    user.territoriosAlojamiento = user.territoriosAlojamiento
+      .map((territorio) => {
+        const tipo = safeStr(territorio?.tipo).toUpperCase();
+        const valor = safeStr(territorio?.valor);
+        if (!tipo || !valor || isObjectIdLike(valor)) return null;
+        return { tipo, valor };
+      })
+      .filter(Boolean);
+  }
+  return user;
 }
 
 // Roles base válidos
@@ -348,6 +376,7 @@ async function listar(req, res) {
     const usuarios = await User.find(filtro).select(ADMIN_READ_SELECT).sort(sort).limit(limit).lean();
     await attachViviendaOcupadaLabel(usuarios);
     await attachAlojamientoActivoLabel(usuarios);
+    usuarios.forEach(sanitizeUsuarioListItem);
 
     return res.json({ usuarios });
   } catch (err) {

@@ -43,8 +43,13 @@ function up(v: unknown) {
   return String(v || "").toUpperCase().trim();
 }
 
+function isObjectIdLike(v: unknown) {
+  return /^[a-fA-F0-9]{24}$/.test(String(v || "").trim());
+}
+
 function fallback(v: unknown) {
   const text = String(v ?? "").trim();
+  if (isObjectIdLike(text)) return "Sin asignar";
   return text || "Sin asignar";
 }
 
@@ -54,7 +59,8 @@ function territoriosAlojamientoLabel(u: Usuario) {
     .map((t) => {
       const tipo = up(t?.tipo);
       const valor = String(t?.valor || "").trim();
-      return tipo && valor ? `${tipo} - ${valor}` : "";
+      if (!valor || isObjectIdLike(valor)) return "";
+      return tipo === "LUGAR" ? `Lugar: ${valor}` : valor;
     })
     .filter(Boolean);
   if (!labels.length) return "Sin asignar";
