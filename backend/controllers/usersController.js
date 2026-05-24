@@ -2,6 +2,7 @@
 const mongoose = require("mongoose");
 const PDFDocument = require("pdfkit");
 const { User } = require("../models/user");
+const AsignacionAlojamiento = require("../modules/alojamientos/models/AsignacionAlojamiento");
 
 // ✅ Vivienda model (minúscula) — IMPORT CORRECTO
 // ✅ Vivienda model (robusto)
@@ -224,9 +225,23 @@ async function attachViviendaOcupadaLabel(usuarios) {
 
     if (!Vivienda) {
       for (const u of usuarios) {
-        if (u && up(u.role) === "PERMISIONARIO") u.viviendaLabel = "—";
+        if (u && up(u.role) === "PERMISIONARIO") u.viviendaLabel = "Sin asignar";
       }
       return usuarios;
+    }
+
+    const viviendaIds = usuarios.map((u) => u?.viviendaAsignada).filter(Boolean);
+    if (viviendaIds.length) {
+      const viviendasAsignadas = await Vivienda.find({ _id: { $in: viviendaIds } })
+        .select("codigo")
+        .lean();
+      const mapViviendaCodigo = new Map(
+        (viviendasAsignadas || []).map((v) => [String(v._id), v.codigo || "Sin asignar"])
+      );
+      for (const u of usuarios) {
+        const codigo = mapViviendaCodigo.get(String(u?.viviendaAsignada || ""));
+        if (codigo) u.viviendaLabel = codigo;
+      }
     }
 
     const permIds = usuarios
@@ -247,17 +262,68 @@ async function attachViviendaOcupadaLabel(usuarios) {
     for (const v of viviendasOcupadas) {
       const uid = v?.ocupacionActual?.permisionario?.toString?.();
       if (!uid) continue;
-      mapUserToVivienda.set(uid, v.codigo || "—");
+      mapUserToVivienda.set(uid, v.codigo || "Sin asignar");
     }
 
     for (const u of usuarios) {
       if (!u || up(u.role) !== "PERMISIONARIO") continue;
       const uid = u._id?.toString?.();
-      u.viviendaLabel = uid && mapUserToVivienda.get(uid) ? mapUserToVivienda.get(uid) : "—";
+      u.viviendaLabel = uid && mapUserToVivienda.get(uid) ? mapUserToVivienda.get(uid) : "Sin asignar";
     }
 
     return usuarios;
   } catch {
+    return usuarios;
+  }
+}
+
+async function attachAlojamientoActivoLabel(usuarios) {
+  try {
+    if (!Array.isArray(usuarios) || usuarios.length === 0) return usuarios;
+
+    const alojadoIds = usuarios
+      .filter((u) => u && (up(u.role) === "ALOJADO" || u.alojamientoAsignado))
+      .map((u) => u._id)
+      .filter(Boolean);
+
+    if (!alojadoIds.length) return usuarios;
+
+    const asignaciones = await AsignacionAlojamiento.find({
+      estado: "ACTIVA",
+      alojado: { $in: alojadoIds },
+    })
+      .select("alojado alojamiento plaza")
+      .populate({ path: "alojamiento", select: "codigo" })
+      .populate({ path: "plaza", select: "codigo numeroPlaza" })
+      .lean();
+
+    const mapUserToAlojamiento = new Map();
+    for (const asignacion of asignaciones || []) {
+      const uid = String(asignacion?.alojado || "");
+      if (!uid) continue;
+      const alojamientoCodigo = safeStr(asignacion?.alojamiento?.codigo);
+      const plazaCodigo = safeStr(asignacion?.plaza?.codigo);
+      const numeroPlaza = asignacion?.plaza?.numeroPlaza
+        ? `Plaza ${asignacion.plaza.numeroPlaza}`
+        : "";
+      const plazaLabel = plazaCodigo || numeroPlaza;
+      const label = [alojamientoCodigo, plazaLabel].filter(Boolean).join(" · ");
+      mapUserToAlojamiento.set(uid, label || "Sin asignar");
+    }
+
+    for (const u of usuarios) {
+      if (!u) continue;
+      const uid = String(u._id || "");
+      if (mapUserToAlojamiento.has(uid)) {
+        u.alojamientoLabel = mapUserToAlojamiento.get(uid);
+      } else if (up(u.role) === "ALOJADO") {
+        u.alojamientoLabel = "Sin asignar";
+      }
+    }
+
+    return usuarios;
+  } catch (err) {
+    console.error("[USERS] Error hidratando alojamiento activo:", err?.message || "Error controlado");
     return usuarios;
   }
 }
@@ -281,6 +347,7 @@ async function listar(req, res) {
 
     const usuarios = await User.find(filtro).select(ADMIN_READ_SELECT).sort(sort).limit(limit).lean();
     await attachViviendaOcupadaLabel(usuarios);
+    await attachAlojamientoActivoLabel(usuarios);
 
     return res.json({ usuarios });
   } catch (err) {

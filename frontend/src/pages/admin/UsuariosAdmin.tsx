@@ -14,6 +14,8 @@ type Usuario = {
   barrioAsignado?: string;
   territoriosAlojamiento?: { tipo?: string; valor?: string }[];
   viviendaAsignada?: string;
+  viviendaLabel?: string;
+  alojamientoLabel?: string;
   activo?: boolean;
   archivado?: boolean;
   viviendaOcupadaLabel?: string;
@@ -33,11 +35,17 @@ type SortKey =
 type SortDir = "asc" | "desc";
 
 function safe(v: unknown) {
-  return v === null || v === undefined || v === "" ? "—" : String(v);
+  const text = String(v ?? "").trim();
+  return text || "Sin asignar";
 }
 
 function up(v: unknown) {
   return String(v || "").toUpperCase().trim();
+}
+
+function fallback(v: unknown) {
+  const text = String(v ?? "").trim();
+  return text || "Sin asignar";
 }
 
 function territoriosAlojamientoLabel(u: Usuario) {
@@ -49,7 +57,8 @@ function territoriosAlojamientoLabel(u: Usuario) {
       return tipo && valor ? `${tipo} - ${valor}` : "";
     })
     .filter(Boolean);
-  return labels.length ? labels.join(", ") : "â€”";
+  if (!labels.length) return "Sin asignar";
+  return labels.join(", ");
 }
 
 export default function UsuariosAdmin() {
@@ -484,6 +493,7 @@ export default function UsuariosAdmin() {
               <th style={thStyle}>Territorios Alojamientos</th>
               <th style={thStyle}>Vivienda (asignada)</th>
               <th style={thStyle}>Vivienda (ocupada)</th>
+              <th style={thStyle}>Alojamiento / Plaza</th>
               <th style={{ ...thStyle, cursor: "pointer" }} onClick={() => toggleSort("activo")}>
                 Activo {sortBy === "activo" ? (sortDir === "asc" ? "▲" : "▼") : ""}
               </th>
@@ -498,19 +508,20 @@ export default function UsuariosAdmin() {
               return (
   <tr key={u._id}>
     <td style={tdStyle}>
-      {safe(u.apellido)} {safe(u.nombre)}
+      {fallback(u.apellido)} {fallback(u.nombre)}
     </td>
-    <td style={tdStyle}>{safe(u.email)}</td>
-    <td style={tdStyle}>{safe(u.dni)}</td>
-    <td style={tdStyle}>{safe(u.matricula)}</td>
-    <td style={tdStyle}>{safe(u.role)}</td>
+    <td style={tdStyle}>{fallback(u.email)}</td>
+    <td style={tdStyle}>{fallback(u.dni)}</td>
+    <td style={tdStyle}>{fallback(u.matricula)}</td>
+    <td style={tdStyle}>{fallback(u.role)}</td>
     <td style={tdStyle}>
-      {Array.isArray(u.permisos) && u.permisos.length ? u.permisos.map(up).join(", ") : "—"}
+      {Array.isArray(u.permisos) && u.permisos.length ? u.permisos.map(up).join(", ") : "Sin asignar"}
     </td>
-    <td style={tdStyle}>{safe(u.barrioAsignado)}</td>
+    <td style={tdStyle}>{fallback(u.barrioAsignado)}</td>
     <td style={tdStyle}>{territoriosAlojamientoLabel(u)}</td>
-    <td style={tdStyle}>{safe((u as any).viviendaLabel || u.viviendaAsignada)}</td>
-    <td style={tdStyle}>{safe((u as any).viviendaOcupadaLabel)}</td>
+    <td style={tdStyle}>{fallback(u.viviendaLabel)}</td>
+    <td style={tdStyle}>{fallback((u as any).viviendaOcupadaLabel)}</td>
+    <td style={tdStyle}>{fallback(u.alojamientoLabel)}</td>
     <td style={tdStyle}>{u.activo === false ? "No" : "Sí"}</td>
     <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
       <button
@@ -532,7 +543,7 @@ export default function UsuariosAdmin() {
 
 {rows.length === 0 && (
   <tr>
-    <td colSpan={12} style={{ ...tdStyle, textAlign: "center" }}>
+    <td colSpan={13} style={{ ...tdStyle, textAlign: "center" }}>
       No hay usuarios para los filtros seleccionados.
     </td>
   </tr>

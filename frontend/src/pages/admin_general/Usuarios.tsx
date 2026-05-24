@@ -13,6 +13,8 @@ type Usuario = {
   permisos?: string[];
   barrioAsignado?: string;
   territoriosAlojamiento?: TerritorioAlojamiento[];
+  viviendaLabel?: string;
+  alojamientoLabel?: string;
   activo?: boolean;
   archivado?: boolean;
 };
@@ -43,7 +45,13 @@ function up(v: unknown) {
 }
 
 function safe(v: unknown) {
-  return v === null || v === undefined || v === "" ? "—" : String(v);
+  const text = String(v ?? "").trim();
+  return text || "Sin asignar";
+}
+
+function fallback(v: unknown) {
+  const text = String(v ?? "").trim();
+  return text || "Sin asignar";
 }
 
 function isInspectorLike(permisos?: string[]) {
@@ -737,6 +745,18 @@ if (loading) return <p style={{ color: "#E5E7EB" }}>Cargando usuarios…</p>;
     whiteSpace: "nowrap",
   }}
 >
+  Alojamiento / Plaza
+</th>
+
+<th
+  style={{
+    padding: "12px 14px",
+    fontSize: 14,
+    border: "1px solid #334155",
+    color: "#F8FAFC",
+    whiteSpace: "nowrap",
+  }}
+>
   Permisos
 </th>
               <th
@@ -804,16 +824,16 @@ if (loading) return <p style={{ color: "#E5E7EB" }}>Cargando usuarios…</p>;
     return (
       <tr key={u._id} style={{ background: "#020817" }}>
         <td style={{ padding: "12px 14px", border: "1px solid #334155", fontSize: 14 }}>
-          {safe(u.apellido)} {safe(u.nombre)}
+          {fallback(u.apellido)} {fallback(u.nombre)}
         </td>
         <td style={{ padding: "12px 14px", border: "1px solid #334155", fontSize: 14 }}>
-          {safe(u.email)}
+          {fallback(u.email)}
         </td>
         <td style={{ padding: "12px 14px", border: "1px solid #334155", fontSize: 14 }}>
-          {safe(u.dni)}
+          {fallback(u.dni)}
         </td>
         <td style={{ padding: "12px 14px", border: "1px solid #334155", fontSize: 14 }}>
-          {safe(u.matricula)}
+          {fallback(u.matricula)}
         </td>
 
         {/* ROL */}
@@ -844,7 +864,18 @@ if (loading) return <p style={{ color: "#E5E7EB" }}>Cargando usuarios…</p>;
             whiteSpace: "nowrap",
           }}
         >
-          {safe((u as any).viviendaLabel)}
+          {fallback(u.viviendaLabel)}
+        </td>
+
+        <td
+          style={{
+            padding: "12px 14px",
+            border: "1px solid #334155",
+            fontSize: 14,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {fallback(u.alojamientoLabel)}
         </td>
 
         {/* PERMISOS */}
@@ -971,7 +1002,7 @@ if (loading) return <p style={{ color: "#E5E7EB" }}>Cargando usuarios…</p>;
               </button>
             </>
           ) : (
-            "â€”"
+            "Sin asignar"
           )}
         </td>
 
@@ -1050,7 +1081,7 @@ if (loading) return <p style={{ color: "#E5E7EB" }}>Cargando usuarios…</p>;
   {rows.length === 0 && (
     <tr>
       <td
-        colSpan={11}
+        colSpan={12}
         style={{
           textAlign: "center",
           padding: 16,
