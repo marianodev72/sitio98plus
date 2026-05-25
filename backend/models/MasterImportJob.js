@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 const { Schema } = mongoose;
 
 const TIPOS_IMPORTACION = ["PERSONAL", "VIVIENDAS"];
-const ESTADOS_IMPORTACION = ["PENDIENTE_CONFIRMACION", "CANCELADO"];
+const ESTADOS_IMPORTACION = ["PENDIENTE_CONFIRMACION", "CANCELADO", "APLICADO", "FALLIDO"];
 
 const masterImportJobSchema = new Schema(
   {
@@ -36,6 +36,9 @@ const masterImportJobSchema = new Schema(
     applyPlanSummary: { type: Schema.Types.Mixed, default: null },
     applyPlanGeneratedAt: { type: Date, default: null },
     applyPlanGeneratedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    appliedAt: { type: Date, default: null },
+    appliedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    applyResult: { type: Schema.Types.Mixed, default: null },
     expiresAt: { type: Date, required: true, index: true },
   },
   { timestamps: true, versionKey: false, suppressReservedKeysWarning: true }

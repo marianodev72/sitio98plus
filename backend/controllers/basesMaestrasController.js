@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const mongoose = require("mongoose");
 
 const { MasterImportJob } = require("../models/MasterImportJob");
+const { executeApply } = require("../services/basesMaestras/applyService");
 const { buildApplyPlan, buildApplyPlanSummary } = require("../services/basesMaestras/applyPlanService");
 const { dryRunPersonal, dryRunViviendas } = require("../services/basesMaestras/dryRunService");
 
@@ -305,6 +306,72 @@ async function getApplyPlan(req, res) {
   }
 }
 
+async function applyJob(req, res) {
+  try {
+    if (!isAdminGeneral(req)) return deny(res);
+    assertValidObjectId(req.params.id);
+    const job = await MasterImportJob.findById(req.params.id).lean();
+    if (!job) return deny(res);
+
+    const result = await executeApply({
+      job,
+      actorId: req.user._id,
+      markApplied: async (applyResult, session) => {
+        const applied = await MasterImportJob.findOneAndUpdate(
+          { _id: job._id, estado: "PENDIENTE_CONFIRMACION" },
+          {
+            $set: {
+              estado: "APLICADO",
+              appliedAt: new Date(),
+              appliedBy: req.user._id,
+              applyResult,
+            },
+          },
+          { new: true, session }
+        );
+        if (!applied) {
+          const err = new Error("Job ya no esta pendiente de confirmacion");
+          err.status = 409;
+          throw err;
+        }
+      },
+      markFailed: async (applyResult, session = null) => {
+        await MasterImportJob.findOneAndUpdate(
+          { _id: job._id, estado: "PENDIENTE_CONFIRMACION" },
+          {
+            $set: {
+              estado: "FALLIDO",
+              appliedBy: req.user._id,
+              applyResult,
+            },
+          },
+          session ? { session } : {}
+        );
+      },
+    });
+
+    if (req.audit?.setTarget) req.audit.setTarget("MasterImportJob", String(job._id));
+    if (req.audit?.addMeta) {
+      req.audit.addMeta({
+        createsApplied: result.createsApplied,
+        updatesApplied: result.updatesApplied,
+        blocked: result.blocked,
+        skipped: result.skipped,
+        errors: result.errors.length,
+      });
+    }
+
+    return res.json({ ok: true, jobId: String(job._id), estado: "APLICADO", applyResult: result });
+  } catch (err) {
+    console.error("[bases-maestras] apply job error:", err);
+    return res.status(err.status || 500).json({
+      ok: false,
+      applyResult: err.applyResult || null,
+      errores: [{ message: err.message || "Error interno" }],
+    });
+  }
+}
+
 module.exports = {
   personalDryRun,
   viviendasDryRun,
@@ -312,4 +379,5 @@ module.exports = {
   getJob,
   cancelJob,
   getApplyPlan,
+  applyJob,
 };

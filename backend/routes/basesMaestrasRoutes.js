@@ -67,6 +67,11 @@ router.post(
   audit("BASES_MAESTRAS_JOB_CANCEL", { targetType: "MasterImportJob" }),
   controller.cancelJob
 );
+router.post(
+  "/jobs/:id/apply",
+  audit("BASES_MAESTRAS_APPLY_EXECUTED", { targetType: "MasterImportJob" }),
+  controller.applyJob
+);
 
 router.post(
   "/personal/dry-run",
