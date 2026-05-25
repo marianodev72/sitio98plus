@@ -73,7 +73,38 @@ function jobDetail(job) {
     warnings: Array.isArray(job.warnings) ? job.warnings : [],
     errores: Array.isArray(job.errors) ? job.errors : [],
     diff: job.diff || {},
+    manualApprovals: (Array.isArray(job.manualApprovals) ? job.manualApprovals : []).map((approval) => ({
+      tipo: approval.tipo,
+      key: approval.key,
+      approved: Boolean(approval.approved),
+      motivo: approval.motivo,
+      approvedBy: approval.approvedBy ? String(approval.approvedBy) : null,
+      approvedAt: approval.approvedAt,
+    })),
   };
+}
+
+function normalizeApprovalTipo(value) {
+  return String(value || "").toUpperCase().trim();
+}
+
+function normalizeApprovalKey(value) {
+  return String(value || "").trim();
+}
+
+function approvalMatches(item, tipo, key) {
+  return normalizeApprovalTipo(item?.tipo) === tipo && normalizeApprovalKey(item?.key) === key;
+}
+
+function findApprovalTarget(job, tipo, key) {
+  const plan = job.applyPlan || {};
+  const risk = (Array.isArray(plan.risks) ? plan.risks : []).find((item) => approvalMatches(item, tipo, key));
+  if (risk) return { source: "risks", item: risk };
+  const manualReview = (Array.isArray(plan.requiresManualReview) ? plan.requiresManualReview : []).find((item) =>
+    approvalMatches(item, tipo, key)
+  );
+  if (manualReview) return { source: "requiresManualReview", item: manualReview };
+  return null;
 }
 
 async function persistDryRunJob(req, tipo, result) {
@@ -372,6 +403,101 @@ async function applyJob(req, res) {
   }
 }
 
+async function manualApproval(req, res) {
+  try {
+    if (!isAdminGeneral(req)) return deny(res);
+    assertValidObjectId(req.params.id);
+
+    const tipo = normalizeApprovalTipo(req.body?.tipo);
+    const key = normalizeApprovalKey(req.body?.key);
+    const motivo = String(req.body?.motivo || "").trim();
+
+    if (!tipo || !key || !motivo) {
+      return res.status(400).json({ ok: false, errores: [{ message: "tipo, key y motivo son obligatorios" }] });
+    }
+
+    const job = await MasterImportJob.findById(req.params.id).lean();
+    if (!job) return deny(res);
+    if (job.estado !== "PENDIENTE_CONFIRMACION") {
+      return res.status(409).json({ ok: false, errores: [{ message: "Job no esta pendiente de confirmacion" }] });
+    }
+    if (Array.isArray(job.errors) && job.errors.length > 0) {
+      return res.status(409).json({ ok: false, errores: [{ message: "Job contiene errores de dry-run" }] });
+    }
+    if (!job.applyPlan || typeof job.applyPlan !== "object") {
+      return res.status(409).json({ ok: false, errores: [{ message: "Job no tiene applyPlan persistido" }] });
+    }
+
+    const target = findApprovalTarget(job, tipo, key);
+    if (!target) {
+      return res.status(400).json({ ok: false, errores: [{ message: "Riesgo o revision manual inexistente" }] });
+    }
+
+    if ((Array.isArray(job.manualApprovals) ? job.manualApprovals : []).some((approval) => approvalMatches(approval, tipo, key) && approval.approved)) {
+      return res.status(409).json({ ok: false, errores: [{ message: "Aprobacion manual ya registrada" }] });
+    }
+
+    const approval = {
+      tipo,
+      key,
+      approved: true,
+      motivo,
+      approvedBy: req.user._id,
+      approvedAt: new Date(),
+    };
+
+    const updated = await MasterImportJob.findOneAndUpdate(
+      {
+        _id: job._id,
+        estado: "PENDIENTE_CONFIRMACION",
+        manualApprovals: {
+          $not: {
+            $elemMatch: {
+              tipo,
+              key,
+              approved: true,
+            },
+          },
+        },
+      },
+      { $push: { manualApprovals: approval } },
+      { new: true }
+    ).lean();
+
+    if (!updated) {
+      return res.status(409).json({ ok: false, errores: [{ message: "No se pudo registrar la aprobacion manual" }] });
+    }
+
+    if (req.audit?.setTarget) req.audit.setTarget("MasterImportJob", String(job._id));
+    if (req.audit?.addMeta) {
+      req.audit.addMeta({
+        tipo,
+        key,
+        motivo,
+        approvedBy: String(req.user._id),
+        source: target.source,
+      });
+    }
+
+    return res.json({
+      ok: true,
+      jobId: String(job._id),
+      approval: {
+        tipo,
+        key,
+        approved: true,
+        motivo,
+        approvedBy: String(req.user._id),
+        approvedAt: approval.approvedAt,
+        source: target.source,
+      },
+    });
+  } catch (err) {
+    console.error("[bases-maestras] manual approval error:", err);
+    return res.status(err.status || 500).json({ ok: false, errores: [{ message: err.message || "Error interno" }] });
+  }
+}
+
 module.exports = {
   personalDryRun,
   viviendasDryRun,
@@ -380,4 +506,5 @@ module.exports = {
   cancelJob,
   getApplyPlan,
   applyJob,
+  manualApproval,
 };

@@ -36,6 +36,19 @@ const masterImportJobSchema = new Schema(
     applyPlanSummary: { type: Schema.Types.Mixed, default: null },
     applyPlanGeneratedAt: { type: Date, default: null },
     applyPlanGeneratedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    manualApprovals: {
+      type: [
+        {
+          tipo: { type: String, required: true, trim: true, uppercase: true },
+          key: { type: String, required: true, trim: true },
+          approved: { type: Boolean, default: true },
+          motivo: { type: String, required: true, trim: true, maxlength: 1000 },
+          approvedBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
+          approvedAt: { type: Date, required: true },
+        },
+      ],
+      default: [],
+    },
     appliedAt: { type: Date, default: null },
     appliedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
     applyResult: { type: Schema.Types.Mixed, default: null },

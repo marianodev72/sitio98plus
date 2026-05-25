@@ -11,6 +11,30 @@ function arr(value) {
   return Array.isArray(value) ? value : [];
 }
 
+function approvalTipo(value) {
+  return String(value || "").toUpperCase().trim();
+}
+
+function approvalKey(value) {
+  return String(value || "").trim();
+}
+
+function approvalToken(item) {
+  return `${approvalTipo(item?.tipo)}::${approvalKey(item?.key)}`;
+}
+
+function approvedTokens(job) {
+  const tokens = new Set();
+  for (const approval of arr(job.manualApprovals)) {
+    if (approval?.approved) tokens.add(approvalToken(approval));
+  }
+  return tokens;
+}
+
+function unapproved(items, tokens) {
+  return arr(items).filter((item) => !tokens.has(approvalToken(item)));
+}
+
 function clean(value) {
   return String(value || "").trim();
 }
@@ -64,14 +88,20 @@ function assertApplyable(job) {
     err.status = 409;
     throw err;
   }
-  if (arr(job.applyPlan.blocked).length > 0 || arr(job.applyPlan.requiresManualReview).length > 0 || arr(job.applyPlan.risks).length > 0) {
+  const blockedCount = arr(job.applyPlan.blocked).length;
+  const approvals = approvedTokens(job);
+  const unapprovedRisks = unapproved(job.applyPlan.risks, approvals);
+  const unapprovedManualReview = unapproved(job.applyPlan.requiresManualReview, approvals);
+  if (blockedCount > 0 || unapprovedRisks.length > 0 || unapprovedManualReview.length > 0) {
     const err = new Error("ApplyPlan contiene operaciones bloqueadas, riesgos o revision manual");
     err.status = 409;
     err.applyResult = {
       createsApplied: 0,
       updatesApplied: 0,
       skipped: 0,
-      blocked: arr(job.applyPlan.blocked).length,
+      blocked: blockedCount,
+      unapprovedRisks: unapprovedRisks.length,
+      unapprovedManualReview: unapprovedManualReview.length,
       errors: [{ message: err.message }],
     };
     throw err;

@@ -72,6 +72,11 @@ router.post(
   audit("BASES_MAESTRAS_APPLY_EXECUTED", { targetType: "MasterImportJob" }),
   controller.applyJob
 );
+router.post(
+  "/jobs/:id/manual-approval",
+  audit("BASES_MAESTRAS_MANUAL_APPROVAL", { targetType: "MasterImportJob" }),
+  controller.manualApproval
+);
 
 router.post(
   "/personal/dry-run",
