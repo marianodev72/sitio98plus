@@ -61,6 +61,7 @@ function jobListItem(job) {
     resumen: job.dryRunSummary || {},
     warningsCount: Array.isArray(job.warnings) ? job.warnings.length : 0,
     erroresCount: Array.isArray(job.errors) ? job.errors.length : 0,
+    appliedAt: job.appliedAt || null,
     expiresAt: job.expiresAt,
     createdAt: job.createdAt,
     updatedAt: job.updatedAt,
@@ -73,6 +74,9 @@ function jobDetail(job) {
     warnings: Array.isArray(job.warnings) ? job.warnings : [],
     errores: Array.isArray(job.errors) ? job.errors : [],
     diff: job.diff || {},
+    applyResult: job.applyResult || null,
+    appliedAt: job.appliedAt || null,
+    appliedBy: job.appliedBy ? String(job.appliedBy) : null,
     manualApprovals: (Array.isArray(job.manualApprovals) ? job.manualApprovals : []).map((approval) => ({
       tipo: approval.tipo,
       key: approval.key,
