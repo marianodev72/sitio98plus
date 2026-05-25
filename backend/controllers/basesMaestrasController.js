@@ -2,7 +2,7 @@ const crypto = require("crypto");
 const mongoose = require("mongoose");
 
 const { MasterImportJob } = require("../models/MasterImportJob");
-const { buildApplyPlan } = require("../services/basesMaestras/applyPlanService");
+const { buildApplyPlan, buildApplyPlanSummary } = require("../services/basesMaestras/applyPlanService");
 const { dryRunPersonal, dryRunViviendas } = require("../services/basesMaestras/dryRunService");
 
 const JOB_TTL_HOURS = 24;
@@ -234,25 +234,69 @@ async function getApplyPlan(req, res) {
     assertValidObjectId(req.params.id);
     const job = await MasterImportJob.findById(req.params.id).lean();
     if (!job) return deny(res);
-    const applyPlan = buildApplyPlan(job);
+    if (job.estado !== "PENDIENTE_CONFIRMACION") {
+      return res.status(409).json({ ok: false, errores: [{ message: "Job no esta pendiente de confirmacion" }] });
+    }
+    if (Array.isArray(job.errors) && job.errors.length > 0) {
+      return res.status(409).json({ ok: false, errores: [{ message: "Job contiene errores de dry-run" }] });
+    }
 
-    if (req.audit?.setTarget) req.audit.setTarget("MasterImportJob", String(job._id));
+    let generated = false;
+    let sourceJob = job;
+    let applyPlan = job.applyPlan || null;
+    let applyPlanSummary = job.applyPlanSummary || null;
+
+    if (!applyPlan) {
+      applyPlan = buildApplyPlan(job);
+      applyPlanSummary = buildApplyPlanSummary(applyPlan);
+      const updated = await MasterImportJob.findOneAndUpdate(
+        {
+          _id: job._id,
+          estado: "PENDIENTE_CONFIRMACION",
+          $or: [{ applyPlan: { $exists: false } }, { applyPlan: null }],
+        },
+        {
+          $set: {
+            applyPlan,
+            applyPlanSummary,
+            applyPlanGeneratedAt: new Date(),
+            applyPlanGeneratedBy: req.user._id,
+          },
+        },
+        { new: true }
+      ).lean();
+
+      if (updated) {
+        generated = true;
+        sourceJob = updated;
+      } else {
+        sourceJob = await MasterImportJob.findById(req.params.id).lean();
+        if (!sourceJob?.applyPlan) {
+          return res.status(409).json({ ok: false, errores: [{ message: "No se pudo congelar apply-plan" }] });
+        }
+        applyPlan = sourceJob.applyPlan;
+        applyPlanSummary = sourceJob.applyPlanSummary || buildApplyPlanSummary(applyPlan);
+      }
+    }
+
+    if (req.audit?.setTarget) req.audit.setTarget("MasterImportJob", String(sourceJob._id));
     if (req.audit?.addMeta) {
       req.audit.addMeta({
-        tipo: job.tipo,
-        estado: job.estado,
-        creates: applyPlan.creates.length,
-        updates: applyPlan.updates.length,
-        blocked: applyPlan.blocked.length,
-        risks: applyPlan.risks.length,
+        tipo: sourceJob.tipo,
+        estado: sourceJob.estado,
+        generated,
+        summary: applyPlanSummary,
       });
     }
 
     return res.json({
       ok: true,
-      jobId: String(job._id),
-      tipo: job.tipo,
-      estado: job.estado,
+      jobId: String(sourceJob._id),
+      tipo: sourceJob.tipo,
+      estado: sourceJob.estado,
+      generated,
+      applyPlanSummary,
+      applyPlanGeneratedAt: sourceJob.applyPlanGeneratedAt || null,
       applyPlan,
     });
   } catch (err) {

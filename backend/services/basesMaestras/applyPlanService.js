@@ -249,6 +249,18 @@ function buildApplyPlan(job) {
   throw err;
 }
 
+function buildApplyPlanSummary(applyPlan = {}) {
+  return {
+    createsCount: arr(applyPlan.creates).length,
+    updatesCount: arr(applyPlan.updates).length,
+    blockedCount: arr(applyPlan.blocked).length,
+    risksCount: arr(applyPlan.risks).length,
+    warningsCount: arr(applyPlan.warnings).length,
+    requiresManualReviewCount: arr(applyPlan.requiresManualReview).length,
+  };
+}
+
 module.exports = {
   buildApplyPlan,
+  buildApplyPlanSummary,
 };

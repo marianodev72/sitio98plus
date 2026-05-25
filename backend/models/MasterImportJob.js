@@ -32,6 +32,10 @@ const masterImportJobSchema = new Schema(
     warnings: { type: [Schema.Types.Mixed], default: [] },
     errors: { type: [Schema.Types.Mixed], default: [] },
     diff: { type: Schema.Types.Mixed, default: {} },
+    applyPlan: { type: Schema.Types.Mixed, default: null },
+    applyPlanSummary: { type: Schema.Types.Mixed, default: null },
+    applyPlanGeneratedAt: { type: Date, default: null },
+    applyPlanGeneratedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
     expiresAt: { type: Date, required: true, index: true },
   },
   { timestamps: true, versionKey: false, suppressReservedKeysWarning: true }
