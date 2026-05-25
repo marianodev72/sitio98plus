@@ -143,6 +143,24 @@ function groupByTipo(items: ApplyPlanItem[]) {
   return grouped;
 }
 
+function warningTipo(item: unknown) {
+  if (item && typeof item === "object") {
+    const record = item as Record<string, unknown>;
+    return safe(record.tipo || record.reason || record.action, "OTRO");
+  }
+  return "OTRO";
+}
+
+function groupWarnings(items: unknown[]) {
+  const grouped: Record<string, unknown[]> = {};
+  for (const item of items) {
+    const tipo = warningTipo(item);
+    grouped[tipo] = grouped[tipo] || [];
+    grouped[tipo].push(item);
+  }
+  return grouped;
+}
+
 const controlStyle: CSSProperties = {
   minHeight: 40,
   padding: "8px 10px",
@@ -191,6 +209,17 @@ const smallLabelStyle: CSSProperties = {
   color: "rgba(255,255,255,0.66)",
 };
 
+const dangerButtonStyle: CSSProperties = {
+  padding: "10px 14px",
+  borderRadius: 10,
+  border: "1px solid rgba(251,191,36,0.42)",
+  background: "rgba(180,83,9,0.28)",
+  color: "#fef3c7",
+  fontWeight: 800,
+  cursor: "pointer",
+  maxWidth: "100%",
+};
+
 export default function BasesMaestras() {
   const [jobs, setJobs] = useState<JobListItem[]>([]);
   const [selectedJobId, setSelectedJobId] = useState("");
@@ -236,6 +265,18 @@ export default function BasesMaestras() {
   const errores = arr(detail?.errores);
   const applyResult = detail?.applyResult || null;
   const summary = detail?.resumen || selectedJob?.resumen || {};
+  const approvedCount = manualApprovals.filter((approval) => approval.approved).length;
+  const createsCount = countValue(detail?.applyPlanSummary?.createsCount);
+  const updatesCount = countValue(detail?.applyPlanSummary?.updatesCount);
+  const applyBlockReasons = [
+    !detail ? "Seleccione un job." : "",
+    detail && detail.estado !== "PENDIENTE_CONFIRMACION" ? `Estado incompatible: ${safe(detail.estado)}` : "",
+    detail && !applyPlan ? "Falta generar o consultar el apply-plan." : "",
+    errores.length > 0 ? `Errores de dry-run pendientes: ${errores.length}` : "",
+    blocked.length > 0 ? `Bloqueos no aprobables: ${blocked.length}` : "",
+    unapprovedRisks.length > 0 ? `Riesgos sin aprobar: ${unapprovedRisks.length}` : "",
+    unapprovedManualReview.length > 0 ? `Revisiones manuales sin aprobar: ${unapprovedManualReview.length}` : "",
+  ].filter(Boolean);
   const canApply =
     Boolean(detail) &&
     detail?.estado === "PENDIENTE_CONFIRMACION" &&
@@ -343,7 +384,10 @@ export default function BasesMaestras() {
       setErrorMsg("El riesgo seleccionado no tiene tipo/key aprobable.");
       return;
     }
-    const motivo = window.prompt("Ingrese motivo institucional de aprobacion:", "");
+    const motivo = window.prompt(
+      `APROBACION MANUAL INDIVIDUAL\n\nTipo: ${safe(item.tipo)}\nKey: ${safe(item.key)}\n\nIngrese el motivo institucional documentado:`,
+      ""
+    );
     if (motivo === null) return;
     const motivoLimpio = motivo.trim();
     if (!motivoLimpio) {
@@ -351,7 +395,7 @@ export default function BasesMaestras() {
       return;
     }
     const ok = window.confirm(
-      `Va a aprobar manualmente el riesgo ${item.tipo} / ${item.key}.\n\nEsta accion queda auditada. Desea continuar?`
+      `CONFIRMACION DE APROBACION MANUAL\n\nTipo: ${safe(item.tipo)}\nKey: ${safe(item.key)}\nMotivo: ${motivoLimpio}\n\nLa aprobacion es individual, queda auditada y solo descuenta este riesgo/revision manual para el apply.\n\nDesea continuar?`
     );
     if (!ok) return;
 
@@ -376,10 +420,8 @@ export default function BasesMaestras() {
 
   async function ejecutarApply() {
     if (!detail?.jobId || !canApply) return;
-    const creates = countValue(detail.applyPlanSummary?.createsCount);
-    const updates = countValue(detail.applyPlanSummary?.updatesCount);
     const ok = window.confirm(
-      `APPLY CONTROLADO\n\nTipo: ${safe(detail.tipo)}\nArchivo: ${safe(detail.archivoOriginalNombre)}\nCreates: ${creates}\nUpdates: ${updates}\n\nLa operacion se ejecutara en transaccion y quedara auditada.\n\nDesea continuar?`
+      `APPLY CONTROLADO TRANSACCIONAL\n\nTipo: ${safe(detail.tipo)}\nArchivo: ${safe(detail.archivoOriginalNombre)}\nCreates: ${createsCount}\nUpdates: ${updatesCount}\nRiesgos aprobados: ${approvedCount}\nBlocked pendientes: ${blocked.length}\nRiesgos sin aprobar: ${unapprovedRisks.length}\nRevision manual sin aprobar: ${unapprovedManualReview.length}\nErrores: ${errores.length}\n\nLa operacion se ejecutara en transaccion, quedara auditada y no debe usarse para applies masivos sin revision previa.\n\nDesea continuar?`
     );
     if (!ok) return;
 
@@ -475,6 +517,36 @@ export default function BasesMaestras() {
             </div>
           ))}
         </div>
+      </section>
+    );
+  }
+
+  function renderWarnings() {
+    const warnings = arr(applyPlan?.warnings);
+    const grouped = groupWarnings(warnings);
+    const entries = Object.entries(grouped);
+    return (
+      <section style={softCardStyle}>
+        <h3 style={{ marginTop: 0, color: "#ffffff", fontSize: 16 }}>Warnings ({warnings.length})</h3>
+        {!entries.length ? (
+          <div style={{ color: "rgba(255,255,255,0.74)", fontSize: 13 }}>Sin registros.</div>
+        ) : (
+          <div style={{ display: "grid", gap: 10 }}>
+            {entries.map(([group, groupItems]) => (
+              <div key={group}>
+                <div style={{ marginBottom: 6, fontWeight: 800, color: "#ffffff" }}>
+                  {group} ({groupItems.length})
+                </div>
+                <pre style={preStyle}>{compactJson(groupItems.slice(0, MAX_ITEMS))}</pre>
+                {groupItems.length > MAX_ITEMS ? (
+                  <div style={{ marginTop: 6, color: "rgba(255,255,255,0.62)", fontSize: 12 }}>
+                    Se muestran {MAX_ITEMS} de {groupItems.length}.
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        )}
       </section>
     );
   }
@@ -696,14 +768,50 @@ export default function BasesMaestras() {
                 <button type="button" style={secondaryButtonStyle} onClick={cargarApplyPlan} disabled={loadingPlan}>
                   {loadingPlan ? "Consultando..." : "Generar / ver plan"}
                 </button>
-                <button type="button" style={primaryButtonStyle} onClick={ejecutarApply} disabled={!canApply || applying}>
+                <button type="button" style={dangerButtonStyle} onClick={ejecutarApply} disabled={!canApply || applying}>
                   {applying ? "Aplicando..." : "Aplicar"}
                 </button>
               </div>
 
+              <section
+                style={{
+                  ...softCardStyle,
+                  marginTop: 12,
+                  border: canApply ? "1px solid rgba(34,197,94,0.30)" : "1px solid rgba(251,191,36,0.30)",
+                  background: canApply ? "rgba(20,83,45,0.14)" : "rgba(120,53,15,0.14)",
+                }}
+              >
+                <h3 style={{ marginTop: 0, color: "#ffffff", fontSize: 16 }}>Estado operativo</h3>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
+                  <div>
+                    <div style={{ color: "rgba(255,255,255,0.62)", fontSize: 12 }}>Puede aplicar</div>
+                    <div style={{ color: canApply ? "#bbf7d0" : "#fde68a", fontSize: 20, fontWeight: 900 }}>
+                      {canApply ? "Si" : "No"}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ color: "rgba(255,255,255,0.62)", fontSize: 12 }}>Motivo principal</div>
+                    <div style={{ color: "#ffffff", fontWeight: 800 }}>{applyBlockReasons[0] || "Listo para apply controlado"}</div>
+                  </div>
+                  <div>
+                    <div style={{ color: "rgba(255,255,255,0.62)", fontSize: 12 }}>Aprobaciones</div>
+                    <div style={{ color: "#ffffff", fontSize: 20, fontWeight: 900 }}>{approvedCount}</div>
+                  </div>
+                  <div>
+                    <div style={{ color: "rgba(255,255,255,0.62)", fontSize: 12 }}>Creates / Updates</div>
+                    <div style={{ color: "#ffffff", fontSize: 20, fontWeight: 900 }}>{createsCount} / {updatesCount}</div>
+                  </div>
+                </div>
+              </section>
+
               {!canApply ? (
                 <div style={{ ...softCardStyle, marginTop: 12, color: "rgba(255,255,255,0.74)" }}>
-                  Apply bloqueado: requiere estado pendiente, plan generado, sin errores, sin blocked y sin riesgos/revision manual pendientes.
+                  <div style={{ marginBottom: 8, color: "#fde68a", fontWeight: 800 }}>Apply bloqueado</div>
+                  <ul style={{ margin: 0, paddingLeft: 18 }}>
+                    {applyBlockReasons.map((reason) => (
+                      <li key={reason}>{reason}</li>
+                    ))}
+                  </ul>
                 </div>
               ) : null}
 
@@ -768,10 +876,7 @@ export default function BasesMaestras() {
                 {renderApplyPlanItems("Blocked", blocked, false)}
                 {renderApplyPlanItems("Risks", risks, true)}
                 {renderApplyPlanItems("Revision manual", manualReview, true)}
-                <section style={softCardStyle}>
-                  <h3 style={{ marginTop: 0, color: "#ffffff", fontSize: 16 }}>Warnings</h3>
-                  <pre style={preStyle}>{compactJson(arr(applyPlan?.warnings).slice(0, MAX_ITEMS))}</pre>
-                </section>
+                {renderWarnings()}
               </div>
             </>
           ) : null}
