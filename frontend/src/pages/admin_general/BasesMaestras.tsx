@@ -13,6 +13,7 @@ import {
   titleStyle,
 } from "../permisionario/uiStyles";
 
+type ImportTipo = "PERSONAL" | "VIVIENDAS";
 type JobEstado = "PENDIENTE_CONFIRMACION" | "CANCELADO" | "APLICADO" | "FALLIDO" | string;
 
 type JobListItem = {
@@ -28,17 +29,6 @@ type JobListItem = {
   updatedAt?: string;
 };
 
-type JobDetail = JobListItem & {
-  resumen?: Record<string, unknown>;
-  diff?: Record<string, unknown>;
-  applyPlanSummary?: Record<string, unknown> | null;
-  manualApprovals?: ManualApproval[];
-  applyResult?: ApplyResult | null;
-  appliedBy?: string | null;
-  warnings?: unknown[];
-  errores?: unknown[];
-};
-
 type ManualApproval = {
   tipo?: string;
   key?: string;
@@ -48,6 +38,26 @@ type ManualApproval = {
   approvedAt?: string | null;
 };
 
+type ApplyPlanItem = {
+  tipo?: string;
+  key?: string;
+  message?: string;
+  campo?: string;
+  action?: string;
+  collection?: string;
+  reason?: string;
+  field?: string;
+};
+
+type ApplyPlan = {
+  creates?: unknown[];
+  updates?: unknown[];
+  blocked?: ApplyPlanItem[];
+  risks?: ApplyPlanItem[];
+  warnings?: unknown[];
+  requiresManualReview?: ApplyPlanItem[];
+};
+
 type ApplyResult = {
   createsApplied?: number;
   updatesApplied?: number;
@@ -55,6 +65,29 @@ type ApplyResult = {
   blocked?: number;
   errors?: unknown[];
 };
+
+type JobDetail = JobListItem & {
+  resumen?: Record<string, unknown>;
+  diff?: Record<string, unknown>;
+  applyPlan?: ApplyPlan | null;
+  applyPlanSummary?: Record<string, unknown> | null;
+  manualApprovals?: ManualApproval[];
+  applyResult?: ApplyResult | null;
+  appliedBy?: string | null;
+  warnings?: unknown[];
+  errores?: unknown[];
+};
+
+type DryRunResult = {
+  ok?: boolean;
+  jobId?: string;
+  resumen?: Record<string, unknown>;
+  summary?: Record<string, unknown>;
+  warnings?: unknown[];
+  errores?: unknown[];
+};
+
+const MAX_ITEMS = 40;
 
 function formatDate(value?: string | null) {
   if (!value) return "-";
@@ -68,8 +101,21 @@ function safe(value: unknown, fallback = "-") {
   return text || fallback;
 }
 
+function arr<T>(value: T[] | undefined | null): T[] {
+  return Array.isArray(value) ? value : [];
+}
+
 function countValue(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function numberFromSummary(summary: Record<string, unknown>, key: string) {
+  const value = summary[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function approvalToken(item: { tipo?: string; key?: string }) {
+  return `${safe(item.tipo, "").toUpperCase()}::${safe(item.key, "")}`;
 }
 
 function estadoTone(estado?: string): CSSProperties {
@@ -85,6 +131,16 @@ function compactJson(value: unknown) {
     return "Sin datos";
   }
   return JSON.stringify(value, null, 2);
+}
+
+function groupByTipo(items: ApplyPlanItem[]) {
+  const grouped: Record<string, ApplyPlanItem[]> = {};
+  for (const item of items) {
+    const tipo = safe(item.tipo || item.reason || item.action, "OTRO");
+    grouped[tipo] = grouped[tipo] || [];
+    grouped[tipo].push(item);
+  }
+  return grouped;
 }
 
 const controlStyle: CSSProperties = {
@@ -128,6 +184,13 @@ const preStyle: CSSProperties = {
   lineHeight: 1.5,
 };
 
+const smallLabelStyle: CSSProperties = {
+  display: "block",
+  marginBottom: 6,
+  fontSize: 12,
+  color: "rgba(255,255,255,0.66)",
+};
+
 export default function BasesMaestras() {
   const [jobs, setJobs] = useState<JobListItem[]>([]);
   const [selectedJobId, setSelectedJobId] = useState("");
@@ -135,13 +198,52 @@ export default function BasesMaestras() {
   const [loadingJobs, setLoadingJobs] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [infoMsg, setInfoMsg] = useState("");
   const [tipo, setTipo] = useState("");
   const [estado, setEstado] = useState("");
+  const [nuevoTipo, setNuevoTipo] = useState<ImportTipo>("PERSONAL");
+  const [archivo, setArchivo] = useState<File | null>(null);
+  const [submittingDryRun, setSubmittingDryRun] = useState(false);
+  const [dryRunResult, setDryRunResult] = useState<DryRunResult | null>(null);
+  const [loadingPlan, setLoadingPlan] = useState(false);
+  const [approvingToken, setApprovingToken] = useState("");
+  const [applying, setApplying] = useState(false);
 
   const selectedJob = useMemo(
     () => jobs.find((job) => job.jobId === selectedJobId) || null,
     [jobs, selectedJobId]
   );
+
+  const manualApprovals = useMemo(
+    () => (Array.isArray(detail?.manualApprovals) ? detail.manualApprovals : []),
+    [detail?.manualApprovals]
+  );
+
+  const approvedTokens = useMemo(() => {
+    const tokens = new Set<string>();
+    manualApprovals.forEach((approval) => {
+      if (approval.approved) tokens.add(approvalToken(approval));
+    });
+    return tokens;
+  }, [manualApprovals]);
+
+  const applyPlan = detail?.applyPlan || null;
+  const risks = arr(applyPlan?.risks);
+  const manualReview = arr(applyPlan?.requiresManualReview);
+  const blocked = arr(applyPlan?.blocked);
+  const unapprovedRisks = risks.filter((item) => !approvedTokens.has(approvalToken(item)));
+  const unapprovedManualReview = manualReview.filter((item) => !approvedTokens.has(approvalToken(item)));
+  const errores = arr(detail?.errores);
+  const applyResult = detail?.applyResult || null;
+  const summary = detail?.resumen || selectedJob?.resumen || {};
+  const canApply =
+    Boolean(detail) &&
+    detail?.estado === "PENDIENTE_CONFIRMACION" &&
+    errores.length === 0 &&
+    blocked.length === 0 &&
+    unapprovedRisks.length === 0 &&
+    unapprovedManualReview.length === 0 &&
+    Boolean(applyPlan);
 
   async function cargarJobs() {
     setLoadingJobs(true);
@@ -181,6 +283,132 @@ export default function BasesMaestras() {
     }
   }
 
+  async function cargarApplyPlan() {
+    if (!detail?.jobId) return;
+    setLoadingPlan(true);
+    setErrorMsg("");
+    setInfoMsg("");
+    try {
+      const res = await http.get(`/admin/bases-maestras/jobs/${encodeURIComponent(detail.jobId)}/apply-plan`);
+      setDetail((curr) =>
+        curr
+          ? {
+              ...curr,
+              applyPlan: res.data?.applyPlan || null,
+              applyPlanSummary: res.data?.applyPlanSummary || null,
+            }
+          : curr
+      );
+      setInfoMsg(res.data?.generated ? "Plan de apply generado y congelado." : "Plan de apply consultado.");
+      await cargarDetalle(detail.jobId);
+    } catch {
+      setErrorMsg("No se pudo consultar el plan de apply. Por favor, contacte al administrador.");
+    } finally {
+      setLoadingPlan(false);
+    }
+  }
+
+  async function ejecutarDryRun() {
+    if (!archivo) {
+      setErrorMsg("Debe seleccionar un archivo .xlsx.");
+      return;
+    }
+    if (!archivo.name.toLowerCase().endsWith(".xlsx")) {
+      setErrorMsg("Solo se aceptan archivos .xlsx.");
+      return;
+    }
+    setSubmittingDryRun(true);
+    setErrorMsg("");
+    setInfoMsg("");
+    setDryRunResult(null);
+    try {
+      const form = new FormData();
+      form.append("archivo", archivo);
+      const path = nuevoTipo === "PERSONAL" ? "personal" : "viviendas";
+      const res = await http.post(`/admin/bases-maestras/${path}/dry-run`, form);
+      const result = res.data as DryRunResult;
+      setDryRunResult(result);
+      setInfoMsg("Dry-run generado y persistido como job auditable.");
+      await cargarJobs();
+      if (result.jobId) await cargarDetalle(result.jobId);
+    } catch {
+      setErrorMsg("No se pudo procesar el dry-run. Por favor, contacte al administrador.");
+    } finally {
+      setSubmittingDryRun(false);
+    }
+  }
+
+  async function aprobarItem(item: ApplyPlanItem) {
+    if (!detail?.jobId || !item.tipo || !item.key) {
+      setErrorMsg("El riesgo seleccionado no tiene tipo/key aprobable.");
+      return;
+    }
+    const motivo = window.prompt("Ingrese motivo institucional de aprobacion:", "");
+    if (motivo === null) return;
+    const motivoLimpio = motivo.trim();
+    if (!motivoLimpio) {
+      setErrorMsg("El motivo es obligatorio para aprobar un riesgo.");
+      return;
+    }
+    const ok = window.confirm(
+      `Va a aprobar manualmente el riesgo ${item.tipo} / ${item.key}.\n\nEsta accion queda auditada. Desea continuar?`
+    );
+    if (!ok) return;
+
+    const token = approvalToken(item);
+    setApprovingToken(token);
+    setErrorMsg("");
+    setInfoMsg("");
+    try {
+      await http.post(`/admin/bases-maestras/jobs/${encodeURIComponent(detail.jobId)}/manual-approval`, {
+        tipo: item.tipo,
+        key: item.key,
+        motivo: motivoLimpio,
+      });
+      setInfoMsg("Aprobacion manual registrada.");
+      await cargarDetalle(detail.jobId);
+    } catch {
+      setErrorMsg("No se pudo registrar la aprobacion manual. Por favor, contacte al administrador.");
+    } finally {
+      setApprovingToken("");
+    }
+  }
+
+  async function ejecutarApply() {
+    if (!detail?.jobId || !canApply) return;
+    const creates = countValue(detail.applyPlanSummary?.createsCount);
+    const updates = countValue(detail.applyPlanSummary?.updatesCount);
+    const ok = window.confirm(
+      `APPLY CONTROLADO\n\nTipo: ${safe(detail.tipo)}\nArchivo: ${safe(detail.archivoOriginalNombre)}\nCreates: ${creates}\nUpdates: ${updates}\n\nLa operacion se ejecutara en transaccion y quedara auditada.\n\nDesea continuar?`
+    );
+    if (!ok) return;
+
+    setApplying(true);
+    setErrorMsg("");
+    setInfoMsg("");
+    try {
+      const res = await http.post(`/admin/bases-maestras/jobs/${encodeURIComponent(detail.jobId)}/apply`);
+      setInfoMsg("Apply ejecutado correctamente.");
+      setDetail((curr) =>
+        curr
+          ? {
+              ...curr,
+              estado: res.data?.estado || "APLICADO",
+              applyResult: res.data?.applyResult || null,
+            }
+          : curr
+      );
+      await cargarJobs();
+      await cargarDetalle(detail.jobId);
+    } catch (err: any) {
+      const result = err?.response?.data?.applyResult || null;
+      if (result) setDetail((curr) => (curr ? { ...curr, applyResult: result } : curr));
+      setErrorMsg("El apply fue bloqueado o no pudo ejecutarse. Revise riesgos, bloqueos y estado del job.");
+    } finally {
+      setApplying(false);
+    }
+  }
+
   function limpiarFiltros() {
     setTipo("");
     setEstado("");
@@ -189,14 +417,74 @@ export default function BasesMaestras() {
     }, 0);
   }
 
+  function renderApplyPlanItems(title: string, items: ApplyPlanItem[], allowApprove: boolean) {
+    const grouped = groupByTipo(items);
+    const entries = Object.entries(grouped);
+    if (!entries.length) {
+      return (
+        <section style={softCardStyle}>
+          <h3 style={{ marginTop: 0, color: "#ffffff", fontSize: 16 }}>{title}</h3>
+          <div style={{ color: "rgba(255,255,255,0.74)", fontSize: 13 }}>Sin registros.</div>
+        </section>
+      );
+    }
+
+    return (
+      <section style={softCardStyle}>
+        <h3 style={{ marginTop: 0, color: "#ffffff", fontSize: 16 }}>{title}</h3>
+        <div style={{ display: "grid", gap: 10 }}>
+          {entries.map(([group, groupItems]) => (
+            <div key={group}>
+              <div style={{ marginBottom: 6, fontWeight: 800, color: "#ffffff" }}>
+                {group} ({groupItems.length})
+              </div>
+              <div style={{ display: "grid", gap: 8 }}>
+                {groupItems.slice(0, MAX_ITEMS).map((item, index) => {
+                  const token = approvalToken(item);
+                  const approved = approvedTokens.has(token);
+                  return (
+                    <div key={`${token}-${index}`} style={{ ...softCardStyle, padding: 10 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                        <div>
+                          <div style={{ color: "#ffffff", fontWeight: 800 }}>{safe(item.tipo || item.reason)}</div>
+                          <div style={{ color: "rgba(255,255,255,0.74)", fontSize: 12 }}>Key: {safe(item.key)}</div>
+                          <div style={{ color: "rgba(255,255,255,0.74)", fontSize: 12 }}>
+                            {safe(item.message || item.campo || item.field || item.collection)}
+                          </div>
+                        </div>
+                        {allowApprove ? (
+                          <button
+                            type="button"
+                            style={{ ...secondaryButtonStyle, padding: "7px 10px" }}
+                            disabled={approved || approvingToken === token || detail?.estado !== "PENDIENTE_CONFIRMACION"}
+                            onClick={() => aprobarItem(item)}
+                          >
+                            {approved ? "Aprobado" : approvingToken === token ? "Aprobando..." : "Aprobar"}
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })}
+                {groupItems.length > MAX_ITEMS ? (
+                  <div style={{ color: "rgba(255,255,255,0.62)", fontSize: 12 }}>
+                    Se muestran {MAX_ITEMS} de {groupItems.length}. Use backend/auditoria para revisar el resto.
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  }
+
   useEffect(() => {
     cargarJobs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const summary = detail?.resumen || selectedJob?.resumen || {};
-  const manualApprovals = Array.isArray(detail?.manualApprovals) ? detail.manualApprovals : [];
-  const applyResult = detail?.applyResult || null;
+  const drySummary = dryRunResult?.resumen || dryRunResult?.summary || {};
 
   return (
     <div style={pageStyle}>
@@ -221,6 +509,78 @@ export default function BasesMaestras() {
             {errorMsg}
           </div>
         ) : null}
+
+        {infoMsg ? (
+          <div
+            style={{
+              ...softCardStyle,
+              marginBottom: 16,
+              border: "1px solid rgba(34,197,94,0.30)",
+              background: "rgba(20,83,45,0.18)",
+              color: "#bbf7d0",
+            }}
+          >
+            {infoMsg}
+          </div>
+        ) : null}
+
+        <div style={{ ...cardStyle, marginBottom: 18 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+            <div>
+              <h2 style={{ ...titleStyle, fontSize: 22 }}>Nuevo dry-run</h2>
+              <p style={subtitleStyle}>Carga XLSX, validacion backend y preview persistido. No aplica cambios.</p>
+            </div>
+          </div>
+
+          <div
+            style={{
+              marginTop: 16,
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+              gap: 12,
+              alignItems: "end",
+            }}
+          >
+            <label>
+              <span style={smallLabelStyle}>Tipo de base</span>
+              <select value={nuevoTipo} onChange={(e) => setNuevoTipo(e.target.value as ImportTipo)} style={{ ...controlStyle, width: "100%" }}>
+                <option value="PERSONAL" style={optionStyle}>Personal autorizado</option>
+                <option value="VIVIENDAS" style={optionStyle}>Viviendas</option>
+              </select>
+            </label>
+
+            <label>
+              <span style={smallLabelStyle}>Archivo XLSX</span>
+              <input
+                type="file"
+                accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                onChange={(e) => setArchivo(e.target.files?.[0] || null)}
+                style={{ ...controlStyle, width: "100%" }}
+              />
+            </label>
+
+            <button type="button" style={primaryButtonStyle} onClick={ejecutarDryRun} disabled={submittingDryRun}>
+              {submittingDryRun ? "Procesando..." : "Ejecutar dry-run"}
+            </button>
+          </div>
+
+          {dryRunResult ? (
+            <div style={{ ...softCardStyle, marginTop: 16 }}>
+              <h3 style={{ marginTop: 0, color: "#ffffff", fontSize: 16 }}>Resultado dry-run</h3>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10 }}>
+                {["totalFilas", "validas", "invalidas", "nuevos", "actualizados", "warnings", "errores"].map((key) => (
+                  <div key={key} style={softCardStyle}>
+                    <div style={{ color: "rgba(255,255,255,0.62)", fontSize: 12 }}>{key}</div>
+                    <div style={{ color: "#ffffff", fontSize: 20, fontWeight: 800 }}>{numberFromSummary(drySummary, key)}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ marginTop: 10, color: "rgba(255,255,255,0.78)", fontSize: 13 }}>
+                Job: {safe(dryRunResult.jobId)}
+              </div>
+            </div>
+          ) : null}
+        </div>
 
         <div style={cardStyle}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
@@ -306,7 +666,7 @@ export default function BasesMaestras() {
         <div style={{ ...cardStyle, marginTop: 18 }}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
             <div>
-              <h2 style={{ ...titleStyle, fontSize: 22 }}>Detalle readonly</h2>
+              <h2 style={{ ...titleStyle, fontSize: 22 }}>Detalle operativo</h2>
               <p style={subtitleStyle}>
                 {detail ? `Job ${detail.jobId}` : "Seleccione un job para consultar su preview persistido."}
               </p>
@@ -331,55 +691,89 @@ export default function BasesMaestras() {
           ) : null}
 
           {detail ? (
-            <div
-              style={{
-                marginTop: 16,
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-                gap: 12,
-              }}
-            >
-              <section style={softCardStyle}>
-                <h3 style={{ marginTop: 0, color: "#ffffff", fontSize: 16 }}>Resumen</h3>
-                <pre style={preStyle}>{compactJson(summary)}</pre>
-              </section>
+            <>
+              <div style={{ marginTop: 16, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <button type="button" style={secondaryButtonStyle} onClick={cargarApplyPlan} disabled={loadingPlan}>
+                  {loadingPlan ? "Consultando..." : "Generar / ver plan"}
+                </button>
+                <button type="button" style={primaryButtonStyle} onClick={ejecutarApply} disabled={!canApply || applying}>
+                  {applying ? "Aplicando..." : "Aplicar"}
+                </button>
+              </div>
 
-              <section style={softCardStyle}>
-                <h3 style={{ marginTop: 0, color: "#ffffff", fontSize: 16 }}>Apply plan</h3>
-                <pre style={preStyle}>{compactJson(detail.applyPlanSummary)}</pre>
-              </section>
+              {!canApply ? (
+                <div style={{ ...softCardStyle, marginTop: 12, color: "rgba(255,255,255,0.74)" }}>
+                  Apply bloqueado: requiere estado pendiente, plan generado, sin errores, sin blocked y sin riesgos/revision manual pendientes.
+                </div>
+              ) : null}
 
-              <section style={softCardStyle}>
-                <h3 style={{ marginTop: 0, color: "#ffffff", fontSize: 16 }}>Aprobaciones manuales</h3>
-                {manualApprovals.length ? (
-                  <div style={{ display: "grid", gap: 8 }}>
-                    {manualApprovals.map((approval, index) => (
-                      <div key={`${approval.tipo}-${approval.key}-${index}`} style={{ ...softCardStyle, padding: 10 }}>
-                        <div style={{ fontWeight: 800, color: "#ffffff" }}>{safe(approval.tipo)}</div>
-                        <div style={{ color: "rgba(255,255,255,0.74)", fontSize: 12 }}>Key: {safe(approval.key)}</div>
-                        <div style={{ color: "rgba(255,255,255,0.74)", fontSize: 12 }}>
-                          Motivo: {safe(approval.motivo)}
+              <div
+                style={{
+                  marginTop: 16,
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+                  gap: 12,
+                }}
+              >
+                <section style={softCardStyle}>
+                  <h3 style={{ marginTop: 0, color: "#ffffff", fontSize: 16 }}>Resumen</h3>
+                  <pre style={preStyle}>{compactJson(summary)}</pre>
+                </section>
+
+                <section style={softCardStyle}>
+                  <h3 style={{ marginTop: 0, color: "#ffffff", fontSize: 16 }}>Apply plan</h3>
+                  <pre style={preStyle}>{compactJson(detail.applyPlanSummary)}</pre>
+                </section>
+
+                <section style={softCardStyle}>
+                  <h3 style={{ marginTop: 0, color: "#ffffff", fontSize: 16 }}>Aprobaciones manuales</h3>
+                  {manualApprovals.length ? (
+                    <div style={{ display: "grid", gap: 8 }}>
+                      {manualApprovals.slice(0, MAX_ITEMS).map((approval, index) => (
+                        <div key={`${approval.tipo}-${approval.key}-${index}`} style={{ ...softCardStyle, padding: 10 }}>
+                          <div style={{ fontWeight: 800, color: "#ffffff" }}>{safe(approval.tipo)}</div>
+                          <div style={{ color: "rgba(255,255,255,0.74)", fontSize: 12 }}>Key: {safe(approval.key)}</div>
+                          <div style={{ color: "rgba(255,255,255,0.74)", fontSize: 12 }}>
+                            Motivo: {safe(approval.motivo)}
+                          </div>
+                          <div style={{ color: "rgba(255,255,255,0.58)", fontSize: 12 }}>
+                            {formatDate(approval.approvedAt)}
+                          </div>
                         </div>
-                        <div style={{ color: "rgba(255,255,255,0.58)", fontSize: 12 }}>
-                          {formatDate(approval.approvedAt)}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div style={{ color: "rgba(255,255,255,0.74)", fontSize: 13 }}>Sin aprobaciones registradas.</div>
-                )}
-              </section>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ color: "rgba(255,255,255,0.74)", fontSize: 13 }}>Sin aprobaciones registradas.</div>
+                  )}
+                </section>
 
-              <section style={softCardStyle}>
-                <h3 style={{ marginTop: 0, color: "#ffffff", fontSize: 16 }}>Apply result</h3>
-                {applyResult ? (
-                  <pre style={preStyle}>{compactJson(applyResult)}</pre>
-                ) : (
-                  <div style={{ color: "rgba(255,255,255,0.74)", fontSize: 13 }}>Sin resultado de apply.</div>
-                )}
-              </section>
-            </div>
+                <section style={softCardStyle}>
+                  <h3 style={{ marginTop: 0, color: "#ffffff", fontSize: 16 }}>Apply result</h3>
+                  {applyResult ? (
+                    <pre style={preStyle}>{compactJson(applyResult)}</pre>
+                  ) : (
+                    <div style={{ color: "rgba(255,255,255,0.74)", fontSize: 13 }}>Sin resultado de apply.</div>
+                  )}
+                </section>
+              </div>
+
+              <div
+                style={{
+                  marginTop: 16,
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                  gap: 12,
+                }}
+              >
+                {renderApplyPlanItems("Blocked", blocked, false)}
+                {renderApplyPlanItems("Risks", risks, true)}
+                {renderApplyPlanItems("Revision manual", manualReview, true)}
+                <section style={softCardStyle}>
+                  <h3 style={{ marginTop: 0, color: "#ffffff", fontSize: 16 }}>Warnings</h3>
+                  <pre style={preStyle}>{compactJson(arr(applyPlan?.warnings).slice(0, MAX_ITEMS))}</pre>
+                </section>
+              </div>
+            </>
           ) : null}
         </div>
       </div>
