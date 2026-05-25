@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const mongoose = require("mongoose");
 
 const { MasterImportJob } = require("../models/MasterImportJob");
+const { buildApplyPlan } = require("../services/basesMaestras/applyPlanService");
 const { dryRunPersonal, dryRunViviendas } = require("../services/basesMaestras/dryRunService");
 
 const JOB_TTL_HOURS = 24;
@@ -227,10 +228,44 @@ async function cancelJob(req, res) {
   }
 }
 
+async function getApplyPlan(req, res) {
+  try {
+    if (!isAdminGeneral(req)) return deny(res);
+    assertValidObjectId(req.params.id);
+    const job = await MasterImportJob.findById(req.params.id).lean();
+    if (!job) return deny(res);
+    const applyPlan = buildApplyPlan(job);
+
+    if (req.audit?.setTarget) req.audit.setTarget("MasterImportJob", String(job._id));
+    if (req.audit?.addMeta) {
+      req.audit.addMeta({
+        tipo: job.tipo,
+        estado: job.estado,
+        creates: applyPlan.creates.length,
+        updates: applyPlan.updates.length,
+        blocked: applyPlan.blocked.length,
+        risks: applyPlan.risks.length,
+      });
+    }
+
+    return res.json({
+      ok: true,
+      jobId: String(job._id),
+      tipo: job.tipo,
+      estado: job.estado,
+      applyPlan,
+    });
+  } catch (err) {
+    console.error("[bases-maestras] apply plan error:", err);
+    return res.status(err.status || 500).json({ ok: false, errores: [{ message: err.message || "Error interno" }] });
+  }
+}
+
 module.exports = {
   personalDryRun,
   viviendasDryRun,
   listJobs,
   getJob,
   cancelJob,
+  getApplyPlan,
 };

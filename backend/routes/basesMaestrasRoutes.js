@@ -57,6 +57,11 @@ router.get(
   audit("BASES_MAESTRAS_JOB_DETAIL", { targetType: "MasterImportJob" }),
   controller.getJob
 );
+router.get(
+  "/jobs/:id/apply-plan",
+  audit("BASES_MAESTRAS_APPLY_PLAN", { targetType: "MasterImportJob" }),
+  controller.getApplyPlan
+);
 router.post(
   "/jobs/:id/cancel",
   audit("BASES_MAESTRAS_JOB_CANCEL", { targetType: "MasterImportJob" }),
