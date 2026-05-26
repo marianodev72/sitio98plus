@@ -23,6 +23,30 @@ const CAMPOS_VIVIENDA_BLOQUEADOS = new Set([
   "historialEstados",
 ]);
 
+const CAMPOS_ALOJAMIENTO_PERMITIDOS = new Set([
+  "denominacion",
+  "dependencia",
+  "lugar",
+  "sector",
+  "generoPermitido",
+  "aptoParaGrupoJerarquico",
+  "capacidad",
+  "estado",
+  "activo",
+  "observaciones",
+]);
+const CAMPOS_ALOJAMIENTO_BLOQUEADOS = new Set([
+  "_id",
+  "codigo",
+  "ocupacionActual",
+  "historialOcupacion",
+  "historialEstados",
+  "origenImportacion",
+  "plazas",
+  "asignaciones",
+]);
+const ESTADOS_ALOJAMIENTO_RIESGO_OCUPADO = new Set(["BAJA", "FUERA_SERVICIO", "INHABILITADO"]);
+
 function arr(value) {
   return Array.isArray(value) ? value : [];
 }
@@ -224,6 +248,179 @@ function planViviendas(job) {
   return { creates, updates, blocked, risks, warnings, requiresManualReview };
 }
 
+function alojamientoOcupado(item) {
+  return (
+    Boolean(item?.existente?.ocupado) ||
+    Number(item?.existente?.plazasOcupadas || 0) > 0 ||
+    Number(item?.existente?.plazasReservadas || 0) > 0 ||
+    String(item?.existente?.estado || "").toUpperCase() === "OCUPADO"
+  );
+}
+
+function pushAlojamientoRisk(risks, requiresManualReview, tipo, key, message) {
+  risks.push({ tipo, key, message });
+  requiresManualReview.push({ tipo, key });
+}
+
+function pushAlojamientoRisks(item, risks, requiresManualReview) {
+  const key = safeKey(item);
+  const cambios = arr(item.cambios);
+  const ocupado = alojamientoOcupado(item);
+
+  if (!ocupado) return;
+
+  if (cambios.some((cambio) => cambio.campo === "generoPermitido")) {
+    pushAlojamientoRisk(
+      risks,
+      requiresManualReview,
+      "ALOJAMIENTO_OCUPADO_CAMBIA_GENERO",
+      key,
+      "Cambio de genero en alojamiento ocupado requiere revision institucional"
+    );
+  }
+  if (cambios.some((cambio) => cambio.campo === "aptoParaGrupoJerarquico")) {
+    pushAlojamientoRisk(
+      risks,
+      requiresManualReview,
+      "ALOJAMIENTO_OCUPADO_CAMBIA_GRUPO_JERARQUICO",
+      key,
+      "Cambio de grupo jerarquico en alojamiento ocupado requiere revision institucional"
+    );
+  }
+  if (cambios.some((cambio) => cambio.campo === "capacidad" && Number(cambio.nuevo) < Number(cambio.actual))) {
+    pushAlojamientoRisk(
+      risks,
+      requiresManualReview,
+      "ALOJAMIENTO_OCUPADO_REDUCE_CAPACIDAD",
+      key,
+      "Reduccion de capacidad en alojamiento ocupado requiere revision institucional"
+    );
+  }
+  if (cambios.some((cambio) => cambio.campo === "activo" && cambio.nuevo === false)) {
+    pushAlojamientoRisk(
+      risks,
+      requiresManualReview,
+      "ALOJAMIENTO_OCUPADO_ACTIVO_FALSE",
+      key,
+      "Desactivacion de alojamiento ocupado requiere revision institucional"
+    );
+  }
+  if (
+    cambios.some(
+      (cambio) => cambio.campo === "estado" && ESTADOS_ALOJAMIENTO_RIESGO_OCUPADO.has(String(cambio.nuevo || "").toUpperCase())
+    )
+  ) {
+    pushAlojamientoRisk(
+      risks,
+      requiresManualReview,
+      "ALOJAMIENTO_OCUPADO_CAMBIA_ESTADO_CRITICO",
+      key,
+      "Cambio a estado critico en alojamiento ocupado requiere revision institucional"
+    );
+  }
+}
+
+function planAlojamientos(job) {
+  const diff = job.diff || {};
+  const creates = [];
+  const updates = [];
+  const blocked = [];
+  const risks = [];
+  const warnings = arr(job.warnings);
+  const requiresManualReview = [];
+
+  for (const item of arr(diff.nuevos)) {
+    creates.push(
+      baseOperation({
+        action: "CREATE",
+        collection: "alojamientos",
+        key: safeKey(item),
+        item,
+        allowedFields: [
+          "codigo",
+          "denominacion",
+          "dependencia",
+          "lugar",
+          "sector",
+          "generoPermitido",
+          "aptoParaGrupoJerarquico",
+          "capacidad",
+          "estado",
+          "activo",
+          "observaciones",
+        ],
+        blockedFields: Array.from(CAMPOS_ALOJAMIENTO_BLOQUEADOS),
+        snapshotFields: [
+          "_id",
+          "codigo",
+          "dependencia",
+          "lugar",
+          "sector",
+          "generoPermitido",
+          "aptoParaGrupoJerarquico",
+          "capacidad",
+          "estado",
+          "activo",
+          "ocupacionActual",
+        ],
+      })
+    );
+  }
+
+  for (const item of arr(diff.actualizados)) {
+    pushAlojamientoRisks(item, risks, requiresManualReview);
+    const cambios = arr(item.cambios);
+    const allowed = cambios.filter((cambio) => CAMPOS_ALOJAMIENTO_PERMITIDOS.has(cambio.campo));
+    const denied = cambios.filter((cambio) => !CAMPOS_ALOJAMIENTO_PERMITIDOS.has(cambio.campo));
+
+    if (allowed.length) {
+      updates.push(
+        baseOperation({
+          action: "UPDATE",
+          collection: "alojamientos",
+          key: safeKey(item),
+          item: { ...item, cambios: allowed },
+          allowedFields: allowed.map((cambio) => cambio.campo),
+          blockedFields: [],
+          snapshotFields: [
+            "_id",
+            "codigo",
+            "dependencia",
+            "lugar",
+            "sector",
+            "generoPermitido",
+            "aptoParaGrupoJerarquico",
+            "capacidad",
+            "estado",
+            "activo",
+            "ocupacionActual",
+          ],
+        })
+      );
+    }
+
+    for (const cambio of denied) {
+      blocked.push({
+        action: "UPDATE",
+        collection: "alojamientos",
+        key: safeKey(item),
+        field: cambio.campo,
+        reason: CAMPOS_ALOJAMIENTO_BLOQUEADOS.has(cambio.campo) ? "CAMPO_BLOQUEADO" : "CAMPO_NO_PERMITIDO",
+        cambio,
+      });
+    }
+  }
+
+  for (const warning of warnings) {
+    if (warning?.tipo === "DUPLICADO_ARCHIVO") {
+      risks.push({ tipo: "CODIGO_ALOJAMIENTO_DUPLICADO", key: warning.valor || "", message: "Codigo duplicado detectado en dry-run" });
+      requiresManualReview.push({ tipo: "CODIGO_ALOJAMIENTO_DUPLICADO", key: warning.valor || "" });
+    }
+  }
+
+  return { creates, updates, blocked, risks, warnings, requiresManualReview };
+}
+
 function buildApplyPlan(job) {
   if (!job) {
     const err = new Error("Job inexistente");
@@ -243,6 +440,7 @@ function buildApplyPlan(job) {
 
   if (job.tipo === "PERSONAL") return planPersonal(job);
   if (job.tipo === "VIVIENDAS") return planViviendas(job);
+  if (job.tipo === "ALOJAMIENTOS") return planAlojamientos(job);
 
   const err = new Error("Tipo de job no soportado");
   err.status = 400;

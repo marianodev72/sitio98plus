@@ -271,7 +271,7 @@ export default function BasesMaestras() {
   const updatesCount = countValue(detail?.applyPlanSummary?.updatesCount);
   const applyBlockReasons = [
     !detail ? "Seleccione un job." : "",
-    isAlojamientosJob ? "ALOJAMIENTOS solo admite dry-run readonly en esta etapa." : "",
+    isAlojamientosJob ? "ALOJAMIENTOS no tiene apply real habilitado en esta etapa." : "",
     detail && detail.estado !== "PENDIENTE_CONFIRMACION" ? `Estado incompatible: ${safe(detail.estado)}` : "",
     detail && !applyPlan ? "Falta generar o consultar el apply-plan." : "",
     errores.length > 0 ? `Errores de dry-run pendientes: ${errores.length}` : "",
@@ -329,10 +329,6 @@ export default function BasesMaestras() {
 
   async function cargarApplyPlan() {
     if (!detail?.jobId) return;
-    if (isAlojamientosJob) {
-      setErrorMsg("ALOJAMIENTOS solo admite dry-run readonly en esta etapa.");
-      return;
-    }
     setLoadingPlan(true);
     setErrorMsg("");
     setInfoMsg("");
@@ -780,7 +776,7 @@ export default function BasesMaestras() {
             <>
               <div style={{ marginTop: 16, display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <button type="button" style={secondaryButtonStyle} onClick={cargarApplyPlan} disabled={loadingPlan}>
-                  {isAlojamientosJob ? "Plan no disponible" : loadingPlan ? "Consultando..." : "Generar / ver plan"}
+                  {loadingPlan ? "Consultando..." : "Generar / ver plan"}
                 </button>
                 <button type="button" style={dangerButtonStyle} onClick={ejecutarApply} disabled={!canApply || applying}>
                   {applying ? "Aplicando..." : "Aplicar"}
@@ -789,8 +785,8 @@ export default function BasesMaestras() {
 
               {isAlojamientosJob ? (
                 <div style={{ ...softCardStyle, marginTop: 12, color: "rgba(255,255,255,0.78)" }}>
-                  ALOJAMIENTOS se encuentra habilitado solo para dry-run y detalle readonly. Apply-plan, aprobaciones
-                  manuales y apply quedan fuera de alcance en esta etapa.
+                  ALOJAMIENTOS permite generar apply-plan readonly para auditoria. El apply real sigue fuera de
+                  alcance y permanece bloqueado en esta etapa.
                 </div>
               ) : null}
 
