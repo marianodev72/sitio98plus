@@ -72,6 +72,7 @@ const alojamientoNavalSchema = new Schema(
       index: true,
       immutable: true,
     },
+    denominacion: { type: String, trim: true, default: "" },
     dependencia: { type: String, required: true, trim: true, index: true },
     lugar: { type: String, required: true, trim: true, index: true },
     sector: { type: String, trim: true, default: "" },

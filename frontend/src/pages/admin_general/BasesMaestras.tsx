@@ -271,7 +271,6 @@ export default function BasesMaestras() {
   const updatesCount = countValue(detail?.applyPlanSummary?.updatesCount);
   const applyBlockReasons = [
     !detail ? "Seleccione un job." : "",
-    isAlojamientosJob ? "ALOJAMIENTOS no tiene apply real habilitado en esta etapa." : "",
     detail && detail.estado !== "PENDIENTE_CONFIRMACION" ? `Estado incompatible: ${safe(detail.estado)}` : "",
     detail && !applyPlan ? "Falta generar o consultar el apply-plan." : "",
     errores.length > 0 ? `Errores de dry-run pendientes: ${errores.length}` : "",
@@ -281,7 +280,6 @@ export default function BasesMaestras() {
   ].filter(Boolean);
   const canApply =
     Boolean(detail) &&
-    !isAlojamientosJob &&
     detail?.estado === "PENDIENTE_CONFIRMACION" &&
     errores.length === 0 &&
     blocked.length === 0 &&
@@ -786,7 +784,7 @@ export default function BasesMaestras() {
               {isAlojamientosJob ? (
                 <div style={{ ...softCardStyle, marginTop: 12, color: "rgba(255,255,255,0.78)" }}>
                   ALOJAMIENTOS permite generar apply-plan readonly para auditoria. El apply real sigue fuera de
-                  alcance y permanece bloqueado en esta etapa.
+                  alcance si existen bloqueos, riesgos o revisiones manuales sin aprobacion institucional.
                 </div>
               ) : null}
 

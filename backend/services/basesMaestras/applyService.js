@@ -4,8 +4,21 @@ const mongoose = require("mongoose");
 
 const { User } = require("../../models/user");
 const Vivienda = require("../../models/vivienda");
+const AlojamientoNaval = require("../../modules/alojamientos/models/AlojamientoNaval");
 
 const APPLYABLE_ESTADO = "PENDIENTE_CONFIRMACION";
+const ALOJAMIENTO_UPDATE_FIELDS = new Set([
+  "denominacion",
+  "dependencia",
+  "lugar",
+  "sector",
+  "generoPermitido",
+  "aptoParaGrupoJerarquico",
+  "capacidad",
+  "estado",
+  "activo",
+  "observaciones",
+]);
 
 function arr(value) {
   return Array.isArray(value) ? value : [];
@@ -114,8 +127,25 @@ function resultBase() {
     updatesApplied: 0,
     skipped: 0,
     blocked: 0,
+    unapprovedRisks: 0,
+    unapprovedManualReview: 0,
     errors: [],
   };
+}
+
+function clasePorCapacidad(capacidad) {
+  const value = Number(capacidad || 0);
+  if (value === 1) return "C01";
+  if (value === 2) return "C02";
+  if (value === 3) return "C03";
+  if (value === 4) return "C04";
+  return "CUSO";
+}
+
+function numeroDesdeCodigo(codigo) {
+  const normalized = clean(codigo).toUpperCase();
+  const parts = normalized.split(/[-_/]/).filter(Boolean);
+  return parts[parts.length - 1] || normalized || "S/N";
 }
 
 async function applyPersonalCreate(operation, session, result) {
@@ -216,12 +246,78 @@ async function applyViviendaUpdate(operation, session, result) {
   else result.skipped += 1;
 }
 
+async function applyAlojamientoCreate(operation, session, result) {
+  const item = operation.preview || {};
+  if (!item.codigo || !item.dependencia || !item.lugar || !item.capacidad || !item.generoPermitido) {
+    result.skipped += 1;
+    result.errors.push({ key: operation.key, message: "Alojamiento CREATE incompleto" });
+    return;
+  }
+
+  const existing = await AlojamientoNaval.findOne({ codigo: item.codigo }).session(session);
+  if (existing) {
+    result.skipped += 1;
+    return;
+  }
+
+  const capacidad = Number(item.capacidad);
+  await AlojamientoNaval.create(
+    [
+      {
+        codigo: item.codigo,
+        denominacion: item.denominacion || "",
+        dependencia: item.dependencia,
+        lugar: item.lugar,
+        sector: item.sector || "",
+        tipo: item.denominacion || item.sector || "BASE_MAESTRA",
+        numero: numeroDesdeCodigo(item.codigo),
+        clase: clasePorCapacidad(capacidad),
+        capacidad,
+        generoPermitido: item.generoPermitido,
+        aptoParaGrupoJerarquico: item.aptoParaGrupoJerarquico || "NO_DEFINIDO",
+        estado: item.estado || "DISPONIBLE",
+        activo: item.activo !== false,
+        observaciones: item.observaciones || "",
+        ocupacionActual: {
+          plazasTotales: 0,
+          plazasOcupadas: 0,
+          plazasReservadas: 0,
+          alojados: [],
+          actualizadoEn: new Date(),
+        },
+      },
+    ],
+    { session }
+  );
+  result.createsApplied += 1;
+}
+
+async function applyAlojamientoUpdate(operation, session, result) {
+  const item = operation.preview || {};
+  const set = {};
+  for (const cambio of arr(item.cambios)) {
+    if (!ALOJAMIENTO_UPDATE_FIELDS.has(cambio.campo)) continue;
+    if (cambio.campo === "capacidad") set.capacidad = Number(cambio.nuevo);
+    else if (cambio.campo === "activo") set.activo = cambio.nuevo !== false;
+    else set[cambio.campo] = cambio.nuevo;
+  }
+  if (Object.keys(set).length === 0) {
+    result.skipped += 1;
+    return;
+  }
+  const update = await AlojamientoNaval.updateOne({ codigo: item.codigo }, { $set: set }, { session });
+  if (update.modifiedCount > 0 || update.matchedCount > 0) result.updatesApplied += 1;
+  else result.skipped += 1;
+}
+
 async function applyOperation(operation, session, result, actorId) {
   const op = { ...operation, actorId };
   if (operation.collection === "users" && operation.action === "CREATE") return applyPersonalCreate(op, session, result);
   if (operation.collection === "users" && operation.action === "UPDATE") return applyPersonalUpdate(op, session, result);
   if (operation.collection === "viviendas" && operation.action === "CREATE") return applyViviendaCreate(op, session, result);
   if (operation.collection === "viviendas" && operation.action === "UPDATE") return applyViviendaUpdate(op, session, result);
+  if (operation.collection === "alojamientos" && operation.action === "CREATE") return applyAlojamientoCreate(op, session, result);
+  if (operation.collection === "alojamientos" && operation.action === "UPDATE") return applyAlojamientoUpdate(op, session, result);
   result.blocked += 1;
   result.errors.push({ key: operation.key, message: "Operacion no permitida" });
   return null;
