@@ -4,7 +4,7 @@ const mongoose = require("mongoose");
 const { MasterImportJob } = require("../models/MasterImportJob");
 const { executeApply } = require("../services/basesMaestras/applyService");
 const { buildApplyPlan, buildApplyPlanSummary } = require("../services/basesMaestras/applyPlanService");
-const { dryRunPersonal, dryRunViviendas } = require("../services/basesMaestras/dryRunService");
+const { dryRunPersonal, dryRunViviendas, dryRunAlojamientos } = require("../services/basesMaestras/dryRunService");
 
 const JOB_TTL_HOURS = 24;
 
@@ -192,6 +192,10 @@ async function personalDryRun(req, res) {
 
 async function viviendasDryRun(req, res) {
   return runPersistedDryRun(req, res, "VIVIENDAS", dryRunViviendas);
+}
+
+async function alojamientosDryRun(req, res) {
+  return runPersistedDryRun(req, res, "ALOJAMIENTOS", dryRunAlojamientos);
 }
 
 async function listJobs(req, res) {
@@ -505,6 +509,7 @@ async function manualApproval(req, res) {
 module.exports = {
   personalDryRun,
   viviendasDryRun,
+  alojamientosDryRun,
   listJobs,
   getJob,
   cancelJob,

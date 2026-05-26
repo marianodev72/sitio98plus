@@ -90,5 +90,11 @@ router.post(
   audit("BASES_MAESTRAS_DRY_RUN_PERSISTED", { targetType: "MasterImportJob" }),
   controller.viviendasDryRun
 );
+router.post(
+  "/alojamientos/dry-run",
+  uploadExcel,
+  audit("BASES_MAESTRAS_DRY_RUN_PERSISTED", { targetType: "MasterImportJob" }),
+  controller.alojamientosDryRun
+);
 
 module.exports = router;

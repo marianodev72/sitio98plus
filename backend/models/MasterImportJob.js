@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 const { Schema } = mongoose;
 
-const TIPOS_IMPORTACION = ["PERSONAL", "VIVIENDAS"];
+const TIPOS_IMPORTACION = ["PERSONAL", "VIVIENDAS", "ALOJAMIENTOS"];
 const ESTADOS_IMPORTACION = ["PENDIENTE_CONFIRMACION", "CANCELADO", "APLICADO", "FALLIDO"];
 
 const masterImportJobSchema = new Schema(

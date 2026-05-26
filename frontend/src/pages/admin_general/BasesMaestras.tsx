@@ -13,7 +13,7 @@ import {
   titleStyle,
 } from "../permisionario/uiStyles";
 
-type ImportTipo = "PERSONAL" | "VIVIENDAS";
+type ImportTipo = "PERSONAL" | "VIVIENDAS" | "ALOJAMIENTOS";
 type JobEstado = "PENDIENTE_CONFIRMACION" | "CANCELADO" | "APLICADO" | "FALLIDO" | string;
 
 type JobListItem = {
@@ -265,11 +265,13 @@ export default function BasesMaestras() {
   const errores = arr(detail?.errores);
   const applyResult = detail?.applyResult || null;
   const summary = detail?.resumen || selectedJob?.resumen || {};
+  const isAlojamientosJob = safe(detail?.tipo, "").toUpperCase() === "ALOJAMIENTOS";
   const approvedCount = manualApprovals.filter((approval) => approval.approved).length;
   const createsCount = countValue(detail?.applyPlanSummary?.createsCount);
   const updatesCount = countValue(detail?.applyPlanSummary?.updatesCount);
   const applyBlockReasons = [
     !detail ? "Seleccione un job." : "",
+    isAlojamientosJob ? "ALOJAMIENTOS solo admite dry-run readonly en esta etapa." : "",
     detail && detail.estado !== "PENDIENTE_CONFIRMACION" ? `Estado incompatible: ${safe(detail.estado)}` : "",
     detail && !applyPlan ? "Falta generar o consultar el apply-plan." : "",
     errores.length > 0 ? `Errores de dry-run pendientes: ${errores.length}` : "",
@@ -279,6 +281,7 @@ export default function BasesMaestras() {
   ].filter(Boolean);
   const canApply =
     Boolean(detail) &&
+    !isAlojamientosJob &&
     detail?.estado === "PENDIENTE_CONFIRMACION" &&
     errores.length === 0 &&
     blocked.length === 0 &&
@@ -326,6 +329,10 @@ export default function BasesMaestras() {
 
   async function cargarApplyPlan() {
     if (!detail?.jobId) return;
+    if (isAlojamientosJob) {
+      setErrorMsg("ALOJAMIENTOS solo admite dry-run readonly en esta etapa.");
+      return;
+    }
     setLoadingPlan(true);
     setErrorMsg("");
     setInfoMsg("");
@@ -365,7 +372,12 @@ export default function BasesMaestras() {
     try {
       const form = new FormData();
       form.append("archivo", archivo);
-      const path = nuevoTipo === "PERSONAL" ? "personal" : "viviendas";
+      const path =
+        nuevoTipo === "PERSONAL"
+          ? "personal"
+          : nuevoTipo === "VIVIENDAS"
+          ? "viviendas"
+          : "alojamientos";
       const res = await http.post(`/admin/bases-maestras/${path}/dry-run`, form);
       const result = res.data as DryRunResult;
       setDryRunResult(result);
@@ -618,6 +630,7 @@ export default function BasesMaestras() {
               <select value={nuevoTipo} onChange={(e) => setNuevoTipo(e.target.value as ImportTipo)} style={{ ...controlStyle, width: "100%" }}>
                 <option value="PERSONAL" style={optionStyle}>Personal autorizado</option>
                 <option value="VIVIENDAS" style={optionStyle}>Viviendas</option>
+                <option value="ALOJAMIENTOS" style={optionStyle}>Alojamientos</option>
               </select>
             </label>
 
@@ -665,6 +678,7 @@ export default function BasesMaestras() {
                 <option value="" style={optionStyle}>Todos los tipos</option>
                 <option value="PERSONAL" style={optionStyle}>Personal</option>
                 <option value="VIVIENDAS" style={optionStyle}>Viviendas</option>
+                <option value="ALOJAMIENTOS" style={optionStyle}>Alojamientos</option>
               </select>
               <select value={estado} onChange={(e) => setEstado(e.target.value)} style={controlStyle}>
                 <option value="" style={optionStyle}>Todos los estados</option>
@@ -766,12 +780,19 @@ export default function BasesMaestras() {
             <>
               <div style={{ marginTop: 16, display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <button type="button" style={secondaryButtonStyle} onClick={cargarApplyPlan} disabled={loadingPlan}>
-                  {loadingPlan ? "Consultando..." : "Generar / ver plan"}
+                  {isAlojamientosJob ? "Plan no disponible" : loadingPlan ? "Consultando..." : "Generar / ver plan"}
                 </button>
                 <button type="button" style={dangerButtonStyle} onClick={ejecutarApply} disabled={!canApply || applying}>
                   {applying ? "Aplicando..." : "Aplicar"}
                 </button>
               </div>
+
+              {isAlojamientosJob ? (
+                <div style={{ ...softCardStyle, marginTop: 12, color: "rgba(255,255,255,0.78)" }}>
+                  ALOJAMIENTOS se encuentra habilitado solo para dry-run y detalle readonly. Apply-plan, aprobaciones
+                  manuales y apply quedan fuera de alcance en esta etapa.
+                </div>
+              ) : null}
 
               <section
                 style={{
