@@ -32,6 +32,7 @@ type DashboardResumen = {
   distribucionPorLugar: CountRow[];
   distribucionPorClase: CountRow[];
   distribucionPorGeneroPermitido: CountRow[];
+  distribucionPorGrupoJerarquico?: CountRow[];
   alertas: Alerta[];
 };
 
@@ -47,6 +48,8 @@ const GENEROS_OFICIALES = [
   "SIN_RESTRICCION",
   "NO_ESPECIFICADO",
 ];
+
+const GRUPOS_JERARQUICOS = ["OF", "SB_CP", "CB", "TR", "NO_DEFINIDO"];
 
 const ALOJAMIENTO_ESTADOS = [
   "DISPONIBLE",
@@ -86,6 +89,15 @@ function n(value: unknown) {
 function safe(value: unknown, fallback = "-") {
   const s = String(value ?? "").trim();
   return s || fallback;
+}
+
+function grupoJerarquicoLabel(value: unknown) {
+  const grupo = up(value);
+  if (grupo === "OF") return "Oficiales";
+  if (grupo === "SB_CP") return "Suboficiales / Cabos Principales";
+  if (grupo === "CB") return "Cabos";
+  if (grupo === "TR") return "Tropa";
+  return "No definido";
 }
 
 const cardStyle: CSSProperties = {
@@ -185,6 +197,12 @@ function chartRowsFromMap(data: Record<string, number>, keys: string[] = []) {
 function chartRowsFromCounts(rows: CountRow[], keys: string[] = []) {
   return normalizeRows(rows || [], keys)
     .map((row) => ({ label: safe(row._id, "SIN_DATO"), value: n(row.count) }))
+    .filter((row) => row.value > 0);
+}
+
+function chartRowsGrupoJerarquico(rows: CountRow[]) {
+  return normalizeRows(rows || [], GRUPOS_JERARQUICOS)
+    .map((row) => ({ label: grupoJerarquicoLabel(row._id), value: n(row.count) }))
     .filter((row) => row.value > 0);
 }
 
@@ -290,6 +308,7 @@ export default function AlojamientosDashboard({ basePath }: Props) {
   const lugarChart = resumen ? chartRowsFromCounts(resumen.distribucionPorLugar || []) : [];
   const claseChart = resumen ? chartRowsFromCounts(resumen.distribucionPorClase || [], CLASES_OFICIALES) : [];
   const generoChart = resumen ? chartRowsFromCounts(resumen.distribucionPorGeneroPermitido || [], GENEROS_OFICIALES) : [];
+  const grupoJerarquicoChart = resumen ? chartRowsGrupoJerarquico(resumen.distribucionPorGrupoJerarquico || []) : [];
 
   return (
     <div style={{ width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box", overflow: "hidden" }}>
@@ -376,6 +395,11 @@ export default function AlojamientosDashboard({ basePath }: Props) {
             <section style={cardStyle}>
               <h2 style={sectionTitleStyle}>Por genero permitido</h2>
               <MiniBarChart rows={generoChart} emptyText="Sin restricciones registradas." />
+            </section>
+
+            <section style={cardStyle}>
+              <h2 style={sectionTitleStyle}>Por grupo jerarquico</h2>
+              <MiniBarChart rows={grupoJerarquicoChart} emptyText="Sin grupos registrados." />
             </section>
           </div>
 

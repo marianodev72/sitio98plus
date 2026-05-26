@@ -9,6 +9,7 @@ type Usuario = {
   email?: string;
   dni?: string;
   matricula?: string;
+  grupoJerarquico?: string;
   role?: string; // rol base
   permisos?: string[];
   barrioAsignado?: string;
@@ -54,6 +55,15 @@ function fallback(v: unknown) {
   const text = String(v ?? "").trim();
   if (/^[a-fA-F0-9]{24}$/.test(text)) return "Sin asignar";
   return text || "Sin asignar";
+}
+
+function grupoJerarquicoLabel(value: unknown) {
+  const grupo = up(value);
+  if (grupo === "OF") return "Oficiales";
+  if (grupo === "SB_CP") return "Suboficiales / Cabos Principales";
+  if (grupo === "CB") return "Cabos";
+  if (grupo === "TR") return "Tropa";
+  return "No definido";
 }
 
 function isInspectorLike(permisos?: string[]) {
@@ -714,6 +724,17 @@ if (loading) return <p style={{ color: "#E5E7EB" }}>Cargando usuarios…</p>;
                 Matrícula {sortBy === "matricula" ? (sortDir === "asc" ? "▲" : "▼") : ""}
               </th>
               <th
+                style={{
+                  padding: "12px 14px",
+                  fontSize: 14,
+                  border: "1px solid #334155",
+                  color: "#F8FAFC",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Grupo jerarquico
+              </th>
+              <th
   style={{
     cursor: "pointer",
     padding: "12px 14px",
@@ -838,6 +859,9 @@ if (loading) return <p style={{ color: "#E5E7EB" }}>Cargando usuarios…</p>;
         </td>
         <td style={{ padding: "12px 14px", border: "1px solid #334155", fontSize: 14 }}>
           {fallback(u.matricula)}
+        </td>
+        <td style={{ padding: "12px 14px", border: "1px solid #334155", fontSize: 14 }}>
+          {grupoJerarquicoLabel(u.grupoJerarquico)}
         </td>
 
         {/* ROL */}
@@ -1085,7 +1109,7 @@ if (loading) return <p style={{ color: "#E5E7EB" }}>Cargando usuarios…</p>;
   {rows.length === 0 && (
     <tr>
       <td
-        colSpan={12}
+        colSpan={13}
         style={{
           textAlign: "center",
           padding: 16,

@@ -46,7 +46,9 @@ async function getResumen(req, res) {
       alojamientosPorLugarRows,
       alojamientosPorClaseRows,
       alojamientosPorGeneroRows,
+      alojamientosPorGrupoJerarquicoRows,
       alojamientosGeneroNoEspecificado,
+      alojamientosGrupoNoDefinido,
       alojamientosFueraServicio,
       alojamientosInhabilitados,
       alojamientosSinPlazas,
@@ -60,7 +62,9 @@ async function getResumen(req, res) {
       groupCount(AlojamientoNaval, "lugar"),
       groupCount(AlojamientoNaval, "clase"),
       groupCount(AlojamientoNaval, "generoPermitido"),
+      groupCount(AlojamientoNaval, "aptoParaGrupoJerarquico"),
       AlojamientoNaval.countDocuments({ generoPermitido: "NO_ESPECIFICADO", activo: true }),
+      AlojamientoNaval.countDocuments({ aptoParaGrupoJerarquico: "NO_DEFINIDO", activo: true }),
       AlojamientoNaval.countDocuments({ estado: "FUERA_SERVICIO", activo: true }),
       AlojamientoNaval.countDocuments({ estado: "INHABILITADO", activo: true }),
       AlojamientoNaval.countDocuments({
@@ -83,6 +87,12 @@ async function getResumen(req, res) {
         severidad: alojamientosGeneroNoEspecificado > 0 ? "MEDIA" : "INFO",
         cantidad: alojamientosGeneroNoEspecificado,
         texto: "Alojamientos activos con genero permitido no especificado",
+      },
+      {
+        codigo: "GRUPO_JERARQUICO_NO_DEFINIDO",
+        severidad: alojamientosGrupoNoDefinido > 0 ? "MEDIA" : "INFO",
+        cantidad: alojamientosGrupoNoDefinido,
+        texto: "Alojamientos activos sin grupo jerarquico definido",
       },
       {
         codigo: "ALOJAMIENTOS_FUERA_SERVICIO",
@@ -129,6 +139,7 @@ async function getResumen(req, res) {
         distribucionPorLugar: alojamientosPorLugarRows,
         distribucionPorClase: alojamientosPorClaseRows,
         distribucionPorGeneroPermitido: alojamientosPorGeneroRows,
+        distribucionPorGrupoJerarquico: alojamientosPorGrupoJerarquicoRows,
         alertas,
       },
     });

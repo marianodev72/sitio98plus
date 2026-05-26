@@ -1,5 +1,12 @@
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
+const {
+  TIPOS_PERSONAL,
+  GRUPOS_JERARQUICOS,
+  normalizeTipoPersonal,
+  normalizeGrupoJerarquico,
+  normalizePrecedencia,
+} = require("../constants/institucional");
 
 const { Schema } = mongoose;
 
@@ -59,6 +66,27 @@ const userSchema = new Schema(
     dni: String,
     matricula: String,
     telefono: String,
+    tipoPersonal: {
+      type: String,
+      enum: [...TIPOS_PERSONAL, null],
+      default: null,
+      set: normalizeTipoPersonal,
+      index: true,
+    },
+    precedencia: {
+      type: Number,
+      default: null,
+      set: normalizePrecedencia,
+      index: true,
+    },
+    grupoJerarquico: {
+      type: String,
+      enum: GRUPOS_JERARQUICOS,
+      default: "NO_DEFINIDO",
+      set: normalizeGrupoJerarquico,
+      index: true,
+    },
+    excepcionTipoDestino: { type: Boolean, default: false },
 
     // 🔐 Nunca exponer
     passwordHash: { type: String, required: true, select: false },
@@ -151,6 +179,11 @@ const userSchema = new Schema(
   },
   { timestamps: true }
 );
+
+userSchema.index({ tipoPersonal: 1, precedencia: 1 });
+userSchema.index({ grupoJerarquico: 1 });
+userSchema.index({ matricula: 1 });
+userSchema.index({ dni: 1 });
 
 userSchema.methods.setPassword = async function (plain) {
   this.passwordHash = await bcrypt.hash(plain, 10);

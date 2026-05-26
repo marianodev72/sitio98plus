@@ -20,6 +20,7 @@ type AlojamientoNaval = {
   clase: string;
   capacidad: number;
   generoPermitido: string;
+  aptoParaGrupoJerarquico?: string;
   localidad?: string;
   provincia?: string;
   observaciones?: string;
@@ -57,6 +58,15 @@ function roleAllowed(role: unknown) {
 function safe(v: unknown, fallback = "-") {
   const s = String(v ?? "").trim();
   return s || fallback;
+}
+
+function grupoJerarquicoLabel(value: unknown) {
+  const grupo = up(value);
+  if (grupo === "OF") return "Oficiales";
+  if (grupo === "SB_CP") return "Suboficiales / Cabos Principales";
+  if (grupo === "CB") return "Cabos";
+  if (grupo === "TR") return "Tropa";
+  return "No definido";
 }
 
 function alojadoLabel(value: Plaza["alojadoActual"]) {
@@ -203,6 +213,7 @@ export default function AlojamientoDetalle() {
             <Field label="Clase" value={alojamiento.clase} />
             <Field label="Capacidad" value={alojamiento.capacidad} />
             <Field label="Genero permitido" value={alojamiento.generoPermitido} />
+            <Field label="Grupo jerarquico" value={grupoJerarquicoLabel(alojamiento.aptoParaGrupoJerarquico)} />
             <Field label="Localidad" value={alojamiento.localidad} />
             <Field label="Provincia" value={alojamiento.provincia} />
             <Field label="Activo" value={alojamiento.activo ? "SI" : "NO"} />

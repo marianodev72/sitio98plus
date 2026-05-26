@@ -112,7 +112,7 @@ const PERMISOS_VALIDOS = ["INSPECTOR", "JEFE_DE_BARRIO", "INSPECTOR_ALOJAMIENTOS
  * ❌ Excluye campos técnicos (passwordHash, loginEventos, adminEventos, tokenVersion, IPs, etc.) por defecto.
  */
 const ADMIN_READ_SELECT =
-  "_id nombre apellido email dni matricula telefono role permisos barrioAsignado territoriosAlojamiento estadoHabitacional activo bloqueado archivado archivadoAt viviendaAsignada alojamientoAsignado createdAt updatedAt";
+  "_id nombre apellido email dni matricula telefono tipoPersonal precedencia grupoJerarquico excepcionTipoDestino role permisos barrioAsignado territoriosAlojamiento estadoHabitacional activo bloqueado archivado archivadoAt viviendaAsignada alojamientoAsignado createdAt updatedAt";
 
 // Legacy roles INSPECTOR/JEFE_DE_BARRIO (si quedaron como role)
 function normalizeLegacyRoleToPermisos(user) {
@@ -209,9 +209,9 @@ function buildSort(req) {
   const by = safeStr(req.query?.sortBy || "apellido").toLowerCase();
   const dir = String(req.query?.sortDir || "asc").toLowerCase() === "desc" ? -1 : 1;
 
-  const allowed = new Set(["apellido", "nombre", "email", "role", "barrioasignado", "activo"]);
+  const allowed = new Set(["apellido", "nombre", "email", "role", "barrioasignado", "activo", "tipopersonal", "precedencia"]);
   const key = allowed.has(by) ? by : "apellido";
-  const map = { barrioasignado: "barrioAsignado" };
+  const map = { barrioasignado: "barrioAsignado", tipopersonal: "tipoPersonal" };
 
   return { [map[key] || key]: dir };
 }

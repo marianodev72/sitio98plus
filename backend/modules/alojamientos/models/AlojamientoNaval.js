@@ -1,5 +1,11 @@
 const mongoose = require("mongoose");
 const { Schema } = mongoose;
+const {
+  TIPOS_DESTINO,
+  GRUPOS_JERARQUICOS,
+  normalizeTipoDestino,
+  normalizeGrupoJerarquico,
+} = require("../../../constants/institucional");
 
 const {
   CLASES_ALOJAMIENTO,
@@ -82,6 +88,20 @@ const alojamientoNavalSchema = new Schema(
     localidad: { type: String, trim: true, default: "" },
     provincia: { type: String, trim: true, default: "" },
     observaciones: { type: String, trim: true, default: "" },
+    tipoDestino: {
+      type: String,
+      enum: TIPOS_DESTINO,
+      default: "MIXTO",
+      set: normalizeTipoDestino,
+      index: true,
+    },
+    aptoParaGrupoJerarquico: {
+      type: String,
+      enum: GRUPOS_JERARQUICOS,
+      default: "NO_DEFINIDO",
+      set: normalizeGrupoJerarquico,
+      index: true,
+    },
     activo: { type: Boolean, default: true, index: true },
     estado: {
       type: String,

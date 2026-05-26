@@ -26,6 +26,8 @@ type GeneroPermitido =
   | "SIN_RESTRICCION"
   | "NO_ESPECIFICADO";
 
+type GrupoJerarquico = "OF" | "SB_CP" | "CB" | "TR" | "NO_DEFINIDO";
+
 type AlojamientoNaval = {
   _id: string;
   codigo: string;
@@ -37,6 +39,7 @@ type AlojamientoNaval = {
   clase: string;
   capacidad: number;
   generoPermitido: GeneroPermitido;
+  aptoParaGrupoJerarquico?: GrupoJerarquico;
   estado: AlojamientoEstado;
   activo: boolean;
   ocupacionActual?: {
@@ -75,6 +78,15 @@ function up(v: unknown) {
 function safe(v: unknown, fallback = "-") {
   const s = String(v ?? "").trim();
   return s || fallback;
+}
+
+function grupoJerarquicoLabel(value: unknown) {
+  const grupo = up(value);
+  if (grupo === "OF") return "Oficiales";
+  if (grupo === "SB_CP") return "Suboficiales / Cabos Principales";
+  if (grupo === "CB") return "Cabos";
+  if (grupo === "TR") return "Tropa";
+  return "No definido";
 }
 
 function roleAllowed(role: unknown) {
@@ -321,6 +333,7 @@ export default function AlojamientosInventario({ basePath }: Props) {
               <th style={thStyle}>Clase</th>
               <th style={thStyle}>Cap.</th>
               <th style={thStyle}>Genero</th>
+              <th style={thStyle}>Grupo jerarquico</th>
               <th style={thStyle}>Estado</th>
               <th style={thStyle}>Activo</th>
               <th style={thStyle}>Plazas</th>
@@ -330,12 +343,12 @@ export default function AlojamientosInventario({ basePath }: Props) {
           <tbody>
             {loading && (
               <tr>
-                <td style={tdStyle} colSpan={13}>Cargando inventario...</td>
+                <td style={tdStyle} colSpan={14}>Cargando inventario...</td>
               </tr>
             )}
             {!loading && !items.length && (
               <tr>
-                <td style={tdStyle} colSpan={13}>Sin alojamientos para mostrar.</td>
+                <td style={tdStyle} colSpan={14}>Sin alojamientos para mostrar.</td>
               </tr>
             )}
             {!loading && items.map((a) => {
@@ -352,6 +365,7 @@ export default function AlojamientosInventario({ basePath }: Props) {
                   <td style={tdStyle}>{safe(a.clase)}</td>
                   <td style={tdStyle}>{Number(a.capacidad || 0)}</td>
                   <td style={tdStyle}>{safe(a.generoPermitido)}</td>
+                  <td style={tdStyle}>{grupoJerarquicoLabel(a.aptoParaGrupoJerarquico)}</td>
                   <td style={tdStyle}>
                     <span style={{ ...badgeStyle, ...estadoTone(a.estado) }}>{safe(a.estado)}</span>
                   </td>
