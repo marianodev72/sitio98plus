@@ -33,15 +33,45 @@ function safeArray<T = any>(v: any): T[] {
   return Array.isArray(v) ? v : [];
 }
 
+function pickAlias(obj: any, aliases: string[]) {
+  if (!obj || typeof obj !== "object") return "";
+
+  for (const alias of aliases) {
+    const value = obj[alias];
+    if (value !== null && value !== undefined && String(value).trim() !== "") {
+      return String(value).trim();
+    }
+  }
+
+  return "";
+}
+
 function normalizeBaseConviviente(c: any): Conviviente {
-  const apellidoNombres = String(c?.apellidoNombres ?? c?.apellidoNombre ?? c?.nombreApellido ?? "").trim();
-  return {
+  const apellidoNombres = pickAlias(c, ["apellidoNombres", "apellidoNombre", "nombreApellido"]);
+  const normalized = {
     parentesco: c?.parentesco ?? c?.relacion ?? c?.["relación"] ?? c?.["Relación"] ?? "",
-    apellido: c?.apellido ?? "",
-    nombre: c?.nombre ?? c?.nombres ?? apellidoNombres,
-    dni: c?.dni ?? c?.DNI ?? c?.documento ?? "",
-    edad: c?.edad ?? c?.Edad ?? "",
+    apellido: pickAlias(c, ["apellido"]),
+    nombre: pickAlias(c, ["nombre", "nombres"]) || apellidoNombres,
+    dni: pickAlias(c, ["dni", "DNI", "documento"]),
+    edad: pickAlias(c, ["edad", "Edad"]),
     observaciones: c?.observaciones ?? c?.observacion ?? c?.["observación"] ?? "",
+  };
+  return {
+    ...normalized,
+    parentesco:
+      pickAlias(c, [
+        "parentesco",
+        "relacion",
+        "relación",
+        "Relacion",
+        "Relación",
+        "RELACION",
+        "RELACIÓN",
+        "relaciÃ³n",
+      ]) || normalized.parentesco,
+    observaciones:
+      pickAlias(c, ["observaciones", "observacion", "observación", "observaciÃ³n"]) ||
+      normalized.observaciones,
   };
 }
 
@@ -359,7 +389,12 @@ export default function ActualizarMisDatosDeclarados() {
       const datos = ultimo?.datos && typeof ultimo.datos === "object" ? ultimo.datos : {};
 
       const next: Record<string, any> = {};
-      campos.forEach((c) => (next[c.key] = datos[c.key] ?? ""));
+      campos.forEach((c) => {
+        next[c.key] =
+          c.key === "matricula"
+            ? pickAlias(datos, ["matricula", "matrícula", "MR", "mr", "m.r.", "señor", "senor"])
+            : datos[c.key] ?? "";
+      });
       setForm(next);
 
       const conv = safeArray<Conviviente>(datos?.convivientes).map(normalizeBaseConviviente);
