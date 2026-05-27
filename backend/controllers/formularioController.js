@@ -5892,8 +5892,53 @@ async function getMisDatosDeclaradosUpdateById(req, res) {
 }
 
 // Helpers para PDF de Mis Datos
+function objectWithContent(value) {
+  return value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length > 0;
+}
+
+function getDatosDeclaradosUpdate(upd) {
+  if (objectWithContent(upd?.datosActualizados)) return upd.datosActualizados;
+  if (objectWithContent(upd?.datos)) return upd.datos;
+
+  const datosPersonales =
+    upd?.datosPersonales && typeof upd.datosPersonales === "object" && !Array.isArray(upd.datosPersonales)
+      ? upd.datosPersonales
+      : {};
+  const grupoRaw = upd?.grupoFamiliar;
+  const grupo = grupoRaw && typeof grupoRaw === "object" && !Array.isArray(grupoRaw) ? grupoRaw : {};
+  const convivientes = Array.isArray(grupoRaw)
+    ? grupoRaw
+    : Array.isArray(grupo.convivientes)
+      ? grupo.convivientes
+      : Array.isArray(grupo.integrantes)
+        ? grupo.integrantes
+        : Array.isArray(grupo.grupoFamiliar)
+          ? grupo.grupoFamiliar
+          : [];
+  const mascotas = Array.isArray(upd?.mascotas) ? upd.mascotas : (upd?.mascotas ? [upd.mascotas] : []);
+  const legacy = {
+    ...datosPersonales,
+    ...(convivientes.length ? { convivientes } : {}),
+    ...(mascotas.length ? { mascotas } : {}),
+  };
+
+  return objectWithContent(legacy) ? legacy : {};
+}
+
+function buildMisDatosDeclaradosUserInfo(upd) {
+  const d = getDatosDeclaradosUpdate(upd);
+  return {
+    apellido: d.apellido || "",
+    nombres: d.nombres || d.nombre || "",
+    matricula: d.matricula || "",
+    gradoEscalafon: d.gradoEscalafon || "",
+    destinoActual: d.destinoActual || "",
+    telefonoActual: d.telefonoActual || "",
+  };
+}
+
 function renderMisDatosDeclaradosPdf(doc, upd, userInfo) {
-  const d = upd?.datos && typeof upd.datos === "object" ? upd.datos : {};
+  const d = getDatosDeclaradosUpdate(upd);
   const val = (x) => (x === null || x === undefined ? "" : String(x));
 
   const titulo = "MIS DATOS DECLARADOS — ACTUALIZACIÓN REGISTRADA";
@@ -5914,13 +5959,13 @@ function renderMisDatosDeclaradosPdf(doc, upd, userInfo) {
   doc.moveDown(0.3);
   doc.font("Helvetica").fontSize(11);
 
-  doc.text(`Apellido: ${val(d.apellido)}`);
-  doc.text(`Nombres: ${val(d.nombres)}`);
-  doc.text(`Grado / Escalafón: ${val(d.gradoEscalafon)}`);
-  doc.text(`Matrícula: ${val(d.matricula)}`);
+  doc.text(`Apellido: ${val(d.apellido || userInfo?.apellido)}`);
+  doc.text(`Nombres: ${val(d.nombres || d.nombre || userInfo?.nombres)}`);
+  doc.text(`Grado / Escalafón: ${val(d.gradoEscalafon || userInfo?.gradoEscalafon)}`);
+  doc.text(`Matrícula: ${val(d.matricula || userInfo?.matricula)}`);
   doc.text(`Años de servicio: ${val(d.aniosServicioRecibo)}`);
-  doc.text(`Destino (lugar de trabajo): ${val(d.destinoActual)}`);
-  doc.text(`Teléfono de contacto: ${val(d.telefonoActual)}`);
+  doc.text(`Destino (lugar de trabajo): ${val(d.destinoActual || userInfo?.destinoActual)}`);
+  doc.text(`Teléfono de contacto: ${val(d.telefonoActual || userInfo?.telefonoActual)}`);
 
   doc.moveDown(0.6);
 
@@ -6014,24 +6059,21 @@ async function descargarMisDatosDeclaradosPdf(req, res) {
 
     // Para imprimir nombre/matrícula/gradoEscalafon usamos lo que está en datos;
     // si faltan, buscamos User (opcional).
-    let userInfo = {
-      apellido: upd?.datos?.apellido || "",
-      nombres: upd?.datos?.nombres || "",
-      matricula: upd?.datos?.matricula || "",
-      gradoEscalafon: upd?.datos?.gradoEscalafon || "",
-    };
+    let userInfo = buildMisDatosDeclaradosUserInfo(upd);
 
     try {
       const u = await User.findById(upd.usuario)
-        .select("apellido nombres matricula gradoEscalafon")
+        .select("apellido nombre nombres matricula gradoEscalafon telefono")
         .lean();
 
       if (u) {
         userInfo = {
           apellido: u.apellido || userInfo.apellido,
-          nombres: u.nombres || userInfo.nombres,
+          nombres: u.nombres || u.nombre || userInfo.nombres,
           matricula: u.matricula || userInfo.matricula,
           gradoEscalafon: u.gradoEscalafon || userInfo.gradoEscalafon,
+          destinoActual: userInfo.destinoActual,
+          telefonoActual: userInfo.telefonoActual || u.telefono || "",
         };
       }
     } catch {}
@@ -6107,24 +6149,21 @@ async function verMisDatosDeclaradosPdf(req, res) {
     }
 
     // userInfo opcional
-    let userInfo = {
-      apellido: upd?.datos?.apellido || "",
-      nombres: upd?.datos?.nombres || "",
-      matricula: upd?.datos?.matricula || "",
-      gradoEscalafon: upd?.datos?.gradoEscalafon || "",
-    };
+    let userInfo = buildMisDatosDeclaradosUserInfo(upd);
 
     try {
       const u = await User.findById(upd.usuario)
-        .select("apellido nombres matricula gradoEscalafon")
+        .select("apellido nombre nombres matricula gradoEscalafon telefono")
         .lean();
 
       if (u) {
         userInfo = {
           apellido: u.apellido || userInfo.apellido,
-          nombres: u.nombres || userInfo.nombres,
+          nombres: u.nombres || u.nombre || userInfo.nombres,
           matricula: u.matricula || userInfo.matricula,
           gradoEscalafon: u.gradoEscalafon || userInfo.gradoEscalafon,
+          destinoActual: userInfo.destinoActual,
+          telefonoActual: userInfo.telefonoActual || u.telefono || "",
         };
       }
     } catch {}
@@ -6192,23 +6231,20 @@ async function previewMisDatosDeclaradosPdf(req, res) {
       return genericDenied(res);
     }
 
-    let userInfo = {
-      apellido: upd?.datos?.apellido || "",
-      nombres: upd?.datos?.nombres || "",
-      matricula: upd?.datos?.matricula || "",
-      gradoEscalafon: upd?.datos?.gradoEscalafon || "",
-    };
+    let userInfo = buildMisDatosDeclaradosUserInfo(upd);
 
     try {
       const u = await User.findById(upd.usuario)
-        .select("apellido nombres matricula gradoEscalafon")
+        .select("apellido nombre nombres matricula gradoEscalafon telefono")
         .lean();
       if (u) {
         userInfo = {
           apellido: u.apellido || userInfo.apellido,
-          nombres: u.nombres || userInfo.nombres,
+          nombres: u.nombres || u.nombre || userInfo.nombres,
           matricula: u.matricula || userInfo.matricula,
           gradoEscalafon: u.gradoEscalafon || userInfo.gradoEscalafon,
+          destinoActual: userInfo.destinoActual,
+          telefonoActual: userInfo.telefonoActual || u.telefono || "",
         };
       }
     } catch {}

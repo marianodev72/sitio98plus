@@ -402,7 +402,12 @@ export default function HistorialMisDatosDeclarados() {
 }
 
 function DetalleMisDatos({ item }: { item: any }) {
-  const d = item?.datos && typeof item.datos === "object" ? item.datos : {};
+  const d =
+    item?.datosActualizados && typeof item.datosActualizados === "object"
+      ? item.datosActualizados
+      : item?.datos && typeof item.datos === "object"
+        ? item.datos
+        : {};
 
   const convivientes = safeArray(d?.convivientes);
   const mascotas = safeArray(d?.mascotas);
