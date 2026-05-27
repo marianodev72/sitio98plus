@@ -190,7 +190,7 @@ function buildViviendasPipeline(query = {}) {
         },
         { $sort: { createdAt: -1 } },
         { $limit: 1 },
-        { $project: { _id: 1, createdAt: 1, datos: 1 } },
+        { $project: { _id: 1, createdAt: 1, datosActualizados: 1, datos: 1, grupoFamiliar: 1 } },
       ],
       as: "misDatosUltimos",
     },
@@ -207,17 +207,37 @@ function buildViviendasPipeline(query = {}) {
   // 3) Derivaciones adicionales para ANEXO 17 (si no hay cantidades, caemos a convivientes por edad)
   pipeline.push({
     $addFields: {
+      _mdDatos: {
+        $ifNull: ["$misDatosUltimo.datosActualizados", { $ifNull: ["$misDatosUltimo.datos", {}] }],
+      },
+      _mdGrupoLegacy: { $ifNull: ["$misDatosUltimo.grupoFamiliar", {}] },
+    },
+  });
+
+  pipeline.push({
+    $addFields: {
       _mdConvivientes: {
-        $cond: [
-          {
-            $and: [
-              { $ne: ["$misDatosUltimo", null] },
-              { $eq: [{ $type: "$misDatosUltimo.datos.convivientes" }, "array"] },
-            ],
+        $let: {
+          vars: {
+            datosConvivientes: "$_mdDatos.convivientes",
+            datosIntegrantes: "$_mdDatos.integrantes",
+            grupoConvivientes: "$_mdGrupoLegacy.convivientes",
+            grupoIntegrantes: "$_mdGrupoLegacy.integrantes",
+            grupoRaw: "$_mdGrupoLegacy",
           },
-          "$misDatosUltimo.datos.convivientes",
-          [],
-        ],
+          in: {
+            $switch: {
+              branches: [
+                { case: { $eq: [{ $type: "$$datosConvivientes" }, "array"] }, then: "$$datosConvivientes" },
+                { case: { $eq: [{ $type: "$$datosIntegrantes" }, "array"] }, then: "$$datosIntegrantes" },
+                { case: { $eq: [{ $type: "$$grupoConvivientes" }, "array"] }, then: "$$grupoConvivientes" },
+                { case: { $eq: [{ $type: "$$grupoIntegrantes" }, "array"] }, then: "$$grupoIntegrantes" },
+                { case: { $eq: [{ $type: "$$grupoRaw" }, "array"] }, then: "$$grupoRaw" },
+              ],
+              default: [],
+            },
+          },
+        },
       },
     },
   });
@@ -245,8 +265,8 @@ function buildViviendasPipeline(query = {}) {
 
   pipeline.push({
     $addFields: {
-      _adultosPreferidos: { $ifNull: ["$misDatosUltimo.datos.cantidadAdultos", null] },
-      _hijosPreferidos: { $ifNull: ["$misDatosUltimo.datos.cantidadHijos", null] },
+      _adultosPreferidos: { $ifNull: ["$_mdDatos.cantidadAdultos", null] },
+      _hijosPreferidos: { $ifNull: ["$_mdDatos.cantidadHijos", null] },
 
       // fallback institucional: titular = 1
       _adultosFallback: { $add: [1, "$_mdAdultosExtraByEdad"] },

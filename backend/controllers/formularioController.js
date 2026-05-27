@@ -5787,6 +5787,7 @@ async function actualizarMisDatosDeclarados(req, res) {
     const {
       baseAnexoId,
       motivo,
+      datos,
       datosPersonales,
       grupoFamiliar,
       mascotas
@@ -5800,18 +5801,44 @@ async function actualizarMisDatosDeclarados(req, res) {
     const base = await FormSubmission.findById(baseAnexoId).lean();
     if (!base) return res.status(404).json(stripAdjuntoRutas({ ok: false, message: "Base no encontrada" }));
 
+    const datosPayload = datos && typeof datos === "object" && !Array.isArray(datos) ? datos : null;
+    const datosPersonalesLegacy =
+      datosPersonales && typeof datosPersonales === "object" && !Array.isArray(datosPersonales) ? datosPersonales : {};
+    const grupoFamiliarRaw = grupoFamiliar;
+    const grupoFamiliarLegacy =
+      grupoFamiliarRaw && typeof grupoFamiliarRaw === "object" && !Array.isArray(grupoFamiliarRaw)
+        ? grupoFamiliarRaw
+        : {};
+    const convivientesLegacy = Array.isArray(grupoFamiliarRaw)
+      ? grupoFamiliarRaw
+      : Array.isArray(grupoFamiliarLegacy.convivientes)
+        ? grupoFamiliarLegacy.convivientes
+        : Array.isArray(grupoFamiliarLegacy.integrantes)
+          ? grupoFamiliarLegacy.integrantes
+          : Array.isArray(grupoFamiliarLegacy.grupoFamiliar)
+            ? grupoFamiliarLegacy.grupoFamiliar
+            : [];
+    const mascotasNormalizadas = Array.isArray(mascotas) ? mascotas : (mascotas ? [mascotas] : []);
+    const datosActualizados = datosPayload || {
+      ...datosPersonalesLegacy,
+      ...(convivientesLegacy.length ? { convivientes: convivientesLegacy } : {}),
+      ...(Object.keys(grupoFamiliarLegacy).length ? { grupoFamiliar: grupoFamiliarLegacy } : {}),
+      ...(mascotasNormalizadas.length ? { mascotas: mascotasNormalizadas } : {}),
+    };
+    const resumenPartes = [
+      `Convivientes: ${Array.isArray(datosActualizados.convivientes) ? datosActualizados.convivientes.length : 0}`,
+      `Mascotas: ${Array.isArray(datosActualizados.mascotas) ? datosActualizados.mascotas.length : 0}`,
+    ];
+
     const upd = await MisDatosDeclaradosUpdate.create({
       usuario: dbUser._id,
 
-      vivienda: base.vivienda || null,
       baseAnexoId: base._id,
-      baseCodigo: base.codigo,
-      baseCreatedAt: base.createdAt || null,
+      baseDatos: (base.datos && typeof base.datos === "object") ? base.datos : {},
 
       motivo: String(motivo || "").trim(),
-      datosPersonales: (datosPersonales && typeof datosPersonales === "object") ? datosPersonales : {},
-      grupoFamiliar: (grupoFamiliar && typeof grupoFamiliar === "object") ? grupoFamiliar : {},
-      mascotas: Array.isArray(mascotas) ? mascotas : (mascotas ? [mascotas] : []),
+      datosActualizados,
+      resumen: resumenPartes.join(" | "),
     });
 
     return res.json(stripAdjuntoRutas({ ok: true, update: upd.toObject ? upd.toObject() : upd }));
