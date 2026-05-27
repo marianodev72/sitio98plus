@@ -392,6 +392,15 @@ export default function VerAnexoPermisionario() {
 
     const inspectorNombre = d.inspectorNombre || "—";
     const yaConforme = !!d?.conformidadPermisionario?.ok;
+    const estadoAnexo03 = up(anexo.estado);
+    const puedeConformarAnexo03 = estadoAnexo03 === "ENVIADO" && !yaConforme;
+    const textoBotonConformidad03 = busy
+      ? "Enviando..."
+      : yaConforme
+      ? "Conformidad registrada"
+      : estadoAnexo03 !== "ENVIADO"
+      ? "Tramite en revision"
+      : "Dar conformidad (ANEXO 03)";
 
     return (
       <div style={pageStyle}>
@@ -602,14 +611,10 @@ export default function VerAnexoPermisionario() {
 
               <button
                 onClick={confirmarConformidadAnexo03}
-                disabled={busy || yaConforme}
+                disabled={busy || !puedeConformarAnexo03}
                 style={successButtonStyle}
               >
-                {busy
-                  ? "Enviando…"
-                  : yaConforme
-                  ? "Conformidad registrada"
-                  : "Dar conformidad (ANEXO 03)"}
+                {textoBotonConformidad03}
               </button>
             </div>
           </div>

@@ -7341,11 +7341,20 @@ async function darConformidadPermisionario03(req, res) {
       return genericDenied(res);
     }
 
+    anexo.datos = anexo.datos || {};
+
     if (["EN_REVISION", "CERRADO"].includes(up(anexo.estado))) {
+      if (!anexo.datos?.conformidadPermisionario?.ok) {
+        anexo.datos.conformidadPermisionario = {
+          ok: true,
+          fecha: new Date(),
+          usuario: user._id,
+        };
+        anexo.markModified("datos");
+        await anexo.save();
+      }
       return res.json(stripAdjuntoRutas({ anexo: toPlain(anexo) }));
     }
-
-    anexo.datos = anexo.datos || {};
 
     // Persistir coherencia mínima si el origen resolvió correctamente
     if (!coincideDirecto && coincideOrigen) {
@@ -7376,6 +7385,7 @@ async function darConformidadPermisionario03(req, res) {
       fecha: new Date(),
       usuario: user._id,
     };
+    anexo.markModified("datos");
 
     anexo.cambiarEstado(
       "EN_REVISION",
