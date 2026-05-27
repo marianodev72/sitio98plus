@@ -5780,7 +5780,7 @@ async function actualizarMisDatosDeclarados(req, res) {
     if (!user || !user.role) return genericDenied(res);
     if (up(user.role) !== "PERMISIONARIO") return genericDenied(res);
 
-    const dbUser = await User.findById(user._id).select("_id role activo").lean();
+    const dbUser = await User.findById(user._id).select("_id role activo viviendaAsignada").lean();
     if (!dbUser || up(dbUser.role) !== "PERMISIONARIO") return genericDenied(res);
     if (dbUser.activo === false) return genericDenied(res);
 
@@ -5793,13 +5793,29 @@ async function actualizarMisDatosDeclarados(req, res) {
       mascotas
     } = req.body || {};
 
-    if (!baseAnexoId) {
-      return res.status(400).json(stripAdjuntoRutas({ ok: false, message: "Falta baseAnexoId" }));
-    }
+    let base = null;
+    if (baseAnexoId) {
+      if (!isObjectId(baseAnexoId)) {
+        return res.status(400).json(stripAdjuntoRutas({ ok: false, message: "baseAnexoId invalido" }));
+      }
+      base = await FormSubmission.findOne({
+        _id: baseAnexoId,
+        codigo: "ANEXO_01",
+        usuario: dbUser._id,
+      }).lean();
+      if (!base) return res.status(404).json(stripAdjuntoRutas({ ok: false, message: "Base no encontrada" }));
+    } else {
+      base = await FormSubmission.findOne({
+        codigo: "ANEXO_01",
+        usuario: dbUser._id,
+      })
+        .sort({ createdAt: -1 })
+        .lean();
 
-    // Validar que exista el Anexo base
-    const base = await FormSubmission.findById(baseAnexoId).lean();
-    if (!base) return res.status(404).json(stripAdjuntoRutas({ ok: false, message: "Base no encontrada" }));
+      if (!base && !isObjectId(dbUser.viviendaAsignada)) {
+        return res.status(400).json(stripAdjuntoRutas({ ok: false, message: "Falta base ANEXO_01" }));
+      }
+    }
 
     const datosPayload = datos && typeof datos === "object" && !Array.isArray(datos) ? datos : null;
     const datosPersonalesLegacy =
@@ -5833,8 +5849,8 @@ async function actualizarMisDatosDeclarados(req, res) {
     const upd = await MisDatosDeclaradosUpdate.create({
       usuario: dbUser._id,
 
-      baseAnexoId: base._id,
-      baseDatos: (base.datos && typeof base.datos === "object") ? base.datos : {},
+      baseAnexoId: base?._id || null,
+      baseDatos: (base?.datos && typeof base.datos === "object") ? base.datos : {},
 
       motivo: String(motivo || "").trim(),
       datosActualizados,

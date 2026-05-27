@@ -26,6 +26,7 @@ try {
 
 // Nombre de colección para $lookup (fallback seguro)
 const MIS_DATOS_COLL = "misdatosdeclaradosupdates";
+const FORM_SUBMISSIONS_COLL = "formsubmissions";
 
 function up(v) {
   return String(v || "").toUpperCase().trim();
@@ -196,11 +197,36 @@ function buildViviendasPipeline(query = {}) {
     },
   });
 
+  pipeline.push({
+    $lookup: {
+      from: FORM_SUBMISSIONS_COLL,
+      let: { uid: "$ocupacionActual.permisionario" },
+      pipeline: [
+        {
+          $match: {
+            codigo: "ANEXO_01",
+            $expr: {
+              $or: [
+                { $eq: ["$usuario", "$$uid"] },
+                { $eq: [{ $toString: "$usuario" }, { $toString: "$$uid" }] },
+              ],
+            },
+          },
+        },
+        { $sort: { createdAt: -1 } },
+        { $limit: 1 },
+        { $project: { _id: 1, createdAt: 1, datos: 1 } },
+      ],
+      as: "anexo01Ultimos",
+    },
+  });
+
   // Normalizamos docs
   pipeline.push({
     $addFields: {
       permisionarioDoc: { $arrayElemAt: ["$permisionarioDoc", 0] },
       misDatosUltimo: { $arrayElemAt: ["$misDatosUltimos", 0] }, // objeto (o null)
+      anexo01Ultimo: { $arrayElemAt: ["$anexo01Ultimos", 0] },
     },
   });
 
@@ -211,12 +237,13 @@ function buildViviendasPipeline(query = {}) {
         $ifNull: ["$misDatosUltimo.datosActualizados", { $ifNull: ["$misDatosUltimo.datos", {}] }],
       },
       _mdGrupoLegacy: { $ifNull: ["$misDatosUltimo.grupoFamiliar", {}] },
+      _a01Datos: { $ifNull: ["$anexo01Ultimo.datos", {}] },
     },
   });
 
   pipeline.push({
     $addFields: {
-      _mdConvivientes: {
+      _mdConvivientesCandidatos: {
         $let: {
           vars: {
             datosConvivientes: "$_mdDatos.convivientes",
@@ -238,6 +265,41 @@ function buildViviendasPipeline(query = {}) {
             },
           },
         },
+      },
+      _a01Convivientes: {
+        $cond: [
+          { $eq: [{ $type: "$_a01Datos.convivientes" }, "array"] },
+          "$_a01Datos.convivientes",
+          [],
+        ],
+      },
+    },
+  });
+
+  pipeline.push({
+    $addFields: {
+      _mdTieneConvivientes: {
+        $and: [
+          { $isArray: "$_mdConvivientesCandidatos" },
+          { $gt: [{ $size: "$_mdConvivientesCandidatos" }, 0] },
+        ],
+      },
+      _a01TieneConvivientes: {
+        $and: [
+          { $isArray: "$_a01Convivientes" },
+          { $gt: [{ $size: "$_a01Convivientes" }, 0] },
+        ],
+      },
+    },
+  });
+
+  pipeline.push({
+    $addFields: {
+      _mdConvivientes: {
+        $cond: ["$_mdTieneConvivientes", "$_mdConvivientesCandidatos", "$_a01Convivientes"],
+      },
+      _datosHabitantes: {
+        $cond: ["$_mdTieneConvivientes", "$_mdDatos", "$_a01Datos"],
       },
     },
   });
@@ -265,8 +327,8 @@ function buildViviendasPipeline(query = {}) {
 
   pipeline.push({
     $addFields: {
-      _adultosPreferidos: { $ifNull: ["$_mdDatos.cantidadAdultos", null] },
-      _hijosPreferidos: { $ifNull: ["$_mdDatos.cantidadHijos", null] },
+      _adultosPreferidos: { $ifNull: ["$_datosHabitantes.cantidadAdultos", null] },
+      _hijosPreferidos: { $ifNull: ["$_datosHabitantes.cantidadHijos", null] },
 
       // fallback institucional: titular = 1
       _adultosFallback: { $add: [1, "$_mdAdultosExtraByEdad"] },
@@ -334,7 +396,7 @@ function buildViviendasPipeline(query = {}) {
         $cond: [
           // Si hay MisDatosDeclarados
           {
-            $and: [{ $isArray: "$misDatosUltimos" }, { $gt: [{ $size: "$misDatosUltimos" }, 0] }],
+            $or: ["$_mdTieneConvivientes", "$_a01TieneConvivientes"],
           },
           { $add: ["$_mdAdultosTotal", "$_mdHijosTotal"] },
 

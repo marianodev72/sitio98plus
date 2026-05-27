@@ -324,7 +324,7 @@ export default function ActualizarMisDatosDeclarados() {
           return tb - ta;
         });
 
-      const ultimo = aprobados[0] || null;
+      const ultimo = aprobados[0] || anexos[0] || null;
       setBase(ultimo);
 
       const datos = ultimo?.datos && typeof ultimo.datos === "object" ? ultimo.datos : {};
