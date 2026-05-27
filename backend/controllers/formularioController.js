@@ -5688,9 +5688,19 @@ async function getMisAnexosPermisionario(req, res) {
     // Scope 3: ANEXO_01 por usuario (para históricos donde vivienda queda null)
     // Esto habilita "Mis datos declarados" aunque ANEXO_01 no tenga vivienda seteada
     const scopeAnexo01Personal = { codigo: "ANEXO_01", usuario: dbUser._id };
+    const scopeAnexo02Usuario = { codigo: "ANEXO_02", usuario: dbUser._id };
+    const scopeAnexo02Postulante = { codigo: "ANEXO_02", "datos.postulanteId": dbUser._id };
+    const scopeAnexo02Vivienda = { codigo: "ANEXO_02", "datos.viviendaId": String(viviendaId) };
 
     const filtroBase = {
-      $or: [scopeVivienda, scopeAnexo04Personal, scopeAnexo01Personal],
+      $or: [
+        scopeVivienda,
+        scopeAnexo04Personal,
+        scopeAnexo01Personal,
+        scopeAnexo02Usuario,
+        scopeAnexo02Postulante,
+        scopeAnexo02Vivienda,
+      ],
     };
 
     // ✅ filtro por código si viene (sin perder el OR)
