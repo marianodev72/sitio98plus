@@ -33,6 +33,18 @@ function safeArray<T = any>(v: any): T[] {
   return Array.isArray(v) ? v : [];
 }
 
+function normalizeBaseConviviente(c: any): Conviviente {
+  const apellidoNombres = String(c?.apellidoNombres ?? c?.apellidoNombre ?? c?.nombreApellido ?? "").trim();
+  return {
+    parentesco: c?.parentesco ?? c?.relacion ?? c?.["relación"] ?? c?.["Relación"] ?? "",
+    apellido: c?.apellido ?? "",
+    nombre: c?.nombre ?? c?.nombres ?? apellidoNombres,
+    dni: c?.dni ?? c?.DNI ?? c?.documento ?? "",
+    edad: c?.edad ?? c?.Edad ?? "",
+    observaciones: c?.observaciones ?? c?.observacion ?? c?.["observación"] ?? "",
+  };
+}
+
 const styles = {
   page: {
     maxWidth: 1180,
@@ -211,6 +223,23 @@ const styles = {
     fontSize: 14,
   } as React.CSSProperties,
 
+  select: {
+    width: "100%",
+    padding: "10px 12px",
+    border: "1px solid rgba(255,255,255,0.14)",
+    borderRadius: 12,
+    background: "rgba(15,23,42,0.98)",
+    color: "#fff",
+    outline: "none",
+    fontSize: 14,
+    colorScheme: "dark" as const,
+  } as React.CSSProperties,
+
+  option: {
+    background: "#0f172a",
+    color: "#fff",
+  } as React.CSSProperties,
+
   textarea: {
     width: "100%",
     padding: "10px 12px",
@@ -333,14 +362,7 @@ export default function ActualizarMisDatosDeclarados() {
       campos.forEach((c) => (next[c.key] = datos[c.key] ?? ""));
       setForm(next);
 
-      const conv = safeArray<Conviviente>(datos?.convivientes).map((c) => ({
-        parentesco: c?.parentesco ?? "",
-        apellido: c?.apellido ?? "",
-        nombre: c?.nombre ?? "",
-        dni: c?.dni ?? "",
-        edad: c?.edad ?? "",
-        observaciones: c?.observaciones ?? "",
-      }));
+      const conv = safeArray<Conviviente>(datos?.convivientes).map(normalizeBaseConviviente);
       setConvivientes(conv);
 
       const mas = safeArray<Mascota>(datos?.mascotas).map((m) => ({
@@ -557,12 +579,12 @@ export default function ActualizarMisDatosDeclarados() {
                           <select
                             value={c.parentesco || ""}
                             onChange={(e) => updateConviviente(idx, { parentesco: e.target.value })}
-                            style={styles.input}
+                            style={styles.select}
                           >
-                            <option value="">—</option>
-                            <option value="Cónyuge">Cónyuge</option>
-                            <option value="Hijo/a">Hijo/a</option>
-                            <option value="Otro">Otro</option>
+                            <option style={styles.option} value="">—</option>
+                            <option style={styles.option} value="Cónyuge">Cónyuge</option>
+                            <option style={styles.option} value="Hijo/a">Hijo/a</option>
+                            <option style={styles.option} value="Otro">Otro</option>
                           </select>
                         </td>
                         <td style={styles.td}>
