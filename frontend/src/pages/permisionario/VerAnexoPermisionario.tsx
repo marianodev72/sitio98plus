@@ -53,6 +53,7 @@ export default function VerAnexoPermisionario() {
   const { user } = useAuth();
 
   const [anexo, setAnexo] = useState<Anexo | null>(null);
+  const [origen, setOrigen] = useState<Anexo | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
   const [busy, setBusy] = useState(false);
@@ -75,13 +76,16 @@ export default function VerAnexoPermisionario() {
       if (!a) {
         setErrorMsg("La página solicitada no está disponible.");
         setAnexo(null);
+        setOrigen(null);
       } else {
         setAnexo(a);
+        setOrigen((res.data && res.data.origen) || null);
       }
     } catch (e) {
       console.error("[VER ANEXO PERMISIONARIO]", e);
       setErrorMsg("La página solicitada no está disponible.");
       setAnexo(null);
+      setOrigen(null);
     } finally {
       setLoading(false);
     }
@@ -1273,7 +1277,7 @@ if (codigo === "ANEXO_07") {
                   padding: 16,
                 }}
               >
-                <AnexoViewer codigo={anexo.codigo} datos={d} />
+                <AnexoViewer codigo={anexo.codigo} datos={d} anexo01Datos={origen?.datos} />
               </div>
             </section>
 

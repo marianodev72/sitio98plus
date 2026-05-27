@@ -212,6 +212,109 @@ function addIntervinienteUnique(list, userId, rol) {
   return list;
 }
 
+async function buildAnexo02ReadOnlyResponse(user, anexo) {
+  const anexoObj = anexo?.toObject ? anexo.toObject() : { ...(anexo || {}) };
+  const datos = anexoObj?.datos && typeof anexoObj.datos === "object" ? { ...anexoObj.datos } : {};
+
+  if (Vivienda && isObjectId(datos.viviendaId)) {
+    const vivienda = await Vivienda.findById(datos.viviendaId)
+      .select("_id codigo barrio dormitorios estado direccion localidad meta")
+      .lean();
+
+    if (vivienda) {
+      const meta = vivienda.meta || {};
+      const direccion =
+        vivienda.direccion ||
+        meta.direccion ||
+        meta.DIRECCION ||
+        meta.domicilio ||
+        meta.DOMICILIO ||
+        "";
+      const localidad =
+        vivienda.localidad ||
+        meta.localidad ||
+        meta.LOCALIDAD ||
+        meta.Localidad ||
+        "";
+
+      if (!datos.viviendaCodigo && vivienda.codigo) datos.viviendaCodigo = String(vivienda.codigo).trim();
+      if (!datos.viviendaBarrio && vivienda.barrio) datos.viviendaBarrio = String(vivienda.barrio).trim();
+      if (!datos.viviendaDormitorios && vivienda.dormitorios !== undefined) datos.viviendaDormitorios = vivienda.dormitorios;
+      if (!datos.viviendaEstado && vivienda.estado) datos.viviendaEstado = String(vivienda.estado).trim();
+      if (!datos.viviendaDireccion && direccion) datos.viviendaDireccion = String(direccion).trim();
+      if (!datos.direccion && direccion) datos.direccion = String(direccion).trim();
+      if (!datos.viviendaLocalidad && localidad) datos.viviendaLocalidad = String(localidad).trim();
+      if (!datos.localidad && localidad) datos.localidad = String(localidad).trim();
+      if (!datos.barrio && vivienda.barrio) datos.barrio = String(vivienda.barrio).trim();
+      if (!datos.viviendaLabel) {
+        datos.viviendaLabel =
+          String(vivienda.codigo || "").trim() ||
+          String(direccion || "").trim() ||
+          "Vivienda fiscal";
+      }
+    }
+  }
+
+  if (User && isObjectId(anexoObj.usuario)) {
+    const u = await User.findById(anexoObj.usuario)
+      .select("nombre apellido matricula gradoEscalafon destinoActual meta")
+      .lean();
+
+    if (u) {
+      const meta = u.meta || {};
+      if (!datos.apellido && u.apellido) datos.apellido = String(u.apellido).trim();
+      if (!datos.nombres && (u.nombre || meta.nombres)) datos.nombres = String(u.nombre || meta.nombres).trim();
+      if (!datos.apellidoNombres) {
+        datos.apellidoNombres = `${String(u.apellido || "").trim()} ${String(u.nombre || "").trim()}`.trim();
+      }
+      if (!datos.matricula && u.matricula) datos.matricula = String(u.matricula).trim();
+      if (!datos.mr && u.matricula) datos.mr = String(u.matricula).trim();
+      if (!datos.grado && (u.gradoEscalafon || meta.grado || meta.GRADO)) {
+        datos.grado = String(u.gradoEscalafon || meta.grado || meta.GRADO).trim();
+      }
+      if (!datos.destino && (u.destinoActual || meta.destino || meta.DESTINO)) {
+        datos.destino = String(u.destinoActual || meta.destino || meta.DESTINO).trim();
+      }
+    }
+  }
+
+  anexoObj.datos = datos;
+  if (!anexoObj.datos.estadoAnexo && anexoObj.estado) anexoObj.datos.estadoAnexo = anexoObj.estado;
+  if (!anexoObj.datos.fechaInicio && anexoObj.createdAt) anexoObj.datos.fechaInicio = anexoObj.createdAt;
+  if (anexoObj.conformidadPostulante && !anexoObj.datos.conformidadPostulante) {
+    anexoObj.datos.conformidadPostulante = anexoObj.conformidadPostulante;
+  }
+
+  let origen = null;
+  if (isObjectId(anexoObj.derivadoDe)) {
+    const a01 = await FormSubmission.findById(anexoObj.derivadoDe)
+      .select("codigo datos adjuntos usuario intervinientes vivienda barrio estado estadoInstitucional derivadoDe createdAt updatedAt")
+      .lean();
+
+    if (a01 && up(a01.codigo) === "ANEXO_01" && canSeeSubmission(user, a01)) {
+      origen = {
+        _id: a01._id,
+        codigo: a01.codigo,
+        datos: a01.datos && typeof a01.datos === "object" ? a01.datos : {},
+        adjuntos: Array.isArray(a01.adjuntos)
+          ? a01.adjuntos.map((x) => ({
+              nombre: x?.nombre || "",
+              tipo: x?.tipo || "application/octet-stream",
+              size: Number(x?.size || 0),
+            }))
+          : [],
+        usuario: a01.usuario,
+        estado: a01.estado,
+        estadoInstitucional: a01.estadoInstitucional,
+        createdAt: a01.createdAt,
+        updatedAt: a01.updatedAt,
+      };
+    }
+  }
+
+  return { anexo: stripEstadoInstitucionalIfNeeded(user, anexoObj), origen };
+}
+
 /**
  * Busca un usuario por rol/permisos y barrio.
  */
@@ -360,6 +463,11 @@ async function getById(req, res) {
       }
 
       // Si es ANEXO_02, devolvemos también adjuntos del ANEXO_01 origen (si existe)
+      if (codigoUp === "ANEXO_02") {
+        const payload = await buildAnexo02ReadOnlyResponse(user, anexo);
+        return res.json(stripAdjuntoRutas(payload));
+      }
+
       let origen = null;
 
       if (codigoUp === "ANEXO_02" && isObjectId(anexo.derivadoDe)) {
@@ -394,6 +502,11 @@ async function getById(req, res) {
     // Para roles no postulante, devolvemos metadata del origen cuando aplica
     let origen = null;
     const codigoUp = up(anexo.codigo);
+
+    if (codigoUp === "ANEXO_02") {
+      const payload = await buildAnexo02ReadOnlyResponse(user, anexo);
+      return res.json(stripAdjuntoRutas(payload));
+    }
 
     // ORIGEN para ANEXO_02: adjuntos del ANEXO_01
     if (codigoUp === "ANEXO_02" && isObjectId(anexo.derivadoDe)) {

@@ -259,25 +259,60 @@ function ViewAnexo02({
   const d = datos || {};
   const d01 = anexo01Datos || {};
 
-  const grado = safe(d?.grado || d01?.gradoEscalafon);
+  const pick = (...values: unknown[]) => {
+    for (const value of values) {
+      const text = String(value ?? "").trim();
+      if (text && !/^[0-9a-fA-F]{24}$/.test(text)) return text;
+    }
+    return "";
+  };
+
+  const grado = safe(pick(d?.grado, d?.gradoEscalafon, d01?.gradoEscalafon, d01?.grado));
 
   const ape = String(d01?.apellido || "").trim();
   const nom = String(d01?.nombres || "").trim();
-  const apeNom = safe(d?.apellidoNombres || `${ape} ${nom}`.trim());
+  const apeNom = safe(pick(d?.apellidoNombres, d?.permisionarioNombre, `${ape} ${nom}`.trim()));
 
-  const matricula = safe(d?.mr || d01?.mr);
+  const matricula = safe(
+    pick(
+      d?.matricula,
+      d?.mr,
+      d?.MR,
+      d01?.matricula,
+      d01?.["matricula"],
+      d01?.["matrícula"],
+      d01?.mr,
+      d01?.MR,
+      d01?.["m.r."],
+      d01?.["señor"],
+      d01?.senor
+    )
+  );
+  const destino = safe(pick(d?.destino, d?.destinoActual, d01?.destinoActual, d01?.destino));
 
-  const direccion = safe(d?.direccion, "");
+  const direccion = safe(pick(d?.viviendaDireccion, d?.direccion, d?.direccionUnidad), "");
   const departamento = safe(d?.departamento, "");
 
   const casa = safe(
-    vivienda?.codigo || d?.casa || d?.unidadHabitacional || d?.viviendaCodigo,
+    vivienda?.codigo || d?.viviendaCodigo || d?.casa || d?.unidadHabitacional || d?.viviendaLabel,
     ""
   );
-  const localidad = safe(vivienda?.barrio || d?.localidad, "");
+  const barrio = safe(pick(vivienda?.barrio, d?.viviendaBarrio, d?.barrio), "");
+  const localidad = safe(pick(d?.viviendaLocalidad, d?.localidad), "");
+  const dormitorios = safe(d?.viviendaDormitorios ?? d?.dormitorios);
+  const viviendaEstado = safe(d?.viviendaEstado);
 
-  const fechaAsignacion = safe(d?.fechaAsignacion);
+  const fechaAsignacion = safe(d?.fechaAsignacion || d?.fechaInicio);
   const fechaEntrega = safe(d?.fechaEntrega);
+  const estadoAnexo = safe(d?.estadoAnexo);
+  const confPostulante = d?.conformidadPostulante?.ok ? "Registrada" : "Pendiente";
+
+  const tipoSolicitud = safe(pick(d01?.tipoSolicitud, d01?.motivoSolicitud, d01?.motivo), "");
+  const convivientes = Array.isArray(d01?.convivientes)
+    ? d01.convivientes
+    : Array.isArray(d01?.grupoFamiliar)
+    ? d01.grupoFamiliar
+    : [];
 
   const styles = {
     section: {
@@ -363,6 +398,11 @@ function ViewAnexo02({
             <span style={styles.label}>M.R. (Matrícula)</span>
             <span style={styles.value}>{matricula}</span>
           </div>
+
+          <div style={styles.field}>
+            <span style={styles.label}>Destino</span>
+            <span style={styles.value}>{destino}</span>
+          </div>
         </div>
       </section>
 
@@ -380,6 +420,11 @@ function ViewAnexo02({
             <span style={styles.value}>{casa}</span>
           </div>
 
+          <div style={styles.field}>
+            <span style={styles.label}>Barrio</span>
+            <span style={styles.value}>{barrio || "â€”"}</span>
+          </div>
+
           {departamento && (
             <div style={styles.field}>
               <span style={styles.label}>Departamento</span>
@@ -390,6 +435,16 @@ function ViewAnexo02({
           <div style={styles.field}>
             <span style={styles.label}>Localidad</span>
             <span style={styles.value}>{localidad}</span>
+          </div>
+
+          <div style={styles.field}>
+            <span style={styles.label}>Dormitorios</span>
+            <span style={styles.value}>{dormitorios}</span>
+          </div>
+
+          <div style={styles.field}>
+            <span style={styles.label}>Estado vivienda</span>
+            <span style={styles.value}>{viviendaEstado}</span>
           </div>
         </div>
       </section>
@@ -407,8 +462,40 @@ function ViewAnexo02({
             <span style={styles.label}>Fecha de entrega</span>
             <span style={styles.value}>{fechaEntrega}</span>
           </div>
+
+          <div style={styles.field}>
+            <span style={styles.label}>Estado tramite</span>
+            <span style={styles.value}>{estadoAnexo}</span>
+          </div>
+
+          <div style={styles.field}>
+            <span style={styles.label}>Conformidad postulante</span>
+            <span style={styles.value}>{confPostulante}</span>
+          </div>
         </div>
       </section>
+
+      {(tipoSolicitud || convivientes.length > 0) && (
+        <section style={styles.section}>
+          <h5 style={styles.sectionTitle}>Referencia ANEXO 01</h5>
+
+          <div style={styles.infoGrid}>
+            {tipoSolicitud && (
+              <div style={styles.field}>
+                <span style={styles.label}>Solicitud / motivo</span>
+                <span style={styles.value}>{tipoSolicitud}</span>
+              </div>
+            )}
+
+            <div style={styles.field}>
+              <span style={styles.label}>Grupo conviviente declarado</span>
+              <span style={styles.value}>
+                {convivientes.length > 0 ? `${convivientes.length} conviviente(s)` : "â€”"}
+              </span>
+            </div>
+          </div>
+        </section>
+      )}
 
       {d?.observaciones && (
         <section style={styles.section}>

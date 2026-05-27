@@ -128,6 +128,7 @@ export default function GestionarAnexo() {
       const a = (res.data?.anexo || res.data?.formulario || null) as Anexo | null;
       setAnexo(a);
       setOrigen((res.data?.origen || null) as Anexo | null);
+      if (res.data?.origen?.datos) setAnexo01Datos(res.data.origen.datos);
 
       const datosLocal = a?.datos || {};
       if (datosLocal?.observacionesAdminGeneral) {
@@ -592,7 +593,7 @@ export default function GestionarAnexo() {
     <AnexoViewer
       codigo={anexo.codigo}
       datos={datos}
-      anexo01Datos={anexo01Datos}
+      anexo01Datos={anexo01Datos || origen?.datos}
       vivienda={undefined}
     />
   )}
