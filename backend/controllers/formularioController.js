@@ -1046,6 +1046,99 @@ async function buildHistorialIntervenciones(anexoId) {
   }
 }
 
+async function buildHistorialIntervencionesAnexo02(anexo, baseHistorial = []) {
+  try {
+    if (!anexo) return Array.isArray(baseHistorial) ? baseHistorial : [];
+
+    const d = anexo.datos && typeof anexo.datos === "object" ? anexo.datos : {};
+    const out = Array.isArray(baseHistorial) ? [...baseHistorial] : [];
+    const push = (item) => {
+      if (!item || !item.fecha) return;
+      out.push(item);
+    };
+
+    push({
+      fecha: anexo.createdAt,
+      usuarioId: anexo.usuario || d.postulanteId || null,
+      rol: "CREADOR",
+      accion: "Creación de ANEXO_02",
+    });
+
+    const confPostulante = anexo.conformidadPostulante || d.conformidadPostulante;
+    if (confPostulante?.fecha) {
+      push({
+        fecha: confPostulante.fecha,
+        usuarioId: confPostulante.usuario || d.postulanteId || anexo.usuario || null,
+        rol: "POSTULANTE",
+        accion: "Conformidad del postulante",
+      });
+    }
+
+    if (d.conformidadAdminGeneral?.fecha) {
+      push({
+        fecha: d.conformidadAdminGeneral.fecha,
+        usuarioId: d.conformidadAdminGeneral.usuario || null,
+        rol: "ADMIN_GENERAL",
+        accion: "Intervención ADMIN_GENERAL",
+        detalle: d.conformidadAdminGeneral.observacion || null,
+      });
+    }
+
+    if (Array.isArray(anexo.historialEstados)) {
+      anexo.historialEstados.forEach((h) => {
+        push({
+          fecha: h?.fecha,
+          usuarioId: h?.realizadoPor || null,
+          rol: "SISTEMA",
+          accion:
+            h?.observacion ||
+            `Cambio de estado: ${String(h?.estadoAnterior || "")} -> ${String(
+              h?.estadoNuevo || ""
+            )}`,
+        });
+      });
+    }
+
+    const ids = [
+      ...new Set(out.map((x) => (x.usuarioId ? String(x.usuarioId) : "")).filter(Boolean)),
+    ];
+
+    const usersMap = {};
+    if (ids.length && User) {
+      const users = await User.find({ _id: { $in: ids } })
+        .select("nombre apellido email role")
+        .lean();
+
+      users.forEach((u) => {
+        usersMap[String(u._id)] =
+          `${String(u.apellido || "").trim()} ${String(u.nombre || "").trim()}`.trim() ||
+          String(u.email || "").trim() ||
+          "Usuario";
+      });
+    }
+
+    const seen = new Set();
+    return out
+      .map((x) => ({
+        fecha: x.fecha,
+        nombre: x.usuarioId ? usersMap[String(x.usuarioId)] || x.nombre || "Usuario" : x.nombre || "Sistema",
+        rol: x.rol || null,
+        accion: x.accion || null,
+        detalle: x.detalle || null,
+      }))
+      .filter((x) => {
+        const key = `${new Date(x.fecha).getTime()}|${x.rol || ""}|${x.accion || ""}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
+  } catch (e) {
+    console.error("[PDF] Error buildHistorialIntervencionesAnexo02:", e);
+    return Array.isArray(baseHistorial) ? baseHistorial : [];
+  }
+}
+
 /**
  * Pinta al pie del PDF el historial de intervenciones
  * (nombre + rol + fecha/hora + acción).
@@ -1944,6 +2037,8 @@ function renderAnexo02Pdf(
 
   doc.moveDown(1.0);
   doc.font("Helvetica").fontSize(9).text("A-5", { align: "right" });
+
+  drawHistorialIntervenciones(doc, historial);
 }
 
 // ─────────────────────────────
@@ -4041,6 +4136,9 @@ async function descargarPdf(req, res) {
     } catch (e2) {
       console.error("[PDF] Error cargando historial:", e2);
       historial = [];
+    }
+    if (codigoUp === "ANEXO_02") {
+      historial = await buildHistorialIntervencionesAnexo02(anexo, historial);
     }
 
     // ─────────────────────────────

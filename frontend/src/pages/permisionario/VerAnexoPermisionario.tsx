@@ -1100,6 +1100,138 @@ if (codigo === "ANEXO_07") {
     );
   }
 
+  // ANEXO_02 usa el visor institucional genérico hidratado.
+  if (codigo === "ANEXO_02") {
+    const viviendaLabel =
+      d.viviendaLabel || d.viviendaCodigo || d.casa || d.unidadHabitacional || "—";
+    const permisionarioNombre =
+      d.apellidoNombres || d.permisionarioNombre || d.postulanteNombre || "—";
+
+    return (
+      <div style={pageStyle}>
+        <div style={shellStyle}>
+          <div style={heroStyle}>
+            <div style={{ marginBottom: 14 }}>
+              <button
+                onClick={() => navigate("/app/permisionario/anexos")}
+                style={secondaryButtonStyle}
+                disabled={busy}
+              >
+                Volver
+              </button>
+            </div>
+
+            <h2 style={titleStyle}>ANEXO 02 — Acta de asignación de vivienda fiscal</h2>
+
+            <p style={{ ...subtitleStyle, maxWidth: 860 }}>
+              Vista de solo lectura del acto de asignación asociado a la vivienda fiscal.
+            </p>
+          </div>
+
+          {errorMsg && (
+            <div
+              style={{
+                marginBottom: 14,
+                padding: 12,
+                borderRadius: 12,
+                border: "1px solid rgba(244,67,54,0.6)",
+                background: "rgba(244,67,54,0.12)",
+                color: "#ffe5e5",
+              }}
+            >
+              {errorMsg}
+            </div>
+          )}
+
+          {infoMsg && !errorMsg && (
+            <div
+              style={{
+                marginBottom: 14,
+                padding: 12,
+                borderRadius: 12,
+                border: "1px solid rgba(76,175,80,0.55)",
+                background: "rgba(76,175,80,0.12)",
+                color: "#e8ffe8",
+              }}
+            >
+              {infoMsg}
+            </div>
+          )}
+
+          <div style={{ display: "grid", gap: 16 }}>
+            <section style={cardStyle}>
+              <h3 style={{ ...sectionTitleStyle, marginTop: 0 }}>Resumen del trámite</h3>
+
+              <div style={infoGridStyle}>
+                <div style={softCardStyle}>
+                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.62)", marginBottom: 6 }}>
+                    Estado
+                  </div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: "#ffffff" }}>
+                    {estado}
+                    {anexo.estadoInstitucional ? ` / ${anexo.estadoInstitucional}` : ""}
+                  </div>
+                </div>
+
+                <div style={softCardStyle}>
+                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.62)", marginBottom: 6 }}>
+                    Fecha de inicio
+                  </div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: "#ffffff" }}>
+                    {fechaInicio}
+                  </div>
+                </div>
+
+                <div style={softCardStyle}>
+                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.62)", marginBottom: 6 }}>
+                    Permisionario
+                  </div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: "#ffffff" }}>
+                    {permisionarioNombre}
+                  </div>
+                </div>
+
+                <div style={softCardStyle}>
+                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.62)", marginBottom: 6 }}>
+                    Vivienda asignada
+                  </div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: "#ffffff" }}>
+                    {viviendaLabel}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section style={cardStyle}>
+              <h3 style={{ ...sectionTitleStyle, marginTop: 0 }}>Detalle del anexo</h3>
+
+              <div
+                style={{
+                  background: "rgba(255,255,255,0.04)",
+                  border: "1px solid rgba(255,255,255,0.10)",
+                  borderRadius: 14,
+                  padding: 16,
+                }}
+              >
+                <AnexoViewer codigo={anexo.codigo} datos={d} anexo01Datos={origen?.datos} />
+              </div>
+            </section>
+
+            <div style={buttonRowStyle}>
+              <button onClick={cargar} disabled={busy} style={primaryButtonStyle}>
+                Recargar
+              </button>
+
+              <button onClick={descargarPdfAnexo} disabled={busy} style={secondaryButtonStyle}>
+                Descargar PDF
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Si NO es ANEXO_11, esta pantalla NO lo debe renderizar como ANEXO_11
   if (codigo !== "ANEXO_11") {
     return (
