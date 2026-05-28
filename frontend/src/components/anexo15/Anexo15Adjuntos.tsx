@@ -56,9 +56,9 @@ export default function Anexo15Adjuntos({
             ["pdf", "PDF"],
             ["imagenes", "Imagenes"],
           ].map(([campo, label]) => (
-            <label key={campo} style={softCardStyle}>
+            <label key={campo} style={{ ...softCardStyle, cursor: busyCampo ? "wait" : "pointer" }}>
               <span style={{ display: "block", marginBottom: 8, fontWeight: 800 }}>{label}</span>
-              <span style={{ ...secondaryButtonStyle, display: "inline-flex", marginBottom: 8 }}>
+              <span style={{ ...secondaryButtonStyle, display: "inline-flex", marginBottom: 8, pointerEvents: "none" }}>
                 {busyCampo === campo ? "Adjuntando..." : "Adjuntar archivo"}
               </span>
               <input
@@ -70,7 +70,7 @@ export default function Anexo15Adjuntos({
                   event.target.value = "";
                   onPick(campo, file);
                 }}
-                style={{ display: "block", maxWidth: "100%" }}
+                style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
               />
             </label>
           ))}

@@ -37,6 +37,10 @@ function downloadBlob(blob: Blob, filename: string) {
   window.URL.revokeObjectURL(url);
 }
 
+function isEstadoEditable(estado?: string) {
+  return ["BORRADOR", "DEVUELTO_A_SOLICITANTE"].includes(String(estado || "").toUpperCase().trim());
+}
+
 export default function Anexo15SolicitanteDetalle({ listPath }: { listPath: string }) {
   const { token } = useParams();
   const navigate = useNavigate();
@@ -45,7 +49,7 @@ export default function Anexo15SolicitanteDetalle({ listPath }: { listPath: stri
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const editable = Boolean(doc?.canEditar);
+  const editable = Boolean(doc?.canEditar || isEstadoEditable(doc?.estado));
 
   async function cargar() {
     if (!token) return;
