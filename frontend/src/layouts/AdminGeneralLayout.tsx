@@ -174,6 +174,9 @@ export default function AdminGeneralLayout() {
             <NavLink to="mantenimientos" style={linkStyle}>
               Mantenimientos
             </NavLink>
+            <NavLink to="anexo-15" style={linkStyle}>
+              ANEXO_15
+            </NavLink>
             <NavLink to="mensajeria" style={linkStyle}>
               Mensajería
             </NavLink>

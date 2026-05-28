@@ -1,0 +1,43 @@
+const ANEXO15_ESTADOS = Object.freeze([
+  "BORRADOR",
+  "ENVIADO",
+  "DEVUELTO_A_SOLICITANTE",
+  "APROBADO_INSPECTOR",
+  "DEVUELTO_A_INSPECTOR",
+  "APROBADO_ADMIN_GENERAL",
+  "FINALIZADO",
+  "ANULADO",
+  "RECHAZADO",
+]);
+
+const ANEXO15_ROLES = Object.freeze([
+  "PERMISIONARIO",
+  "ALOJADO",
+  "INSPECTOR",
+  "ADMIN_GENERAL",
+]);
+
+const ANEXO15_TRANSICIONES = Object.freeze({
+  BORRADOR: Object.freeze(["ENVIADO", "ANULADO"]),
+  DEVUELTO_A_SOLICITANTE: Object.freeze(["ENVIADO", "ANULADO"]),
+  ENVIADO: Object.freeze(["DEVUELTO_A_SOLICITANTE", "APROBADO_INSPECTOR", "RECHAZADO"]),
+  APROBADO_INSPECTOR: Object.freeze(["DEVUELTO_A_INSPECTOR", "APROBADO_ADMIN_GENERAL", "RECHAZADO"]),
+  DEVUELTO_A_INSPECTOR: Object.freeze(["APROBADO_INSPECTOR", "RECHAZADO"]),
+  APROBADO_ADMIN_GENERAL: Object.freeze(["FINALIZADO"]),
+  FINALIZADO: Object.freeze([]),
+  ANULADO: Object.freeze([]),
+  RECHAZADO: Object.freeze([]),
+});
+
+const ANEXO15_ADJUNTO_MIMES = Object.freeze([
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+]);
+
+module.exports = {
+  ANEXO15_ESTADOS,
+  ANEXO15_ROLES,
+  ANEXO15_TRANSICIONES,
+  ANEXO15_ADJUNTO_MIMES,
+};

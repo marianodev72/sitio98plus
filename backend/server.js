@@ -209,6 +209,7 @@ const alojamientosMiRoutes = safeRequire(
   "alojamientosMiRoutes",
   "./modules/alojamientos/routes/alojamientosMiRoutes"
 );
+const anexo15Routes = safeRequire("anexo15Routes", "./routes/anexo15Routes");
 
 // -------------------------
 // Health
@@ -244,6 +245,7 @@ app.use("/api/alojamientos-asignaciones", alojamientosAsignacionesRoutes);
 app.use("/api/alojamientos-documentos", alojamientosDocumentosRoutes);
 app.use("/api/alojamientos-plazas", alojamientosPlazasRoutes);
 app.use("/api/alojamientos-mi", alojamientosMiRoutes);
+app.use("/api/anexo-15", anexo15Routes);
 
 // -------------------------
 app.use("/uploads", (_req, res) => res.status(404).end());

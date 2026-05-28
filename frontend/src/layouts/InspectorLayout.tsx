@@ -197,6 +197,12 @@ export default function InspectorLayout(props: InspectorLayoutProps) {
                   </NavLink>
                 ) : null}
 
+                {esInspector ? (
+                  <NavLink to={link("anexo-15")} style={navItemStyle}>
+                    ANEXO_15
+                  </NavLink>
+                ) : null}
+
                 {esJefe ? (
                   <NavLink to={link("usuarios")} style={navItemStyle}>
                     Usuarios

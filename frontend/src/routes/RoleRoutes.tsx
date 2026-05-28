@@ -69,6 +69,10 @@ import NuevoMantenimiento from "../pages/permisionario/NuevoMantenimiento";
 import CrearAnexo04Permisionario from "../pages/permisionario/CrearAnexo04Permisionario";
 import VerAnexoPermisionario from "../pages/permisionario/VerAnexoPermisionario";
 import MiBarrio from "../pages/permisionario/MiBarrio";
+import Anexo15SolicitanteListado from "../pages/anexo15/Anexo15SolicitanteListado";
+import Anexo15SolicitanteDetalle from "../pages/anexo15/Anexo15SolicitanteDetalle";
+import Anexo15InspectorPage from "../pages/anexo15/Anexo15InspectorPage";
+import Anexo15AdminGeneralPage from "../pages/anexo15/Anexo15AdminGeneralPage";
 
 /* INSPECTOR (subpanel Mi Barrio) */
 import InspectorDashboard from "../pages/permisionario/inspector/InspectorDashboard";
@@ -216,6 +220,8 @@ export default function RoleRoutes() {
           <Route index element={<AlojadoDashboard />} />
           <Route path="anexos" element={<MisAnexosAlojado />} />
           <Route path="anexos/:token" element={<AlojamientoDocumentoReadonlyAlojado />} />
+          <Route path="anexo-15" element={<Anexo15SolicitanteListado basePath="/app/alojado/anexo-15" />} />
+          <Route path="anexo-15/:token" element={<Anexo15SolicitanteDetalle listPath="/app/alojado/anexo-15" />} />
           <Route path="ocupaciones" element={<HistorialOcupacionAlojado />} />
           <Route path="datos" element={<DatosDeclaradosAlojado />} />
           <Route path="datos/actualizar" element={<ActualizarDatosDeclaradosAlojado />} />
@@ -235,6 +241,8 @@ export default function RoleRoutes() {
 
           <Route path="anexos" element={<MisAnexosPermisionario />} />
           <Route path="anexos/:id" element={<VerAnexoPermisionario />} />
+          <Route path="anexo-15" element={<Anexo15SolicitanteListado basePath="/app/permisionario/anexo-15" />} />
+          <Route path="anexo-15/:token" element={<Anexo15SolicitanteDetalle listPath="/app/permisionario/anexo-15" />} />
           <Route
             path="anexo-01-cambio-vivienda"
             element={
@@ -333,6 +341,7 @@ export default function RoleRoutes() {
             />
             <Route path="gestiones/:id" element={<GestionarAnexoInspector />} />
             <Route path="mantenimientos" element={<MantenimientosInspector />} />
+            <Route path="anexo-15" element={<Anexo15InspectorPage />} />
             {/* /usuarios NO se monta */}
             <Route path="*" element={<GenericUnavailable />} />
           </Route>
@@ -368,6 +377,7 @@ export default function RoleRoutes() {
           <Route path="liquidaciones" element={<LiquidacionesAdminGeneral />} />
           <Route path="servicios" element={<ServiciosAdminGeneral />} />
           <Route path="mantenimientos" element={<MantenimientosAdminGeneral />} />
+          <Route path="anexo-15" element={<Anexo15AdminGeneralPage />} />
           <Route path="auditoria" element={<AuditoriaInstitucionalPage />} />
           <Route path="bases-maestras" element={<BasesMaestras />} />
           <Route path="liquidaciones-consulta" element={<LiquidacionesAdminConsulta />} />
