@@ -27,6 +27,25 @@ function safe(value: unknown) {
   return text || "-";
 }
 
+function canDevolver(estado?: string) {
+  return String(estado || "").toUpperCase().trim() === "ENVIADO";
+}
+
+function canAprobar(estado?: string) {
+  return ["ENVIADO", "DEVUELTO_A_INSPECTOR"].includes(String(estado || "").toUpperCase().trim());
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
 export default function Anexo15InspectorPage() {
   const [docs, setDocs] = useState<Anexo15Documento[]>([]);
   const [selected, setSelected] = useState<Anexo15Documento | null>(null);
@@ -82,14 +101,20 @@ export default function Anexo15InspectorPage() {
     window.open(URL.createObjectURL(new Blob([res.data], { type: "application/pdf" })), "_blank", "noopener,noreferrer");
   }
 
+  async function descargarPdf() {
+    if (!selected) return;
+    const res = await descargarPdfAnexo15(selected.token, false);
+    downloadBlob(new Blob([res.data], { type: "application/pdf" }), "ANEXO_15.pdf");
+  }
+
   useEffect(() => {
     cargar();
   }, []);
 
   return (
     <section style={cardStyle}>
-      <h1 style={titleStyle}>ANEXO_15</h1>
-      <p style={subtitleStyle}>Bandeja territorial de solicitudes de reintegro.</p>
+      <h1 style={titleStyle}>Reintegros</h1>
+      <p style={subtitleStyle}>Bandeja territorial de gestion de reintegros.</p>
       {error ? <div style={{ ...softCardStyle, marginTop: 12, color: "#fecaca" }}>{error}</div> : null}
 
       <section style={{ ...softCardStyle, marginTop: 12 }}>
@@ -115,6 +140,7 @@ export default function Anexo15InspectorPage() {
             <Anexo15Readonly documento={selected} />
             <div style={buttonRowStyle}>
               <button type="button" style={secondaryButtonStyle} onClick={previewPdf}>Vista previa PDF</button>
+              <button type="button" style={secondaryButtonStyle} onClick={descargarPdf}>Descargar PDF</button>
             </div>
           </section>
           <section style={{ ...softCardStyle, marginTop: 12 }}>
@@ -130,8 +156,12 @@ export default function Anexo15InspectorPage() {
               style={{ width: "100%", boxSizing: "border-box", borderRadius: 8, padding: 10, background: "rgba(255,255,255,0.05)", color: "#fff", border: "1px solid rgba(255,255,255,0.16)" }}
             />
             <div style={buttonRowStyle}>
-              <button type="button" style={secondaryButtonStyle} onClick={devolver} disabled={busy}>Devolver a solicitante</button>
-              <button type="button" style={primaryButtonStyle} onClick={aprobar} disabled={busy}>Aprobar</button>
+              {canDevolver(selected.estado) ? (
+                <button type="button" style={secondaryButtonStyle} onClick={devolver} disabled={busy}>Devolver a solicitante</button>
+              ) : null}
+              {canAprobar(selected.estado) ? (
+                <button type="button" style={primaryButtonStyle} onClick={aprobar} disabled={busy}>Aprobar</button>
+              ) : null}
             </div>
           </section>
           <section style={{ ...softCardStyle, marginTop: 12 }}>

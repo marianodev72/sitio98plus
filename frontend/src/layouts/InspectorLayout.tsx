@@ -199,7 +199,7 @@ export default function InspectorLayout(props: InspectorLayoutProps) {
 
                 {esInspector ? (
                   <NavLink to={link("anexo-15")} style={navItemStyle}>
-                    ANEXO_15
+                    Reintegros
                   </NavLink>
                 ) : null}
 

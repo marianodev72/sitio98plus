@@ -473,10 +473,10 @@ return (
           >
             <div>
               <h3 style={{ ...sectionTitleStyle, margin: 0 }}>
-                ANEXO 15 - Solicitud de reintegro
+                Reintegros
               </h3>
               <p style={{ ...noteStyle, marginTop: 10, marginBottom: 0 }}>
-                Inicia una solicitud de reintegro con comprobantes y documentacion respaldatoria.
+                Gestiona solicitudes de reintegro con comprobantes y documentacion respaldatoria.
               </p>
             </div>
 
@@ -485,7 +485,7 @@ return (
               onClick={() => navigate("/app/permisionario/anexo-15")}
               style={successButtonStyle}
             >
-              Crear ANEXO 15
+              Abrir reintegros
             </button>
           </div>
         </section>

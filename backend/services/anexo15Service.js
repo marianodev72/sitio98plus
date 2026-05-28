@@ -311,7 +311,6 @@ async function listarInspector({ user }) {
 async function listarAdmin({ user }) {
   if (!isAdminGeneral(user)) return deny();
   const docs = await Anexo15Reintegro.find({
-    estado: { $in: ["APROBADO_INSPECTOR", "APROBADO_ADMIN_GENERAL", "FINALIZADO", "RECHAZADO"] },
     activo: { $ne: false },
   }).sort({ updatedAt: -1 }).limit(300);
   return { ok: true, status: 200, documentos: docs.map(toPublic) };
@@ -446,10 +445,7 @@ async function adminAprobar({ token, user, payload }) {
   if (!doc) return deny();
   const observacion = trimText(payload?.observacion || payload?.datos?.observacion || "", 1600);
   const dbUser = await User.findById(user._id).select("nombre apellido role").lean();
-  if (!changeState(doc, "APROBADO_ADMIN_GENERAL", dbUser, observacion || "Aprobacion ADMIN_GENERAL.", "ADMIN_GENERAL")) {
-    return deny(409, "TRANSICION_INVALIDA");
-  }
-  if (!changeState(doc, "FINALIZADO", dbUser, "Finalizacion de ANEXO_15.", "ADMIN_GENERAL")) {
+  if (!changeState(doc, "FINALIZADO", dbUser, observacion || "Finalizacion de ANEXO_15.", "ADMIN_GENERAL")) {
     return deny(409, "TRANSICION_INVALIDA");
   }
   pushInterviniente(doc, dbUser, "ADMIN_GENERAL");

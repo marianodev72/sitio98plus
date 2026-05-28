@@ -133,8 +133,8 @@ export default function Anexo15SolicitanteDetalle({ listPath }: { listPath: stri
             {doc?.canPdf ? <button type="button" style={secondaryButtonStyle} onClick={() => pdf(true)}>Vista previa PDF</button> : null}
             {doc?.canPdf ? <button type="button" style={secondaryButtonStyle} onClick={() => pdf(false)}>Descargar PDF</button> : null}
           </div>
-          <h1 style={titleStyle}>ANEXO_15</h1>
-          <p style={subtitleStyle}>Solicitud de reintegro.</p>
+          <h1 style={titleStyle}>Reintegros</h1>
+          <p style={subtitleStyle}>Detalle de solicitud de reintegro.</p>
           {doc ? <span style={badgeStyle}>{doc.estado}</span> : null}
         </section>
 

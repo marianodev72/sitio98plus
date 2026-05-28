@@ -69,14 +69,14 @@ export default function Anexo15SolicitanteListado({ basePath }: { basePath: stri
     <div style={pageStyle}>
       <div style={shellStyle}>
         <section style={cardStyle}>
-          <h1 style={titleStyle}>ANEXO_15</h1>
-          <p style={subtitleStyle}>Solicitud de reintegro.</p>
+          <h1 style={titleStyle}>Reintegros</h1>
+          <p style={subtitleStyle}>Gestion de solicitudes de reintegro.</p>
         </section>
 
         {error ? <section style={{ ...cardStyle, marginTop: 12, color: "#fecaca" }}>{error}</section> : null}
 
         <section style={{ ...cardStyle, marginTop: 12 }}>
-          <h2 style={sectionTitleStyle}>Nueva solicitud</h2>
+          <h2 style={sectionTitleStyle}>Nueva solicitud de reintegro</h2>
           <Anexo15Form value={form} onChange={setForm} readOnly={busy} />
           <div style={buttonRowStyle}>
             <button type="button" style={primaryButtonStyle} onClick={crear} disabled={busy}>

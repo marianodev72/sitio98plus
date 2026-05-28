@@ -37,6 +37,10 @@ function downloadBlob(blob: Blob, filename: string) {
   window.URL.revokeObjectURL(url);
 }
 
+function canResolver(estado?: string) {
+  return String(estado || "").toUpperCase().trim() === "APROBADO_INSPECTOR";
+}
+
 export default function Anexo15AdminGeneralPage() {
   const [docs, setDocs] = useState<Anexo15Documento[]>([]);
   const [selected, setSelected] = useState<Anexo15Documento | null>(null);
@@ -100,8 +104,8 @@ export default function Anexo15AdminGeneralPage() {
 
   return (
     <section>
-      <h1 style={titleStyle}>ANEXO_15</h1>
-      <p style={subtitleStyle}>Solicitudes de reintegro para revision ADMIN_GENERAL.</p>
+      <h1 style={titleStyle}>Reintegros</h1>
+      <p style={subtitleStyle}>Gestion global de solicitudes de reintegro.</p>
       {error ? <div style={{ ...softCardStyle, marginTop: 12, color: "#fecaca" }}>{error}</div> : null}
 
       <section style={{ ...softCardStyle, marginTop: 12 }}>
@@ -143,8 +147,12 @@ export default function Anexo15AdminGeneralPage() {
               style={{ width: "100%", boxSizing: "border-box", borderRadius: 8, padding: 10, background: "rgba(255,255,255,0.05)", color: "#fff", border: "1px solid rgba(255,255,255,0.16)" }}
             />
             <div style={buttonRowStyle}>
-              <button type="button" style={secondaryButtonStyle} onClick={devolver} disabled={busy}>Devolver a inspector</button>
-              <button type="button" style={primaryButtonStyle} onClick={aprobar} disabled={busy}>Aprobar y finalizar</button>
+              {canResolver(selected.estado) ? (
+                <button type="button" style={secondaryButtonStyle} onClick={devolver} disabled={busy}>Devolver a inspector</button>
+              ) : null}
+              {canResolver(selected.estado) ? (
+                <button type="button" style={primaryButtonStyle} onClick={aprobar} disabled={busy}>Aprobar y finalizar</button>
+              ) : null}
             </div>
           </section>
           <section style={{ ...softCardStyle, marginTop: 12 }}>
