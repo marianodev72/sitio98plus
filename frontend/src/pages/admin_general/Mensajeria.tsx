@@ -63,6 +63,14 @@ type MensajeriaProps = {
   contexto?: "PERMISIONARIO" | "ALOJADO" | "INSPECTOR_ALOJAMIENTOS";
 };
 
+const MAX_ADJUNTOS = 10;
+const MAX_ADJUNTO_BYTES = 10 * 1024 * 1024;
+const ADJUNTO_MIME_PERMITIDOS = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+]);
+
 function safe(v: unknown) {
   return v === null || v === undefined || v === "" ? "-" : String(v);
 }
@@ -682,9 +690,22 @@ export default function Mensajeria(props: MensajeriaProps = {}) {
     return "-";
   }
 
-  function archivosPermitidos(files: File[]) {
-    const allowed = ["application/pdf", "image/jpeg", "image/png"];
-    return files.filter((f) => allowed.includes(f.type));
+  function validarAdjuntos(files: File[]) {
+    if (files.length > MAX_ADJUNTOS) {
+      return { ok: false, message: "Puede adjuntar hasta 10 archivos.", files: [] as File[] };
+    }
+
+    const invalido = files.find((f) => !ADJUNTO_MIME_PERMITIDOS.has(f.type));
+    if (invalido) {
+      return { ok: false, message: "Solo se permiten adjuntos PDF, JPG o PNG.", files: [] as File[] };
+    }
+
+    const pesado = files.find((f) => f.size > MAX_ADJUNTO_BYTES);
+    if (pesado) {
+      return { ok: false, message: "Cada adjunto debe pesar 10 MB o menos.", files: [] as File[] };
+    }
+
+    return { ok: true, message: "", files };
   }
 
   async function enviarMensaje() {
@@ -695,15 +716,27 @@ export default function Mensajeria(props: MensajeriaProps = {}) {
       return;
     }
 
+    const cuerpoTrim = cuerpo.trim();
+    if (!cuerpoTrim) {
+      setErrorMsg("El cuerpo del mensaje es obligatorio.");
+      return;
+    }
+
+    const adjuntosValidados = validarAdjuntos(files);
+    if (!adjuntosValidados.ok) {
+      setErrorMsg(adjuntosValidados.message);
+      return;
+    }
+
     setLoading(true);
     try {
-      const adj = archivosPermitidos(files);
+      const adj = adjuntosValidados.files;
 
       if (adj.length > 0) {
         const fd = new FormData();
         paraIds.forEach((id) => fd.append("para", id));
         fd.append("asunto", asunto || "");
-        fd.append("cuerpo", cuerpo || "");
+        fd.append("cuerpo", cuerpoTrim);
         if (replyToId) fd.append("replyTo", replyToId);
         adj.forEach((f) => fd.append("adjuntos", f));
 
@@ -714,7 +747,7 @@ export default function Mensajeria(props: MensajeriaProps = {}) {
         await http.post("/mensajes", {
           para: paraIds,
           asunto: asunto || "",
-          cuerpo: cuerpo || "",
+          cuerpo: cuerpoTrim,
           replyTo: replyToId,
           adjuntos: [],
         });
@@ -725,7 +758,14 @@ export default function Mensajeria(props: MensajeriaProps = {}) {
       setTab("enviados");
     } catch (err) {
       console.error("[Mensajeria] Error enviando", err);
-      setErrorMsg("La operación solicitada no está disponible. Por favor, contacte al administrador.");
+      const backendMessage =
+        typeof (err as any)?.response?.data?.message === "string"
+          ? String((err as any).response.data.message).trim()
+          : "";
+      setErrorMsg(
+        backendMessage ||
+          "La operación solicitada no está disponible. Por favor, contacte al administrador."
+      );
     } finally {
       setLoading(false);
     }

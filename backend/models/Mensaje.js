@@ -22,10 +22,14 @@ function escapeHTML(input) {
  */
 const MensajeAdjuntoSchema = new Schema(
   {
-    fileId: { type: Schema.Types.ObjectId, required: true },
+    fileId: { type: String, required: true, trim: true },
+    filename: { type: String, default: "", trim: true },
+    originalName: { type: String, default: "", trim: true },
+    mimeType: { type: String, default: "", trim: true },
     nombre: { type: String, default: "" },
     mimetype: { type: String, default: "" },
     size: { type: Number, default: 0 },
+    storageKey: { type: String, default: "", trim: true },
 
     // Path relativo controlado (ya validado en controller al descargar)
     path: { type: String, default: "" },

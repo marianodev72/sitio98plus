@@ -2,8 +2,11 @@
 const Mensaje = require("../models/Mensaje");
 const { User } = require("../models/user");
 const mongoose = require("mongoose");
+const fs = require("fs");
+const path = require("path");
 const AsignacionAlojamiento = require("../modules/alojamientos/models/AsignacionAlojamiento");
 const Vivienda = require("../models/vivienda");
+const { UPLOAD_ROOT: MENSAJES_UPLOAD_ROOT } = require("../middleware/uploadMensajes");
 
 function up(v) {
   return String(v || "").toUpperCase().trim();
@@ -19,6 +22,118 @@ function uniqStrings(list) {
   return Array.from(
     new Set(asArray(list).map((x) => String(x || "").trim()).filter(Boolean))
   );
+}
+
+function safeOriginalName(value) {
+  return path.basename(String(value || "").trim()).slice(0, 180);
+}
+
+function normalizeJsonAdjuntos(value) {
+  return asArray(value)
+    .filter((item) => item && typeof item === "object")
+    .map((item) => {
+      const fileId = String(item.fileId || item.filename || item.storageKey || "").trim();
+      if (!fileId) return null;
+
+      const filename = String(item.filename || fileId).trim();
+      const originalName = safeOriginalName(item.originalName || item.nombre || item.name || filename);
+      const mimeType = String(item.mimeType || item.mimetype || "").trim();
+      const storageKey = String(item.storageKey || item.path || "").trim();
+
+      return {
+        fileId,
+        filename,
+        originalName,
+        nombre: originalName,
+        mimeType,
+        mimetype: mimeType,
+        size: Number(item.size || 0) || 0,
+        storageKey,
+        path: storageKey,
+      };
+    })
+    .filter(Boolean);
+}
+
+function normalizeUploadedAdjuntos(files) {
+  return (Array.isArray(files) ? files : []).map((f) => {
+    const filename = String(f.filename || "").trim();
+    const originalName = safeOriginalName(f.originalname || filename);
+    const mimeType = String(f.mimetype || "").trim();
+    const storageKey = filename ? `mensajes/${filename}` : "";
+
+    return {
+      fileId: filename,
+      filename,
+      originalName,
+      nombre: originalName,
+      mimeType,
+      mimetype: mimeType,
+      size: Number(f.size || 0) || 0,
+      storageKey,
+      path: storageKey,
+    };
+  }).filter((a) => a.fileId);
+}
+
+function safeDownloadName(value) {
+  const base = safeOriginalName(value || "adjunto");
+  return base.replace(/[\r\n"]/g, "").trim() || "adjunto";
+}
+
+function usuarioPuedeVerMensaje(user, mensaje) {
+  const myId = String(user?._id || user?.id || "").trim();
+  if (!myId || !mensaje) return false;
+
+  const role = up(user?.role);
+  if (role === "ADMIN_GENERAL" || role === "ADMIN") return true;
+
+  const remitenteId = String(mensaje.remitente || "");
+  const destinatarios = Array.isArray(mensaje.destinatarios)
+    ? mensaje.destinatarios.map(String)
+    : [];
+  const para = Array.isArray(mensaje.para) ? mensaje.para.map(String) : [];
+
+  return remitenteId === myId || destinatarios.includes(myId) || para.includes(myId);
+}
+
+function adjuntoMatchesFileId(adjunto, fileId) {
+  const expected = String(fileId || "").trim();
+  if (!expected || !adjunto) return false;
+
+  return [
+    adjunto.fileId,
+    adjunto.filename,
+    adjunto.storageKey,
+    adjunto.path,
+  ]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .some((value) => value === expected || path.basename(value) === expected);
+}
+
+function filenameFromAdjunto(adjunto) {
+  const raw =
+    adjunto?.filename ||
+    adjunto?.storageKey ||
+    adjunto?.path ||
+    adjunto?.fileId ||
+    "";
+  const filename = path.basename(String(raw || "").trim());
+  if (!filename || filename === "." || filename === "..") return "";
+  return filename;
+}
+
+function resolveMensajeAdjuntoPath(adjunto) {
+  const filename = filenameFromAdjunto(adjunto);
+  if (!filename) return "";
+
+  const root = path.resolve(MENSAJES_UPLOAD_ROOT);
+  const fullPath = path.resolve(root, filename);
+  const insideRoot = fullPath === root || fullPath.startsWith(`${root}${path.sep}`);
+  if (!insideRoot) return "";
+
+  return fullPath;
 }
 
 function permisosList(user) {
@@ -483,6 +598,61 @@ async function marcarLeido(req, res) {
 }
 
 // ==========================
+// DESCARGAR ADJUNTO
+// ==========================
+async function descargarAdjunto(req, res) {
+  try {
+    const id = String(req.params?.id || "").trim();
+    const fileId = String(req.params?.fileId || "").trim();
+
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(404).json({ message: "Adjunto no encontrado" });
+    }
+    if (!fileId || fileId.includes("/") || fileId.includes("\\") || path.isAbsolute(fileId)) {
+      return res.status(404).json({ message: "Adjunto no encontrado" });
+    }
+
+    const mensaje = await Mensaje.findById(id).lean();
+    if (!mensaje) return res.status(404).json({ message: "Mensaje no encontrado" });
+
+    if (!usuarioPuedeVerMensaje(req.user, mensaje)) {
+      return res.status(403).json({ message: "No autorizado" });
+    }
+
+    const adjuntos = Array.isArray(mensaje.adjuntos) ? mensaje.adjuntos : [];
+    const adjunto = adjuntos.find((item) => adjuntoMatchesFileId(item, fileId));
+    if (!adjunto) return res.status(404).json({ message: "Adjunto no encontrado" });
+
+    const fullPath = resolveMensajeAdjuntoPath(adjunto);
+    if (!fullPath) return res.status(404).json({ message: "Adjunto no encontrado" });
+
+    let stat;
+    try {
+      stat = fs.statSync(fullPath);
+    } catch (_) {
+      return res.status(404).json({ message: "Adjunto no encontrado" });
+    }
+    if (!stat.isFile()) return res.status(404).json({ message: "Adjunto no encontrado" });
+
+    const mimeType = String(adjunto.mimeType || adjunto.mimetype || "application/octet-stream").trim();
+    const downloadName = safeDownloadName(adjunto.originalName || adjunto.nombre || adjunto.filename || fileId);
+
+    res.setHeader("Content-Type", mimeType || "application/octet-stream");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Cache-Control", "no-store");
+
+    return res.download(fullPath, downloadName, (err) => {
+      if (!err || res.headersSent) return;
+      console.error("[mensajes][adjunto] download error:", err?.message || err);
+      return res.status(404).json({ message: "Adjunto no encontrado" });
+    });
+  } catch (error) {
+    console.error("[mensajes][adjunto] error:", error?.message || error);
+    return res.status(500).json({ message: "No es posible procesar su solicitud" });
+  }
+}
+
+// ==========================
 // ENVIAR MENSAJE (JSON o MULTIPART)
 // ==========================
 async function enviarMensaje(req, res) {
@@ -506,7 +676,7 @@ async function enviarMensaje(req, res) {
 
     const paraIds = uniqStrings(paraRaw);
 
-    const asunto = String(req.body?.asunto || "").trim();
+    const asunto = String(req.body?.asunto ?? req.body?.titulo ?? "").trim();
     const cuerpo = String(req.body?.cuerpo ?? req.body?.contenido ?? "").trim();
 
     // replyTo puede venir como "undefined"/"null" (string)
@@ -519,8 +689,11 @@ async function enviarMensaje(req, res) {
       }
     }
 
-    if (!paraIds.length || !cuerpo) {
-      return res.status(400).json({ message: "No es posible procesar su solicitud" });
+    if (!paraIds.length) {
+      return res.status(400).json({ message: "Debe seleccionar al menos un destinatario" });
+    }
+    if (!cuerpo) {
+      return res.status(400).json({ message: "El cuerpo del mensaje es obligatorio" });
     }
 
     // Cargar destinatarios (incluye permisos para poder evaluar autoridad territorial)
@@ -599,13 +772,10 @@ async function enviarMensaje(req, res) {
       }
     }
 
-    const files = Array.isArray(req.files) ? req.files : [];
-    const adjuntos = files.map((f) => ({
-      fileId: f.id || f.filename || undefined,
-      nombre: f.originalname || undefined,
-      mimetype: f.mimetype || undefined,
-      size: f.size || undefined,
-    }));
+    const adjuntos = [
+      ...normalizeJsonAdjuntos(req.body?.adjuntos),
+      ...normalizeUploadedAdjuntos(req.files),
+    ];
 
     const created = await Mensaje.create({
       remitente: remitenteId,
@@ -629,5 +799,6 @@ module.exports = {
   getEnviados,
   getMensaje,
   marcarLeido,
+  descargarAdjunto,
   enviarMensaje,
 };
