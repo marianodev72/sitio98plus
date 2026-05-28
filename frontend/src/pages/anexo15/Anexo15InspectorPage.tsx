@@ -119,7 +119,7 @@ export default function Anexo15InspectorPage() {
 
       <section style={{ ...softCardStyle, marginTop: 12 }}>
         <h2 style={sectionTitleStyle}>Solicitudes</h2>
-        {!docs.length ? <p style={subtitleStyle}>Sin solicitudes pendientes.</p> : null}
+        {!docs.length ? <p style={subtitleStyle}>Sin solicitudes registradas para su territorialidad.</p> : null}
         <div style={{ display: "grid", gap: 8 }}>
           {docs.map((doc) => (
             <div key={doc.token} style={{ ...softCardStyle, display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>

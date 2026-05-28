@@ -56,11 +56,22 @@ function barrioInspector(user) {
   return String(user?.barrioAsignado || "").trim();
 }
 
+function territoriosInspector(user) {
+  const values = [barrioInspector(user)];
+  if (Array.isArray(user?.territoriosAlojamiento)) {
+    user.territoriosAlojamiento.forEach((item) => {
+      const value = typeof item === "string" ? item : item?.valor;
+      values.push(String(value || "").trim());
+    });
+  }
+  return [...new Set(values.filter(Boolean).map((item) => item.trim()))];
+}
+
 function canInspect(user, doc) {
   if (!isInspectorTerritorial(user)) return false;
-  const barrio = barrioInspector(user);
-  if (!barrio) return false;
-  return up(doc?.datos?.viviendaSnapshot?.barrio) === up(barrio);
+  const territorios = territoriosInspector(user).map(up);
+  if (!territorios.length) return false;
+  return territorios.includes(up(doc?.datos?.viviendaSnapshot?.barrio));
 }
 
 function canTransition(current, next) {
@@ -299,10 +310,11 @@ async function listarMis({ user }) {
 }
 
 async function listarInspector({ user }) {
-  if (!isInspectorTerritorial(user) || !barrioInspector(user)) return deny();
+  const territorios = territoriosInspector(user);
+  if (!isInspectorTerritorial(user) || !territorios.length) return deny();
   const docs = await Anexo15Reintegro.find({
-    "datos.viviendaSnapshot.barrio": barrioInspector(user),
-    estado: { $in: ["ENVIADO", "DEVUELTO_A_INSPECTOR"] },
+    "datos.viviendaSnapshot.barrio": { $in: territorios },
+    estado: { $in: ["ENVIADO", "DEVUELTO_A_SOLICITANTE", "APROBADO_INSPECTOR", "DEVUELTO_A_INSPECTOR", "FINALIZADO", "RECHAZADO"] },
     activo: { $ne: false },
   }).sort({ updatedAt: -1 }).limit(200);
   return { ok: true, status: 200, documentos: docs.map(toPublic) };
