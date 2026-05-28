@@ -102,9 +102,10 @@ export async function adminAprobarAnexo15(token: string, observacion: string) {
 export async function subirAdjuntoAnexo15(token: string, campo: string, file: File) {
   const fd = new FormData();
   fd.append("archivo", file);
-  const res = await http.post(`/anexo-15/${encodeURIComponent(token)}/adjuntos/${campo}`, fd, {
-    headers: { "Content-Type": "multipart/form-data" },
-  });
+  const res = await http.post(
+    `/anexo-15/${encodeURIComponent(token)}/adjuntos/${encodeURIComponent(campo)}`,
+    fd
+  );
   return res.data?.documento as Anexo15Documento;
 }
 
