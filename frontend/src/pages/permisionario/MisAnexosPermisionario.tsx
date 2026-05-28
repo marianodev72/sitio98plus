@@ -471,6 +471,35 @@ return (
               flexWrap: "wrap",
             }}
           >
+            <div>
+              <h3 style={{ ...sectionTitleStyle, margin: 0 }}>
+                ANEXO 15 - Solicitud de reintegro
+              </h3>
+              <p style={{ ...noteStyle, marginTop: 10, marginBottom: 0 }}>
+                Inicia una solicitud de reintegro con comprobantes y documentacion respaldatoria.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => navigate("/app/permisionario/anexo-15")}
+              style={successButtonStyle}
+            >
+              Crear ANEXO 15
+            </button>
+          </div>
+        </section>
+
+        <section style={cardStyle}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 12,
+              flexWrap: "wrap",
+            }}
+          >
             <h3 style={{ ...sectionTitleStyle, margin: 0 }}>
               ANEXO 11 – Formulario de Pedido de Trabajo
             </h3>

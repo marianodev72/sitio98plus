@@ -151,6 +151,18 @@ export default function MisAnexosAlojado() {
         <section style={{ ...cardStyle, marginBottom: 12 }}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
             <div>
+              <h2 style={sectionTitleStyle}>Nuevo ANEXO_15</h2>
+              <p style={subtitleStyle}>Solicitud de reintegro con comprobantes y documentacion respaldatoria.</p>
+            </div>
+            <button type="button" style={primaryButtonStyle} onClick={() => navigate("/app/alojado/anexo-15")}>
+              Crear ANEXO_15
+            </button>
+          </div>
+        </section>
+
+        <section style={{ ...cardStyle, marginBottom: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+            <div>
               <h2 style={sectionTitleStyle}>Nuevo ANEXO_28</h2>
               <p style={subtitleStyle}>Pedido de trabajo sobre su ocupacion activa.</p>
             </div>

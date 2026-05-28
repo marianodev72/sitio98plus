@@ -41,10 +41,14 @@ export default function Anexo15Adjuntos({
           ].map(([campo, label]) => (
             <label key={campo} style={softCardStyle}>
               <span style={{ display: "block", marginBottom: 8, fontWeight: 800 }}>{label}</span>
+              <span style={{ ...secondaryButtonStyle, display: "inline-flex", marginBottom: 8 }}>
+                Adjuntar archivo
+              </span>
               <input
                 type="file"
                 accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
                 onChange={(event) => onPick(campo, event.target.files?.[0])}
+                style={{ display: "block", maxWidth: "100%" }}
               />
             </label>
           ))}

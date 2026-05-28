@@ -184,10 +184,6 @@ export default function PermisionarioLayout() {
               Mis Anexos
             </button>
 
-            <button style={navButton()} onClick={() => navigate("anexo-15")}>
-              ANEXO_15
-            </button>
-
             <button style={navButton()} onClick={() => navigate("comunicaciones")}>
               Comunicaciones
             </button>
