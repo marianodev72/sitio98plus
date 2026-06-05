@@ -5,6 +5,7 @@ docker-compose.yml
 .git
 .gitignore
 .env
+.env*
 .env.*
 dist
 coverage
