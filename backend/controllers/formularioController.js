@@ -60,6 +60,10 @@ function badRequest(res, msg = "Datos inválidos") {
   return res.status(400).json({ message: msg });
 }
 
+function conflict(res, msg = GENERIC_DENIED_MESSAGE) {
+  return res.status(409).json(stripAdjuntoRutas({ message: msg }));
+}
+
 function toPlain(value) {
   if (Array.isArray(value)) return value.map(toPlain);
   if (value && typeof value.toObject === "function") return value.toObject();
@@ -108,6 +112,88 @@ function stripAdjuntoRutas(value) {
 // ✅ Seguridad / Auditoría (ANEXO_09)
 // - O1: estadoInstitucional NO se expone a frontend como “estado real”.
 //       Para roles no-admin devolvemos leyendaInstitucional (texto) y ocultamos estadoInstitucional.
+function pickObjectId(...values) {
+  for (const value of values) {
+    if (isObjectId(value)) return value;
+  }
+  return null;
+}
+
+function sameObjectId(a, b) {
+  return String(a || "") === String(b || "");
+}
+
+async function resolveViviendaIdForAnexo08(anexo) {
+  const datos = anexo?.datos && typeof anexo.datos === "object" ? anexo.datos : {};
+  const directId = pickObjectId(datos.viviendaId, anexo?.vivienda);
+  const origenId = pickObjectId(anexo?.derivadoDe, datos.derivadoDe);
+  if (!origenId) return { viviendaId: directId, origenValido: false, mismatch: false };
+
+  const anexo03 = await FormSubmission.findOne({
+    _id: origenId,
+    codigo: "ANEXO_03",
+  })
+    .select("codigo datos vivienda")
+    .lean();
+
+  if (!anexo03) return { viviendaId: null, origenValido: false };
+
+  const originViviendaId = pickObjectId(anexo03?.datos?.viviendaId, anexo03?.vivienda);
+  if (directId && originViviendaId && !sameObjectId(directId, originViviendaId)) {
+    return { viviendaId: null, origenValido: true, mismatch: true };
+  }
+
+  return {
+    viviendaId: directId || originViviendaId,
+    origenValido: true,
+    mismatch: false,
+  };
+}
+
+async function resolveViviendaIdForAnexo09(anexo) {
+  const datos = anexo?.datos && typeof anexo.datos === "object" ? anexo.datos : {};
+  const directId = pickObjectId(datos.viviendaId, anexo?.vivienda);
+  const origenId = pickObjectId(anexo?.derivadoDe, datos.derivadoDe);
+
+  if (!origenId) {
+    return { viviendaId: directId, origenValido: false };
+  }
+
+  const anexo08 = await FormSubmission.findOne({
+    _id: origenId,
+    codigo: "ANEXO_08",
+  })
+    .select("codigo datos vivienda")
+    .lean();
+
+  if (!anexo08) {
+    return { viviendaId: directId, origenValido: false };
+  }
+
+  const originViviendaId = pickObjectId(anexo08?.datos?.viviendaId, anexo08?.vivienda);
+  if (directId && originViviendaId && !sameObjectId(directId, originViviendaId)) {
+    return { viviendaId: null, origenValido: true, mismatch: true };
+  }
+
+  return {
+    viviendaId: directId || originViviendaId,
+    origenValido: true,
+    mismatch: false,
+  };
+}
+
+function appendViviendaEstadoHistorial(vivienda, actor, estadoAnterior, estadoNuevo, observacion) {
+  if (!vivienda || !Array.isArray(vivienda.historialEstados)) return;
+
+  vivienda.historialEstados.push({
+    fecha: new Date(),
+    actor,
+    estadoAnterior,
+    estadoNuevo,
+    observacion,
+  });
+}
+
 function stripEstadoInstitucionalIfNeeded(user, anexoObj) {
   if (!anexoObj || typeof anexoObj !== "object") return anexoObj;
   const codigoUp = up(anexoObj.codigo || "");
@@ -7857,6 +7943,38 @@ async function cerrarAnexo08AdminGeneral(req, res) {
     }
 
     // Aseguramos que el permisionario quede con trazabilidad aunque no haya dado conforme explícito
+    if (!Vivienda) return genericDenied(res);
+
+    const resolved08 = await resolveViviendaIdForAnexo08(anexo);
+    if (resolved08?.mismatch) {
+      return conflict(res, "Inconsistencia de vivienda entre anexo y origen.");
+    }
+    const viviendaId = resolved08?.viviendaId;
+    if (!viviendaId || !isObjectId(viviendaId)) return genericDenied(res);
+
+    const vivienda = await Vivienda.findById(viviendaId);
+    if (!vivienda) return genericDenied(res);
+
+    let viviendaChanged = false;
+    const estadoVivienda = up(vivienda.estado);
+
+    if (estadoVivienda === "OCUPADA") {
+      const estadoAnterior = vivienda.estado;
+      vivienda.estado = "A_DESOCUPARSE";
+      appendViviendaEstadoHistorial(
+        vivienda,
+        user._id,
+        estadoAnterior,
+        vivienda.estado,
+        "Cierre ADMIN_GENERAL (ANEXO_08)"
+      );
+      viviendaChanged = true;
+    } else if (estadoVivienda === "A_DESOCUPARSE") {
+      // Idempotente.
+    } else {
+      return conflict(res, "Estado de vivienda incompatible con cierre ANEXO_08.");
+    }
+
     if (!datos.conformidadPermisionario || !datos.conformidadPermisionario.ok) {
       const fallbackUserId =
         (isObjectId(datos.permisionarioId) && datos.permisionarioId) ||
@@ -7890,6 +8008,7 @@ async function cerrarAnexo08AdminGeneral(req, res) {
         "Cierre ADMIN_GENERAL del ANEXO 08.",
     };
 
+    if (viviendaChanged) await vivienda.save();
     await anexo.save();
     return res.json(stripAdjuntoRutas({ anexo: anexo.toObject() }));
   } catch (e) {
@@ -8062,6 +8181,62 @@ async function cerrarAnexo09AdminGeneral(req, res) {
     const confPerm = datos.conformidadPermisionario;
     const okPerm = typeof confPerm?.ok === "boolean" ? confPerm.ok : true;
 
+    if (!Vivienda) return genericDenied(res);
+
+    const resolved09 = await resolveViviendaIdForAnexo09(anexo);
+    if (resolved09?.mismatch) {
+      return conflict(res, "Inconsistencia de vivienda entre anexo y origen.");
+    }
+    const viviendaId = resolved09?.viviendaId;
+    if (!viviendaId || !isObjectId(viviendaId)) return genericDenied(res);
+
+    const vivienda = await Vivienda.findById(viviendaId);
+    if (!vivienda) return genericDenied(res);
+
+    let viviendaChanged = false;
+    const estadoVivienda = up(vivienda.estado);
+
+    if (estadoVivienda === "A_DESOCUPARSE") {
+      const estadoAnterior = vivienda.estado;
+      vivienda.estado = "DISPONIBLE";
+      vivienda.ocupacionActual = undefined;
+      vivienda.markModified("ocupacionActual");
+      appendViviendaEstadoHistorial(
+        vivienda,
+        user._id,
+        estadoAnterior,
+        vivienda.estado,
+        "Cierre ADMIN_GENERAL (ANEXO_09)"
+      );
+      viviendaChanged = true;
+    } else if (estadoVivienda === "OCUPADA") {
+      if (!resolved09.origenValido) {
+        return conflict(res, "ANEXO_09 legacy sin ANEXO_08 valido.");
+      }
+      const estadoAnterior = vivienda.estado;
+      vivienda.estado = "DISPONIBLE";
+      vivienda.ocupacionActual = undefined;
+      vivienda.markModified("ocupacionActual");
+      appendViviendaEstadoHistorial(
+        vivienda,
+        user._id,
+        estadoAnterior,
+        vivienda.estado,
+        "Cierre ADMIN_GENERAL (ANEXO_09 legacy)"
+      );
+      viviendaChanged = true;
+    } else if (estadoVivienda === "DISPONIBLE") {
+      if (vivienda.ocupacionActual) {
+        vivienda.ocupacionActual = undefined;
+        vivienda.markModified("ocupacionActual");
+        viviendaChanged = true;
+      }
+    } else if (estadoVivienda === "RESERVADA") {
+      return conflict(res, "Vivienda reservada: reserva futura no implementada en esta fase.");
+    } else {
+      return conflict(res, "Estado de vivienda incompatible con cierre ANEXO_09.");
+    }
+
     if (!okPerm) {
       // cierre CON NOVEDADES → observación crítica obligatoria
       if (!obsCrit) {
@@ -8091,25 +8266,7 @@ async function cerrarAnexo09AdminGeneral(req, res) {
     // Cierre del trámite
     anexo.cambiarEstado("CERRADO", user._id, "Cierre ADMIN_GENERAL (ANEXO_09)");
 
-    // ─────────────────────────────
-    // AJUSTE INSTITUCIONAL (PLAN DT)
-    // Al cierre exitoso:
-    // 1) Leer anexo.datos.viviendaId
-    // 2) Fail-closed si no existe / inválido
-    // 3) Si estado === A_DESOCUPARSE → cambiar SOLO a RESERVADA
-    // 4) No hacer ningún otro automatismo
-
-    const viviendaId = datos?.viviendaId;
-    if (!viviendaId || !isObjectId(viviendaId)) return genericDenied(res);
-
-    const vivienda = await Vivienda.findById(viviendaId);
-    if (!vivienda) return genericDenied(res);
-
-    if (up(vivienda.estado) === "A_DESOCUPARSE") {
-      vivienda.estado = "RESERVADA";
-      await vivienda.save();
-    }
-
+    if (viviendaChanged) await vivienda.save();
     await anexo.save();
     return res.json(stripAdjuntoRutas({ anexo: stripEstadoInstitucionalIfNeeded(user, anexo.toObject()) }));
   } catch (e) {
