@@ -131,6 +131,14 @@ function buildViviendasPipeline(query = {}) {
 
   const dir = String(sortDir || "asc").toLowerCase() === "desc" ? -1 : 1;
   const sortKey = String(sortBy || "barrio").toLowerCase();
+  const toIntOrZero = (input) => ({
+    $convert: {
+      input: { $ifNull: [input, 0] },
+      to: "int",
+      onError: 0,
+      onNull: 0,
+    },
+  });
 
   const pipeline = [];
   const match = { estado: { $ne: "BAJA" } };
@@ -311,7 +319,7 @@ function buildViviendasPipeline(query = {}) {
           $filter: {
             input: "$_mdConvivientes",
             as: "c",
-            cond: { $gte: [{ $toInt: { $ifNull: ["$$c.edad", 0] } }, 18] },
+            cond: { $gte: [toIntOrZero("$$c.edad"), 18] },
           },
         },
       },
@@ -319,7 +327,7 @@ function buildViviendasPipeline(query = {}) {
         $filter: {
           input: "$_mdConvivientes",
           as: "c",
-          cond: { $lt: [{ $toInt: { $ifNull: ["$$c.edad", 0] } }, 18] },
+          cond: { $lt: [toIntOrZero("$$c.edad"), 18] },
         },
       },
     },
@@ -329,6 +337,8 @@ function buildViviendasPipeline(query = {}) {
     $addFields: {
       _adultosPreferidos: { $ifNull: ["$_datosHabitantes.cantidadAdultos", null] },
       _hijosPreferidos: { $ifNull: ["$_datosHabitantes.cantidadHijos", null] },
+      _cantidadHabitantesBase: toIntOrZero("$cantidadHabitantes"),
+      _dormitoriosNum: toIntOrZero("$dormitorios"),
 
       // fallback institucional: titular = 1
       _adultosFallback: { $add: [1, "$_mdAdultosExtraByEdad"] },
@@ -339,10 +349,10 @@ function buildViviendasPipeline(query = {}) {
   pipeline.push({
     $addFields: {
       _mdAdultosTotal: {
-        $cond: [{ $ne: ["$_adultosPreferidos", null] }, "$_adultosPreferidos", "$_adultosFallback"],
+        $cond: [{ $ne: ["$_adultosPreferidos", null] }, toIntOrZero("$_adultosPreferidos"), "$_adultosFallback"],
       },
       _mdHijosTotal: {
-        $cond: [{ $ne: ["$_hijosPreferidos", null] }, "$_hijosPreferidos", "$_hijosFallback"],
+        $cond: [{ $ne: ["$_hijosPreferidos", null] }, toIntOrZero("$_hijosPreferidos"), "$_hijosFallback"],
       },
     },
   });
@@ -403,8 +413,8 @@ function buildViviendasPipeline(query = {}) {
           // Si NO hay MisDatosDeclarados
           {
             $cond: [
-              { $gt: [{ $ifNull: ["$cantidadHabitantes", 0] }, 0] },
-              "$cantidadHabitantes",
+              { $gt: ["$_cantidadHabitantesBase", 0] },
+              "$_cantidadHabitantesBase",
               1, // mínimo institucional: titular
             ],
           },
@@ -417,7 +427,7 @@ function buildViviendasPipeline(query = {}) {
   pipeline.push({
     $addFields: {
       hacinamientoRatio: {
-        $cond: [{ $gt: ["$dormitorios", 0] }, { $divide: ["$cantidadHabitantesEfectiva", "$dormitorios"] }, 0],
+        $cond: [{ $gt: ["$_dormitoriosNum", 0] }, { $divide: ["$cantidadHabitantesEfectiva", "$_dormitoriosNum"] }, 0],
       },
     },
   });
@@ -508,21 +518,21 @@ function buildViviendasPipeline(query = {}) {
     $addFields: {
       hacinamientoColor: {
         $cond: [
-          { $lt: ["$dormitorios", "$dormitoriosMinimos"] },
+          { $lt: ["$_dormitoriosNum", "$dormitoriosMinimos"] },
           "ROJO",
-          { $cond: [{ $eq: ["$dormitorios", "$dormitoriosMinimos"] }, "AMARILLO", "VERDE"] },
+          { $cond: [{ $eq: ["$_dormitoriosNum", "$dormitoriosMinimos"] }, "AMARILLO", "VERDE"] },
         ],
       },
       hacinamientoPct: {
         $cond: [
           { $gt: ["$dormitoriosMinimos", 0] },
-          { $round: [{ $multiply: [{ $divide: ["$dormitorios", "$dormitoriosMinimos"] }, 100] }, 0] },
+          { $round: [{ $multiply: [{ $divide: ["$_dormitoriosNum", "$dormitoriosMinimos"] }, 100] }, 0] },
           0,
         ],
       },
       // compatibilidad histórica
       hacinamientoRatio: {
-        $cond: [{ $gt: ["$dormitorios", 0] }, { $divide: ["$cantidadHabitantesEfectiva", "$dormitorios"] }, 0],
+        $cond: [{ $gt: ["$_dormitoriosNum", 0] }, { $divide: ["$cantidadHabitantesEfectiva", "$_dormitoriosNum"] }, 0],
       },
     },
   });
