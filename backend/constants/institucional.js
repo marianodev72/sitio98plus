@@ -12,6 +12,12 @@ function normalizeTipoDestino(value) {
   return TIPOS_DESTINO.includes(normalized) ? normalized : "MIXTO";
 }
 
+function normalizeTipoDestinoStrict(value) {
+  if (value === undefined || value === null) return null;
+  const normalized = String(value).toUpperCase().trim();
+  return TIPOS_DESTINO.includes(normalized) ? normalized : null;
+}
+
 function normalizeGrupoJerarquico(value) {
   const normalized = String(value || "").toUpperCase().trim().replace(/[\s/-]+/g, "_");
   return GRUPOS_JERARQUICOS.includes(normalized) ? normalized : "NO_DEFINIDO";
@@ -30,6 +36,7 @@ module.exports = {
   GRUPOS_JERARQUICOS,
   normalizeTipoPersonal,
   normalizeTipoDestino,
+  normalizeTipoDestinoStrict,
   normalizeGrupoJerarquico,
   normalizePrecedencia,
 };
