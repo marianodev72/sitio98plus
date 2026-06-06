@@ -1,5 +1,6 @@
 // backend/models/Vivienda.js
 const mongoose = require("mongoose");
+const { TIPOS_DESTINO } = require("../constants/institucional");
 
 // ─────────────────────────────
 // Subdocumento: ocupación actual
@@ -60,6 +61,10 @@ const viviendaSchema = new mongoose.Schema(
     },
 
     cantidadHabitantes: { type: Number, default: 0 },
+    tipoDestino: {
+      type: String,
+      enum: TIPOS_DESTINO,
+    },
 
     ocupacionActual: ocupacionSchema,
 
