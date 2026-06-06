@@ -5,6 +5,7 @@ const mongoose = require("mongoose");
 const { User } = require("../../models/user");
 const Vivienda = require("../../models/vivienda");
 const AlojamientoNaval = require("../../modules/alojamientos/models/AlojamientoNaval");
+const { normalizeTipoDestinoStrict } = require("../../constants/institucional");
 
 const APPLYABLE_ESTADO = "PENDIENTE_CONFIRMACION";
 const ALOJAMIENTO_UPDATE_FIELDS = new Set([
@@ -50,6 +51,10 @@ function unapproved(items, tokens) {
 
 function clean(value) {
   return String(value || "").trim();
+}
+
+function validTipoDestino(value) {
+  return normalizeTipoDestinoStrict(value);
 }
 
 function normDni(value) {
@@ -210,6 +215,12 @@ async function applyViviendaCreate(operation, session, result) {
     result.errors.push({ key: operation.key, message: "Vivienda CREATE incompleta" });
     return;
   }
+  const tipoDestino = validTipoDestino(item.tipoDestino);
+  if (!tipoDestino) {
+    result.skipped += 1;
+    result.errors.push({ key: operation.key, message: "Vivienda CREATE sin tipoDestino valido" });
+    return;
+  }
   const existing = await Vivienda.findOne({ codigo: item.codigo }).session(session);
   if (existing) {
     result.skipped += 1;
@@ -221,7 +232,7 @@ async function applyViviendaCreate(operation, session, result) {
         codigo: item.codigo,
         barrio: item.barrio,
         dormitorios: Number(item.dormitorios || 0),
-        tipoDestino: item.tipoDestino || "MIXTO",
+        tipoDestino,
       },
     ],
     { session }
@@ -235,7 +246,15 @@ async function applyViviendaUpdate(operation, session, result) {
   for (const cambio of arr(item.cambios)) {
     if (cambio.campo === "barrio") set.barrio = cambio.nuevo;
     if (cambio.campo === "dormitorios") set.dormitorios = Number(cambio.nuevo);
-    if (cambio.campo === "tipoDestino") set.tipoDestino = cambio.nuevo;
+    if (cambio.campo === "tipoDestino") {
+      const tipoDestino = validTipoDestino(cambio.nuevo);
+      if (!tipoDestino) {
+        result.skipped += 1;
+        result.errors.push({ key: operation.key, message: "Vivienda UPDATE con tipoDestino invalido" });
+        return;
+      }
+      set.tipoDestino = tipoDestino;
+    }
   }
   if (Object.keys(set).length === 0) {
     result.skipped += 1;

@@ -5,7 +5,7 @@ const Vivienda = require("../../models/vivienda");
 const AlojamientoNaval = require("../../modules/alojamientos/models/AlojamientoNaval");
 const {
   normalizeTipoPersonal,
-  normalizeTipoDestino,
+  normalizeTipoDestinoStrict,
   normalizeGrupoJerarquico,
   normalizePrecedencia,
 } = require("../../constants/institucional");
@@ -328,7 +328,7 @@ function publicVivienda(vivienda) {
     barrio: vivienda.barrio || "",
     dormitorios: vivienda.dormitorios ?? null,
     estado: vivienda.estado || "",
-    tipoDestino: vivienda.tipoDestino || "MIXTO",
+    tipoDestino: vivienda.tipoDestino || null,
     ocupada: Boolean(vivienda?.ocupacionActual?.permisionario) || up(vivienda.estado) === "OCUPADA",
   };
 }
@@ -516,13 +516,13 @@ function parseViviendaRows(rows) {
     const codigoInfo = normalizeCodigoVivienda({ barrio, codigo: raw.DPTOCASA });
     const codigo = codigoInfo.codigo;
     const dormitorios = Number(clean(raw.DORM));
-    const tipoDestino = normalizeTipoDestino(raw.GRUPO);
+    const tipoDestino = normalizeTipoDestinoStrict(raw.GRUPO);
     const rowErrors = [];
 
     if (!codigo) rowErrors.push({ fila, campo: "DPTOCASA", message: "codigo obligatorio" });
     if (!barrio) rowErrors.push({ fila, campo: "BARRIOS", message: "barrio obligatorio" });
     if (!Number.isInteger(dormitorios) || dormitorios < 0) rowErrors.push({ fila, campo: "DORM", message: "DORM debe ser numerico" });
-    if (!["OF", "SO", "MIXTO"].includes(up(raw.GRUPO))) rowErrors.push({ fila, campo: "GRUPO", message: "GRUPO debe ser OF, SO o MIXTO" });
+    if (!tipoDestino) rowErrors.push({ fila, campo: "GRUPO", message: "GRUPO debe ser OF, SO o MIXTO" });
 
     if (rowErrors.length) {
       errors.push(...rowErrors);
@@ -620,7 +620,7 @@ async function dryRunViviendas(buffer) {
         ? { ...row, codigo: existing.codigo, codigoNormalizado: existing.codigo }
         : row;
     const cambios = [];
-    const existingTipoDestino = existing.tipoDestino || "MIXTO";
+    const existingTipoDestino = existing.tipoDestino || null;
     if (existingTipoDestino !== matchedRow.tipoDestino) {
       cambios.push({ campo: "tipoDestino", actual: existingTipoDestino, nuevo: matchedRow.tipoDestino });
       warnings.push({ tipo: "CAMBIO_TIPO_DESTINO", fila: matchedRow.fila, codigo: matchedRow.codigo, actual: existingTipoDestino, nuevo: matchedRow.tipoDestino });
