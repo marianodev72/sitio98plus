@@ -51,6 +51,15 @@ function deriveGrupoViviendaFromGradoEscalafon(value) {
   return null;
 }
 
+function isTipoDestinoCompatibleConGrupoVivienda(grupoPersona, tipoDestino) {
+  const grupo = normalizeTipoPersonal(grupoPersona);
+  const destino = normalizeTipoDestinoStrict(tipoDestino);
+
+  if (!grupo || !destino) return false;
+  if (destino === "MIXTO") return true;
+  return grupo === destino;
+}
+
 module.exports = {
   TIPOS_PERSONAL,
   TIPOS_DESTINO,
@@ -61,4 +70,5 @@ module.exports = {
   normalizeGrupoJerarquico,
   normalizePrecedencia,
   deriveGrupoViviendaFromGradoEscalafon,
+  isTipoDestinoCompatibleConGrupoVivienda,
 };
