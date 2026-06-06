@@ -6,6 +6,10 @@ const path = require("path");
 const fs = require("fs");
 const { aplicarCambiosAnexo11 } = require("../services/anexo11Service");
 const { updateByInspector } = require("./anexos/ControllerAnexo08");
+const {
+  deriveGrupoViviendaFromGradoEscalafon,
+  isTipoDestinoCompatibleConGrupoVivienda,
+} = require("../constants/institucional");
 
 const { FormTemplate } = require("../models/FormTemplate");
 const { FormSubmission, ESTADOS_FORM } = require("../models/FormSubmission");
@@ -62,6 +66,37 @@ function badRequest(res, msg = "Datos inválidos") {
 
 function conflict(res, msg = GENERIC_DENIED_MESSAGE) {
   return res.status(409).json(stripAdjuntoRutas({ message: msg }));
+}
+
+const MSG_GRADO_NO_MAPEABLE =
+  "No se pudo determinar el grupo institucional del postulante. Revise grado/escalafón del ANEXO_01.";
+const MSG_VIVIENDA_SIN_TIPO_DESTINO = "La vivienda seleccionada no tiene destino institucional definido.";
+const MSG_VIVIENDA_INCOMPATIBLE =
+  "La vivienda seleccionada no es compatible con el grupo institucional del postulante.";
+
+function validateCompatibilidadTipoDestinoAnexo02({ gradoEscalafon, vivienda }) {
+  const gradoEscalafonOrigen =
+    gradoEscalafon === undefined || gradoEscalafon === null ? "" : String(gradoEscalafon).trim();
+  const grupoViviendaPostulante = deriveGrupoViviendaFromGradoEscalafon(gradoEscalafonOrigen);
+  if (!grupoViviendaPostulante) return { ok: false, message: MSG_GRADO_NO_MAPEABLE };
+
+  const tipoDestinoVivienda =
+    vivienda?.tipoDestino === undefined || vivienda?.tipoDestino === null ? "" : String(vivienda.tipoDestino).trim().toUpperCase();
+  if (!tipoDestinoVivienda) return { ok: false, message: MSG_VIVIENDA_SIN_TIPO_DESTINO };
+
+  if (!isTipoDestinoCompatibleConGrupoVivienda(grupoViviendaPostulante, tipoDestinoVivienda)) {
+    return { ok: false, message: MSG_VIVIENDA_INCOMPATIBLE };
+  }
+
+  return {
+    ok: true,
+    snapshot: {
+      compatibilidadTipoDestinoValidada: true,
+      grupoViviendaPostulante,
+      tipoDestinoVivienda,
+      gradoEscalafonOrigen,
+    },
+  };
 }
 
 function toPlain(value) {
@@ -6827,6 +6862,24 @@ async function darConformidadAdmin(req, res) {
       const v = await Vivienda.findById(d.viviendaId);
       if (!v) return genericDenied(res);
 
+      if (d.compatibilidadTipoDestinoValidada === true) {
+        const anexo01OrigenId = isObjectId(d?.anexo01Id)
+          ? d.anexo01Id
+          : isObjectId(anexo.derivadoDe)
+          ? anexo.derivadoDe
+          : null;
+
+        const anexo01Origen = anexo01OrigenId
+          ? await FormSubmission.findById(anexo01OrigenId).select({ codigo: 1, datos: 1 }).lean()
+          : null;
+
+        const compatibilidadTipoDestino = validateCompatibilidadTipoDestinoAnexo02({
+          gradoEscalafon: up(anexo01Origen?.codigo) === "ANEXO_01" ? anexo01Origen?.datos?.gradoEscalafon : "",
+          vivienda: v,
+        });
+        if (!compatibilidadTipoDestino.ok) return badRequest(res, compatibilidadTipoDestino.message);
+      }
+
       barrioVivienda = v.barrio || null;
 
       // Idempotencia segura: solo pasar DISPONIBLE -> RESERVADA
@@ -6936,16 +6989,6 @@ async function generarAnexo02DesdeAnexo01(req, res) {
 
     if (!canSeeSubmission(user, anexo01)) return genericDenied(res);
 
-    // FAIL-CLOSED: validar vivienda antes de crear ANEXO_02
-    const vivienda = await Vivienda.findById(viviendaId);
-    if (!vivienda) {
-      return res.status(403).json(stripAdjuntoRutas({ message: "Recurso no disponible" }));
-    }
-    const estadoVivienda = up(vivienda.estado);
-    if (estadoVivienda !== "DISPONIBLE" && estadoVivienda !== "A_DESOCUPARSE") {
-      return res.status(403).json(stripAdjuntoRutas({ message: "Recurso no disponible" }));
-    }
-
     // NO tocar idempotencia existente por derivadoDe
     const existente = await FormSubmission.findOne({
       codigo: "ANEXO_02",
@@ -6964,6 +7007,22 @@ async function generarAnexo02DesdeAnexo01(req, res) {
 
       return res.json(stripAdjuntoRutas({ anexo: toPlain(existente) }));
     }
+
+    // FAIL-CLOSED: validar vivienda antes de crear ANEXO_02 nuevo
+    const vivienda = await Vivienda.findById(viviendaId);
+    if (!vivienda) {
+      return res.status(403).json(stripAdjuntoRutas({ message: "Recurso no disponible" }));
+    }
+    const estadoVivienda = up(vivienda.estado);
+    if (estadoVivienda !== "DISPONIBLE" && estadoVivienda !== "A_DESOCUPARSE") {
+      return res.status(403).json(stripAdjuntoRutas({ message: "Recurso no disponible" }));
+    }
+
+    const compatibilidadTipoDestino = validateCompatibilidadTipoDestinoAnexo02({
+      gradoEscalafon: anexo01?.datos?.gradoEscalafon,
+      vivienda,
+    });
+    if (!compatibilidadTipoDestino.ok) return badRequest(res, compatibilidadTipoDestino.message);
 
     // ─────────────────────────────
     // TEMPLATE requerido por schema
@@ -6990,6 +7049,7 @@ async function generarAnexo02DesdeAnexo01(req, res) {
         anexo01Id: anexo01._id,
         postulanteId: anexo01.usuario,
         viviendaId,
+        ...compatibilidadTipoDestino.snapshot,
       },
     });
 
