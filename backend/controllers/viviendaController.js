@@ -562,6 +562,7 @@ function buildViviendasPipeline(query = {}) {
       barrio: 1,
       dormitorios: 1,
       estado: 1,
+      tipoDestino: 1,
 
       // UI usa la efectiva
       cantidadHabitantes: "$cantidadHabitantesEfectiva",
@@ -731,7 +732,7 @@ async function listarElegiblesAsignacion(req, res) {
     const viviendas = await Vivienda.find({
       estado: { $in: ["DISPONIBLE", "A_DESOCUPARSE"] },
     })
-      .select("_id codigo barrio dormitorios estado")
+      .select("_id codigo barrio dormitorios estado tipoDestino")
       .sort({ barrio: 1, codigo: 1 })
       .lean();
 

@@ -20,6 +20,7 @@ type Vivienda = {
   barrio: string;
   dormitorios: number;
   estado: EstadoVivienda;
+  tipoDestino?: "OF" | "SO" | "MIXTO" | null;
 
   // 🔢 Backend (pipeline) — valores ya calculados
   cantidadHabitantes?: number; // EFECTIVA (adultos + hijos)
@@ -109,6 +110,14 @@ function getSemaforoLabel(semaforo: Semaforo): string {
   if (semaforo === "verde") return "Verde";
   if (semaforo === "amarillo") return "Amarillo";
   return "Rojo";
+}
+
+function formatTipoDestino(value: unknown): string {
+  const normalized = up(value);
+  if (normalized === "OF") return "OFICIALES";
+  if (normalized === "SO") return "SUBOFICIALES";
+  if (normalized === "MIXTO") return "MIXTO";
+  return "SIN DEFINIR";
 }
 
 function isEstadoVivienda(value: string): value is EstadoVivienda {
@@ -597,7 +606,7 @@ export default function Viviendas({ readOnly = false }: Props) {
                 border={0}
                 cellPadding={6}
                 cellSpacing={0}
-                style={{ width: "100%", borderCollapse: "collapse", minWidth: 980 }}
+                style={{ width: "100%", borderCollapse: "collapse", minWidth: 1080 }}
               >
                 <thead>
                   <tr>
@@ -612,6 +621,9 @@ export default function Viviendas({ readOnly = false }: Props) {
                     </th>
                     <th style={thStyle} onClick={() => applySort("estado")}>
                       Estado{sortIndicator("estado")}
+                    </th>
+                    <th style={thStyle}>
+                      Destino
                     </th>
                     <th style={thStyle} onClick={() => applySort("permisionario")}>
                       Permisionario{sortIndicator("permisionario")}
@@ -682,6 +694,8 @@ export default function Viviendas({ readOnly = false }: Props) {
                             <span>{estadoActual}</span>
                           )}
                         </td>
+
+                        <td style={tdStyle}>{formatTipoDestino(v.tipoDestino)}</td>
 
                         <td style={tdStyle}>{perm}</td>
 

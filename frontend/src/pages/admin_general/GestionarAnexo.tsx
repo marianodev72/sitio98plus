@@ -64,6 +64,19 @@ function safe(v: unknown) {
   return v === null || v === undefined || v === "" ? "—" : String(v);
 }
 
+function formatTipoDestino(value: unknown): string {
+  const normalized = up(value);
+  if (normalized === "OF") return "OFICIALES";
+  if (normalized === "SO") return "SUBOFICIALES";
+  if (normalized === "MIXTO") return "MIXTO";
+  return "SIN DEFINIR";
+}
+
+function viviendaElegibleLabel(v: any): string {
+  const base = safe(v?.codigo || v?.nombre || v?.direccion || prettyId(v?._id));
+  return `${base} - Destino: ${formatTipoDestino(v?.tipoDestino)}`;
+}
+
 function prettyId(v: unknown) {
   const s = String(v || "").trim();
   if (!s) return "—";
@@ -765,7 +778,7 @@ export default function GestionarAnexo() {
                             .filter((v: any) => up(v?.estado) === "DISPONIBLE")
                             .map((v: any) => (
                               <option key={String(v?._id)} value={String(v?._id)} style={housingOptionStyle}>
-                                {safe(v?.codigo || v?.nombre || v?.direccion || prettyId(v?._id))}
+                                {viviendaElegibleLabel(v)}
                               </option>
                             ))}
                       </optgroup>
@@ -776,7 +789,7 @@ export default function GestionarAnexo() {
                             .filter((v: any) => up(v?.estado) === "A_DESOCUPARSE")
                             .map((v: any) => (
                               <option key={String(v?._id)} value={String(v?._id)} style={housingOptionStyle}>
-                                {safe(v?.codigo || v?.nombre || v?.direccion || prettyId(v?._id))}
+                                {viviendaElegibleLabel(v)}
                               </option>
                             ))}
                       </optgroup>
