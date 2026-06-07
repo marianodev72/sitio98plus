@@ -11,7 +11,15 @@ const {
 } = require("../../constants/institucional");
 const { parseXlsxBuffer } = require("./xlsxParser");
 
-const PERSONAL_HEADERS = ["PRECEDENCIA", "MATRICULAS", "NOMBRE Y APELLIDO", "DNI", "GRUPO"];
+const PERSONAL_HEADERS_LEGACY = ["PRECEDENCIA", "MATRICULAS", "NOMBRE Y APELLIDO", "DNI", "GRUPO"];
+const PERSONAL_HEADERS_COMPLETO = [
+  "MATRICULAS",
+  "NOMBRE Y APELLIDO",
+  "DNI",
+  "TIPO_PERSONAL",
+  "GRUPO_JERARQUICO",
+  "PRECEDENCIA",
+];
 const VIVIENDAS_HEADERS = ["BARRIOS", "DPTOCASA", "DORM", "GRUPO"];
 const GENEROS_ALOJAMIENTO = new Set(["MASCULINO", "FEMENINO", "SIN_RESTRICCION", "NO_ESPECIFICADO"]);
 const ALOJAMIENTO_ESTADOS = new Set([
@@ -185,6 +193,11 @@ function normalizeHeaderKey(value) {
   return normalizeHeader(value).replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "");
 }
 
+function normalizeGrupoJerarquicoStrict(value) {
+  const normalized = normalizeHeaderKey(value);
+  return ["OF", "SB_CP", "CB", "TR", "NO_DEFINIDO"].includes(normalized) ? normalized : null;
+}
+
 function assertHeaders(actual, expected) {
   const normalized = actual.map(normalizeHeader).filter(Boolean);
   const missing = expected.filter((header) => !normalized.includes(header));
@@ -210,6 +223,25 @@ function rowObject(cells, headers) {
     out[header] = clean(cells[index]);
   });
   return out;
+}
+
+function assertPersonalHeaders(actual) {
+  const completo = assertHeaders(actual, PERSONAL_HEADERS_COMPLETO);
+  if (completo.ok) return { ok: true, formato: "COMPLETO", headers: completo.headers };
+
+  const legacy = assertHeaders(actual, PERSONAL_HEADERS_LEGACY);
+  if (legacy.ok) return { ok: true, formato: "LEGACY", headers: legacy.headers };
+
+  return {
+    ok: false,
+    error: {
+      fila: 1,
+      campo: "headers",
+      message: `Columnas invalidas. Formato esperado completo: ${PERSONAL_HEADERS_COMPLETO.join(
+        ", "
+      )}; formato legacy: ${PERSONAL_HEADERS_LEGACY.join(", ")}`,
+    },
+  };
 }
 
 function hasDangerousFormulaText(raw) {
@@ -317,6 +349,7 @@ function publicUser(user) {
     archivado: user.archivado === true,
     bloqueado: user.bloqueado === true,
     tipoPersonal: user.tipoPersonal || null,
+    grupoJerarquico: user.grupoJerarquico || "NO_DEFINIDO",
     precedencia: user.precedencia ?? null,
   };
 }
@@ -370,11 +403,13 @@ function baseSummary({ tipoBase, totalFilas, validas, invalidas, nuevos, actuali
 }
 
 function parsePersonalRows(rows) {
-  const headerCheck = assertHeaders(rows[0]?.cells || [], PERSONAL_HEADERS);
-  if (!headerCheck.ok) return { parsed: [], errors: [headerCheck.error] };
+  const headerCheck = assertPersonalHeaders(rows[0]?.cells || []);
+  if (!headerCheck.ok) return { parsed: [], errors: [headerCheck.error], warnings: [] };
 
   const parsed = [];
   const errors = [];
+  const warnings = [];
+  const isFormatoCompleto = headerCheck.formato === "COMPLETO";
 
   rows.slice(1).forEach((row, index) => {
     const fila = index + 2;
@@ -383,39 +418,83 @@ function parsePersonalRows(rows) {
       return;
     }
 
-    const raw = rowObject(row.cells, PERSONAL_HEADERS);
+    const raw = rowObject(row.cells, headerCheck.headers);
     if (hasDangerousFormulaText(raw)) {
       errors.push({ fila, campo: "archivo", message: "No se aceptan valores con prefijo de formula (=, +, -, @)" });
       return;
     }
-    const tipoPersonal = normalizeTipoPersonal(raw.GRUPO);
+    const tipoPersonal = normalizeTipoPersonal(isFormatoCompleto ? raw.TIPO_PERSONAL : raw.GRUPO);
     const precedencia = normalizePrecedencia(raw.PRECEDENCIA);
     const matricula = clean(raw.MATRICULAS);
     const dni = normDni(raw.DNI);
     const nombreApellido = clean(raw["NOMBRE Y APELLIDO"]);
+    const grupoJerarquicoRaw = isFormatoCompleto ? clean(raw.GRUPO_JERARQUICO) : "";
+    let grupoJerarquico = null;
     const rowErrors = [];
+    const rowWarnings = [];
 
     if (!matricula) rowErrors.push({ fila, campo: "MATRICULAS", message: "matricula obligatoria" });
+    if (!nombreApellido) rowErrors.push({ fila, campo: "NOMBRE Y APELLIDO", message: "nombre y apellido obligatorio" });
     if (!dni) rowErrors.push({ fila, campo: "DNI", message: "DNI obligatorio" });
     if (precedencia === null) rowErrors.push({ fila, campo: "PRECEDENCIA", message: "precedencia numerica obligatoria" });
-    if (!tipoPersonal) rowErrors.push({ fila, campo: "GRUPO", message: "GRUPO debe ser OF o SO" });
+    if (!tipoPersonal) {
+      rowErrors.push({
+        fila,
+        campo: isFormatoCompleto ? "TIPO_PERSONAL" : "GRUPO",
+        message: `${isFormatoCompleto ? "TIPO_PERSONAL" : "GRUPO"} debe ser OF o SO`,
+      });
+    }
+
+    if (isFormatoCompleto) {
+      const grupoNormalizado = normalizeGrupoJerarquicoStrict(grupoJerarquicoRaw);
+
+      if (!grupoJerarquicoRaw) {
+        rowErrors.push({ fila, campo: "GRUPO_JERARQUICO", message: "GRUPO_JERARQUICO obligatorio" });
+      } else if (!grupoNormalizado) {
+        rowErrors.push({
+          fila,
+          campo: "GRUPO_JERARQUICO",
+          message: "GRUPO_JERARQUICO debe ser OF, SB_CP, CB, TR o NO_DEFINIDO",
+        });
+      } else {
+        grupoJerarquico = grupoNormalizado;
+        if (grupoJerarquico === "NO_DEFINIDO") {
+          rowWarnings.push({
+            tipo: "PERSONAL_GRUPO_JERARQUICO_NO_DEFINIDO",
+            fila,
+            matricula,
+            message: "GRUPO_JERARQUICO NO_DEFINIDO no sera asignable automaticamente en alojamientos",
+          });
+        }
+      }
+    } else if (tipoPersonal === "OF") {
+      grupoJerarquico = "OF";
+    } else if (tipoPersonal === "SO") {
+      grupoJerarquico = "NO_DEFINIDO";
+      rowWarnings.push({
+        tipo: "PERSONAL_LEGACY_SIN_GRUPO_JERARQUICO",
+        fila,
+        matricula,
+        message: "El formato legacy no informa grupo jerarquico granular para personal SO",
+      });
+    }
 
     if (rowErrors.length) {
       errors.push(...rowErrors);
       return;
     }
 
-    parsed.push({ fila, matricula, dni, nombreApellido, tipoPersonal, precedencia });
+    warnings.push(...rowWarnings);
+    parsed.push({ fila, matricula, dni, nombreApellido, tipoPersonal, grupoJerarquico, precedencia });
   });
 
-  return { parsed, errors };
+  return { parsed, errors, warnings };
 }
 
 async function dryRunPersonal(buffer) {
   const rows = parseXlsxBuffer(buffer);
   const hash = sha256(buffer);
-  const { parsed, errors } = parsePersonalRows(rows);
-  const warnings = [];
+  const { parsed, errors, warnings } = parsePersonalRows(rows);
   const nuevos = [];
   const actualizados = [];
   const sinCambios = [];
@@ -428,7 +507,7 @@ async function dryRunPersonal(buffer) {
   const users = await User.find({
     $or: [{ matricula: { $in: matriculas } }, { dni: { $in: dnis } }],
   })
-    .select("email matricula dni role activo archivado bloqueado tipoPersonal precedencia nombre apellido")
+    .select("email matricula dni role activo archivado bloqueado tipoPersonal grupoJerarquico precedencia nombre apellido")
     .lean();
 
   const byMatricula = new Map(users.filter((user) => user.matricula).map((user) => [String(user.matricula), user]));
@@ -454,6 +533,16 @@ async function dryRunPersonal(buffer) {
     if ((existing.tipoPersonal || null) !== row.tipoPersonal) {
       cambios.push({ campo: "tipoPersonal", actual: existing.tipoPersonal || null, nuevo: row.tipoPersonal });
       warnings.push({ tipo: "CAMBIO_TIPO_PERSONAL", fila: row.fila, matricula: row.matricula, actual: existing.tipoPersonal || null, nuevo: row.tipoPersonal });
+    }
+    if ((existing.grupoJerarquico || "NO_DEFINIDO") !== row.grupoJerarquico) {
+      cambios.push({ campo: "grupoJerarquico", actual: existing.grupoJerarquico || "NO_DEFINIDO", nuevo: row.grupoJerarquico });
+      warnings.push({
+        tipo: "CAMBIO_GRUPO_JERARQUICO",
+        fila: row.fila,
+        matricula: row.matricula,
+        actual: existing.grupoJerarquico || "NO_DEFINIDO",
+        nuevo: row.grupoJerarquico,
+      });
     }
     if ((existing.precedencia ?? null) !== row.precedencia) {
       cambios.push({ campo: "precedencia", actual: existing.precedencia ?? null, nuevo: row.precedencia });
