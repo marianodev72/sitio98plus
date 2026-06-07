@@ -1,6 +1,7 @@
 const zlib = require("zlib");
 
 const MAX_ENTRIES = 200;
+const XML_PREFIX = "(?:[A-Za-z0-9_]+:)?";
 
 function fail(message) {
   const err = new Error(message);
@@ -86,15 +87,23 @@ function stripTags(value) {
   return decodeXml(String(value || "").replace(/<[^>]+>/g, ""));
 }
 
+function xmlTagRegex(tag, flags = "") {
+  return new RegExp(`<${XML_PREFIX}${tag}\\b[\\s\\S]*?<\\/${XML_PREFIX}${tag}>`, flags);
+}
+
+function xmlSelfClosingTagRegex(tag) {
+  return new RegExp(`<${XML_PREFIX}${tag}\\b[^>]*\\/>`);
+}
+
 function parseSharedStrings(xml) {
   if (!xml) return [];
   const out = [];
-  const siRegex = /<si\b[\s\S]*?<\/si>/g;
+  const siRegex = xmlTagRegex("si", "g");
   const items = xml.match(siRegex) || [];
 
   for (const item of items) {
     const parts = [];
-    const tRegex = /<t\b[^>]*>([\s\S]*?)<\/t>/g;
+    const tRegex = new RegExp(`<${XML_PREFIX}t\\b[^>]*>([\\s\\S]*?)<\\/${XML_PREFIX}t>`, "g");
     let match;
     while ((match = tRegex.exec(item))) parts.push(decodeXml(match[1]));
     out.push(parts.join(""));
@@ -111,18 +120,18 @@ function columnFromRef(ref) {
 }
 
 function cellValue(cellXml, sharedStrings) {
-  if (/<f\b[\s\S]*?<\/f>/.test(cellXml) || /<f\b[^>]*\/>/.test(cellXml)) {
+  if (xmlTagRegex("f").test(cellXml) || xmlSelfClosingTagRegex("f").test(cellXml)) {
     return { formula: true, value: "" };
   }
 
   const type = cellXml.match(/\bt="([^"]+)"/)?.[1] || "";
 
   if (type === "inlineStr") {
-    const inline = cellXml.match(/<is\b[\s\S]*?<\/is>/)?.[0] || "";
+    const inline = cellXml.match(xmlTagRegex("is"))?.[0] || "";
     return { formula: false, value: stripTags(inline) };
   }
 
-  const raw = cellXml.match(/<v>([\s\S]*?)<\/v>/)?.[1] || "";
+  const raw = cellXml.match(new RegExp(`<${XML_PREFIX}v>([\\s\\S]*?)<\\/${XML_PREFIX}v>`))?.[1] || "";
   if (type === "s") return { formula: false, value: sharedStrings[Number(raw)] || "" };
   if (type === "str") return { formula: false, value: decodeXml(raw) };
   if (type === "b") return { formula: false, value: raw === "1" ? "TRUE" : "FALSE" };
@@ -132,17 +141,20 @@ function cellValue(cellXml, sharedStrings) {
 function parseSheetRows(xml, sharedStrings) {
   if (!xml) fail("XLSX sin hoja de calculo");
   const rows = [];
-  const rowRegex = /<row\b[^>]*>([\s\S]*?)<\/row>/g;
+  const rowRegex = xmlTagRegex("row", "g");
   let rowMatch;
 
   while ((rowMatch = rowRegex.exec(xml))) {
     const cells = [];
     let hasFormula = false;
-    const cellRegex = /<c\b([^>]*)>([\s\S]*?)<\/c>|<c\b([^>]*)\/>/g;
+    const cellRegex = new RegExp(
+      `<${XML_PREFIX}c\\b([^>]*)>[\\s\\S]*?<\\/${XML_PREFIX}c>|<${XML_PREFIX}c\\b([^>]*)\\/>`,
+      "g"
+    );
     let cellMatch;
 
     while ((cellMatch = cellRegex.exec(rowMatch[0]))) {
-      const attrs = cellMatch[1] || cellMatch[3] || "";
+      const attrs = cellMatch[1] || cellMatch[2] || "";
       const ref = attrs.match(/\br="([^"]+)"/)?.[1] || "";
       const index = columnFromRef(ref);
       const parsed = cellValue(cellMatch[0], sharedStrings);
