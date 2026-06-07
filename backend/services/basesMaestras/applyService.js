@@ -20,6 +20,7 @@ const ALOJAMIENTO_UPDATE_FIELDS = new Set([
   "activo",
   "observaciones",
 ]);
+const GRUPOS_JERARQUICOS_VALIDOS = new Set(["OF", "SB_CP", "CB", "TR", "NO_DEFINIDO"]);
 
 function arr(value) {
   return Array.isArray(value) ? value : [];
@@ -55,6 +56,11 @@ function clean(value) {
 
 function validTipoDestino(value) {
   return normalizeTipoDestinoStrict(value);
+}
+
+function validGrupoJerarquico(value) {
+  const normalized = String(value || "").toUpperCase().trim().replace(/[\s/-]+/g, "_");
+  return GRUPOS_JERARQUICOS_VALIDOS.has(normalized) ? normalized : null;
 }
 
 function normDni(value) {
@@ -155,9 +161,15 @@ function numeroDesdeCodigo(codigo) {
 
 async function applyPersonalCreate(operation, session, result) {
   const item = operation.preview || {};
-  if (!item.matricula || !item.dni || !item.tipoPersonal || item.precedencia == null) {
+  const grupoJerarquico = validGrupoJerarquico(item.grupoJerarquico);
+  if (!item.matricula || !item.dni || !item.tipoPersonal || !item.grupoJerarquico || item.precedencia == null) {
     result.skipped += 1;
     result.errors.push({ key: operation.key, message: "Personal CREATE incompleto" });
+    return;
+  }
+  if (!grupoJerarquico) {
+    result.skipped += 1;
+    result.errors.push({ key: operation.key, message: "Personal CREATE con grupoJerarquico invalido" });
     return;
   }
 
@@ -179,6 +191,7 @@ async function applyPersonalCreate(operation, session, result) {
         dni: item.dni,
         matricula: item.matricula,
         tipoPersonal: item.tipoPersonal,
+        grupoJerarquico,
         precedencia: item.precedencia,
         passwordHash: await buildPasswordHash(),
         mustChangePassword: true,
@@ -196,6 +209,15 @@ async function applyPersonalUpdate(operation, session, result) {
   const set = {};
   for (const cambio of arr(item.cambios)) {
     if (cambio.campo === "tipoPersonal") set.tipoPersonal = cambio.nuevo;
+    if (cambio.campo === "grupoJerarquico") {
+      const grupoJerarquico = validGrupoJerarquico(cambio.nuevo);
+      if (!grupoJerarquico) {
+        result.skipped += 1;
+        result.errors.push({ key: operation.key, message: "Personal UPDATE con grupoJerarquico invalido" });
+        return;
+      }
+      set.grupoJerarquico = grupoJerarquico;
+    }
     if (cambio.campo === "precedencia") set.precedencia = cambio.nuevo;
   }
   if (Object.keys(set).length === 0) {

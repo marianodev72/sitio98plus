@@ -1,4 +1,4 @@
-const CAMPOS_PERSONAL_PERMITIDOS = new Set(["tipoPersonal", "precedencia"]);
+const CAMPOS_PERSONAL_PERMITIDOS = new Set(["tipoPersonal", "grupoJerarquico", "precedencia"]);
 const CAMPOS_PERSONAL_BLOQUEADOS = new Set([
   "role",
   "permisos",
@@ -92,6 +92,9 @@ function pushPersonalRisks(job, item, risks, requiresManualReview) {
   if (arr(item.cambios).some((cambio) => cambio.campo === "tipoPersonal")) {
     risks.push({ tipo: "CAMBIO_TIPO_PERSONAL", key: safeKey(item), message: "Cambio OF/SO requiere revision institucional" });
   }
+  if (arr(item.cambios).some((cambio) => cambio.campo === "grupoJerarquico")) {
+    risks.push({ tipo: "CAMBIO_GRUPO_JERARQUICO", key: safeKey(item), message: "Cambio de grupo jerarquico requiere revision institucional" });
+  }
 }
 
 function planPersonal(job) {
@@ -111,9 +114,9 @@ function planPersonal(job) {
         collection: "users",
         key: safeKey(item),
         item,
-        allowedFields: ["nombre", "apellido", "dni", "matricula", "tipoPersonal", "precedencia"],
+        allowedFields: ["nombre", "apellido", "dni", "matricula", "tipoPersonal", "grupoJerarquico", "precedencia"],
         blockedFields: Array.from(CAMPOS_PERSONAL_BLOQUEADOS),
-        snapshotFields: ["_id", "dni", "matricula", "tipoPersonal", "precedencia", "activo", "archivado"],
+        snapshotFields: ["_id", "dni", "matricula", "tipoPersonal", "grupoJerarquico", "precedencia", "activo", "archivado"],
       })
     );
   }
@@ -133,7 +136,7 @@ function planPersonal(job) {
           item: { ...item, cambios: allowed },
           allowedFields: allowed.map((cambio) => cambio.campo),
           blockedFields: [],
-          snapshotFields: ["_id", "dni", "matricula", "tipoPersonal", "precedencia"],
+          snapshotFields: ["_id", "dni", "matricula", "tipoPersonal", "grupoJerarquico", "precedencia"],
         })
       );
     }
