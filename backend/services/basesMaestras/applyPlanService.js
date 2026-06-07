@@ -450,14 +450,28 @@ function buildApplyPlan(job) {
   throw err;
 }
 
-function buildApplyPlanSummary(applyPlan = {}) {
+function buildApplyPlanSummary(applyPlan) {
+  const plan = applyPlan || {};
+  const creates = arr(plan.creates).length;
+  const updates = arr(plan.updates).length;
+  const blocked = arr(plan.blocked).length;
+  const risks = arr(plan.risks).length;
+  const warnings = arr(plan.warnings).length;
+  const requiresManualReview = arr(plan.requiresManualReview).length;
+
   return {
-    createsCount: arr(applyPlan.creates).length,
-    updatesCount: arr(applyPlan.updates).length,
-    blockedCount: arr(applyPlan.blocked).length,
-    risksCount: arr(applyPlan.risks).length,
-    warningsCount: arr(applyPlan.warnings).length,
-    requiresManualReviewCount: arr(applyPlan.requiresManualReview).length,
+    creates,
+    updates,
+    blocked,
+    risks,
+    warnings,
+    requiresManualReview,
+    createsCount: creates,
+    updatesCount: updates,
+    blockedCount: blocked,
+    risksCount: risks,
+    warningsCount: warnings,
+    requiresManualReviewCount: requiresManualReview,
   };
 }
 
