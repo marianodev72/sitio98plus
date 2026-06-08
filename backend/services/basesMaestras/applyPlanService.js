@@ -160,6 +160,15 @@ function viviendaOcupada(item) {
   return Boolean(item?.existente?.ocupada) || String(item?.existente?.estado || "").toUpperCase() === "OCUPADA";
 }
 
+function bajaViviendaAusenteReason(estado) {
+  const normalized = String(estado || "").toUpperCase().trim();
+  if (["DISPONIBLE", "REPARACION", "BAJA"].includes(normalized)) return null;
+  if (normalized === "OCUPADA") return "BAJA_VIVIENDA_OCUPADA_BLOQUEADA";
+  if (normalized === "RESERVADA") return "BAJA_VIVIENDA_RESERVADA_BLOQUEADA";
+  if (normalized === "A_DESOCUPARSE") return "BAJA_VIVIENDA_A_DESOCUPARSE_BLOQUEADA";
+  return "BAJA_AUTOMATICA_BLOQUEADA";
+}
+
 function pushViviendaRisks(item, risks, requiresManualReview) {
   if (viviendaOcupada(item)) {
     risks.push({ tipo: "VIVIENDA_OCUPADA", key: safeKey(item), message: "Vivienda ocupada detectada en dry-run" });
@@ -234,13 +243,30 @@ function planViviendas(job) {
 
   for (const warning of warnings) {
     if (warning?.tipo === "VIVIENDA_DESAPARECE_DEL_ARCHIVO") {
-      blocked.push({
-        action: "BAJA_SUGERIDA",
-        collection: "viviendas",
-        key: warning?.vivienda?.codigo || "",
-        reason: "BAJA_AUTOMATICA_BLOQUEADA",
-        warning,
-      });
+      const vivienda = warning?.vivienda || {};
+      const key = vivienda.codigo || "";
+      const reason = bajaViviendaAusenteReason(vivienda.estado);
+      if (reason) {
+        blocked.push({
+          action: "BAJA_SUGERIDA",
+          collection: "viviendas",
+          key,
+          reason,
+          warning,
+        });
+      } else {
+        risks.push({
+          tipo: "BAJA_LOGICA_VIVIENDA",
+          key,
+          message: "Vivienda no incluida en el Excel; baja logica requiere revision institucional.",
+        });
+        requiresManualReview.push({
+          tipo: "BAJA_LOGICA_VIVIENDA",
+          key,
+          vivienda,
+          message: "La vivienda no aparece en el Excel. Requiere aprobacion ADMIN_GENERAL para baja logica.",
+        });
+      }
     }
     if (warning?.tipo === "DUPLICADO_ARCHIVO") {
       risks.push({ tipo: "CODIGO_AMBIGUO", key: warning.valor || "", message: "Codigo duplicado detectado en dry-run" });
