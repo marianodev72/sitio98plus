@@ -783,8 +783,8 @@ export default function BasesMaestras() {
 
               {isAlojamientosJob ? (
                 <div style={{ ...softCardStyle, marginTop: 12, color: "rgba(255,255,255,0.78)" }}>
-                  ALOJAMIENTOS permite generar apply-plan readonly para auditoria. El apply real sigue fuera de
-                  alcance si existen bloqueos, riesgos o revisiones manuales sin aprobacion institucional.
+                  ALOJAMIENTOS usa apply-plan con validaciones reforzadas. Revise bloqueos, riesgos y aprobaciones
+                  manuales antes de aplicar.
                 </div>
               ) : null}
 
