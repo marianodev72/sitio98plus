@@ -45,7 +45,8 @@ const CAMPOS_ALOJAMIENTO_BLOQUEADOS = new Set([
   "plazas",
   "asignaciones",
 ]);
-const ESTADOS_ALOJAMIENTO_RIESGO_OCUPADO = new Set(["BAJA", "FUERA_SERVICIO", "INHABILITADO"]);
+const ESTADOS_ALOJAMIENTO_CRITICOS = new Set(["FUERA_SERVICIO", "INHABILITADO", "BAJA", "MANTENIMIENTO"]);
+const ESTADOS_ALOJAMIENTO_BLOQUEO_OCUPADO = new Set(["BAJA", "INHABILITADO"]);
 
 function arr(value) {
   return Array.isArray(value) ? value : [];
@@ -278,12 +279,20 @@ function planViviendas(job) {
 }
 
 function alojamientoOcupado(item) {
+  const alojados = arr(item?.existente?.alojados);
+  const alojadosOcupacionActual = arr(item?.existente?.ocupacionActual?.alojados);
   return (
     Boolean(item?.existente?.ocupado) ||
     Number(item?.existente?.plazasOcupadas || 0) > 0 ||
     Number(item?.existente?.plazasReservadas || 0) > 0 ||
+    alojados.length > 0 ||
+    alojadosOcupacionActual.length > 0 ||
     String(item?.existente?.estado || "").toUpperCase() === "OCUPADO"
   );
+}
+
+function alojamientoOcupacionComprometida(item) {
+  return Number(item?.existente?.plazasOcupadas || 0) + Number(item?.existente?.plazasReservadas || 0);
 }
 
 function pushAlojamientoRisk(risks, requiresManualReview, tipo, key, message) {
@@ -291,10 +300,22 @@ function pushAlojamientoRisk(risks, requiresManualReview, tipo, key, message) {
   requiresManualReview.push({ tipo, key });
 }
 
-function pushAlojamientoRisks(item, risks, requiresManualReview) {
+function pushAlojamientoBlocked(blocked, item, field, reason, cambio) {
+  blocked.push({
+    action: "UPDATE",
+    collection: "alojamientos",
+    key: safeKey(item),
+    field,
+    reason,
+    cambio,
+  });
+}
+
+function pushAlojamientoRisks(item, risks, requiresManualReview, blocked) {
   const key = safeKey(item);
   const cambios = arr(item.cambios);
   const ocupado = alojamientoOcupado(item);
+  const ocupacionComprometida = alojamientoOcupacionComprometida(item);
 
   if (!ocupado) return;
 
@@ -302,7 +323,7 @@ function pushAlojamientoRisks(item, risks, requiresManualReview) {
     pushAlojamientoRisk(
       risks,
       requiresManualReview,
-      "ALOJAMIENTO_OCUPADO_CAMBIA_GENERO",
+      "CAMBIO_GENERO_ALOJAMIENTO_OCUPADO",
       key,
       "Cambio de genero en alojamiento ocupado requiere revision institucional"
     );
@@ -311,41 +332,72 @@ function pushAlojamientoRisks(item, risks, requiresManualReview) {
     pushAlojamientoRisk(
       risks,
       requiresManualReview,
-      "ALOJAMIENTO_OCUPADO_CAMBIA_GRUPO_JERARQUICO",
+      "CAMBIO_GRUPO_ALOJAMIENTO_OCUPADO",
       key,
       "Cambio de grupo jerarquico en alojamiento ocupado requiere revision institucional"
     );
   }
-  if (cambios.some((cambio) => cambio.campo === "capacidad" && Number(cambio.nuevo) < Number(cambio.actual))) {
-    pushAlojamientoRisk(
-      risks,
-      requiresManualReview,
-      "ALOJAMIENTO_OCUPADO_REDUCE_CAPACIDAD",
-      key,
-      "Reduccion de capacidad en alojamiento ocupado requiere revision institucional"
-    );
+  for (const cambio of cambios.filter((cambio) => cambio.campo === "capacidad")) {
+    const capacidadNueva = Number(cambio.nuevo);
+    const capacidadActual = Number(cambio.actual);
+    const reduceCapacidad = capacidadNueva < capacidadActual;
+
+    if (reduceCapacidad && capacidadNueva < ocupacionComprometida) {
+      pushAlojamientoBlocked(blocked, item, "capacidad", "REDUCCION_CAPACIDAD_INCOMPATIBLE_BLOQUEADA", cambio);
+    } else if (reduceCapacidad) {
+      pushAlojamientoRisk(
+        risks,
+        requiresManualReview,
+        "REDUCCION_CAPACIDAD_ALOJAMIENTO",
+        key,
+        "Reduccion de capacidad en alojamiento ocupado requiere revision institucional"
+      );
+    } else {
+      pushAlojamientoRisk(
+        risks,
+        requiresManualReview,
+        "CAMBIO_CAPACIDAD_ALOJAMIENTO_OCUPADO",
+        key,
+        "Cambio de capacidad en alojamiento ocupado requiere revision institucional"
+      );
+    }
   }
   if (cambios.some((cambio) => cambio.campo === "activo" && cambio.nuevo === false)) {
     pushAlojamientoRisk(
       risks,
       requiresManualReview,
-      "ALOJAMIENTO_OCUPADO_ACTIVO_FALSE",
+      "CAMBIO_ACTIVO_ALOJAMIENTO_OCUPADO",
       key,
       "Desactivacion de alojamiento ocupado requiere revision institucional"
     );
   }
-  if (
-    cambios.some(
-      (cambio) => cambio.campo === "estado" && ESTADOS_ALOJAMIENTO_RIESGO_OCUPADO.has(String(cambio.nuevo || "").toUpperCase())
-    )
-  ) {
-    pushAlojamientoRisk(
-      risks,
-      requiresManualReview,
-      "ALOJAMIENTO_OCUPADO_CAMBIA_ESTADO_CRITICO",
-      key,
-      "Cambio a estado critico en alojamiento ocupado requiere revision institucional"
-    );
+  for (const cambio of cambios.filter((cambio) => cambio.campo === "estado")) {
+    const estadoNuevo = String(cambio.nuevo || "").toUpperCase();
+    if (ESTADOS_ALOJAMIENTO_BLOQUEO_OCUPADO.has(estadoNuevo)) {
+      pushAlojamientoBlocked(
+        blocked,
+        item,
+        "estado",
+        estadoNuevo === "BAJA" ? "BAJA_ALOJAMIENTO_OCUPADO_BLOQUEADA" : "INHABILITADO_ALOJAMIENTO_OCUPADO_BLOQUEADO",
+        cambio
+      );
+    } else if (ESTADOS_ALOJAMIENTO_CRITICOS.has(estadoNuevo)) {
+      pushAlojamientoRisk(
+        risks,
+        requiresManualReview,
+        "ESTADO_CRITICO_ALOJAMIENTO_OCUPADO",
+        key,
+        "Cambio a estado critico en alojamiento ocupado requiere revision institucional"
+      );
+    } else {
+      pushAlojamientoRisk(
+        risks,
+        requiresManualReview,
+        "CAMBIO_ESTADO_ALOJAMIENTO_OCUPADO",
+        key,
+        "Cambio de estado en alojamiento ocupado requiere revision institucional"
+      );
+    }
   }
 }
 
@@ -397,7 +449,7 @@ function planAlojamientos(job) {
   }
 
   for (const item of arr(diff.actualizados)) {
-    pushAlojamientoRisks(item, risks, requiresManualReview);
+    pushAlojamientoRisks(item, risks, requiresManualReview, blocked);
     const cambios = arr(item.cambios);
     const allowed = cambios.filter((cambio) => CAMPOS_ALOJAMIENTO_PERMITIDOS.has(cambio.campo));
     const denied = cambios.filter((cambio) => !CAMPOS_ALOJAMIENTO_PERMITIDOS.has(cambio.campo));
