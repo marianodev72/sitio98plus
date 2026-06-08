@@ -8,6 +8,8 @@ const AlojamientoNaval = require("../../modules/alojamientos/models/AlojamientoN
 const { normalizeTipoDestinoStrict } = require("../../constants/institucional");
 
 const APPLYABLE_ESTADO = "PENDIENTE_CONFIRMACION";
+const BAJA_LOGICA_VIVIENDA = "BAJA_LOGICA_VIVIENDA";
+const ESTADOS_VIVIENDA_BAJA_LOGICA = new Set(["DISPONIBLE", "REPARACION", "BAJA"]);
 const ALOJAMIENTO_UPDATE_FIELDS = new Set([
   "denominacion",
   "dependencia",
@@ -48,6 +50,21 @@ function approvedTokens(job) {
 
 function unapproved(items, tokens) {
   return arr(items).filter((item) => !tokens.has(approvalToken(item)));
+}
+
+function bajaLogicaViviendaItems(job) {
+  return arr(job?.applyPlan?.requiresManualReview).filter((item) => approvalTipo(item?.tipo) === BAJA_LOGICA_VIVIENDA);
+}
+
+function approvedManualReview(job, tipo, key) {
+  const normalizedTipo = approvalTipo(tipo);
+  const normalizedKey = approvalKey(key);
+  return arr(job?.manualApprovals).find(
+    (approval) =>
+      approval?.approved === true &&
+      approvalTipo(approval.tipo) === normalizedTipo &&
+      approvalKey(approval.key) === normalizedKey
+  );
 }
 
 function clean(value) {
@@ -106,7 +123,8 @@ function assertApplyable(job) {
     err.status = 409;
     throw err;
   }
-  const totalOps = arr(job.applyPlan.creates).length + arr(job.applyPlan.updates).length;
+  const totalOps =
+    arr(job.applyPlan.creates).length + arr(job.applyPlan.updates).length + bajaLogicaViviendaItems(job).length;
   if (totalOps === 0) {
     const err = new Error("ApplyPlan vacio");
     err.status = 409;
@@ -287,6 +305,62 @@ async function applyViviendaUpdate(operation, session, result) {
   else result.skipped += 1;
 }
 
+async function applyViviendaBajaLogica({ job, item, actorId, session, result }) {
+  const key = approvalKey(item?.key);
+  const approval = approvedManualReview(job, BAJA_LOGICA_VIVIENDA, key);
+  if (!approval) {
+    result.skipped += 1;
+    result.errors.push({ key, message: "Baja logica de vivienda sin aprobacion manual" });
+    return;
+  }
+
+  const vivienda = await Vivienda.findOne({ codigo: key }).session(session);
+  if (!vivienda) {
+    result.skipped += 1;
+    result.errors.push({ key, message: "Vivienda BAJA_LOGICA inexistente" });
+    return;
+  }
+
+  const estadoAnterior = String(vivienda.estado || "").toUpperCase().trim();
+  if (!ESTADOS_VIVIENDA_BAJA_LOGICA.has(estadoAnterior)) {
+    result.skipped += 1;
+    result.errors.push({ key, message: "Vivienda BAJA_LOGICA con estado no permitido" });
+    return;
+  }
+
+  if (estadoAnterior === "BAJA") {
+    result.skipped += 1;
+    return;
+  }
+
+  const motivo = clean(approval.motivo);
+  const observacion = `Baja logica aprobada por ADMIN_GENERAL desde Bases Maestras. Motivo: ${motivo}`.slice(0, 500);
+  const actor = approval.approvedBy || actorId || null;
+  const update = await Vivienda.updateOne(
+    { _id: vivienda._id, estado: estadoAnterior },
+    {
+      $set: { estado: "BAJA" },
+      $push: {
+        historialEstados: {
+          fecha: new Date(),
+          actor,
+          estadoAnterior,
+          estadoNuevo: "BAJA",
+          observacion,
+          forzado: false,
+        },
+      },
+    },
+    { session }
+  );
+
+  if (update.modifiedCount > 0 || update.matchedCount > 0) result.updatesApplied += 1;
+  else {
+    result.skipped += 1;
+    result.errors.push({ key, message: "No se pudo aplicar baja logica de vivienda" });
+  }
+}
+
 async function applyAlojamientoCreate(operation, session, result) {
   const item = operation.preview || {};
   if (!item.codigo || !item.dependencia || !item.lugar || !item.capacidad || !item.generoPermitido) {
@@ -383,6 +457,9 @@ async function executeApply({ job, actorId, markApplied, markFailed }) {
       }
       for (const operation of arr(job.applyPlan.updates)) {
         await applyOperation(operation, session, result, actorId);
+      }
+      for (const item of bajaLogicaViviendaItems(job)) {
+        await applyViviendaBajaLogica({ job, item, actorId, session, result });
       }
       if (result.errors.length > 0) {
         const err = new Error("Apply abortado por errores de operacion");
