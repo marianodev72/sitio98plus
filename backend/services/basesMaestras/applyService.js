@@ -5,11 +5,20 @@ const mongoose = require("mongoose");
 const { User } = require("../../models/user");
 const Vivienda = require("../../models/vivienda");
 const AlojamientoNaval = require("../../modules/alojamientos/models/AlojamientoNaval");
+const {
+  ALOJAMIENTO_ESTADOS,
+  GENERO_PERMITIDO,
+} = require("../../modules/alojamientos/constants/alojamientoConstants");
 const { normalizeTipoDestinoStrict } = require("../../constants/institucional");
 
 const APPLYABLE_ESTADO = "PENDIENTE_CONFIRMACION";
 const BAJA_LOGICA_VIVIENDA = "BAJA_LOGICA_VIVIENDA";
 const ESTADOS_VIVIENDA_BAJA_LOGICA = new Set(["DISPONIBLE", "REPARACION", "BAJA"]);
+const GENEROS_ALOJAMIENTO_VALIDOS = new Set(GENERO_PERMITIDO);
+const ESTADOS_ALOJAMIENTO_VALIDOS = new Set(ALOJAMIENTO_ESTADOS);
+const ESTADOS_ALOJAMIENTO_OCUPADO_REAL = new Set(["OCUPADO", "RESERVADO", "PARCIALMENTE_OCUPADO"]);
+const ESTADOS_ALOJAMIENTO_CRITICOS = new Set(["FUERA_SERVICIO", "MANTENIMIENTO"]);
+const ESTADOS_ALOJAMIENTO_BLOQUEO_OCUPADO = new Set(["BAJA", "INHABILITADO"]);
 const ALOJAMIENTO_UPDATE_FIELDS = new Set([
   "denominacion",
   "dependencia",
@@ -78,6 +87,16 @@ function validTipoDestino(value) {
 function validGrupoJerarquico(value) {
   const normalized = String(value || "").toUpperCase().trim().replace(/[\s/-]+/g, "_");
   return GRUPOS_JERARQUICOS_VALIDOS.has(normalized) ? normalized : null;
+}
+
+function validGeneroAlojamiento(value) {
+  const normalized = String(value || "").toUpperCase().trim().replace(/[\s/-]+/g, "_");
+  return GENEROS_ALOJAMIENTO_VALIDOS.has(normalized) ? normalized : null;
+}
+
+function validEstadoAlojamiento(value) {
+  const normalized = String(value || "").toUpperCase().trim().replace(/[\s/-]+/g, "_");
+  return ESTADOS_ALOJAMIENTO_VALIDOS.has(normalized) ? normalized : null;
 }
 
 function normDni(value) {
@@ -175,6 +194,42 @@ function numeroDesdeCodigo(codigo) {
   const normalized = clean(codigo).toUpperCase();
   const parts = normalized.split(/[-_/]/).filter(Boolean);
   return parts[parts.length - 1] || normalized || "S/N";
+}
+
+function alojamientoOcupacionActual(alojamiento) {
+  const ocupacion = alojamiento?.ocupacionActual || {};
+  return {
+    plazasOcupadas: Number(ocupacion.plazasOcupadas || 0),
+    plazasReservadas: Number(ocupacion.plazasReservadas || 0),
+    alojados: arr(ocupacion.alojados),
+    estado: String(alojamiento?.estado || "").toUpperCase().trim(),
+  };
+}
+
+function alojamientoOcupadoReal(alojamiento) {
+  const ocupacion = alojamientoOcupacionActual(alojamiento);
+  return (
+    ocupacion.plazasOcupadas > 0 ||
+    ocupacion.plazasReservadas > 0 ||
+    ocupacion.alojados.length > 0 ||
+    ESTADOS_ALOJAMIENTO_OCUPADO_REAL.has(ocupacion.estado)
+  );
+}
+
+function alojamientoOcupacionComprometida(alojamiento) {
+  const ocupacion = alojamientoOcupacionActual(alojamiento);
+  return ocupacion.plazasOcupadas + ocupacion.plazasReservadas;
+}
+
+function pushApplyError(result, key, message, extra = {}) {
+  result.skipped += 1;
+  result.errors.push({ key, message, ...extra });
+}
+
+function requireManualApproval(job, tipo, key, result) {
+  if (approvedManualReview(job, tipo, key)) return true;
+  pushApplyError(result, key, `Alojamiento requiere aprobacion manual ${tipo}`, { tipo });
+  return false;
 }
 
 async function applyPersonalCreate(operation, session, result) {
@@ -363,9 +418,30 @@ async function applyViviendaBajaLogica({ job, item, actorId, session, result }) 
 
 async function applyAlojamientoCreate(operation, session, result) {
   const item = operation.preview || {};
+  const key = operation.key || item.codigo;
+  const capacidad = Number(item.capacidad);
+  const generoPermitido = validGeneroAlojamiento(item.generoPermitido);
+  const aptoParaGrupoJerarquico = validGrupoJerarquico(item.aptoParaGrupoJerarquico || "NO_DEFINIDO");
+  const estado = validEstadoAlojamiento(item.estado || "DISPONIBLE");
+
   if (!item.codigo || !item.dependencia || !item.lugar || !item.capacidad || !item.generoPermitido) {
-    result.skipped += 1;
-    result.errors.push({ key: operation.key, message: "Alojamiento CREATE incompleto" });
+    pushApplyError(result, key, "Alojamiento CREATE incompleto");
+    return;
+  }
+  if (!Number.isInteger(capacidad) || capacidad < 1) {
+    pushApplyError(result, key, "Alojamiento CREATE con capacidad invalida");
+    return;
+  }
+  if (!generoPermitido) {
+    pushApplyError(result, key, "Alojamiento CREATE con generoPermitido invalido");
+    return;
+  }
+  if (!aptoParaGrupoJerarquico) {
+    pushApplyError(result, key, "Alojamiento CREATE con aptoParaGrupoJerarquico invalido");
+    return;
+  }
+  if (!estado) {
+    pushApplyError(result, key, "Alojamiento CREATE con estado invalido");
     return;
   }
 
@@ -375,7 +451,6 @@ async function applyAlojamientoCreate(operation, session, result) {
     return;
   }
 
-  const capacidad = Number(item.capacidad);
   await AlojamientoNaval.create(
     [
       {
@@ -388,9 +463,9 @@ async function applyAlojamientoCreate(operation, session, result) {
         numero: numeroDesdeCodigo(item.codigo),
         clase: clasePorCapacidad(capacidad),
         capacidad,
-        generoPermitido: item.generoPermitido,
-        aptoParaGrupoJerarquico: item.aptoParaGrupoJerarquico || "NO_DEFINIDO",
-        estado: item.estado || "DISPONIBLE",
+        generoPermitido,
+        aptoParaGrupoJerarquico,
+        estado,
         activo: item.activo !== false,
         observaciones: item.observaciones || "",
         ocupacionActual: {
@@ -407,32 +482,99 @@ async function applyAlojamientoCreate(operation, session, result) {
   result.createsApplied += 1;
 }
 
-async function applyAlojamientoUpdate(operation, session, result) {
+async function applyAlojamientoUpdate(operation, session, result, job) {
   const item = operation.preview || {};
+  const key = operation.key || item.codigo;
+  const alojamiento = await AlojamientoNaval.findOne({ codigo: item.codigo }).session(session);
+  if (!alojamiento) {
+    pushApplyError(result, key, "Alojamiento UPDATE inexistente");
+    return;
+  }
+
+  const ocupado = alojamientoOcupadoReal(alojamiento);
+  const ocupacionComprometida = alojamientoOcupacionComprometida(alojamiento);
   const set = {};
+
   for (const cambio of arr(item.cambios)) {
     if (!ALOJAMIENTO_UPDATE_FIELDS.has(cambio.campo)) continue;
-    if (cambio.campo === "capacidad") set.capacidad = Number(cambio.nuevo);
-    else if (cambio.campo === "activo") set.activo = cambio.nuevo !== false;
-    else set[cambio.campo] = cambio.nuevo;
+
+    if (cambio.campo === "generoPermitido") {
+      const generoPermitido = validGeneroAlojamiento(cambio.nuevo);
+      if (!generoPermitido) {
+        pushApplyError(result, key, "Alojamiento UPDATE con generoPermitido invalido");
+        return;
+      }
+      if (ocupado && !requireManualApproval(job, "CAMBIO_GENERO_ALOJAMIENTO_OCUPADO", key, result)) return;
+      set.generoPermitido = generoPermitido;
+    } else if (cambio.campo === "aptoParaGrupoJerarquico") {
+      const aptoParaGrupoJerarquico = validGrupoJerarquico(cambio.nuevo);
+      if (!aptoParaGrupoJerarquico) {
+        pushApplyError(result, key, "Alojamiento UPDATE con aptoParaGrupoJerarquico invalido");
+        return;
+      }
+      if (ocupado && !requireManualApproval(job, "CAMBIO_GRUPO_ALOJAMIENTO_OCUPADO", key, result)) return;
+      set.aptoParaGrupoJerarquico = aptoParaGrupoJerarquico;
+    } else if (cambio.campo === "capacidad") {
+      const capacidadNueva = Number(cambio.nuevo);
+      const capacidadActual = Number(alojamiento.capacidad || 0);
+      const reduceCapacidad = capacidadNueva < capacidadActual;
+      if (!Number.isInteger(capacidadNueva) || capacidadNueva < 1) {
+        pushApplyError(result, key, "Alojamiento UPDATE con capacidad invalida");
+        return;
+      }
+      if (capacidadNueva < ocupacionComprometida) {
+        pushApplyError(result, key, "REDUCCION_CAPACIDAD_INCOMPATIBLE_BLOQUEADA", {
+          tipo: "REDUCCION_CAPACIDAD_INCOMPATIBLE_BLOQUEADA",
+        });
+        return;
+      }
+      if (ocupado && reduceCapacidad && !requireManualApproval(job, "REDUCCION_CAPACIDAD_ALOJAMIENTO", key, result)) return;
+      if (ocupado && !reduceCapacidad && !requireManualApproval(job, "CAMBIO_CAPACIDAD_ALOJAMIENTO_OCUPADO", key, result)) return;
+      set.capacidad = capacidadNueva;
+      set.clase = clasePorCapacidad(capacidadNueva);
+    } else if (cambio.campo === "estado") {
+      const estado = validEstadoAlojamiento(cambio.nuevo);
+      if (!estado) {
+        pushApplyError(result, key, "Alojamiento UPDATE con estado invalido");
+        return;
+      }
+      if (ocupado && ESTADOS_ALOJAMIENTO_BLOQUEO_OCUPADO.has(estado)) {
+        pushApplyError(
+          result,
+          key,
+          estado === "BAJA" ? "BAJA_ALOJAMIENTO_OCUPADO_BLOQUEADA" : "INHABILITADO_ALOJAMIENTO_OCUPADO_BLOQUEADO",
+          { tipo: estado === "BAJA" ? "BAJA_ALOJAMIENTO_OCUPADO_BLOQUEADA" : "INHABILITADO_ALOJAMIENTO_OCUPADO_BLOQUEADO" }
+        );
+        return;
+      }
+      if (ocupado && ESTADOS_ALOJAMIENTO_CRITICOS.has(estado) && !requireManualApproval(job, "ESTADO_CRITICO_ALOJAMIENTO_OCUPADO", key, result)) return;
+      if (ocupado && !ESTADOS_ALOJAMIENTO_CRITICOS.has(estado) && !requireManualApproval(job, "CAMBIO_ESTADO_ALOJAMIENTO_OCUPADO", key, result)) return;
+      set.estado = estado;
+    } else if (cambio.campo === "activo") {
+      const activo = cambio.nuevo !== false;
+      if (ocupado && activo === false && !requireManualApproval(job, "CAMBIO_ACTIVO_ALOJAMIENTO_OCUPADO", key, result)) return;
+      set.activo = activo;
+    } else {
+      set[cambio.campo] = cambio.nuevo;
+    }
   }
   if (Object.keys(set).length === 0) {
     result.skipped += 1;
     return;
   }
-  const update = await AlojamientoNaval.updateOne({ codigo: item.codigo }, { $set: set }, { session });
+  const update = await AlojamientoNaval.updateOne({ _id: alojamiento._id }, { $set: set }, { session });
   if (update.modifiedCount > 0 || update.matchedCount > 0) result.updatesApplied += 1;
   else result.skipped += 1;
 }
 
-async function applyOperation(operation, session, result, actorId) {
+async function applyOperation(operation, session, result, actorId, job) {
   const op = { ...operation, actorId };
   if (operation.collection === "users" && operation.action === "CREATE") return applyPersonalCreate(op, session, result);
   if (operation.collection === "users" && operation.action === "UPDATE") return applyPersonalUpdate(op, session, result);
   if (operation.collection === "viviendas" && operation.action === "CREATE") return applyViviendaCreate(op, session, result);
   if (operation.collection === "viviendas" && operation.action === "UPDATE") return applyViviendaUpdate(op, session, result);
   if (operation.collection === "alojamientos" && operation.action === "CREATE") return applyAlojamientoCreate(op, session, result);
-  if (operation.collection === "alojamientos" && operation.action === "UPDATE") return applyAlojamientoUpdate(op, session, result);
+  if (operation.collection === "alojamientos" && operation.action === "UPDATE") return applyAlojamientoUpdate(op, session, result, job);
   result.blocked += 1;
   result.errors.push({ key: operation.key, message: "Operacion no permitida" });
   return null;
@@ -453,10 +595,10 @@ async function executeApply({ job, actorId, markApplied, markFailed }) {
   try {
     await session.withTransaction(async () => {
       for (const operation of arr(job.applyPlan.creates)) {
-        await applyOperation(operation, session, result, actorId);
+        await applyOperation(operation, session, result, actorId, job);
       }
       for (const operation of arr(job.applyPlan.updates)) {
-        await applyOperation(operation, session, result, actorId);
+        await applyOperation(operation, session, result, actorId, job);
       }
       for (const item of bajaLogicaViviendaItems(job)) {
         await applyViviendaBajaLogica({ job, item, actorId, session, result });
