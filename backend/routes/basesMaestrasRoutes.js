@@ -77,6 +77,11 @@ router.post(
   audit("BASES_MAESTRAS_MANUAL_APPROVAL", { targetType: "MasterImportJob" }),
   controller.manualApproval
 );
+router.post(
+  "/jobs/:id/exclusions",
+  audit("BASES_MAESTRAS_EXCLUSION", { targetType: "MasterImportJob" }),
+  controller.excludeBlockedItem
+);
 
 router.post(
   "/personal/dry-run",

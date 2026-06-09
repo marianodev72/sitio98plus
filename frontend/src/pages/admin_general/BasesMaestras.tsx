@@ -38,8 +38,23 @@ type ManualApproval = {
   approvedAt?: string | null;
 };
 
+type JobExclusion = {
+  tipo?: string;
+  code?: string;
+  key?: string;
+  rowIndex?: number | null;
+  matricula?: string;
+  dni?: string;
+  userId?: string;
+  motivo?: string;
+  createdBy?: string | null;
+  createdAt?: string | null;
+  revokedAt?: string | null;
+};
+
 type ApplyPlanItem = {
   tipo?: string;
+  code?: string;
   key?: string;
   message?: string;
   campo?: string;
@@ -47,6 +62,16 @@ type ApplyPlanItem = {
   collection?: string;
   reason?: string;
   field?: string;
+  rowIndex?: number | null;
+  matricula?: string;
+  dni?: string;
+  nombre?: string;
+  nombreApellido?: string;
+  userId?: string;
+  flags?: Record<string, unknown>;
+  changes?: unknown[];
+  excluded?: boolean;
+  exclusion?: JobExclusion;
   grouped?: boolean;
   count?: number;
 };
@@ -55,6 +80,7 @@ type ApplyPlan = {
   creates?: unknown[];
   updates?: unknown[];
   blocked?: ApplyPlanItem[];
+  excluded?: ApplyPlanItem[];
   risks?: ApplyPlanItem[];
   warnings?: unknown[];
   requiresManualReview?: ApplyPlanItem[];
@@ -78,6 +104,7 @@ type JobDetail = JobListItem & {
   applyPlan?: ApplyPlan | null;
   applyPlanSummary?: Record<string, unknown> | null;
   manualApprovals?: ManualApproval[];
+  exclusions?: JobExclusion[];
   applyResult?: ApplyResult | null;
   appliedBy?: string | null;
   warnings?: unknown[];
@@ -94,6 +121,7 @@ type DryRunResult = {
 };
 
 const MAX_ITEMS = 40;
+const EXCLUDABLE_PERSONAL_BLOCK_CODES = new Set(["USUARIO_ARCHIVADO_EN_IMPORTACION_PERSONAL"]);
 
 function formatDate(value?: string | null) {
   if (!value) return "-";
@@ -122,6 +150,10 @@ function numberFromSummary(summary: Record<string, unknown>, key: string) {
 
 function approvalToken(item: { tipo?: string; key?: string }) {
   return `${safe(item.tipo, "").toUpperCase()}::${safe(item.key, "")}`;
+}
+
+function blockCode(item: ApplyPlanItem) {
+  return safe(item.code || item.reason || item.tipo, "").toUpperCase();
 }
 
 function estadoTone(estado?: string): CSSProperties {
@@ -304,6 +336,7 @@ export default function BasesMaestras() {
   const risks = arr(applyPlan?.risks);
   const manualReview = arr(applyPlan?.requiresManualReview);
   const blocked = arr(applyPlan?.blocked);
+  const excluded = arr(applyPlan?.excluded);
   const sampleCreates = arr(applyPlan?.sampleCreates || applyPlan?.creates);
   const sampleUpdates = arr(applyPlan?.sampleUpdates || applyPlan?.updates);
   const isLargePlan = Boolean(applyPlan?.isLargePlan || detail?.applyPlanSummary?.isLargePlan);
@@ -477,6 +510,53 @@ export default function BasesMaestras() {
     }
   }
 
+  async function excluirItem(item: ApplyPlanItem) {
+    if (!detail?.jobId || !item.key) {
+      setErrorMsg("El bloqueo seleccionado no tiene key excluible.");
+      return;
+    }
+    const code = blockCode(item);
+    if (!EXCLUDABLE_PERSONAL_BLOCK_CODES.has(code)) {
+      setErrorMsg("Este bloqueo no es excluible del apply.");
+      return;
+    }
+
+    const motivo = window.prompt(
+      `EXCLUIR DEL APPLY MASIVO\n\nCodigo: ${safe(code)}\nKey: ${safe(item.key)}\nMatricula: ${safe(item.matricula)}\nDNI: ${safe(item.dni)}\nNombre: ${safe(item.nombreApellido || item.nombre)}\n\nIngrese el motivo institucional documentado:`,
+      ""
+    );
+    if (motivo === null) return;
+    const motivoLimpio = motivo.trim();
+    if (motivoLimpio.length < 10) {
+      setErrorMsg("El motivo de exclusion debe tener al menos 10 caracteres.");
+      return;
+    }
+    const ok = window.confirm(
+      `CONFIRMACION DE EXCLUSION\n\nCodigo: ${safe(code)}\nKey: ${safe(item.key)}\nMotivo: ${motivoLimpio}\n\nLa fila sera omitida del apply masivo. No se modificara ni reactivara el usuario archivado.\n\nDesea continuar?`
+    );
+    if (!ok) return;
+
+    setApprovingToken(`EXCLUDE::${code}::${item.key}`);
+    setErrorMsg("");
+    setInfoMsg("");
+    try {
+      const res = await http.post(`/admin/bases-maestras/jobs/${encodeURIComponent(detail.jobId)}/exclusions`, {
+        tipo: code,
+        code,
+        key: item.key,
+        motivo: motivoLimpio,
+      });
+      setInfoMsg("Exclusion registrada. La fila no sera aplicada en el apply masivo.");
+      if (res.data?.job) setDetail(res.data.job);
+      else await cargarDetalle(detail.jobId);
+    } catch (err: any) {
+      const message = err?.response?.data?.errores?.[0]?.message || "No se pudo registrar la exclusion.";
+      setErrorMsg(message);
+    } finally {
+      setApprovingToken("");
+    }
+  }
+
   async function ejecutarApply() {
     if (!detail?.jobId || !canApply) return;
     const ok = window.confirm(
@@ -518,7 +598,7 @@ export default function BasesMaestras() {
     }, 0);
   }
 
-  function renderApplyPlanItems(title: string, items: ApplyPlanItem[], allowApprove: boolean) {
+  function renderApplyPlanItems(title: string, items: ApplyPlanItem[], allowApprove: boolean, allowExclude = false) {
     const grouped = groupByTipo(items);
     const entries = Object.entries(grouped);
     if (!entries.length) {
@@ -543,12 +623,23 @@ export default function BasesMaestras() {
                 {groupItems.slice(0, MAX_ITEMS).map((item, index) => {
                   const token = approvalToken(item);
                   const approved = approvedTokens.has(token);
+                  const code = blockCode(item);
+                  const canExclude = allowExclude && EXCLUDABLE_PERSONAL_BLOCK_CODES.has(code) && !item.excluded;
+                  const excludingToken = `EXCLUDE::${code}::${item.key}`;
                   return (
                     <div key={`${token}-${index}`} style={applyPlanItemStyle}>
                       <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: 10, alignItems: "start", minWidth: 0 }}>
                         <div style={{ minWidth: 0, ...wrapTextStyle }}>
                           <div style={{ color: "#ffffff", fontWeight: 800, ...wrapTextStyle }}>{safe(item.tipo || item.reason)}</div>
                           <div style={{ color: "rgba(255,255,255,0.74)", fontSize: 12, ...wrapTextStyle }}>Key: {safe(item.key)}</div>
+                          {item.excluded ? (
+                            <div style={{ color: "#bbf7d0", fontSize: 12, fontWeight: 900, ...wrapTextStyle }}>Excluido del apply</div>
+                          ) : null}
+                          {item.rowIndex || item.matricula || item.dni || item.nombreApellido || item.userId ? (
+                            <div style={{ color: "rgba(255,255,255,0.74)", fontSize: 12, ...wrapTextStyle }}>
+                              Fila: {safe(item.rowIndex)} - Matricula: {safe(item.matricula)} - DNI: {safe(item.dni)} - Nombre: {safe(item.nombreApellido || item.nombre)} - UserId: {safe(item.userId)}
+                            </div>
+                          ) : null}
                           {item.grouped || item.count ? (
                             <div style={{ color: "#bfdbfe", fontSize: 12, fontWeight: 800, ...wrapTextStyle }}>
                               Agrupado{item.count ? ` - ${item.count} registros` : ""}
@@ -557,17 +648,42 @@ export default function BasesMaestras() {
                           <div style={{ color: "rgba(255,255,255,0.74)", fontSize: 12 }}>
                             {safe(item.message || item.campo || item.field || item.collection)}
                           </div>
+                          {item.changes?.length ? (
+                            <pre style={{ ...preStyle, marginTop: 6 }}>{compactJson(item.changes)}</pre>
+                          ) : null}
+                          {item.flags ? (
+                            <pre style={{ ...preStyle, marginTop: 6 }}>{compactJson(item.flags)}</pre>
+                          ) : null}
+                          {item.exclusion ? (
+                            <div style={{ color: "rgba(255,255,255,0.74)", fontSize: 12, ...wrapTextStyle }}>
+                              Motivo exclusion: {safe(item.exclusion.motivo)}
+                            </div>
+                          ) : null}
                         </div>
-                        {allowApprove ? (
-                          <button
-                            type="button"
-                            style={{ ...secondaryButtonStyle, padding: "7px 10px", alignSelf: "start", whiteSpace: "nowrap", position: "relative", zIndex: 1 }}
-                            disabled={approved || approvingToken === token || detail?.estado !== "PENDIENTE_CONFIRMACION"}
-                            onClick={() => aprobarItem(item)}
-                          >
-                            {approved ? "Aprobado" : approvingToken === token ? "Aprobando..." : "Aprobar"}
-                          </button>
-                        ) : null}
+                        <div style={{ display: "grid", gap: 8, justifyItems: "end" }}>
+                          {allowApprove ? (
+                            <button
+                              type="button"
+                              style={{ ...secondaryButtonStyle, padding: "7px 10px", alignSelf: "start", whiteSpace: "nowrap", position: "relative", zIndex: 1 }}
+                              disabled={approved || approvingToken === token || detail?.estado !== "PENDIENTE_CONFIRMACION"}
+                              onClick={() => aprobarItem(item)}
+                            >
+                              {approved ? "Aprobado" : approvingToken === token ? "Aprobando..." : "Aprobar"}
+                            </button>
+                          ) : null}
+                          {canExclude ? (
+                            <button
+                              type="button"
+                              style={{ ...secondaryButtonStyle, padding: "7px 10px", alignSelf: "start", whiteSpace: "nowrap", position: "relative", zIndex: 1 }}
+                              disabled={approvingToken === excludingToken || detail?.estado !== "PENDIENTE_CONFIRMACION"}
+                              onClick={() => excluirItem(item)}
+                            >
+                              {approvingToken === excludingToken ? "Excluyendo..." : "Excluir del apply"}
+                            </button>
+                          ) : !allowApprove && allowExclude ? (
+                            <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 12, textAlign: "right" }}>Bloqueo no excluible</div>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
                   );
@@ -968,7 +1084,8 @@ export default function BasesMaestras() {
                   minWidth: 0,
                 }}
               >
-                {renderApplyPlanItems("Blocked", blocked, false)}
+                {renderApplyPlanItems("Blocked", blocked, false, true)}
+                {renderApplyPlanItems("Excluidos del apply", excluded, false)}
                 {renderApplyPlanItems("Risks", risks, true)}
                 {renderApplyPlanItems("Revision manual", manualReview, true)}
                 {renderWarnings()}

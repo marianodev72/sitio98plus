@@ -52,6 +52,7 @@ const PERSONAL_LARGE_PLAN_THRESHOLD = 1000;
 const PERSONAL_SAMPLE_CREATES = 25;
 const PERSONAL_SAMPLE_UPDATES = 25;
 const PERSONAL_SAMPLE_ITEMS = 50;
+const EXCLUDABLE_PERSONAL_BLOCK_CODES = new Set(["USUARIO_ARCHIVADO_EN_IMPORTACION_PERSONAL"]);
 
 function arr(value) {
   return Array.isArray(value) ? value : [];
@@ -169,6 +170,45 @@ function compactPersonalWarning(warning = {}) {
   return Object.fromEntries(Object.entries(compact).filter(([, value]) => value !== null && value !== undefined && value !== ""));
 }
 
+function normalizeCode(value) {
+  return String(value || "").toUpperCase().trim();
+}
+
+function personalBlockCode(item = {}) {
+  return normalizeCode(item.code || item.reason || item.tipo);
+}
+
+function exclusionToken(code, key) {
+  return `${normalizeCode(code)}::${String(key || "").trim()}`;
+}
+
+function activePersonalExclusions(job = {}) {
+  const map = new Map();
+  for (const exclusion of arr(job.exclusions)) {
+    const code = normalizeCode(exclusion.code || exclusion.tipo);
+    const key = String(exclusion.key || "").trim();
+    if (!code || !key || exclusion.revokedAt || !EXCLUDABLE_PERSONAL_BLOCK_CODES.has(code)) continue;
+    map.set(exclusionToken(code, key), exclusion);
+  }
+  return map;
+}
+
+function compactPersonalFlags(existente = {}) {
+  return {
+    archivado: Boolean(existente.archivado),
+    bloqueado: Boolean(existente.bloqueado),
+    hasViviendaAsignada: Boolean(existente.viviendaAsignada),
+    hasAlojamientoAsignado: Boolean(existente.alojamientoAsignado),
+  };
+}
+
+function compactPersonalChanges(item = {}, fallbackCambio = null) {
+  const cambios = arr(item.cambios).length ? arr(item.cambios) : arr(fallbackCambio ? [fallbackCambio] : []);
+  return cambios
+    .filter((cambio) => ["tipoPersonal", "grupoJerarquico", "precedencia", "dni"].includes(cambio?.campo))
+    .map(compactCambio);
+}
+
 function countByCode(items, codeField = "tipo") {
   const counts = {};
   for (const item of arr(items)) {
@@ -188,6 +228,50 @@ function groupedApprovalItems(items, messagePrefix) {
   }));
 }
 
+function applyPersonalExclusions(job, plan) {
+  const active = activePersonalExclusions(job);
+  if (!active.size) return { ...plan, excluded: [], totalExcluded: 0, excludedCounts: {} };
+
+  const excluded = [];
+  const blocked = [];
+  const excludedKeys = new Set();
+
+  for (const item of arr(plan.blocked)) {
+    const code = personalBlockCode(item);
+    const key = String(item.key || "").trim();
+    const exclusion = active.get(exclusionToken(code, key));
+    if (exclusion && EXCLUDABLE_PERSONAL_BLOCK_CODES.has(code)) {
+      excludedKeys.add(key);
+      excluded.push({
+        ...item,
+        excluded: true,
+        exclusion: {
+          tipo: exclusion.tipo || code,
+          code,
+          key,
+          motivo: exclusion.motivo || "",
+          createdBy: idString(exclusion.createdBy) || "",
+          createdAt: exclusion.createdAt || null,
+        },
+      });
+      continue;
+    }
+    blocked.push(item);
+  }
+
+  const keepOperation = (operation) => !excludedKeys.has(String(operation?.key || "").trim());
+
+  return {
+    ...plan,
+    creates: arr(plan.creates).filter(keepOperation),
+    updates: arr(plan.updates).filter(keepOperation),
+    blocked,
+    excluded,
+    totalExcluded: excluded.length,
+    excludedCounts: countByCode(excluded, "reason"),
+  };
+}
+
 function compactPersonalApplyPlanForPersistence(plan) {
   const creates = arr(plan.creates);
   const updates = arr(plan.updates);
@@ -195,7 +279,8 @@ function compactPersonalApplyPlanForPersistence(plan) {
   const risks = arr(plan.risks);
   const warnings = arr(plan.warnings);
   const requiresManualReview = arr(plan.requiresManualReview);
-  const totalItems = creates.length + updates.length + blocked.length + risks.length + warnings.length + requiresManualReview.length;
+  const excluded = arr(plan.excluded);
+  const totalItems = creates.length + updates.length + blocked.length + risks.length + warnings.length + requiresManualReview.length + excluded.length;
 
   if (totalItems <= PERSONAL_LARGE_PLAN_THRESHOLD) return plan;
 
@@ -213,8 +298,10 @@ function compactPersonalApplyPlanForPersistence(plan) {
     totalRisks: risks.length,
     totalWarnings: warnings.length,
     totalRequiresManualReview: requiresManualReview.length,
+    totalExcluded: excluded.length,
     canApply: blocked.length === 0,
     blocked: blocked.slice(0, PERSONAL_SAMPLE_ITEMS),
+    excluded: excluded.slice(0, PERSONAL_SAMPLE_ITEMS),
     risks: groupedRisks,
     requiresManualReview: groupedManualReview,
     warnings: warnings.slice(0, PERSONAL_SAMPLE_ITEMS),
@@ -223,12 +310,14 @@ function compactPersonalApplyPlanForPersistence(plan) {
     sampleCreates: creates.slice(0, PERSONAL_SAMPLE_CREATES),
     sampleUpdates: updates.slice(0, PERSONAL_SAMPLE_UPDATES),
     sampleBlocked: blocked.slice(0, PERSONAL_SAMPLE_ITEMS),
+    sampleExcluded: excluded.slice(0, PERSONAL_SAMPLE_ITEMS),
     sampleWarnings: warnings.slice(0, PERSONAL_SAMPLE_ITEMS),
     sampleRisks: risks.slice(0, PERSONAL_SAMPLE_ITEMS),
     riskCounts: countByCode(risks),
     blockedCounts: countByCode(blocked, "reason"),
     warningCounts: countByCode(warnings),
     manualReviewCounts: countByCode(requiresManualReview),
+    excludedCounts: plan.excludedCounts || countByCode(excluded, "reason"),
   };
 }
 
@@ -242,13 +331,29 @@ function hasDuplicateWarning(job, field, value) {
 }
 
 function pushPersonalBlocked(blocked, item, reason, field = null, cambio = null) {
+  const existente = item?.existente || {};
+  const code = normalizeCode(reason);
   blocked.push({
+    tipo: code,
+    code,
     action: "UPDATE",
     collection: "users",
     key: safeKey(item),
+    rowIndex: item.fila || null,
+    matricula: item.matricula || existente.matricula || "",
+    dni: item.dni || existente.dni || "",
+    nombre: item.nombre || "",
+    nombreApellido: item.nombreApellido || "",
+    userId: idString(existente._id) || "",
+    flags: compactPersonalFlags(existente),
+    changes: compactPersonalChanges(item, cambio),
     field,
     reason,
     cambio,
+    message:
+      code === "USUARIO_ARCHIVADO_EN_IMPORTACION_PERSONAL"
+        ? "Usuario archivado detectado en importacion de personal. Puede excluirse del apply masivo para revision individual."
+        : "Bloqueo no aprobable en importacion de personal.",
   });
 }
 
@@ -494,7 +599,7 @@ function planPersonal(job) {
     }
   }
 
-  return {
+  return applyPersonalExclusions(job, {
     creates,
     updates,
     blocked,
@@ -502,7 +607,7 @@ function planPersonal(job) {
     warnings: warnings.map(compactPersonalWarning),
     requiresManualReview,
     totalSinCambios: arr(diff.sinCambios).length,
-  };
+  });
 }
 
 function viviendaOcupada(item) {
@@ -887,6 +992,7 @@ function buildApplyPlanSummary(applyPlan) {
   const risks = Number(plan.totalRisks ?? arr(plan.risks).length);
   const warnings = Number(plan.totalWarnings ?? arr(plan.warnings).length);
   const requiresManualReview = Number(plan.totalRequiresManualReview ?? arr(plan.requiresManualReview).length);
+  const excluded = Number(plan.totalExcluded ?? arr(plan.excluded).length);
 
   return {
     creates,
@@ -895,30 +1001,35 @@ function buildApplyPlanSummary(applyPlan) {
     risks,
     warnings,
     requiresManualReview,
+    excluded,
     totalCreates: creates,
     totalUpdates: updates,
     totalBlocked: blocked,
     totalRisks: risks,
     totalWarnings: warnings,
     totalRequiresManualReview: requiresManualReview,
+    totalExcluded: excluded,
     totalSinCambios: Number(plan.totalSinCambios || 0),
-    totalItems: Number(plan.totalItems || creates + updates + blocked + risks + warnings + requiresManualReview),
+    totalItems: Number(plan.totalItems || creates + updates + blocked + risks + warnings + requiresManualReview + excluded),
     isLargePlan: Boolean(plan.isLargePlan),
     detailsTruncated: Boolean(plan.detailsTruncated),
     riskCounts: plan.riskCounts || countByCode(plan.risks),
     blockedCounts: plan.blockedCounts || countByCode(plan.blocked, "reason"),
     warningCounts: plan.warningCounts || countByCode(plan.warnings),
     manualReviewCounts: plan.manualReviewCounts || countByCode(plan.requiresManualReview),
+    excludedCounts: plan.excludedCounts || countByCode(plan.excluded, "reason"),
     createsCount: creates,
     updatesCount: updates,
     blockedCount: blocked,
     risksCount: risks,
     warningsCount: warnings,
     requiresManualReviewCount: requiresManualReview,
+    excludedCount: excluded,
   };
 }
 
 module.exports = {
   buildApplyPlan,
   buildApplyPlanSummary,
+  EXCLUDABLE_PERSONAL_BLOCK_CODES,
 };

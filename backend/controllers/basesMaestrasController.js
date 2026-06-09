@@ -3,7 +3,11 @@ const mongoose = require("mongoose");
 
 const { MasterImportJob } = require("../models/MasterImportJob");
 const { executeApply } = require("../services/basesMaestras/applyService");
-const { buildApplyPlan, buildApplyPlanSummary } = require("../services/basesMaestras/applyPlanService");
+const {
+  buildApplyPlan,
+  buildApplyPlanSummary,
+  EXCLUDABLE_PERSONAL_BLOCK_CODES,
+} = require("../services/basesMaestras/applyPlanService");
 const { dryRunPersonal, dryRunViviendas, dryRunAlojamientos } = require("../services/basesMaestras/dryRunService");
 
 const JOB_TTL_HOURS = 24;
@@ -94,6 +98,19 @@ function jobDetail(job) {
       approvedBy: approval.approvedBy ? String(approval.approvedBy) : null,
       approvedAt: approval.approvedAt,
     })),
+    exclusions: (Array.isArray(job.exclusions) ? job.exclusions : []).map((exclusion) => ({
+      tipo: exclusion.tipo,
+      code: exclusion.code,
+      key: exclusion.key,
+      rowIndex: exclusion.rowIndex ?? null,
+      matricula: exclusion.matricula || "",
+      dni: exclusion.dni || "",
+      userId: exclusion.userId || "",
+      motivo: exclusion.motivo || "",
+      createdBy: exclusion.createdBy ? String(exclusion.createdBy) : null,
+      createdAt: exclusion.createdAt || null,
+      revokedAt: exclusion.revokedAt || null,
+    })),
   };
 }
 
@@ -103,6 +120,10 @@ function normalizeApprovalTipo(value) {
 
 function normalizeApprovalKey(value) {
   return String(value || "").trim();
+}
+
+function normalizeExclusionCode(value) {
+  return String(value || "").toUpperCase().trim();
 }
 
 function approvalMatches(item, tipo, key) {
@@ -118,6 +139,22 @@ function findApprovalTarget(job, tipo, key) {
   );
   if (manualReview) return { source: "requiresManualReview", item: manualReview };
   return null;
+}
+
+function activeExclusionExists(job, code, key) {
+  return (Array.isArray(job.exclusions) ? job.exclusions : []).some(
+    (exclusion) =>
+      !exclusion.revokedAt &&
+      normalizeExclusionCode(exclusion.code || exclusion.tipo) === code &&
+      normalizeApprovalKey(exclusion.key) === key
+  );
+}
+
+function findBlockedTarget(job, code, key) {
+  const plan = buildApplyPlan({ ...job, exclusions: [] }, { full: true });
+  return (Array.isArray(plan.blocked) ? plan.blocked : []).find(
+    (item) => normalizeExclusionCode(item.code || item.reason || item.tipo) === code && normalizeApprovalKey(item.key) === key
+  );
 }
 
 async function persistDryRunJob(req, tipo, result) {
@@ -529,6 +566,126 @@ async function manualApproval(req, res) {
   }
 }
 
+async function excludeBlockedItem(req, res) {
+  try {
+    if (!isAdminGeneral(req)) return deny(res);
+    assertValidObjectId(req.params.id);
+
+    const code = normalizeExclusionCode(req.body?.code || req.body?.tipo);
+    const tipo = normalizeExclusionCode(req.body?.tipo || code);
+    const key = normalizeApprovalKey(req.body?.key);
+    const motivo = String(req.body?.motivo || "").trim();
+
+    if (!code || !tipo || !key || motivo.length < 10) {
+      return res.status(400).json({ ok: false, errores: [{ message: "tipo/code, key y motivo de al menos 10 caracteres son obligatorios" }] });
+    }
+    if (!EXCLUDABLE_PERSONAL_BLOCK_CODES.has(code)) {
+      return res.status(400).json({ ok: false, errores: [{ message: "El bloqueo seleccionado no es excluible del apply" }] });
+    }
+
+    const job = await MasterImportJob.findById(req.params.id).lean();
+    if (!job) return deny(res);
+    if (job.tipo !== "PERSONAL") {
+      return res.status(400).json({ ok: false, errores: [{ message: "Las exclusiones solo estan habilitadas para PERSONAL" }] });
+    }
+    if (job.estado !== "PENDIENTE_CONFIRMACION") {
+      return res.status(409).json({ ok: false, errores: [{ message: "Job no esta pendiente de confirmacion" }] });
+    }
+    if (Array.isArray(job.errors) && job.errors.length > 0) {
+      return res.status(409).json({ ok: false, errores: [{ message: "Job contiene errores de dry-run" }] });
+    }
+    if (activeExclusionExists(job, code, key)) {
+      return res.status(409).json({ ok: false, errores: [{ message: "La exclusion ya esta registrada para este bloqueo" }] });
+    }
+
+    const target = findBlockedTarget(job, code, key);
+    if (!target) {
+      return res.status(400).json({ ok: false, errores: [{ message: "Bloqueo excluible inexistente en el plan actual" }] });
+    }
+
+    const exclusion = {
+      tipo,
+      code,
+      key,
+      rowIndex: target.rowIndex ?? null,
+      matricula: target.matricula || "",
+      dni: target.dni || "",
+      userId: target.userId || "",
+      motivo,
+      createdBy: req.user._id,
+      createdAt: new Date(),
+    };
+
+    const nextJob = {
+      ...job,
+      exclusions: [...(Array.isArray(job.exclusions) ? job.exclusions : []), exclusion],
+    };
+    const applyPlan = buildApplyPlan(nextJob);
+    const applyPlanSummary = buildApplyPlanSummary(applyPlan);
+    const persistBytes = jsonSizeBytes({ applyPlan, applyPlanSummary });
+    if (persistBytes > MAX_APPLY_PLAN_PERSIST_BYTES) {
+      return res.status(413).json({
+        ok: false,
+        errores: [{ message: "El plan de aplicacion excede el tamano maximo persistible luego de registrar la exclusion" }],
+      });
+    }
+
+    const updated = await MasterImportJob.findOneAndUpdate(
+      {
+        _id: job._id,
+        estado: "PENDIENTE_CONFIRMACION",
+        exclusions: {
+          $not: {
+            $elemMatch: {
+              code,
+              key,
+              revokedAt: null,
+            },
+          },
+        },
+      },
+      {
+        $push: { exclusions: exclusion },
+        $set: {
+          applyPlan,
+          applyPlanSummary,
+          applyPlanGeneratedAt: new Date(),
+          applyPlanGeneratedBy: req.user._id,
+        },
+      },
+      { new: true }
+    ).lean();
+
+    if (!updated) {
+      return res.status(409).json({ ok: false, errores: [{ message: "No se pudo registrar la exclusion" }] });
+    }
+
+    if (req.audit?.setTarget) req.audit.setTarget("MasterImportJob", String(job._id));
+    if (req.audit?.addMeta) {
+      req.audit.addMeta({
+        tipo,
+        code,
+        key,
+        motivo,
+        createdBy: String(req.user._id),
+      });
+    }
+
+    return res.json({
+      ok: true,
+      jobId: String(job._id),
+      exclusion: {
+        ...exclusion,
+        createdBy: String(req.user._id),
+      },
+      job: jobDetail(updated),
+    });
+  } catch (err) {
+    console.error("[bases-maestras] exclusion error:", err);
+    return res.status(err.status || 500).json({ ok: false, errores: [{ message: err.message || "Error interno" }] });
+  }
+}
+
 module.exports = {
   personalDryRun,
   viviendasDryRun,
@@ -539,4 +696,5 @@ module.exports = {
   getApplyPlan,
   applyJob,
   manualApproval,
+  excludeBlockedItem,
 };

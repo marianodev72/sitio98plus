@@ -192,6 +192,7 @@ function resultBase() {
   return {
     createsApplied: 0,
     updatesApplied: 0,
+    excluded: 0,
     skipped: 0,
     blocked: 0,
     unapprovedRisks: 0,
@@ -611,6 +612,7 @@ async function executeApply({ job, actorId, markApplied, markFailed }) {
   }
 
   const result = resultBase();
+  result.excluded = Number(applyJob.applyPlan?.totalExcluded ?? arr(applyJob.applyPlan?.excluded).length);
 
   try {
     await session.withTransaction(async () => {
