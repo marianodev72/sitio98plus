@@ -7,6 +7,7 @@ const { buildApplyPlan, buildApplyPlanSummary } = require("../services/basesMaes
 const { dryRunPersonal, dryRunViviendas, dryRunAlojamientos } = require("../services/basesMaestras/dryRunService");
 
 const JOB_TTL_HOURS = 24;
+const MAX_APPLY_PLAN_PERSIST_BYTES = Number(process.env.BASES_MAESTRAS_MAX_APPLY_PLAN_BYTES || 12 * 1024 * 1024);
 
 function deny(res) {
   return res.status(404).json({ message: "Recurso no disponible" });
@@ -31,6 +32,10 @@ function sha256(buffer) {
 
 function getExpiresAt() {
   return new Date(Date.now() + JOB_TTL_HOURS * 60 * 60 * 1000);
+}
+
+function jsonSizeBytes(value) {
+  return Buffer.byteLength(JSON.stringify(value || {}), "utf8");
 }
 
 function assertValidObjectId(id) {
@@ -293,6 +298,20 @@ async function getApplyPlan(req, res) {
     if (!applyPlan) {
       applyPlan = buildApplyPlan(job);
       applyPlanSummary = buildApplyPlanSummary(applyPlan);
+      const persistPayload = { applyPlan, applyPlanSummary };
+      const persistBytes = jsonSizeBytes(persistPayload);
+      if (persistBytes > MAX_APPLY_PLAN_PERSIST_BYTES) {
+        return res.status(413).json({
+          ok: false,
+          errores: [
+            {
+              message: "El plan de aplicacion excede el tamano maximo persistible. Divida el archivo o reduzca el volumen del plan.",
+              bytes: persistBytes,
+              maxBytes: MAX_APPLY_PLAN_PERSIST_BYTES,
+            },
+          ],
+        });
+      }
       const updated = await MasterImportJob.findOneAndUpdate(
         {
           _id: job._id,

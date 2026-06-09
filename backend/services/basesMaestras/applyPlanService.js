@@ -73,6 +73,98 @@ function baseOperation({ action, collection, key, item, allowedFields = [], bloc
   };
 }
 
+function idString(value) {
+  if (!value) return null;
+  if (typeof value === "string") return value;
+  if (value._id) return String(value._id);
+  return String(value);
+}
+
+function compactAssignment(value) {
+  if (!value) return null;
+  return idString(value);
+}
+
+function compactCambio(cambio = {}) {
+  return {
+    campo: cambio.campo || null,
+    actual: cambio.actual ?? null,
+    nuevo: cambio.nuevo ?? null,
+  };
+}
+
+function compactPersonalExistente(value = {}) {
+  if (!value || typeof value !== "object") return null;
+  return {
+    _id: idString(value._id),
+    matricula: value.matricula || null,
+    dni: value.dni || null,
+    tipoPersonal: value.tipoPersonal || null,
+    grupoJerarquico: value.grupoJerarquico || "NO_DEFINIDO",
+    precedencia: value.precedencia ?? null,
+    role: value.role || null,
+    bloqueado: Boolean(value.bloqueado),
+    archivado: Boolean(value.archivado),
+    viviendaAsignada: compactAssignment(value.viviendaAsignada),
+    alojamientoAsignado: compactAssignment(value.alojamientoAsignado),
+  };
+}
+
+function compactPersonalItem(item = {}, options = {}) {
+  const compact = {
+    fila: item.fila || null,
+    matricula: item.matricula || "",
+    dni: item.dni || "",
+    nombreApellido: item.nombreApellido || "",
+    nombre: item.nombre || "",
+    apellido: item.apellido || "",
+    tipoPersonal: item.tipoPersonal || null,
+    grupoJerarquico: item.grupoJerarquico || null,
+    precedencia: item.precedencia ?? null,
+  };
+  const cambios = arr(options.cambios !== undefined ? options.cambios : item.cambios).map(compactCambio);
+  if (cambios.length) compact.cambios = cambios;
+  const existente = compactPersonalExistente(item.existente);
+  if (existente && options.includeExistente) compact.existente = existente;
+  return compact;
+}
+
+function compactRows(rows, limit = 10) {
+  const values = arr(rows);
+  return {
+    rows: values.slice(0, limit),
+    count: values.length,
+    truncated: values.length > limit,
+  };
+}
+
+function compactUsers(users, limit = 5) {
+  const values = arr(users);
+  return {
+    ids: values.slice(0, limit).map((user) => idString(user?._id || user)).filter(Boolean),
+    count: values.length,
+    truncated: values.length > limit,
+  };
+}
+
+function compactPersonalWarning(warning = {}) {
+  const tipo = warning.tipo || null;
+  const compact = {
+    tipo,
+    campo: warning.campo || null,
+    valor: warning.valor ?? null,
+    fila: warning.fila || null,
+    matricula: warning.matricula || null,
+    dni: warning.dni || null,
+    actual: warning.actual ?? null,
+    nuevo: warning.nuevo ?? null,
+    message: warning.message || null,
+  };
+  if (warning.filas) Object.assign(compact, compactRows(warning.filas));
+  if (warning.usuarios) Object.assign(compact, compactUsers(warning.usuarios));
+  return Object.fromEntries(Object.entries(compact).filter(([, value]) => value !== null && value !== undefined && value !== ""));
+}
+
 function hasDuplicateWarning(job, field, value) {
   return arr(job.warnings).some((warning) => {
     if (!String(warning?.tipo || "").includes("DUPLICADO")) return false;
@@ -218,7 +310,7 @@ function planPersonal(job) {
         action: "CREATE",
         collection: "users",
         key: safeKey(item),
-        item,
+        item: compactPersonalItem(item),
         allowedFields: ["nombre", "apellido", "dni", "matricula", "tipoPersonal", "grupoJerarquico", "precedencia"],
         blockedFields: Array.from(CAMPOS_PERSONAL_BLOQUEADOS),
         snapshotFields: [
@@ -252,7 +344,7 @@ function planPersonal(job) {
           action: "UPDATE",
           collection: "users",
           key: safeKey(item),
-          item: { ...item, cambios: allowed },
+          item: compactPersonalItem(item, { cambios: allowed }),
           allowedFields: allowed.map((cambio) => cambio.campo),
           blockedFields: [],
           snapshotFields: [
@@ -294,7 +386,7 @@ function planPersonal(job) {
         collection: "users",
         key: warning.valor || "",
         reason: "DUPLICADO_MATRICULA_ARCHIVO",
-        warning,
+        warning: compactPersonalWarning(warning),
       });
     }
     if (warning?.tipo === "DUPLICADO_ARCHIVO" && String(warning?.campo || "").toUpperCase() === "DNI") {
@@ -303,7 +395,7 @@ function planPersonal(job) {
         collection: "users",
         key: warning.valor || "",
         reason: "DUPLICADO_DNI_ARCHIVO",
-        warning,
+        warning: compactPersonalWarning(warning),
       });
     }
     if (warning?.tipo === "DUPLICADO_DB" && String(warning?.campo || "").toUpperCase() === "MATRICULAS") {
@@ -312,7 +404,7 @@ function planPersonal(job) {
         collection: "users",
         key: warning.valor || "",
         reason: "DUPLICADO_MATRICULA_DB",
-        warning,
+        warning: compactPersonalWarning(warning),
       });
     }
     if (warning?.tipo === "DUPLICADO_DB" && String(warning?.campo || "").toUpperCase() === "DNI") {
@@ -321,7 +413,7 @@ function planPersonal(job) {
         collection: "users",
         key: warning.valor || "",
         reason: "DUPLICADO_DNI_DB",
-        warning,
+        warning: compactPersonalWarning(warning),
       });
     }
     if (warning?.tipo === "CONFLICTO_MATRICULA_DNI_USUARIOS_DISTINTOS") {
@@ -330,12 +422,12 @@ function planPersonal(job) {
         collection: "users",
         key: warning.matricula || warning.dni || "",
         reason: "CONFLICTO_MATRICULA_DNI_USUARIOS_DISTINTOS",
-        warning,
+        warning: compactPersonalWarning(warning),
       });
     }
   }
 
-  return { creates, updates, blocked, risks, warnings, requiresManualReview };
+  return { creates, updates, blocked, risks, warnings: warnings.map(compactPersonalWarning), requiresManualReview };
 }
 
 function viviendaOcupada(item) {
