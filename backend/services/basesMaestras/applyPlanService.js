@@ -47,6 +47,7 @@ const CAMPOS_ALOJAMIENTO_BLOQUEADOS = new Set([
 ]);
 const ESTADOS_ALOJAMIENTO_CRITICOS = new Set(["FUERA_SERVICIO", "INHABILITADO", "BAJA", "MANTENIMIENTO"]);
 const ESTADOS_ALOJAMIENTO_BLOQUEO_OCUPADO = new Set(["BAJA", "INHABILITADO"]);
+const ROLES_ADMIN_PERSONAL = new Set(["ADMIN", "ADMIN_GENERAL"]);
 
 function arr(value) {
   return Array.isArray(value) ? value : [];
@@ -81,6 +82,45 @@ function hasDuplicateWarning(job, field, value) {
   });
 }
 
+function pushPersonalBlocked(blocked, item, reason, field = null, cambio = null) {
+  blocked.push({
+    action: "UPDATE",
+    collection: "users",
+    key: safeKey(item),
+    field,
+    reason,
+    cambio,
+  });
+}
+
+function personalTieneAsignacion(value) {
+  return Boolean(value);
+}
+
+function pushPersonalPrecedenciaDuplicada(diff, risks, requiresManualReview) {
+  const byPrecedencia = new Map();
+  for (const item of [...arr(diff.nuevos), ...arr(diff.actualizados), ...arr(diff.sinCambios)]) {
+    if (item?.precedencia === null || item?.precedencia === undefined) continue;
+    const key = String(item.precedencia);
+    const current = byPrecedencia.get(key) || [];
+    current.push(item);
+    byPrecedencia.set(key, current);
+  }
+
+  for (const [precedencia, items] of byPrecedencia.entries()) {
+    if (items.length <= 1) continue;
+    for (const item of items) {
+      risks.push({
+        tipo: "PRECEDENCIA_DUPLICADA_ARCHIVO",
+        key: safeKey(item),
+        precedencia,
+        message: "Precedencia duplicada en archivo requiere revision institucional",
+      });
+      requiresManualReview.push({ tipo: "PRECEDENCIA_DUPLICADA_ARCHIVO", key: safeKey(item) });
+    }
+  }
+}
+
 function pushPersonalRisks(job, item, risks, requiresManualReview) {
   if (hasDuplicateWarning(job, "MATRICULAS", item.matricula)) {
     risks.push({ tipo: "MATRICULA_DUPLICADA", key: safeKey(item), message: "Matricula duplicada detectada en dry-run" });
@@ -95,6 +135,70 @@ function pushPersonalRisks(job, item, risks, requiresManualReview) {
   }
   if (arr(item.cambios).some((cambio) => cambio.campo === "grupoJerarquico")) {
     risks.push({ tipo: "CAMBIO_GRUPO_JERARQUICO", key: safeKey(item), message: "Cambio de grupo jerarquico requiere revision institucional" });
+  }
+}
+
+function pushPersonalHardening(item, risks, requiresManualReview, blocked) {
+  const existente = item?.existente || {};
+  const cambios = arr(item.cambios);
+  const key = safeKey(item);
+  const cambiaTipoPersonal = cambios.some((cambio) => cambio.campo === "tipoPersonal");
+  const cambiaGrupoJerarquico = cambios.some((cambio) => cambio.campo === "grupoJerarquico");
+  const cambiaPrecedencia = cambios.some((cambio) => cambio.campo === "precedencia");
+  const cambiaDni = cambios.find((cambio) => cambio.campo === "dni") || null;
+  const role = String(existente.role || "").toUpperCase();
+  const usuarioAdmin = ROLES_ADMIN_PERSONAL.has(role);
+
+  if (cambiaTipoPersonal && personalTieneAsignacion(existente.viviendaAsignada)) {
+    risks.push({
+      tipo: "CAMBIO_TIPO_PERSONAL_CON_VIVIENDA_ASIGNADA",
+      key,
+      message: "Cambio OF/SO con vivienda asignada requiere revision institucional",
+    });
+    requiresManualReview.push({ tipo: "CAMBIO_TIPO_PERSONAL_CON_VIVIENDA_ASIGNADA", key });
+  }
+
+  if (cambiaGrupoJerarquico && personalTieneAsignacion(existente.alojamientoAsignado)) {
+    risks.push({
+      tipo: "CAMBIO_GRUPO_JERARQUICO_CON_ALOJAMIENTO_ASIGNADO",
+      key,
+      message: "Cambio de grupo jerarquico con alojamiento asignado requiere revision institucional",
+    });
+    requiresManualReview.push({ tipo: "CAMBIO_GRUPO_JERARQUICO_CON_ALOJAMIENTO_ASIGNADO", key });
+  }
+
+  if (existente.archivado) {
+    pushPersonalBlocked(blocked, item, "USUARIO_ARCHIVADO_EN_IMPORTACION_PERSONAL");
+  }
+
+  if (existente.bloqueado) {
+    risks.push({
+      tipo: "USUARIO_BLOQUEADO_EN_IMPORTACION_PERSONAL",
+      key,
+      message: "Usuario bloqueado requiere revision institucional antes de actualizar datos de personal",
+    });
+    requiresManualReview.push({ tipo: "USUARIO_BLOQUEADO_EN_IMPORTACION_PERSONAL", key });
+  }
+
+  if (usuarioAdmin && cambios.length) {
+    risks.push({
+      tipo: "USUARIO_ADMIN_EN_IMPORTACION_PERSONAL",
+      key,
+      role,
+      message: "Usuario con rol administrativo detectado en importacion de personal",
+    });
+  }
+  if (usuarioAdmin && cambiaTipoPersonal) {
+    pushPersonalBlocked(blocked, item, "CAMBIO_TIPO_PERSONAL_USUARIO_ADMIN", "tipoPersonal", cambios.find((cambio) => cambio.campo === "tipoPersonal") || null);
+  }
+  if (usuarioAdmin && cambiaDni) {
+    pushPersonalBlocked(blocked, item, "CAMBIO_DNI_USUARIO_ADMIN", "dni", cambiaDni);
+  }
+  if (usuarioAdmin && cambiaGrupoJerarquico) {
+    requiresManualReview.push({ tipo: "USUARIO_ADMIN_EN_IMPORTACION_PERSONAL", key, campo: "grupoJerarquico" });
+  }
+  if (usuarioAdmin && cambiaPrecedencia) {
+    requiresManualReview.push({ tipo: "USUARIO_ADMIN_EN_IMPORTACION_PERSONAL", key, campo: "precedencia" });
   }
 }
 
@@ -117,13 +221,27 @@ function planPersonal(job) {
         item,
         allowedFields: ["nombre", "apellido", "dni", "matricula", "tipoPersonal", "grupoJerarquico", "precedencia"],
         blockedFields: Array.from(CAMPOS_PERSONAL_BLOQUEADOS),
-        snapshotFields: ["_id", "dni", "matricula", "tipoPersonal", "grupoJerarquico", "precedencia", "activo", "archivado"],
+        snapshotFields: [
+          "_id",
+          "dni",
+          "matricula",
+          "tipoPersonal",
+          "grupoJerarquico",
+          "precedencia",
+          "role",
+          "activo",
+          "archivado",
+          "bloqueado",
+          "viviendaAsignada",
+          "alojamientoAsignado",
+        ],
       })
     );
   }
 
   for (const item of arr(diff.actualizados)) {
     pushPersonalRisks(job, item, risks, requiresManualReview);
+    pushPersonalHardening(item, risks, requiresManualReview, blocked);
     const cambios = arr(item.cambios);
     const allowed = cambios.filter((cambio) => CAMPOS_PERSONAL_PERMITIDOS.has(cambio.campo));
     const denied = cambios.filter((cambio) => !CAMPOS_PERSONAL_PERMITIDOS.has(cambio.campo));
@@ -137,7 +255,20 @@ function planPersonal(job) {
           item: { ...item, cambios: allowed },
           allowedFields: allowed.map((cambio) => cambio.campo),
           blockedFields: [],
-          snapshotFields: ["_id", "dni", "matricula", "tipoPersonal", "grupoJerarquico", "precedencia"],
+          snapshotFields: [
+            "_id",
+            "dni",
+            "matricula",
+            "tipoPersonal",
+            "grupoJerarquico",
+            "precedencia",
+            "role",
+            "activo",
+            "archivado",
+            "bloqueado",
+            "viviendaAsignada",
+            "alojamientoAsignado",
+          ],
         })
       );
     }
@@ -150,6 +281,56 @@ function planPersonal(job) {
         field: cambio.campo,
         reason: CAMPOS_PERSONAL_BLOQUEADOS.has(cambio.campo) ? "CAMPO_BLOQUEADO" : "CAMPO_NO_PERMITIDO",
         cambio,
+      });
+    }
+  }
+
+  pushPersonalPrecedenciaDuplicada(diff, risks, requiresManualReview);
+
+  for (const warning of warnings) {
+    if (warning?.tipo === "DUPLICADO_ARCHIVO" && String(warning?.campo || "").toUpperCase() === "MATRICULAS") {
+      blocked.push({
+        action: "IDENTIDAD_BLOQUEADA",
+        collection: "users",
+        key: warning.valor || "",
+        reason: "DUPLICADO_MATRICULA_ARCHIVO",
+        warning,
+      });
+    }
+    if (warning?.tipo === "DUPLICADO_ARCHIVO" && String(warning?.campo || "").toUpperCase() === "DNI") {
+      blocked.push({
+        action: "IDENTIDAD_BLOQUEADA",
+        collection: "users",
+        key: warning.valor || "",
+        reason: "DUPLICADO_DNI_ARCHIVO",
+        warning,
+      });
+    }
+    if (warning?.tipo === "DUPLICADO_DB" && String(warning?.campo || "").toUpperCase() === "MATRICULAS") {
+      blocked.push({
+        action: "IDENTIDAD_BLOQUEADA",
+        collection: "users",
+        key: warning.valor || "",
+        reason: "DUPLICADO_MATRICULA_DB",
+        warning,
+      });
+    }
+    if (warning?.tipo === "DUPLICADO_DB" && String(warning?.campo || "").toUpperCase() === "DNI") {
+      blocked.push({
+        action: "IDENTIDAD_BLOQUEADA",
+        collection: "users",
+        key: warning.valor || "",
+        reason: "DUPLICADO_DNI_DB",
+        warning,
+      });
+    }
+    if (warning?.tipo === "CONFLICTO_MATRICULA_DNI_USUARIOS_DISTINTOS") {
+      blocked.push({
+        action: "IDENTIDAD_BLOQUEADA",
+        collection: "users",
+        key: warning.matricula || warning.dni || "",
+        reason: "CONFLICTO_MATRICULA_DNI_USUARIOS_DISTINTOS",
+        warning,
       });
     }
   }

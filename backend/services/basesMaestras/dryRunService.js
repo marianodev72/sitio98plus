@@ -351,6 +351,8 @@ function publicUser(user) {
     tipoPersonal: user.tipoPersonal || null,
     grupoJerarquico: user.grupoJerarquico || "NO_DEFINIDO",
     precedencia: user.precedencia ?? null,
+    viviendaAsignada: user.viviendaAsignada || null,
+    alojamientoAsignado: user.alojamientoAsignado || null,
   };
 }
 
@@ -507,7 +509,9 @@ async function dryRunPersonal(buffer) {
   const users = await User.find({
     $or: [{ matricula: { $in: matriculas } }, { dni: { $in: dnis } }],
   })
-    .select("email matricula dni role activo archivado bloqueado tipoPersonal grupoJerarquico precedencia nombre apellido")
+    .select(
+      "email matricula dni role activo archivado bloqueado tipoPersonal grupoJerarquico precedencia viviendaAsignada alojamientoAsignado nombre apellido"
+    )
     .lean();
 
   const byMatricula = new Map(users.filter((user) => user.matricula).map((user) => [String(user.matricula), user]));
@@ -523,7 +527,23 @@ async function dryRunPersonal(buffer) {
   }
 
   for (const row of parsed) {
-    const existing = byMatricula.get(row.matricula) || byDni.get(row.dni) || null;
+    const existingByMatricula = byMatricula.get(row.matricula) || null;
+    const existingByDni = byDni.get(row.dni) || null;
+    if (
+      existingByMatricula &&
+      existingByDni &&
+      String(existingByMatricula._id || "") !== String(existingByDni._id || "")
+    ) {
+      warnings.push({
+        tipo: "CONFLICTO_MATRICULA_DNI_USUARIOS_DISTINTOS",
+        fila: row.fila,
+        matricula: row.matricula,
+        dni: row.dni,
+        usuarios: [publicUser(existingByMatricula), publicUser(existingByDni)],
+      });
+    }
+
+    const existing = existingByMatricula || existingByDni || null;
     if (!existing) {
       nuevos.push(row);
       continue;
