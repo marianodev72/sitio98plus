@@ -47,6 +47,8 @@ type ApplyPlanItem = {
   collection?: string;
   reason?: string;
   field?: string;
+  grouped?: boolean;
+  count?: number;
 };
 
 type ApplyPlan = {
@@ -56,6 +58,10 @@ type ApplyPlan = {
   risks?: ApplyPlanItem[];
   warnings?: unknown[];
   requiresManualReview?: ApplyPlanItem[];
+  isLargePlan?: boolean;
+  detailsTruncated?: boolean;
+  sampleCreates?: unknown[];
+  sampleUpdates?: unknown[];
 };
 
 type ApplyResult = {
@@ -197,9 +203,47 @@ const preStyle: CSSProperties = {
   margin: 0,
   whiteSpace: "pre-wrap",
   wordBreak: "break-word",
+  overflowWrap: "anywhere",
   color: "rgba(255,255,255,0.82)",
   fontSize: 12,
   lineHeight: 1.5,
+};
+
+const wrapTextStyle: CSSProperties = {
+  minWidth: 0,
+  maxWidth: "100%",
+  overflowWrap: "anywhere",
+  wordBreak: "break-word",
+  whiteSpace: "normal",
+};
+
+const applyPlanSectionStyle: CSSProperties = {
+  ...softCardStyle,
+  minWidth: 0,
+  overflow: "hidden",
+  display: "flex",
+  flexDirection: "column",
+  gap: 10,
+};
+
+const applyPlanListStyle: CSSProperties = {
+  display: "grid",
+  gap: 10,
+  minWidth: 0,
+  maxHeight: 420,
+  overflowY: "auto",
+  paddingRight: 4,
+};
+
+const applyPlanItemStyle: CSSProperties = {
+  borderRadius: 8,
+  border: "1px solid rgba(255,255,255,0.12)",
+  background: "rgba(255,255,255,0.035)",
+  padding: 10,
+  minWidth: 0,
+  display: "grid",
+  gap: 8,
+  ...wrapTextStyle,
 };
 
 const smallLabelStyle: CSSProperties = {
@@ -260,6 +304,9 @@ export default function BasesMaestras() {
   const risks = arr(applyPlan?.risks);
   const manualReview = arr(applyPlan?.requiresManualReview);
   const blocked = arr(applyPlan?.blocked);
+  const sampleCreates = arr(applyPlan?.sampleCreates || applyPlan?.creates);
+  const sampleUpdates = arr(applyPlan?.sampleUpdates || applyPlan?.updates);
+  const isLargePlan = Boolean(applyPlan?.isLargePlan || detail?.applyPlanSummary?.isLargePlan);
   const unapprovedRisks = risks.filter((item) => !approvedTokens.has(approvalToken(item)));
   const unapprovedManualReview = manualReview.filter((item) => !approvedTokens.has(approvalToken(item)));
   const errores = arr(detail?.errores);
@@ -390,8 +437,11 @@ export default function BasesMaestras() {
       setErrorMsg("El riesgo seleccionado no tiene tipo/key aprobable.");
       return;
     }
+    const esAgrupado = item.grouped || item.key === "*";
     const motivo = window.prompt(
-      `APROBACION MANUAL INDIVIDUAL\n\nTipo: ${safe(item.tipo)}\nKey: ${safe(item.key)}\n\nIngrese el motivo institucional documentado:`,
+      `${esAgrupado ? "APROBACION MANUAL AGRUPADA" : "APROBACION MANUAL INDIVIDUAL"}\n\nTipo: ${safe(item.tipo)}\nKey: ${safe(item.key)}${
+        esAgrupado ? `\nCantidad: ${safe(item.count)}` : ""
+      }\n\nIngrese el motivo institucional documentado:`,
       ""
     );
     if (motivo === null) return;
@@ -401,7 +451,9 @@ export default function BasesMaestras() {
       return;
     }
     const ok = window.confirm(
-      `CONFIRMACION DE APROBACION MANUAL\n\nTipo: ${safe(item.tipo)}\nKey: ${safe(item.key)}\nMotivo: ${motivoLimpio}\n\nLa aprobacion es individual, queda auditada y solo descuenta este riesgo/revision manual para el apply.\n\nDesea continuar?`
+      `CONFIRMACION DE APROBACION MANUAL\n\nTipo: ${safe(item.tipo)}\nKey: ${safe(item.key)}\nMotivo: ${motivoLimpio}\n\nLa aprobacion ${
+        esAgrupado ? "agrupada" : "individual"
+      } queda auditada y descuenta ${esAgrupado ? "este tipo de riesgo/revision manual del plan masivo" : "este riesgo/revision manual"} para el apply.\n\nDesea continuar?`
     );
     if (!ok) return;
 
@@ -417,8 +469,9 @@ export default function BasesMaestras() {
       });
       setInfoMsg("Aprobacion manual registrada.");
       await cargarDetalle(detail.jobId);
-    } catch {
-      setErrorMsg("No se pudo registrar la aprobacion manual. Por favor, contacte al administrador.");
+    } catch (err: any) {
+      const message = err?.response?.data?.errores?.[0]?.message || "No se pudo registrar la aprobacion manual. Por favor, contacte al administrador.";
+      setErrorMsg(message);
     } finally {
       setApprovingToken("");
     }
@@ -470,7 +523,7 @@ export default function BasesMaestras() {
     const entries = Object.entries(grouped);
     if (!entries.length) {
       return (
-        <section style={softCardStyle}>
+        <section style={applyPlanSectionStyle}>
           <h3 style={{ marginTop: 0, color: "#ffffff", fontSize: 16 }}>{title}</h3>
           <div style={{ color: "rgba(255,255,255,0.74)", fontSize: 13 }}>Sin registros.</div>
         </section>
@@ -478,24 +531,29 @@ export default function BasesMaestras() {
     }
 
     return (
-      <section style={softCardStyle}>
+      <section style={applyPlanSectionStyle}>
         <h3 style={{ marginTop: 0, color: "#ffffff", fontSize: 16 }}>{title}</h3>
-        <div style={{ display: "grid", gap: 10 }}>
+        <div style={applyPlanListStyle}>
           {entries.map(([group, groupItems]) => (
-            <div key={group}>
-              <div style={{ marginBottom: 6, fontWeight: 800, color: "#ffffff" }}>
+            <div key={group} style={{ display: "grid", gap: 8, minWidth: 0 }}>
+              <div style={{ fontWeight: 800, color: "#ffffff", ...wrapTextStyle }}>
                 {group} ({groupItems.length})
               </div>
-              <div style={{ display: "grid", gap: 8 }}>
+              <div style={{ display: "grid", gap: 8, minWidth: 0 }}>
                 {groupItems.slice(0, MAX_ITEMS).map((item, index) => {
                   const token = approvalToken(item);
                   const approved = approvedTokens.has(token);
                   return (
-                    <div key={`${token}-${index}`} style={{ ...softCardStyle, padding: 10 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-                        <div>
-                          <div style={{ color: "#ffffff", fontWeight: 800 }}>{safe(item.tipo || item.reason)}</div>
-                          <div style={{ color: "rgba(255,255,255,0.74)", fontSize: 12 }}>Key: {safe(item.key)}</div>
+                    <div key={`${token}-${index}`} style={applyPlanItemStyle}>
+                      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: 10, alignItems: "start", minWidth: 0 }}>
+                        <div style={{ minWidth: 0, ...wrapTextStyle }}>
+                          <div style={{ color: "#ffffff", fontWeight: 800, ...wrapTextStyle }}>{safe(item.tipo || item.reason)}</div>
+                          <div style={{ color: "rgba(255,255,255,0.74)", fontSize: 12, ...wrapTextStyle }}>Key: {safe(item.key)}</div>
+                          {item.grouped || item.count ? (
+                            <div style={{ color: "#bfdbfe", fontSize: 12, fontWeight: 800, ...wrapTextStyle }}>
+                              Agrupado{item.count ? ` - ${item.count} registros` : ""}
+                            </div>
+                          ) : null}
                           <div style={{ color: "rgba(255,255,255,0.74)", fontSize: 12 }}>
                             {safe(item.message || item.campo || item.field || item.collection)}
                           </div>
@@ -503,7 +561,7 @@ export default function BasesMaestras() {
                         {allowApprove ? (
                           <button
                             type="button"
-                            style={{ ...secondaryButtonStyle, padding: "7px 10px" }}
+                            style={{ ...secondaryButtonStyle, padding: "7px 10px", alignSelf: "start", whiteSpace: "nowrap", position: "relative", zIndex: 1 }}
                             disabled={approved || approvingToken === token || detail?.estado !== "PENDIENTE_CONFIRMACION"}
                             onClick={() => aprobarItem(item)}
                           >
@@ -532,15 +590,15 @@ export default function BasesMaestras() {
     const grouped = groupWarnings(warnings);
     const entries = Object.entries(grouped);
     return (
-      <section style={softCardStyle}>
+      <section style={applyPlanSectionStyle}>
         <h3 style={{ marginTop: 0, color: "#ffffff", fontSize: 16 }}>Warnings ({warnings.length})</h3>
         {!entries.length ? (
           <div style={{ color: "rgba(255,255,255,0.74)", fontSize: 13 }}>Sin registros.</div>
         ) : (
-          <div style={{ display: "grid", gap: 10 }}>
+          <div style={applyPlanListStyle}>
             {entries.map(([group, groupItems]) => (
-              <div key={group}>
-                <div style={{ marginBottom: 6, fontWeight: 800, color: "#ffffff" }}>
+              <div key={group} style={applyPlanItemStyle}>
+                <div style={{ fontWeight: 800, color: "#ffffff", ...wrapTextStyle }}>
                   {group} ({groupItems.length})
                 </div>
                 <pre style={preStyle}>{compactJson(groupItems.slice(0, MAX_ITEMS))}</pre>
@@ -551,6 +609,21 @@ export default function BasesMaestras() {
                 ) : null}
               </div>
             ))}
+          </div>
+        )}
+      </section>
+    );
+  }
+
+  function renderPlanSample(title: string, items: unknown[]) {
+    return (
+      <section style={applyPlanSectionStyle}>
+        <h3 style={{ marginTop: 0, color: "#ffffff", fontSize: 16 }}>{title} ({items.length})</h3>
+        {!items.length ? (
+          <div style={{ color: "rgba(255,255,255,0.74)", fontSize: 13 }}>Sin muestra.</div>
+        ) : (
+          <div style={applyPlanListStyle}>
+            <pre style={preStyle}>{compactJson(items.slice(0, MAX_ITEMS))}</pre>
           </div>
         )}
       </section>
@@ -834,28 +907,34 @@ export default function BasesMaestras() {
                 style={{
                   marginTop: 16,
                   display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
                   gap: 12,
+                  minWidth: 0,
                 }}
               >
-                <section style={softCardStyle}>
+                <section style={applyPlanSectionStyle}>
                   <h3 style={{ marginTop: 0, color: "#ffffff", fontSize: 16 }}>Resumen</h3>
                   <pre style={preStyle}>{compactJson(summary)}</pre>
                 </section>
 
-                <section style={softCardStyle}>
+                <section style={applyPlanSectionStyle}>
                   <h3 style={{ marginTop: 0, color: "#ffffff", fontSize: 16 }}>Apply plan</h3>
+                  {isLargePlan ? (
+                    <div style={{ color: "#bfdbfe", fontSize: 12, fontWeight: 800, ...wrapTextStyle }}>
+                      Plan masivo: se muestran muestras limitadas. Los totales completos estan en el resumen.
+                    </div>
+                  ) : null}
                   <pre style={preStyle}>{compactJson(detail.applyPlanSummary)}</pre>
                 </section>
 
-                <section style={softCardStyle}>
+                <section style={applyPlanSectionStyle}>
                   <h3 style={{ marginTop: 0, color: "#ffffff", fontSize: 16 }}>Aprobaciones manuales</h3>
                   {manualApprovals.length ? (
-                    <div style={{ display: "grid", gap: 8 }}>
+                    <div style={applyPlanListStyle}>
                       {manualApprovals.slice(0, MAX_ITEMS).map((approval, index) => (
-                        <div key={`${approval.tipo}-${approval.key}-${index}`} style={{ ...softCardStyle, padding: 10 }}>
-                          <div style={{ fontWeight: 800, color: "#ffffff" }}>{safe(approval.tipo)}</div>
-                          <div style={{ color: "rgba(255,255,255,0.74)", fontSize: 12 }}>Key: {safe(approval.key)}</div>
+                        <div key={`${approval.tipo}-${approval.key}-${index}`} style={applyPlanItemStyle}>
+                          <div style={{ fontWeight: 800, color: "#ffffff", ...wrapTextStyle }}>{safe(approval.tipo)}</div>
+                          <div style={{ color: "rgba(255,255,255,0.74)", fontSize: 12, ...wrapTextStyle }}>Key: {safe(approval.key)}</div>
                           <div style={{ color: "rgba(255,255,255,0.74)", fontSize: 12 }}>
                             Motivo: {safe(approval.motivo)}
                           </div>
@@ -870,7 +949,7 @@ export default function BasesMaestras() {
                   )}
                 </section>
 
-                <section style={softCardStyle}>
+                <section style={applyPlanSectionStyle}>
                   <h3 style={{ marginTop: 0, color: "#ffffff", fontSize: 16 }}>Apply result</h3>
                   {applyResult ? (
                     <pre style={preStyle}>{compactJson(applyResult)}</pre>
@@ -884,14 +963,17 @@ export default function BasesMaestras() {
                 style={{
                   marginTop: 16,
                   display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
                   gap: 12,
+                  minWidth: 0,
                 }}
               >
                 {renderApplyPlanItems("Blocked", blocked, false)}
                 {renderApplyPlanItems("Risks", risks, true)}
                 {renderApplyPlanItems("Revision manual", manualReview, true)}
                 {renderWarnings()}
+                {isLargePlan ? renderPlanSample("Sample creates", sampleCreates) : null}
+                {isLargePlan ? renderPlanSample("Sample updates", sampleUpdates) : null}
               </div>
             </>
           ) : null}
