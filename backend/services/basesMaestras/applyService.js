@@ -10,6 +10,7 @@ const {
   GENERO_PERMITIDO,
 } = require("../../modules/alojamientos/constants/alojamientoConstants");
 const { normalizeTipoDestinoStrict } = require("../../constants/institucional");
+const { buildApplyPlan } = require("./applyPlanService");
 
 const APPLYABLE_ESTADO = "PENDIENTE_CONFIRMACION";
 const BAJA_LOGICA_VIVIENDA = "BAJA_LOGICA_VIVIENDA";
@@ -49,6 +50,10 @@ function approvalToken(item) {
   return `${approvalTipo(item?.tipo)}::${approvalKey(item?.key)}`;
 }
 
+function approvalGroupToken(item) {
+  return `${approvalTipo(item?.tipo)}::*`;
+}
+
 function approvedTokens(job) {
   const tokens = new Set();
   for (const approval of arr(job.manualApprovals)) {
@@ -57,8 +62,12 @@ function approvedTokens(job) {
   return tokens;
 }
 
-function unapproved(items, tokens) {
-  return arr(items).filter((item) => !tokens.has(approvalToken(item)));
+function unapproved(items, tokens, options = {}) {
+  return arr(items).filter((item) => {
+    if (tokens.has(approvalToken(item))) return false;
+    if (options.allowGroupedApprovals && tokens.has(approvalGroupToken(item))) return false;
+    return true;
+  });
 }
 
 function bajaLogicaViviendaItems(job) {
@@ -151,8 +160,9 @@ function assertApplyable(job) {
   }
   const blockedCount = arr(job.applyPlan.blocked).length;
   const approvals = approvedTokens(job);
-  const unapprovedRisks = unapproved(job.applyPlan.risks, approvals);
-  const unapprovedManualReview = unapproved(job.applyPlan.requiresManualReview, approvals);
+  const approvalOptions = { allowGroupedApprovals: Boolean(job.__allowGroupedApprovals) };
+  const unapprovedRisks = unapproved(job.applyPlan.risks, approvals, approvalOptions);
+  const unapprovedManualReview = unapproved(job.applyPlan.requiresManualReview, approvals, approvalOptions);
   if (blockedCount > 0 || unapprovedRisks.length > 0 || unapprovedManualReview.length > 0) {
     const err = new Error("ApplyPlan contiene operaciones bloqueadas, riesgos o revision manual");
     err.status = 409;
@@ -167,6 +177,15 @@ function assertApplyable(job) {
     };
     throw err;
   }
+}
+
+function prepareApplyJob(job) {
+  if (job?.tipo !== "PERSONAL" || !job?.applyPlan?.isLargePlan) return job;
+  return {
+    ...job,
+    __allowGroupedApprovals: true,
+    applyPlan: buildApplyPlan(job, { full: true }),
+  };
 }
 
 function resultBase() {
@@ -581,7 +600,8 @@ async function applyOperation(operation, session, result, actorId, job) {
 }
 
 async function executeApply({ job, actorId, markApplied, markFailed }) {
-  assertApplyable(job);
+  const applyJob = prepareApplyJob(job);
+  assertApplyable(applyJob);
 
   const session = await mongoose.startSession();
   if (!session || typeof session.withTransaction !== "function") {
@@ -594,14 +614,14 @@ async function executeApply({ job, actorId, markApplied, markFailed }) {
 
   try {
     await session.withTransaction(async () => {
-      for (const operation of arr(job.applyPlan.creates)) {
-        await applyOperation(operation, session, result, actorId, job);
+      for (const operation of arr(applyJob.applyPlan.creates)) {
+        await applyOperation(operation, session, result, actorId, applyJob);
       }
-      for (const operation of arr(job.applyPlan.updates)) {
-        await applyOperation(operation, session, result, actorId, job);
+      for (const operation of arr(applyJob.applyPlan.updates)) {
+        await applyOperation(operation, session, result, actorId, applyJob);
       }
-      for (const item of bajaLogicaViviendaItems(job)) {
-        await applyViviendaBajaLogica({ job, item, actorId, session, result });
+      for (const item of bajaLogicaViviendaItems(applyJob)) {
+        await applyViviendaBajaLogica({ job: applyJob, item, actorId, session, result });
       }
       if (result.errors.length > 0) {
         const err = new Error("Apply abortado por errores de operacion");

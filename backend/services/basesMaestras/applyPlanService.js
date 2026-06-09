@@ -48,6 +48,10 @@ const CAMPOS_ALOJAMIENTO_BLOQUEADOS = new Set([
 const ESTADOS_ALOJAMIENTO_CRITICOS = new Set(["FUERA_SERVICIO", "INHABILITADO", "BAJA", "MANTENIMIENTO"]);
 const ESTADOS_ALOJAMIENTO_BLOQUEO_OCUPADO = new Set(["BAJA", "INHABILITADO"]);
 const ROLES_ADMIN_PERSONAL = new Set(["ADMIN", "ADMIN_GENERAL"]);
+const PERSONAL_LARGE_PLAN_THRESHOLD = 1000;
+const PERSONAL_SAMPLE_CREATES = 25;
+const PERSONAL_SAMPLE_UPDATES = 25;
+const PERSONAL_SAMPLE_ITEMS = 50;
 
 function arr(value) {
   return Array.isArray(value) ? value : [];
@@ -163,6 +167,69 @@ function compactPersonalWarning(warning = {}) {
   if (warning.filas) Object.assign(compact, compactRows(warning.filas));
   if (warning.usuarios) Object.assign(compact, compactUsers(warning.usuarios));
   return Object.fromEntries(Object.entries(compact).filter(([, value]) => value !== null && value !== undefined && value !== ""));
+}
+
+function countByCode(items, codeField = "tipo") {
+  const counts = {};
+  for (const item of arr(items)) {
+    const code = String(item?.[codeField] || item?.reason || item?.tipo || "SIN_CODIGO");
+    counts[code] = (counts[code] || 0) + 1;
+  }
+  return counts;
+}
+
+function groupedApprovalItems(items, messagePrefix) {
+  return Object.entries(countByCode(items)).map(([tipo, count]) => ({
+    tipo,
+    key: "*",
+    grouped: true,
+    count,
+    message: `${messagePrefix}: ${tipo} (${count})`,
+  }));
+}
+
+function compactPersonalApplyPlanForPersistence(plan) {
+  const creates = arr(plan.creates);
+  const updates = arr(plan.updates);
+  const blocked = arr(plan.blocked);
+  const risks = arr(plan.risks);
+  const warnings = arr(plan.warnings);
+  const requiresManualReview = arr(plan.requiresManualReview);
+  const totalItems = creates.length + updates.length + blocked.length + risks.length + warnings.length + requiresManualReview.length;
+
+  if (totalItems <= PERSONAL_LARGE_PLAN_THRESHOLD) return plan;
+
+  const groupedRisks = groupedApprovalItems(risks, "Riesgo agrupado de plan masivo PERSONAL");
+  const groupedManualReview = groupedApprovalItems(requiresManualReview, "Revision manual agrupada de plan masivo PERSONAL");
+
+  return {
+    isLargePlan: true,
+    detailsTruncated: true,
+    totalItems,
+    maxPersistedSamples: PERSONAL_SAMPLE_ITEMS,
+    totalCreates: creates.length,
+    totalUpdates: updates.length,
+    totalBlocked: blocked.length,
+    totalRisks: risks.length,
+    totalWarnings: warnings.length,
+    totalRequiresManualReview: requiresManualReview.length,
+    canApply: blocked.length === 0,
+    blocked: blocked.slice(0, PERSONAL_SAMPLE_ITEMS),
+    risks: groupedRisks,
+    requiresManualReview: groupedManualReview,
+    warnings: warnings.slice(0, PERSONAL_SAMPLE_ITEMS),
+    creates: creates.slice(0, PERSONAL_SAMPLE_CREATES),
+    updates: updates.slice(0, PERSONAL_SAMPLE_UPDATES),
+    sampleCreates: creates.slice(0, PERSONAL_SAMPLE_CREATES),
+    sampleUpdates: updates.slice(0, PERSONAL_SAMPLE_UPDATES),
+    sampleBlocked: blocked.slice(0, PERSONAL_SAMPLE_ITEMS),
+    sampleWarnings: warnings.slice(0, PERSONAL_SAMPLE_ITEMS),
+    sampleRisks: risks.slice(0, PERSONAL_SAMPLE_ITEMS),
+    riskCounts: countByCode(risks),
+    blockedCounts: countByCode(blocked, "reason"),
+    warningCounts: countByCode(warnings),
+    manualReviewCounts: countByCode(requiresManualReview),
+  };
 }
 
 function hasDuplicateWarning(job, field, value) {
@@ -427,7 +494,15 @@ function planPersonal(job) {
     }
   }
 
-  return { creates, updates, blocked, risks, warnings: warnings.map(compactPersonalWarning), requiresManualReview };
+  return {
+    creates,
+    updates,
+    blocked,
+    risks,
+    warnings: warnings.map(compactPersonalWarning),
+    requiresManualReview,
+    totalSinCambios: arr(diff.sinCambios).length,
+  };
 }
 
 function viviendaOcupada(item) {
@@ -775,7 +850,7 @@ function planAlojamientos(job) {
   return { creates, updates, blocked, risks, warnings, requiresManualReview };
 }
 
-function buildApplyPlan(job) {
+function buildApplyPlan(job, options = {}) {
   if (!job) {
     const err = new Error("Job inexistente");
     err.status = 404;
@@ -792,7 +867,10 @@ function buildApplyPlan(job) {
     throw err;
   }
 
-  if (job.tipo === "PERSONAL") return planPersonal(job);
+  if (job.tipo === "PERSONAL") {
+    const plan = planPersonal(job);
+    return options.full ? plan : compactPersonalApplyPlanForPersistence(plan);
+  }
   if (job.tipo === "VIVIENDAS") return planViviendas(job);
   if (job.tipo === "ALOJAMIENTOS") return planAlojamientos(job);
 
@@ -803,12 +881,12 @@ function buildApplyPlan(job) {
 
 function buildApplyPlanSummary(applyPlan) {
   const plan = applyPlan || {};
-  const creates = arr(plan.creates).length;
-  const updates = arr(plan.updates).length;
-  const blocked = arr(plan.blocked).length;
-  const risks = arr(plan.risks).length;
-  const warnings = arr(plan.warnings).length;
-  const requiresManualReview = arr(plan.requiresManualReview).length;
+  const creates = Number(plan.totalCreates ?? arr(plan.creates).length);
+  const updates = Number(plan.totalUpdates ?? arr(plan.updates).length);
+  const blocked = Number(plan.totalBlocked ?? arr(plan.blocked).length);
+  const risks = Number(plan.totalRisks ?? arr(plan.risks).length);
+  const warnings = Number(plan.totalWarnings ?? arr(plan.warnings).length);
+  const requiresManualReview = Number(plan.totalRequiresManualReview ?? arr(plan.requiresManualReview).length);
 
   return {
     creates,
@@ -817,6 +895,20 @@ function buildApplyPlanSummary(applyPlan) {
     risks,
     warnings,
     requiresManualReview,
+    totalCreates: creates,
+    totalUpdates: updates,
+    totalBlocked: blocked,
+    totalRisks: risks,
+    totalWarnings: warnings,
+    totalRequiresManualReview: requiresManualReview,
+    totalSinCambios: Number(plan.totalSinCambios || 0),
+    totalItems: Number(plan.totalItems || creates + updates + blocked + risks + warnings + requiresManualReview),
+    isLargePlan: Boolean(plan.isLargePlan),
+    detailsTruncated: Boolean(plan.detailsTruncated),
+    riskCounts: plan.riskCounts || countByCode(plan.risks),
+    blockedCounts: plan.blockedCounts || countByCode(plan.blocked, "reason"),
+    warningCounts: plan.warningCounts || countByCode(plan.warnings),
+    manualReviewCounts: plan.manualReviewCounts || countByCode(plan.requiresManualReview),
     createsCount: creates,
     updatesCount: updates,
     blockedCount: blocked,
