@@ -80,6 +80,7 @@ const masterImportJobSchema = new Schema(
 masterImportJobSchema.index({ tipo: 1, estado: 1, createdAt: -1 });
 masterImportJobSchema.index({ creadoPor: 1, createdAt: -1 });
 masterImportJobSchema.index({ archivoSha256: 1, tipo: 1 });
+masterImportJobSchema.index({ createdAt: -1 });
 
 const MasterImportJob =
   mongoose.models.MasterImportJob || mongoose.model("MasterImportJob", masterImportJobSchema);

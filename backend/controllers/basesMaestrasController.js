@@ -68,8 +68,8 @@ function jobListItem(job) {
     mime: job.mime || "",
     size: job.size || 0,
     resumen: job.dryRunSummary || {},
-    warningsCount: Array.isArray(job.warnings) ? job.warnings.length : 0,
-    erroresCount: Array.isArray(job.errors) ? job.errors.length : 0,
+    warningsCount: Number(job.warningsCount ?? (Array.isArray(job.warnings) ? job.warnings.length : 0)),
+    erroresCount: Number(job.erroresCount ?? job.errorsCount ?? (Array.isArray(job.errors) ? job.errors.length : 0)),
     appliedAt: job.appliedAt || null,
     expiresAt: job.expiresAt,
     createdAt: job.createdAt,
@@ -256,13 +256,33 @@ async function listJobs(req, res) {
     if (tipo) filter.tipo = tipo;
     if (estado) filter.estado = estado;
 
+    const jobsPipeline = [
+      { $match: filter },
+      {
+        $project: {
+          tipo: 1,
+          estado: 1,
+          archivoOriginalNombre: 1,
+          archivoSha256: 1,
+          mime: 1,
+          size: 1,
+          dryRunSummary: 1,
+          warningsCount: { $size: { $ifNull: ["$warnings", []] } },
+          erroresCount: { $size: { $ifNull: ["$errors", []] } },
+          appliedAt: 1,
+          expiresAt: 1,
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      },
+      { $sort: { createdAt: -1 } },
+      { $skip: (page - 1) * limit },
+      { $limit: limit },
+    ];
+
     const [total, jobs] = await Promise.all([
       MasterImportJob.countDocuments(filter),
-      MasterImportJob.find(filter)
-        .sort({ createdAt: -1 })
-        .skip((page - 1) * limit)
-        .limit(limit)
-        .lean(),
+      MasterImportJob.aggregate(jobsPipeline).allowDiskUse(true),
     ]);
 
     if (req.audit?.addMeta) req.audit.addMeta({ page, limit, total, tipo, estado });
