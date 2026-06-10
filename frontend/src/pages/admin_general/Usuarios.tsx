@@ -9,6 +9,7 @@ type Usuario = {
   email?: string;
   dni?: string;
   matricula?: string;
+  tipoPersonal?: string;
   grupoJerarquico?: string;
   role?: string; // rol base
   permisos?: string[];
@@ -34,6 +35,7 @@ type SortKey =
   | "email"
   | "dni"
   | "matricula"
+  | "tipoPersonal"
   | "role"
   | "barrioAsignado"
   | "activo"
@@ -64,6 +66,13 @@ function grupoJerarquicoLabel(value: unknown) {
   if (grupo === "CB") return "Cabos";
   if (grupo === "TR") return "Tropa";
   return "No definido";
+}
+
+function tipoPersonalLabel(value: unknown) {
+  const tipo = up(value);
+  if (tipo === "OF") return "Oficial";
+  if (tipo === "SO") return "Suboficial";
+  return "Sin definir";
 }
 
 function isInspectorLike(permisos?: string[]) {
@@ -659,7 +668,7 @@ if (loading) return <p style={{ color: "#E5E7EB" }}>Cargando usuarios…</p>;
           cellSpacing={0}
           style={{
             width: "100%",
-            minWidth: 1880,
+            minWidth: 2000,
             borderCollapse: "collapse",
             background: "#020817",
             color: "#E5E7EB",
@@ -722,6 +731,20 @@ if (loading) return <p style={{ color: "#E5E7EB" }}>Cargando usuarios…</p>;
                 title="Ordenar por matrícula"
               >
                 Matrícula {sortBy === "matricula" ? (sortDir === "asc" ? "▲" : "▼") : ""}
+              </th>
+              <th
+                style={{
+                  cursor: "pointer",
+                  padding: "12px 14px",
+                  fontSize: 14,
+                  border: "1px solid #334155",
+                  color: "#F8FAFC",
+                  whiteSpace: "nowrap",
+                }}
+                onClick={() => toggleSort("tipoPersonal")}
+                title="Ordenar por tipo de personal"
+              >
+                Tipo personal {sortBy === "tipoPersonal" ? (sortDir === "asc" ? "▲" : "▼") : ""}
               </th>
               <th
                 style={{
@@ -859,6 +882,9 @@ if (loading) return <p style={{ color: "#E5E7EB" }}>Cargando usuarios…</p>;
         </td>
         <td style={{ padding: "12px 14px", border: "1px solid #334155", fontSize: 14 }}>
           {fallback(u.matricula)}
+        </td>
+        <td style={{ padding: "12px 14px", border: "1px solid #334155", fontSize: 14 }}>
+          {tipoPersonalLabel(u.tipoPersonal)}
         </td>
         <td style={{ padding: "12px 14px", border: "1px solid #334155", fontSize: 14 }}>
           {grupoJerarquicoLabel(u.grupoJerarquico)}
@@ -1109,7 +1135,7 @@ if (loading) return <p style={{ color: "#E5E7EB" }}>Cargando usuarios…</p>;
   {rows.length === 0 && (
     <tr>
       <td
-        colSpan={13}
+        colSpan={14}
         style={{
           textAlign: "center",
           padding: 16,

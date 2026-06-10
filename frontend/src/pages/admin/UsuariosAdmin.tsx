@@ -9,6 +9,7 @@ type Usuario = {
   email?: string;
   dni?: string;
   matricula?: string;
+  tipoPersonal?: string;
   role?: string;
   permisos?: string[];
   barrioAsignado?: string;
@@ -27,6 +28,7 @@ type SortKey =
   | "email"
   | "dni"
   | "matricula"
+  | "tipoPersonal"
   | "role"
   | "barrioAsignado"
   | "activo"
@@ -51,6 +53,13 @@ function fallback(v: unknown) {
   const text = String(v ?? "").trim();
   if (isObjectIdLike(text)) return "Sin asignar";
   return text || "Sin asignar";
+}
+
+function tipoPersonalLabel(value: unknown) {
+  const tipo = up(value);
+  if (tipo === "OF") return "Oficial";
+  if (tipo === "SO") return "Suboficial";
+  return "Sin definir";
 }
 
 function territoriosAlojamientoLabel(u: Usuario) {
@@ -489,6 +498,9 @@ export default function UsuariosAdmin() {
               <th style={{ ...thStyle, cursor: "pointer" }} onClick={() => toggleSort("matricula")}>
                 Matrícula {sortBy === "matricula" ? (sortDir === "asc" ? "▲" : "▼") : ""}
               </th>
+              <th style={{ ...thStyle, cursor: "pointer" }} onClick={() => toggleSort("tipoPersonal")}>
+                Tipo personal {sortBy === "tipoPersonal" ? (sortDir === "asc" ? "▲" : "▼") : ""}
+              </th>
               <th style={{ ...thStyle, cursor: "pointer" }} onClick={() => toggleSort("role")}>
                 Rol base {sortBy === "role" ? (sortDir === "asc" ? "▲" : "▼") : ""}
               </th>
@@ -519,6 +531,7 @@ export default function UsuariosAdmin() {
     <td style={tdStyle}>{fallback(u.email)}</td>
     <td style={tdStyle}>{fallback(u.dni)}</td>
     <td style={tdStyle}>{fallback(u.matricula)}</td>
+    <td style={tdStyle}>{tipoPersonalLabel(u.tipoPersonal)}</td>
     <td style={tdStyle}>{fallback(u.role)}</td>
     <td style={tdStyle}>
       {Array.isArray(u.permisos) && u.permisos.length ? u.permisos.map(up).join(", ") : "Sin asignar"}
@@ -549,7 +562,7 @@ export default function UsuariosAdmin() {
 
 {rows.length === 0 && (
   <tr>
-    <td colSpan={13} style={{ ...tdStyle, textAlign: "center" }}>
+    <td colSpan={14} style={{ ...tdStyle, textAlign: "center" }}>
       No hay usuarios para los filtros seleccionados.
     </td>
   </tr>
