@@ -516,7 +516,7 @@ function planPersonal(job) {
           action: "UPDATE",
           collection: "users",
           key: safeKey(item),
-          item: compactPersonalItem(item, { cambios: allowed }),
+          item: compactPersonalItem(item, { cambios: allowed, includeExistente: true }),
           allowedFields: allowed.map((cambio) => cambio.campo),
           blockedFields: [],
           snapshotFields: [

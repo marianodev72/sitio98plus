@@ -569,12 +569,13 @@ export default function BasesMaestras() {
     setInfoMsg("");
     try {
       const res = await http.post(`/admin/bases-maestras/jobs/${encodeURIComponent(detail.jobId)}/apply`);
-      setInfoMsg("Apply ejecutado correctamente.");
+      const nextEstado = res.data?.estado || "APLICADO";
+      setInfoMsg(nextEstado === "APLICANDO" ? "Apply masivo iniciado. Consulte el detalle para ver el estado." : "Apply ejecutado correctamente.");
       setDetail((curr) =>
         curr
           ? {
               ...curr,
-              estado: res.data?.estado || "APLICADO",
+              estado: nextEstado,
               applyResult: res.data?.applyResult || null,
             }
           : curr

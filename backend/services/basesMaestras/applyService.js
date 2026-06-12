@@ -13,6 +13,9 @@ const { normalizeTipoDestinoStrict } = require("../../constants/institucional");
 const { buildApplyPlan } = require("./applyPlanService");
 
 const APPLYABLE_ESTADO = "PENDIENTE_CONFIRMACION";
+const APPLYING_ESTADO = "APLICANDO";
+const PERSONAL_MASSIVE_BATCH_SIZE = Math.max(50, Math.min(1000, Number(process.env.BASES_MAESTRAS_PERSONAL_BATCH_SIZE || 250)));
+const MAX_APPLY_ERRORS = Math.max(10, Math.min(200, Number(process.env.BASES_MAESTRAS_APPLY_MAX_ERRORS || 50)));
 const BAJA_LOGICA_VIVIENDA = "BAJA_LOGICA_VIVIENDA";
 const ESTADOS_VIVIENDA_BAJA_LOGICA = new Set(["DISPONIBLE", "REPARACION", "BAJA"]);
 const GENEROS_ALOJAMIENTO_VALIDOS = new Set(GENERO_PERMITIDO);
@@ -36,6 +39,17 @@ const GRUPOS_JERARQUICOS_VALIDOS = new Set(["OF", "SB_CP", "CB", "TR", "NO_DEFIN
 
 function arr(value) {
   return Array.isArray(value) ? value : [];
+}
+
+function idString(value) {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  if (value._id) return String(value._id);
+  return String(value);
+}
+
+function pushCompactError(result, error) {
+  if (result.errors.length < MAX_APPLY_ERRORS) result.errors.push(error);
 }
 
 function approvalTipo(value) {
@@ -136,7 +150,7 @@ function assertApplyable(job) {
     err.status = 404;
     throw err;
   }
-  if (job.estado !== APPLYABLE_ESTADO) {
+  if (job.estado !== APPLYABLE_ESTADO && !(job.__isPersonalLargeApply && job.estado === APPLYING_ESTADO)) {
     const err = new Error("Job no esta pendiente de confirmacion");
     err.status = 409;
     throw err;
@@ -183,6 +197,7 @@ function prepareApplyJob(job) {
   if (job?.tipo !== "PERSONAL" || !job?.applyPlan?.isLargePlan) return job;
   return {
     ...job,
+    __isPersonalLargeApply: true,
     __allowGroupedApprovals: true,
     applyPlan: buildApplyPlan(job, { full: true }),
   };
@@ -193,6 +208,11 @@ function resultBase() {
     createsApplied: 0,
     updatesApplied: 0,
     excluded: 0,
+    batchCount: 0,
+    processedCreates: 0,
+    processedUpdates: 0,
+    startedAt: null,
+    finishedAt: null,
     skipped: 0,
     blocked: 0,
     unapprovedRisks: 0,
@@ -243,7 +263,7 @@ function alojamientoOcupacionComprometida(alojamiento) {
 
 function pushApplyError(result, key, message, extra = {}) {
   result.skipped += 1;
-  result.errors.push({ key, message, ...extra });
+  pushCompactError(result, { key, message, ...extra });
 }
 
 function requireManualApproval(job, tipo, key, result) {
@@ -321,6 +341,186 @@ async function applyPersonalUpdate(operation, session, result) {
   const update = await User.updateOne(filter, { $set: set }, { session });
   if (update.modifiedCount > 0 || update.matchedCount > 0) result.updatesApplied += 1;
   else result.skipped += 1;
+}
+
+function personalUpdateSet(item, result, key) {
+  const set = {};
+  for (const cambio of arr(item.cambios)) {
+    if (cambio.campo === "tipoPersonal") set.tipoPersonal = cambio.nuevo;
+    if (cambio.campo === "grupoJerarquico") {
+      const grupoJerarquico = validGrupoJerarquico(cambio.nuevo);
+      if (!grupoJerarquico) {
+        pushApplyError(result, key, "Personal UPDATE con grupoJerarquico invalido");
+        return null;
+      }
+      set.grupoJerarquico = grupoJerarquico;
+    }
+    if (cambio.campo === "precedencia") set.precedencia = cambio.nuevo;
+  }
+  if (Object.keys(set).length === 0) {
+    result.skipped += 1;
+    return null;
+  }
+  return set;
+}
+
+async function applyPersonalCreateBatch(operations, actorId, result) {
+  const valid = [];
+  for (const operation of operations) {
+    const item = operation.preview || {};
+    const grupoJerarquico = validGrupoJerarquico(item.grupoJerarquico);
+    if (!item.matricula || !item.dni || !item.tipoPersonal || !item.grupoJerarquico || item.precedencia == null) {
+      pushApplyError(result, operation.key, "Personal CREATE incompleto");
+      continue;
+    }
+    if (!grupoJerarquico) {
+      pushApplyError(result, operation.key, "Personal CREATE con grupoJerarquico invalido");
+      continue;
+    }
+    valid.push({ operation, item, grupoJerarquico });
+  }
+  if (!valid.length) return;
+
+  const matriculas = [...new Set(valid.map(({ item }) => clean(item.matricula)).filter(Boolean))];
+  const dnis = [...new Set(valid.map(({ item }) => normDni(item.dni)).filter(Boolean))];
+  const or = [];
+  if (matriculas.length) or.push({ matricula: { $in: matriculas } });
+  if (dnis.length) or.push({ dni: { $in: dnis } });
+  const existing = or.length
+    ? await User.find({ $or: or }).select("_id matricula dni").lean()
+    : [];
+  const byMatricula = new Map(existing.filter((user) => user.matricula).map((user) => [String(user.matricula), user]));
+  const byDni = new Map(existing.filter((user) => user.dni).map((user) => [normDni(user.dni), user]));
+
+  const bulk = [];
+  for (const { operation, item, grupoJerarquico } of valid) {
+    const existingByMatricula = byMatricula.get(clean(item.matricula)) || null;
+    const existingByDni = byDni.get(normDni(item.dni)) || null;
+    if (
+      existingByMatricula &&
+      existingByDni &&
+      idString(existingByMatricula._id) !== idString(existingByDni._id)
+    ) {
+      pushApplyError(result, operation.key, "Personal CREATE con identidad ambigua matricula/DNI");
+      continue;
+    }
+    if (existingByMatricula || existingByDni) {
+      result.skipped += 1;
+      continue;
+    }
+
+    const name = splitNombreApellido(item.nombreApellido || `${item.nombre || ""} ${item.apellido || ""}`);
+    bulk.push({
+      updateOne: {
+        filter: { matricula: item.matricula },
+        update: {
+          $setOnInsert: {
+            nombre: item.nombre || name.nombre,
+            apellido: item.apellido || name.apellido,
+            email: item.email || syntheticEmail(item),
+            dni: item.dni,
+            matricula: item.matricula,
+            tipoPersonal: item.tipoPersonal,
+            grupoJerarquico,
+            precedencia: item.precedencia,
+            passwordHash: await buildPasswordHash(),
+            mustChangePassword: true,
+            createdBy: actorId || null,
+            meta: { origen: "BASES_MAESTRAS_APPLY" },
+          },
+        },
+        upsert: true,
+      },
+    });
+  }
+
+  if (!bulk.length) return;
+  try {
+    const write = await User.bulkWrite(bulk, { ordered: false });
+    result.createsApplied += Number(write.upsertedCount || 0);
+    const alreadyExisting = Number(write.matchedCount || 0);
+    if (alreadyExisting > 0) result.skipped += alreadyExisting;
+  } catch (err) {
+    pushCompactError(result, { message: err.message || "Error bulk create personal" });
+  }
+}
+
+async function applyPersonalUpdateBatch(operations, result) {
+  const prepared = [];
+  const ids = [];
+  const matriculas = [];
+  const dnis = [];
+
+  for (const operation of operations) {
+    const item = operation.preview || {};
+    const set = personalUpdateSet(item, result, operation.key);
+    if (!set) continue;
+    const existingId = idString(item.existente?._id);
+    prepared.push({ operation, item, set, existingId });
+    if (existingId && mongoose.Types.ObjectId.isValid(existingId)) ids.push(existingId);
+    if (item.matricula) matriculas.push(clean(item.matricula));
+    if (item.dni) dnis.push(normDni(item.dni));
+  }
+  if (!prepared.length) return;
+
+  const or = [];
+  if (ids.length) or.push({ _id: { $in: ids } });
+  if (matriculas.length) or.push({ matricula: { $in: [...new Set(matriculas)] } });
+  if (dnis.length) or.push({ dni: { $in: [...new Set(dnis)] } });
+  const users = or.length ? await User.find({ $or: or }).select("_id matricula dni").lean() : [];
+  const byId = new Map(users.map((user) => [idString(user._id), user]));
+  const byMatricula = new Map(users.filter((user) => user.matricula).map((user) => [String(user.matricula), user]));
+  const byDni = new Map(users.filter((user) => user.dni).map((user) => [normDni(user.dni), user]));
+
+  const bulk = [];
+  for (const { operation, item, set, existingId } of prepared) {
+    let target = existingId ? byId.get(existingId) : null;
+    if (!target) {
+      const existingByMatricula = item.matricula ? byMatricula.get(clean(item.matricula)) : null;
+      const existingByDni = item.dni ? byDni.get(normDni(item.dni)) : null;
+      if (
+        existingByMatricula &&
+        existingByDni &&
+        idString(existingByMatricula._id) !== idString(existingByDni._id)
+      ) {
+        pushApplyError(result, operation.key, "Personal UPDATE con identidad ambigua matricula/DNI");
+        continue;
+      }
+      target = existingByMatricula || existingByDni || null;
+    }
+    if (!target) {
+      pushApplyError(result, operation.key, "Personal UPDATE sin usuario inequivoco");
+      continue;
+    }
+
+    bulk.push({
+      updateOne: {
+        filter: { _id: target._id },
+        update: { $set: set },
+      },
+    });
+  }
+
+  if (!bulk.length) return;
+  try {
+    const write = await User.bulkWrite(bulk, { ordered: false });
+    result.updatesApplied += Number(write.matchedCount || 0);
+  } catch (err) {
+    pushCompactError(result, { message: err.message || "Error bulk update personal" });
+  }
+}
+
+async function applyPersonalOperationsInBatches(operations, type, actorId, result, updateProgress) {
+  for (let index = 0; index < operations.length; index += PERSONAL_MASSIVE_BATCH_SIZE) {
+    const batch = operations.slice(index, index + PERSONAL_MASSIVE_BATCH_SIZE);
+    if (type === "creates") await applyPersonalCreateBatch(batch, actorId, result);
+    else await applyPersonalUpdateBatch(batch, result);
+    result.batchCount += 1;
+    if (type === "creates") result.processedCreates += batch.length;
+    else result.processedUpdates += batch.length;
+    if (typeof updateProgress === "function") await updateProgress(result);
+    if (result.errors.length > 0) break;
+  }
 }
 
 async function applyViviendaCreate(operation, session, result) {
@@ -600,9 +800,13 @@ async function applyOperation(operation, session, result, actorId, job) {
   return null;
 }
 
-async function executeApply({ job, actorId, markApplied, markFailed }) {
+async function executeApply({ job, actorId, markApplied, markFailed, updateProgress }) {
   const applyJob = prepareApplyJob(job);
   assertApplyable(applyJob);
+
+  if (applyJob.__isPersonalLargeApply) {
+    return executePersonalLargeApply({ applyJob, actorId, markApplied, markFailed, updateProgress });
+  }
 
   const session = await mongoose.startSession();
   if (!session || typeof session.withTransaction !== "function") {
@@ -647,6 +851,40 @@ async function executeApply({ job, actorId, markApplied, markFailed }) {
     throw err;
   } finally {
     await session.endSession();
+  }
+}
+
+async function executePersonalLargeApply({ applyJob, actorId, markApplied, markFailed, updateProgress }) {
+  const result = resultBase();
+  result.startedAt = new Date();
+  result.excluded = Number(applyJob.applyPlan?.totalExcluded ?? arr(applyJob.applyPlan?.excluded).length);
+  result.totalCreates = arr(applyJob.applyPlan.creates).length;
+  result.totalUpdates = arr(applyJob.applyPlan.updates).length;
+  result.batchSize = PERSONAL_MASSIVE_BATCH_SIZE;
+
+  try {
+    if (typeof updateProgress === "function") await updateProgress(result);
+    await applyPersonalOperationsInBatches(arr(applyJob.applyPlan.creates), "creates", actorId, result, updateProgress);
+    if (result.errors.length === 0) {
+      await applyPersonalOperationsInBatches(arr(applyJob.applyPlan.updates), "updates", actorId, result, updateProgress);
+    }
+    result.finishedAt = new Date();
+    if (result.errors.length > 0) {
+      const err = new Error("Apply PERSONAL masivo abortado por errores de operacion");
+      err.status = 409;
+      throw err;
+    }
+    await markApplied(result, null);
+    return result;
+  } catch (err) {
+    result.finishedAt = result.finishedAt || new Date();
+    const failedResult = {
+      ...result,
+      errors: [...result.errors, { message: err.message || "Error interno" }],
+    };
+    await markFailed(failedResult, null);
+    err.applyResult = result;
+    throw err;
   }
 }
 

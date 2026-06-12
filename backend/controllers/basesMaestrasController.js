@@ -87,6 +87,7 @@ function jobDetail(job) {
     applyPlanSummary: job.applyPlanSummary || null,
     applyPlanGeneratedAt: job.applyPlanGeneratedAt || null,
     applyPlanGeneratedBy: job.applyPlanGeneratedBy || null,
+    applyProgress: job.applyProgress || null,
     applyResult: job.applyResult || null,
     appliedAt: job.appliedAt || null,
     appliedBy: job.appliedBy ? String(job.appliedBy) : null,
@@ -111,6 +112,30 @@ function jobDetail(job) {
       createdAt: exclusion.createdAt || null,
       revokedAt: exclusion.revokedAt || null,
     })),
+  };
+}
+
+function isPersonalLargeApplyJob(job) {
+  return job?.tipo === "PERSONAL" && Boolean(job?.applyPlan?.isLargePlan);
+}
+
+function applyProgressFromResult(result = {}, status = "RUNNING") {
+  return {
+    status,
+    startedAt: result.startedAt || new Date(),
+    finishedAt: result.finishedAt || null,
+    totalCreates: Number(result.totalCreates || 0),
+    totalUpdates: Number(result.totalUpdates || 0),
+    processedCreates: Number(result.processedCreates || 0),
+    processedUpdates: Number(result.processedUpdates || 0),
+    created: Number(result.createsApplied || 0),
+    updated: Number(result.updatesApplied || 0),
+    skipped: Number(result.skipped || 0),
+    excluded: Number(result.excluded || 0),
+    errors: Array.isArray(result.errors) ? result.errors.slice(0, 20) : [],
+    batchSize: Number(result.batchSize || 0),
+    batchCount: Number(result.batchCount || 0),
+    lastBatchAt: new Date(),
   };
 }
 
@@ -431,10 +456,106 @@ async function applyJob(req, res) {
     assertValidObjectId(req.params.id);
     const job = await MasterImportJob.findById(req.params.id).lean();
     if (!job) return deny(res);
+    const actorId = req.user._id;
+
+    if (isPersonalLargeApplyJob(job)) {
+      if (!["PENDIENTE_CONFIRMACION", "FALLIDO"].includes(job.estado)) {
+        return res.status(409).json({ ok: false, errores: [{ message: "Job no esta disponible para apply masivo" }] });
+      }
+
+      const startedAt = new Date();
+      const initialProgress = applyProgressFromResult(
+        {
+          startedAt,
+          totalCreates: Number(job.applyPlan?.totalCreates || 0),
+          totalUpdates: Number(job.applyPlan?.totalUpdates || 0),
+          excluded: Number(job.applyPlan?.totalExcluded || 0),
+          batchSize: Number(process.env.BASES_MAESTRAS_PERSONAL_BATCH_SIZE || 250),
+        },
+        "RUNNING"
+      );
+
+      const running = await MasterImportJob.findOneAndUpdate(
+        { _id: job._id, estado: { $in: ["PENDIENTE_CONFIRMACION", "FALLIDO"] } },
+        {
+          $set: {
+            estado: "APLICANDO",
+            appliedBy: actorId,
+            applyResult: null,
+            applyProgress: initialProgress,
+          },
+        },
+        { new: true }
+      ).lean();
+
+      if (!running) {
+        return res.status(409).json({ ok: false, errores: [{ message: "No se pudo iniciar apply masivo" }] });
+      }
+
+      const jobForApply = { ...job, estado: "PENDIENTE_CONFIRMACION" };
+      setImmediate(() => {
+        executeApply({
+          job: jobForApply,
+          actorId,
+          updateProgress: async (progress) => {
+            await MasterImportJob.updateOne(
+              { _id: job._id, estado: "APLICANDO" },
+              { $set: { applyProgress: applyProgressFromResult(progress, "RUNNING") } }
+            );
+          },
+          markApplied: async (applyResult) => {
+            await MasterImportJob.findOneAndUpdate(
+              { _id: job._id, estado: "APLICANDO" },
+              {
+                $set: {
+                  estado: "APLICADO",
+                  appliedAt: new Date(),
+                  appliedBy: actorId,
+                  applyResult,
+                  applyProgress: applyProgressFromResult(applyResult, "COMPLETED"),
+                },
+              }
+            );
+          },
+          markFailed: async (applyResult) => {
+            await MasterImportJob.findOneAndUpdate(
+              { _id: job._id, estado: "APLICANDO" },
+              {
+                $set: {
+                  estado: "FALLIDO",
+                  appliedBy: actorId,
+                  applyResult,
+                  applyProgress: applyProgressFromResult(applyResult, "FAILED"),
+                },
+              }
+            );
+          },
+        }).catch((err) => {
+          console.error("[bases-maestras] async personal apply error:", err);
+        });
+      });
+
+      if (req.audit?.setTarget) req.audit.setTarget("MasterImportJob", String(job._id));
+      if (req.audit?.addMeta) {
+        req.audit.addMeta({
+          async: true,
+          totalCreates: initialProgress.totalCreates,
+          totalUpdates: initialProgress.totalUpdates,
+          excluded: initialProgress.excluded,
+        });
+      }
+
+      return res.status(202).json({
+        ok: true,
+        jobId: String(job._id),
+        estado: "APLICANDO",
+        applyProgress: initialProgress,
+      });
+    }
 
     const result = await executeApply({
       job,
-      actorId: req.user._id,
+      actorId,
       markApplied: async (applyResult, session) => {
         const applied = await MasterImportJob.findOneAndUpdate(
           { _id: job._id, estado: "PENDIENTE_CONFIRMACION" },
@@ -442,7 +563,7 @@ async function applyJob(req, res) {
             $set: {
               estado: "APLICADO",
               appliedAt: new Date(),
-              appliedBy: req.user._id,
+              appliedBy: actorId,
               applyResult,
             },
           },
@@ -460,7 +581,7 @@ async function applyJob(req, res) {
           {
             $set: {
               estado: "FALLIDO",
-              appliedBy: req.user._id,
+              appliedBy: actorId,
               applyResult,
             },
           },
