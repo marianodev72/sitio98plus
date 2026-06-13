@@ -280,7 +280,16 @@ function compactPersonalApplyPlanForPersistence(plan) {
   const warnings = arr(plan.warnings);
   const requiresManualReview = arr(plan.requiresManualReview);
   const excluded = arr(plan.excluded);
-  const totalItems = creates.length + updates.length + blocked.length + risks.length + warnings.length + requiresManualReview.length + excluded.length;
+  const omitidosNoRegistrados = arr(plan.omitidosNoRegistrados);
+  const totalItems =
+    creates.length +
+    updates.length +
+    blocked.length +
+    risks.length +
+    warnings.length +
+    requiresManualReview.length +
+    excluded.length +
+    omitidosNoRegistrados.length;
 
   if (totalItems <= PERSONAL_LARGE_PLAN_THRESHOLD) return plan;
 
@@ -299,9 +308,11 @@ function compactPersonalApplyPlanForPersistence(plan) {
     totalWarnings: warnings.length,
     totalRequiresManualReview: requiresManualReview.length,
     totalExcluded: excluded.length,
+    totalOmitidosNoRegistrados: omitidosNoRegistrados.length,
     canApply: blocked.length === 0,
     blocked: blocked.slice(0, PERSONAL_SAMPLE_ITEMS),
     excluded: excluded.slice(0, PERSONAL_SAMPLE_ITEMS),
+    omitidosNoRegistrados: omitidosNoRegistrados.slice(0, PERSONAL_SAMPLE_ITEMS),
     risks: groupedRisks,
     requiresManualReview: groupedManualReview,
     warnings: warnings.slice(0, PERSONAL_SAMPLE_ITEMS),
@@ -311,6 +322,7 @@ function compactPersonalApplyPlanForPersistence(plan) {
     sampleUpdates: updates.slice(0, PERSONAL_SAMPLE_UPDATES),
     sampleBlocked: blocked.slice(0, PERSONAL_SAMPLE_ITEMS),
     sampleExcluded: excluded.slice(0, PERSONAL_SAMPLE_ITEMS),
+    sampleOmitidosNoRegistrados: omitidosNoRegistrados.slice(0, PERSONAL_SAMPLE_ITEMS),
     sampleWarnings: warnings.slice(0, PERSONAL_SAMPLE_ITEMS),
     sampleRisks: risks.slice(0, PERSONAL_SAMPLE_ITEMS),
     riskCounts: countByCode(risks),
@@ -318,6 +330,7 @@ function compactPersonalApplyPlanForPersistence(plan) {
     warningCounts: countByCode(warnings),
     manualReviewCounts: countByCode(requiresManualReview),
     excludedCounts: plan.excludedCounts || countByCode(excluded, "reason"),
+    omitidosNoRegistradosCounts: countByCode(omitidosNoRegistrados),
   };
 }
 
@@ -474,34 +487,12 @@ function planPersonal(job) {
   const risks = [];
   const warnings = arr(job.warnings);
   const requiresManualReview = [];
-
-  for (const item of arr(diff.nuevos)) {
-    pushPersonalRisks(job, item, risks, requiresManualReview);
-    creates.push(
-      baseOperation({
-        action: "CREATE",
-        collection: "users",
-        key: safeKey(item),
-        item: compactPersonalItem(item),
-        allowedFields: ["nombre", "apellido", "dni", "matricula", "tipoPersonal", "grupoJerarquico", "precedencia"],
-        blockedFields: Array.from(CAMPOS_PERSONAL_BLOQUEADOS),
-        snapshotFields: [
-          "_id",
-          "dni",
-          "matricula",
-          "tipoPersonal",
-          "grupoJerarquico",
-          "precedencia",
-          "role",
-          "activo",
-          "archivado",
-          "bloqueado",
-          "viviendaAsignada",
-          "alojamientoAsignado",
-        ],
-      })
-    );
-  }
+  const omitidosNoRegistrados = [...arr(diff.nuevos), ...arr(diff.omitidosNoRegistrados)].map((item) => ({
+    tipo: "PERSONAL_SIN_USUARIO_REGISTRADO",
+    key: safeKey(item),
+    message: "Persona presente en padron institucional sin usuario SITIO98PLUS; se omite del apply",
+    item: compactPersonalItem(item),
+  }));
 
   for (const item of arr(diff.actualizados)) {
     pushPersonalRisks(job, item, risks, requiresManualReview);
@@ -607,6 +598,7 @@ function planPersonal(job) {
     warnings: warnings.map(compactPersonalWarning),
     requiresManualReview,
     totalSinCambios: arr(diff.sinCambios).length,
+    omitidosNoRegistrados,
   });
 }
 
@@ -993,6 +985,7 @@ function buildApplyPlanSummary(applyPlan) {
   const warnings = Number(plan.totalWarnings ?? arr(plan.warnings).length);
   const requiresManualReview = Number(plan.totalRequiresManualReview ?? arr(plan.requiresManualReview).length);
   const excluded = Number(plan.totalExcluded ?? arr(plan.excluded).length);
+  const omitidosNoRegistrados = Number(plan.totalOmitidosNoRegistrados ?? arr(plan.omitidosNoRegistrados).length);
 
   return {
     creates,
@@ -1002,6 +995,7 @@ function buildApplyPlanSummary(applyPlan) {
     warnings,
     requiresManualReview,
     excluded,
+    omitidosNoRegistrados,
     totalCreates: creates,
     totalUpdates: updates,
     totalBlocked: blocked,
@@ -1009,8 +1003,9 @@ function buildApplyPlanSummary(applyPlan) {
     totalWarnings: warnings,
     totalRequiresManualReview: requiresManualReview,
     totalExcluded: excluded,
+    totalOmitidosNoRegistrados: omitidosNoRegistrados,
     totalSinCambios: Number(plan.totalSinCambios || 0),
-    totalItems: Number(plan.totalItems || creates + updates + blocked + risks + warnings + requiresManualReview + excluded),
+    totalItems: Number(plan.totalItems || creates + updates + blocked + risks + warnings + requiresManualReview + excluded + omitidosNoRegistrados),
     isLargePlan: Boolean(plan.isLargePlan),
     detailsTruncated: Boolean(plan.detailsTruncated),
     riskCounts: plan.riskCounts || countByCode(plan.risks),
@@ -1018,6 +1013,7 @@ function buildApplyPlanSummary(applyPlan) {
     warningCounts: plan.warningCounts || countByCode(plan.warnings),
     manualReviewCounts: plan.manualReviewCounts || countByCode(plan.requiresManualReview),
     excludedCounts: plan.excludedCounts || countByCode(plan.excluded, "reason"),
+    omitidosNoRegistradosCounts: plan.omitidosNoRegistradosCounts || countByCode(plan.omitidosNoRegistrados),
     createsCount: creates,
     updatesCount: updates,
     blockedCount: blocked,
@@ -1025,6 +1021,7 @@ function buildApplyPlanSummary(applyPlan) {
     warningsCount: warnings,
     requiresManualReviewCount: requiresManualReview,
     excludedCount: excluded,
+    omitidosNoRegistradosCount: omitidosNoRegistrados,
   };
 }
 

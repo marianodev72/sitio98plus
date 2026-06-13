@@ -386,7 +386,7 @@ function pushDuplicateWarnings({ rows, key, label, warnings }) {
   }
 }
 
-function baseSummary({ tipoBase, totalFilas, validas, invalidas, nuevos, actualizados, sinCambios, warnings, errores, hash }) {
+function baseSummary({ tipoBase, totalFilas, validas, invalidas, nuevos, actualizados, sinCambios, warnings, errores, hash, omitidosNoRegistrados = [] }) {
   return {
     tipoBase,
     dryRun: true,
@@ -397,6 +397,7 @@ function baseSummary({ tipoBase, totalFilas, validas, invalidas, nuevos, actuali
     nuevos: nuevos.length,
     actualizados: actualizados.length,
     sinCambios: sinCambios.length,
+    omitidosNoRegistrados: omitidosNoRegistrados.length,
     warnings: warnings.length,
     errores: errores.length,
     conflictos: warnings.filter((warning) => String(warning.tipo || "").includes("INCONSISTENCIA")).length,
@@ -500,6 +501,7 @@ async function dryRunPersonal(buffer) {
   const nuevos = [];
   const actualizados = [];
   const sinCambios = [];
+  const omitidosNoRegistrados = [];
 
   pushDuplicateWarnings({ rows: parsed, key: "dni", label: "DNI", warnings });
   pushDuplicateWarnings({ rows: parsed, key: "matricula", label: "MATRICULAS", warnings });
@@ -545,7 +547,7 @@ async function dryRunPersonal(buffer) {
 
     const existing = existingByMatricula || existingByDni || null;
     if (!existing) {
-      nuevos.push(row);
+      omitidosNoRegistrados.push(row);
       continue;
     }
 
@@ -592,10 +594,12 @@ async function dryRunPersonal(buffer) {
       warnings,
       errores: errors,
       hash,
+      omitidosNoRegistrados,
     }),
     nuevos,
     actualizados,
     sinCambios,
+    omitidosNoRegistrados,
     warnings,
     errores: errors,
   };

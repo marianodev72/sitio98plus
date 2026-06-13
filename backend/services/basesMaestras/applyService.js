@@ -1,5 +1,3 @@
-const crypto = require("crypto");
-const bcrypt = require("bcryptjs");
 const mongoose = require("mongoose");
 
 const { User } = require("../../models/user");
@@ -132,18 +130,6 @@ function splitNombreApellido(value) {
   return { nombre: parts.slice(0, -1).join(" "), apellido: parts.slice(-1).join(" ") };
 }
 
-function syntheticEmail(item) {
-  const matricula = clean(item.matricula).toLowerCase().replace(/[^a-z0-9._-]/g, "");
-  const dni = normDni(item.dni);
-  const key = matricula || dni || crypto.randomBytes(8).toString("hex");
-  return `import-${key}@sitio98plus.local`;
-}
-
-async function buildPasswordHash() {
-  const random = crypto.randomBytes(32).toString("hex");
-  return bcrypt.hash(random, 10);
-}
-
 function assertApplyable(job) {
   if (!job) {
     const err = new Error("Job inexistente");
@@ -272,51 +258,6 @@ function requireManualApproval(job, tipo, key, result) {
   return false;
 }
 
-async function applyPersonalCreate(operation, session, result) {
-  const item = operation.preview || {};
-  const grupoJerarquico = validGrupoJerarquico(item.grupoJerarquico);
-  if (!item.matricula || !item.dni || !item.tipoPersonal || !item.grupoJerarquico || item.precedencia == null) {
-    result.skipped += 1;
-    result.errors.push({ key: operation.key, message: "Personal CREATE incompleto" });
-    return;
-  }
-  if (!grupoJerarquico) {
-    result.skipped += 1;
-    result.errors.push({ key: operation.key, message: "Personal CREATE con grupoJerarquico invalido" });
-    return;
-  }
-
-  const existing = await User.findOne({
-    $or: [{ matricula: item.matricula }, { dni: item.dni }],
-  }).session(session);
-  if (existing) {
-    result.skipped += 1;
-    return;
-  }
-
-  const name = splitNombreApellido(item.nombreApellido || `${item.nombre || ""} ${item.apellido || ""}`);
-  await User.create(
-    [
-      {
-        nombre: item.nombre || name.nombre,
-        apellido: item.apellido || name.apellido,
-        email: item.email || syntheticEmail(item),
-        dni: item.dni,
-        matricula: item.matricula,
-        tipoPersonal: item.tipoPersonal,
-        grupoJerarquico,
-        precedencia: item.precedencia,
-        passwordHash: await buildPasswordHash(),
-        mustChangePassword: true,
-        createdBy: operation.actorId || null,
-        meta: { origen: "BASES_MAESTRAS_APPLY" },
-      },
-    ],
-    { session }
-  );
-  result.createsApplied += 1;
-}
-
 async function applyPersonalUpdate(operation, session, result) {
   const item = operation.preview || {};
   const set = {};
@@ -362,87 +303,6 @@ function personalUpdateSet(item, result, key) {
     return null;
   }
   return set;
-}
-
-async function applyPersonalCreateBatch(operations, actorId, result) {
-  const valid = [];
-  for (const operation of operations) {
-    const item = operation.preview || {};
-    const grupoJerarquico = validGrupoJerarquico(item.grupoJerarquico);
-    if (!item.matricula || !item.dni || !item.tipoPersonal || !item.grupoJerarquico || item.precedencia == null) {
-      pushApplyError(result, operation.key, "Personal CREATE incompleto");
-      continue;
-    }
-    if (!grupoJerarquico) {
-      pushApplyError(result, operation.key, "Personal CREATE con grupoJerarquico invalido");
-      continue;
-    }
-    valid.push({ operation, item, grupoJerarquico });
-  }
-  if (!valid.length) return;
-
-  const matriculas = [...new Set(valid.map(({ item }) => clean(item.matricula)).filter(Boolean))];
-  const dnis = [...new Set(valid.map(({ item }) => normDni(item.dni)).filter(Boolean))];
-  const or = [];
-  if (matriculas.length) or.push({ matricula: { $in: matriculas } });
-  if (dnis.length) or.push({ dni: { $in: dnis } });
-  const existing = or.length
-    ? await User.find({ $or: or }).select("_id matricula dni").lean()
-    : [];
-  const byMatricula = new Map(existing.filter((user) => user.matricula).map((user) => [String(user.matricula), user]));
-  const byDni = new Map(existing.filter((user) => user.dni).map((user) => [normDni(user.dni), user]));
-
-  const bulk = [];
-  for (const { operation, item, grupoJerarquico } of valid) {
-    const existingByMatricula = byMatricula.get(clean(item.matricula)) || null;
-    const existingByDni = byDni.get(normDni(item.dni)) || null;
-    if (
-      existingByMatricula &&
-      existingByDni &&
-      idString(existingByMatricula._id) !== idString(existingByDni._id)
-    ) {
-      pushApplyError(result, operation.key, "Personal CREATE con identidad ambigua matricula/DNI");
-      continue;
-    }
-    if (existingByMatricula || existingByDni) {
-      result.skipped += 1;
-      continue;
-    }
-
-    const name = splitNombreApellido(item.nombreApellido || `${item.nombre || ""} ${item.apellido || ""}`);
-    bulk.push({
-      updateOne: {
-        filter: { matricula: item.matricula },
-        update: {
-          $setOnInsert: {
-            nombre: item.nombre || name.nombre,
-            apellido: item.apellido || name.apellido,
-            email: item.email || syntheticEmail(item),
-            dni: item.dni,
-            matricula: item.matricula,
-            tipoPersonal: item.tipoPersonal,
-            grupoJerarquico,
-            precedencia: item.precedencia,
-            passwordHash: await buildPasswordHash(),
-            mustChangePassword: true,
-            createdBy: actorId || null,
-            meta: { origen: "BASES_MAESTRAS_APPLY" },
-          },
-        },
-        upsert: true,
-      },
-    });
-  }
-
-  if (!bulk.length) return;
-  try {
-    const write = await User.bulkWrite(bulk, { ordered: false });
-    result.createsApplied += Number(write.upsertedCount || 0);
-    const alreadyExisting = Number(write.matchedCount || 0);
-    if (alreadyExisting > 0) result.skipped += alreadyExisting;
-  } catch (err) {
-    pushCompactError(result, { message: err.message || "Error bulk create personal" });
-  }
 }
 
 async function applyPersonalUpdateBatch(operations, result) {
@@ -513,8 +373,11 @@ async function applyPersonalUpdateBatch(operations, result) {
 async function applyPersonalOperationsInBatches(operations, type, actorId, result, updateProgress) {
   for (let index = 0; index < operations.length; index += PERSONAL_MASSIVE_BATCH_SIZE) {
     const batch = operations.slice(index, index + PERSONAL_MASSIVE_BATCH_SIZE);
-    if (type === "creates") await applyPersonalCreateBatch(batch, actorId, result);
-    else await applyPersonalUpdateBatch(batch, result);
+    if (type === "creates") {
+      for (const operation of batch) pushApplyError(result, operation.key, "Personal CREATE no permitido: hidratacion only");
+    } else {
+      await applyPersonalUpdateBatch(batch, result);
+    }
     result.batchCount += 1;
     if (type === "creates") result.processedCreates += batch.length;
     else result.processedUpdates += batch.length;
@@ -789,7 +652,10 @@ async function applyAlojamientoUpdate(operation, session, result, job) {
 
 async function applyOperation(operation, session, result, actorId, job) {
   const op = { ...operation, actorId };
-  if (operation.collection === "users" && operation.action === "CREATE") return applyPersonalCreate(op, session, result);
+  if (operation.collection === "users" && operation.action === "CREATE") {
+    pushApplyError(result, operation.key, "Personal CREATE no permitido: hidratacion only");
+    return null;
+  }
   if (operation.collection === "users" && operation.action === "UPDATE") return applyPersonalUpdate(op, session, result);
   if (operation.collection === "viviendas" && operation.action === "CREATE") return applyViviendaCreate(op, session, result);
   if (operation.collection === "viviendas" && operation.action === "UPDATE") return applyViviendaUpdate(op, session, result);
@@ -864,10 +730,10 @@ async function executePersonalLargeApply({ applyJob, actorId, markApplied, markF
 
   try {
     if (typeof updateProgress === "function") await updateProgress(result);
-    await applyPersonalOperationsInBatches(arr(applyJob.applyPlan.creates), "creates", actorId, result, updateProgress);
-    if (result.errors.length === 0) {
-      await applyPersonalOperationsInBatches(arr(applyJob.applyPlan.updates), "updates", actorId, result, updateProgress);
+    if (arr(applyJob.applyPlan.creates).length > 0) {
+      await applyPersonalOperationsInBatches(arr(applyJob.applyPlan.creates), "creates", actorId, result, updateProgress);
     }
+    if (result.errors.length === 0) await applyPersonalOperationsInBatches(arr(applyJob.applyPlan.updates), "updates", actorId, result, updateProgress);
     result.finishedAt = new Date();
     if (result.errors.length > 0) {
       const err = new Error("Apply PERSONAL masivo abortado por errores de operacion");
