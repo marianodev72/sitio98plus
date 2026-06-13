@@ -8,7 +8,9 @@ const { aplicarCambiosAnexo11 } = require("../services/anexo11Service");
 const { updateByInspector } = require("./anexos/ControllerAnexo08");
 const {
   deriveGrupoViviendaFromGradoEscalafon,
+  deriveGrupoViviendaFromGrupoJerarquico,
   isTipoDestinoCompatibleConGrupoVivienda,
+  normalizeTipoPersonal,
 } = require("../constants/institucional");
 
 const { FormTemplate } = require("../models/FormTemplate");
@@ -74,10 +76,22 @@ const MSG_VIVIENDA_SIN_TIPO_DESTINO = "La vivienda seleccionada no tiene destino
 const MSG_VIVIENDA_INCOMPATIBLE =
   "La vivienda seleccionada no es compatible con el grupo institucional del postulante.";
 
-function validateCompatibilidadTipoDestinoAnexo02({ gradoEscalafon, vivienda }) {
+function validateCompatibilidadTipoDestinoAnexo02({ gradoEscalafon, vivienda, postulante }) {
   const gradoEscalafonOrigen =
     gradoEscalafon === undefined || gradoEscalafon === null ? "" : String(gradoEscalafon).trim();
-  const grupoViviendaPostulante = deriveGrupoViviendaFromGradoEscalafon(gradoEscalafonOrigen);
+  let fuenteGrupoViviendaPostulante = "ANEXO_01_GRADO_ESCALAFON";
+  let grupoViviendaPostulante = deriveGrupoViviendaFromGradoEscalafon(gradoEscalafonOrigen);
+
+  if (!grupoViviendaPostulante) {
+    grupoViviendaPostulante = deriveGrupoViviendaFromGrupoJerarquico(postulante?.grupoJerarquico);
+    fuenteGrupoViviendaPostulante = "USER_GRUPO_JERARQUICO";
+  }
+
+  if (!grupoViviendaPostulante) {
+    grupoViviendaPostulante = normalizeTipoPersonal(postulante?.tipoPersonal);
+    fuenteGrupoViviendaPostulante = "USER_TIPO_PERSONAL";
+  }
+
   if (!grupoViviendaPostulante) return { ok: false, message: MSG_GRADO_NO_MAPEABLE };
 
   const tipoDestinoVivienda =
@@ -95,6 +109,7 @@ function validateCompatibilidadTipoDestinoAnexo02({ gradoEscalafon, vivienda }) 
       grupoViviendaPostulante,
       tipoDestinoVivienda,
       gradoEscalafonOrigen,
+      fuenteGrupoViviendaPostulante,
     },
   };
 }
@@ -6872,10 +6887,14 @@ async function darConformidadAdmin(req, res) {
         const anexo01Origen = anexo01OrigenId
           ? await FormSubmission.findById(anexo01OrigenId).select({ codigo: 1, datos: 1 }).lean()
           : null;
+        const postulanteInstitucional = await User.findById(postulanteId)
+          .select("_id tipoPersonal grupoJerarquico matricula dni email apellido nombre")
+          .lean();
 
         const compatibilidadTipoDestino = validateCompatibilidadTipoDestinoAnexo02({
           gradoEscalafon: up(anexo01Origen?.codigo) === "ANEXO_01" ? anexo01Origen?.datos?.gradoEscalafon : "",
           vivienda: v,
+          postulante: postulanteInstitucional,
         });
         if (!compatibilidadTipoDestino.ok) return badRequest(res, compatibilidadTipoDestino.message);
       }
@@ -7021,6 +7040,9 @@ async function generarAnexo02DesdeAnexo01(req, res) {
     const compatibilidadTipoDestino = validateCompatibilidadTipoDestinoAnexo02({
       gradoEscalafon: anexo01?.datos?.gradoEscalafon,
       vivienda,
+      postulante: await User.findById(anexo01.usuario)
+        .select("_id tipoPersonal grupoJerarquico matricula dni email apellido nombre")
+        .lean(),
     });
     if (!compatibilidadTipoDestino.ok) return badRequest(res, compatibilidadTipoDestino.message);
 
