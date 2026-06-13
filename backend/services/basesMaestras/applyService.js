@@ -279,7 +279,7 @@ async function applyPersonalUpdate(operation, session, result) {
     return;
   }
   const filter = item.matricula ? { matricula: item.matricula } : { dni: item.dni };
-  const update = await User.updateOne(filter, { $set: set }, { session });
+  const update = await User.updateOne(filter, { $set: set }, { session, strict: false });
   if (update.modifiedCount > 0 || update.matchedCount > 0) result.updatesApplied += 1;
   else result.skipped += 1;
 }
@@ -363,7 +363,7 @@ async function applyPersonalUpdateBatch(operations, result) {
 
   if (!bulk.length) return;
   try {
-    const write = await User.bulkWrite(bulk, { ordered: false });
+    const write = await User.bulkWrite(bulk, { ordered: false, strict: false });
     result.updatesApplied += Number(write.matchedCount || 0);
   } catch (err) {
     pushCompactError(result, { message: err.message || "Error bulk update personal" });
