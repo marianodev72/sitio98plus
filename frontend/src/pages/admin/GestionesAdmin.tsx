@@ -48,6 +48,8 @@ const ALOJAMIENTOS_CODES = [
 
 const ANEXOS_PERMISIONARIO = VIVIENDAS_CODES;
 const ANEXOS_ALOJADO = ALOJAMIENTOS_CODES;
+const FORM_LIMIT_OPTIONS = [50, 100];
+const ALOJADOS_LIMIT_OPTIONS = [50, 100, 200];
 
 function safe(v: unknown) {
   return v === null || v === undefined || v === "" ? "-" : String(v);
@@ -162,6 +164,9 @@ export default function GestionesAdmin() {
   );
 
   const [codigo, setCodigo] = useState<string>(ANEXOS_PERMISIONARIO[0]);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(50);
+  const [total, setTotal] = useState<number | null>(null);
   const [items, setItems] = useState<Anexo[]>([]);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
@@ -172,18 +177,24 @@ export default function GestionesAdmin() {
 
   useEffect(() => {
     const codes = panel === "PERMISIONARIOS" ? VIVIENDAS_CODES : ALOJAMIENTOS_CODES;
-    if (!codes.includes(codigo)) setCodigo(codes[0]);
+    if (panel === "PERMISIONARIOS") setLimit((value) => Math.min(value, 100));
+    if (!codes.includes(codigo)) {
+      setCodigo(codes[0]);
+      setPage(1);
+    }
   }, [codigo, panel]);
 
   async function cargarLista() {
     setLoading(true);
     setErrorMsg("");
     setItems([]);
+    setTotal(null);
 
     try {
       if (!codigo) return;
 
       if (esAdmin) {
+        const requestLimit = panel === "ALOJADOS" ? limit : Math.min(limit, 100);
         if (panel === "ALOJADOS") {
           if (!ALOJAMIENTOS_CODES.includes(codigo)) {
             setCodigo(ALOJAMIENTOS_CODES[0]);
@@ -191,9 +202,10 @@ export default function GestionesAdmin() {
           }
 
           const res = await http.get("/alojamientos-documentos", {
-            params: { codigo, limit: 50, page: 1 },
+            params: { codigo, limit: requestLimit, page },
           });
           setItems(Array.isArray(res.data?.documentos) ? res.data.documentos : []);
+          setTotal(typeof res.data?.total === "number" ? res.data.total : null);
           return;
         }
 
@@ -202,8 +214,11 @@ export default function GestionesAdmin() {
           return;
         }
 
-        const res = await http.get(`/formularios/anexo/${codigo}`);
+        const res = await http.get(`/formularios/anexo/${codigo}`, {
+          params: { limit: requestLimit, page },
+        });
         setItems(Array.isArray(res.data?.anexos) ? res.data.anexos : []);
+        setTotal(typeof res.data?.total === "number" ? res.data.total : null);
       } else {
         const res = await http.get(`/formularios/mios`, { params: { codigo } });
         setItems(Array.isArray(res.data?.anexos) ? res.data.anexos : []);
@@ -249,7 +264,7 @@ export default function GestionesAdmin() {
   useEffect(() => {
     cargarLista();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [codigo, esAdmin, panel]);
+  }, [codigo, esAdmin, panel, page, limit]);
 
   const pageStyle: CSSProperties = {
     padding: 24,
@@ -339,6 +354,10 @@ export default function GestionesAdmin() {
   };
 
   const isAlojados = panel === "ALOJADOS";
+  const limitOptions = isAlojados ? ALOJADOS_LIMIT_OPTIONS : FORM_LIMIT_OPTIONS;
+  const effectiveLimit = isAlojados ? limit : Math.min(limit, 100);
+  const totalPages = total !== null ? Math.max(1, Math.ceil(total / effectiveLimit)) : null;
+  const canGoNext = totalPages !== null ? page < totalPages : items.length === effectiveLimit;
 
   return (
     <div style={pageStyle}>
@@ -348,13 +367,19 @@ export default function GestionesAdmin() {
 
       <section style={{ display: "flex", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
         <button
-          onClick={() => setPanel("PERMISIONARIOS")}
+          onClick={() => {
+            setPanel("PERMISIONARIOS");
+            setPage(1);
+          }}
           style={tabButtonStyle(panel === "PERMISIONARIOS")}
         >
           Permisionarios
         </button>
         <button
-          onClick={() => setPanel("ALOJADOS")}
+          onClick={() => {
+            setPanel("ALOJADOS");
+            setPage(1);
+          }}
           style={tabButtonStyle(panel === "ALOJADOS")}
         >
           Alojados
@@ -379,7 +404,10 @@ export default function GestionesAdmin() {
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           <select
             value={codigo}
-            onChange={(e) => setCodigo(e.target.value)}
+            onChange={(e) => {
+              setCodigo(e.target.value);
+              setPage(1);
+            }}
             disabled={loading}
             style={selectStyle}
           >
@@ -390,12 +418,56 @@ export default function GestionesAdmin() {
             ))}
           </select>
 
+          <select
+            value={effectiveLimit}
+            onChange={(e) => {
+              setLimit(Number(e.target.value));
+              setPage(1);
+            }}
+            disabled={loading}
+            style={selectStyle}
+            aria-label="Cantidad por pagina"
+          >
+            {limitOptions.map((value) => (
+              <option key={value} value={value} style={optionStyle}>
+                {value} por pagina
+              </option>
+            ))}
+          </select>
+
           <button onClick={cargarLista} disabled={loading} style={buttonStyle}>
             {loading ? "Cargando…" : "Actualizar"}
           </button>
 
           <span style={{ marginLeft: 12, color: "rgba(255,255,255,0.80)" }}>
-            Resultados: {items.length}
+            Resultados visibles: {items.length}
+          </span>
+          <span style={{ color: "rgba(255,255,255,0.80)" }}>
+            Pagina: {page}
+            {totalPages !== null ? ` de ${totalPages}` : ""}
+          </span>
+        </div>
+      </section>
+
+      <section style={{ ...cardStyle, marginBottom: 12 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <button
+            onClick={() => setPage((value) => Math.max(1, value - 1))}
+            disabled={loading || page <= 1}
+            style={buttonStyle}
+          >
+            Anterior
+          </button>
+          <button
+            onClick={() => setPage((value) => value + 1)}
+            disabled={loading || !canGoNext}
+            style={buttonStyle}
+          >
+            Siguiente
+          </button>
+          <span style={{ color: "rgba(255,255,255,0.80)" }}>
+            Cantidad por pagina: {effectiveLimit}
+            {total !== null ? ` / Total: ${total}` : ""}
           </span>
         </div>
       </section>

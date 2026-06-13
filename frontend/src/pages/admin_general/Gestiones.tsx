@@ -80,6 +80,9 @@ const ESTADOS_ALOJAMIENTO = [
   "ANULADO",
 ];
 
+const FORM_LIMIT_OPTIONS = [50, 100];
+const ALOJADOS_LIMIT_OPTIONS = [50, 100, 200];
+
 function safe(v: unknown) {
   return v === null || v === undefined || v === "" ? "-" : String(v);
 }
@@ -196,6 +199,9 @@ export default function Gestiones() {
   const [estadoFiltro, setEstadoFiltro] = useState("");
   const [barrioFiltro, setBarrioFiltro] = useState("");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(50);
+  const [total, setTotal] = useState<number | null>(null);
   const [items, setItems] = useState<Anexo[]>([]);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
@@ -208,21 +214,25 @@ export default function Gestiones() {
     setCodigo(panel === "PERMISIONARIOS" ? TODOS_CODIGOS : "ANEXO_21");
     setEstadoFiltro("");
     setBarrioFiltro("");
+    setPage(1);
+    if (panel === "PERMISIONARIOS") setLimit((value) => Math.min(value, 100));
   }, [panel]);
 
   async function cargarLista() {
     setLoading(true);
     setErrorMsg("");
     setItems([]);
+    setTotal(null);
 
     try {
       if (!codigo) return;
 
       if (esAdmin) {
+        const requestLimit = panel === "ALOJADOS" ? limit : Math.min(limit, 100);
         const params: Record<string, string | number> = {
           sortDir,
-          limit: 50,
-          page: 1,
+          limit: requestLimit,
+          page,
         };
 
         if (estadoFiltro) params.estado = estadoFiltro;
@@ -231,6 +241,7 @@ export default function Gestiones() {
           if (codigo && codigo !== TODOS_CODIGOS) params.codigo = codigo;
           const res = await http.get("/alojamientos-documentos", { params });
           setItems(Array.isArray(res.data?.documentos) ? res.data.documentos : []);
+          setTotal(typeof res.data?.total === "number" ? res.data.total : null);
           return;
         }
 
@@ -238,6 +249,7 @@ export default function Gestiones() {
 
         const res = await http.get(`/formularios/anexo/${codigo}`, { params });
         setItems(Array.isArray(res.data?.anexos) ? res.data.anexos : []);
+        setTotal(typeof res.data?.total === "number" ? res.data.total : null);
       } else {
         const res = await http.get(`/formularios/mios`, { params: { codigo } });
         setItems(Array.isArray(res.data?.anexos) ? res.data.anexos : []);
@@ -284,9 +296,13 @@ export default function Gestiones() {
   useEffect(() => {
     cargarLista();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [codigo, estadoFiltro, barrioFiltro, sortDir, esAdmin]);
+  }, [codigo, estadoFiltro, barrioFiltro, sortDir, esAdmin, page, limit]);
 
   const isAlojados = panel === "ALOJADOS";
+  const limitOptions = isAlojados ? ALOJADOS_LIMIT_OPTIONS : FORM_LIMIT_OPTIONS;
+  const effectiveLimit = isAlojados ? limit : Math.min(limit, 100);
+  const totalPages = total !== null ? Math.max(1, Math.ceil(total / effectiveLimit)) : null;
+  const canGoNext = totalPages !== null ? page < totalPages : items.length === effectiveLimit;
 
   const thStyle: CSSProperties = {
     textAlign: "left",
@@ -381,7 +397,10 @@ const optionStyle: CSSProperties = {
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
               <select
   value={codigo}
-  onChange={(e) => setCodigo(e.target.value)}
+  onChange={(e) => {
+    setCodigo(e.target.value);
+    setPage(1);
+  }}
   disabled={loading}
   style={selectStyle}
 >
@@ -399,7 +418,10 @@ const optionStyle: CSSProperties = {
 
               <select
                 value={estadoFiltro}
-                onChange={(e) => setEstadoFiltro(e.target.value)}
+                onChange={(e) => {
+                  setEstadoFiltro(e.target.value);
+                  setPage(1);
+                }}
                 disabled={loading}
                 style={selectStyle}
                 aria-label="Estado"
@@ -417,7 +439,10 @@ const optionStyle: CSSProperties = {
               {!isAlojados && (
                 <input
                   value={barrioFiltro}
-                  onChange={(e) => setBarrioFiltro(e.target.value)}
+                  onChange={(e) => {
+                    setBarrioFiltro(e.target.value);
+                    setPage(1);
+                  }}
                   disabled={loading}
                   placeholder="Barrio"
                   style={{ ...controlStyle, minWidth: 180 }}
@@ -427,7 +452,10 @@ const optionStyle: CSSProperties = {
 
               <select
                 value={sortDir}
-                onChange={(e) => setSortDir(e.target.value === "asc" ? "asc" : "desc")}
+                onChange={(e) => {
+                  setSortDir(e.target.value === "asc" ? "asc" : "desc");
+                  setPage(1);
+                }}
                 disabled={loading}
                 style={selectStyle}
                 aria-label="Orden por fecha"
@@ -440,12 +468,56 @@ const optionStyle: CSSProperties = {
                 </option>
               </select>
 
+              <select
+                value={effectiveLimit}
+                onChange={(e) => {
+                  setLimit(Number(e.target.value));
+                  setPage(1);
+                }}
+                disabled={loading}
+                style={selectStyle}
+                aria-label="Cantidad por pagina"
+              >
+                {limitOptions.map((value) => (
+                  <option key={value} value={value} style={optionStyle}>
+                    {value} por pagina
+                  </option>
+                ))}
+              </select>
+
               <button onClick={cargarLista} disabled={loading} style={primaryButtonStyle}>
                 {loading ? "Cargando…" : "Actualizar"}
               </button>
 
               <span style={{ color: "rgba(255,255,255,0.72)" }}>
-                Resultados: {items.length}
+                Resultados visibles: {items.length}
+              </span>
+              <span style={{ color: "rgba(255,255,255,0.72)" }}>
+                Pagina: {page}
+                {totalPages !== null ? ` de ${totalPages}` : ""}
+              </span>
+            </div>
+          </section>
+
+          <section style={{ ...softCardStyle, marginBottom: 12 }}>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+              <button
+                onClick={() => setPage((value) => Math.max(1, value - 1))}
+                disabled={loading || page <= 1}
+                style={secondaryButtonStyle}
+              >
+                Anterior
+              </button>
+              <button
+                onClick={() => setPage((value) => value + 1)}
+                disabled={loading || !canGoNext}
+                style={secondaryButtonStyle}
+              >
+                Siguiente
+              </button>
+              <span style={{ color: "rgba(255,255,255,0.72)" }}>
+                Cantidad por pagina: {effectiveLimit}
+                {total !== null ? ` / Total: ${total}` : ""}
               </span>
             </div>
           </section>
