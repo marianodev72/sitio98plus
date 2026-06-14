@@ -134,6 +134,26 @@ const styles = {
     outline: "none",
   } as React.CSSProperties,
 
+  select: {
+    width: "100%",
+    padding: "10px 12px",
+    borderRadius: 12,
+    border: "1px solid rgba(255,255,255,0.1)",
+    backgroundColor: "#111827",
+    color: "#F8FAFC",
+    fontSize: 14,
+    outline: "none",
+    appearance: "none",
+    WebkitAppearance: "none",
+    MozAppearance: "none",
+    colorScheme: "dark",
+  } as React.CSSProperties,
+
+  option: {
+    backgroundColor: "#1f2937",
+    color: "#ffffff",
+  } as React.CSSProperties,
+
   readonlyInput: {
     width: "100%",
     padding: "10px 12px",
@@ -360,16 +380,16 @@ export default function MisMantenimientosNuevo() {
               <select
                 value={tipo}
                 onChange={(e) => setTipo(e.target.value as TipoMantenimiento)}
-                style={styles.input}
+                style={styles.select}
               >
-                <option value="MANTENIMIENTO_ARTEFACTOS_A_GAS">
+                <option value="MANTENIMIENTO_ARTEFACTOS_A_GAS" style={styles.option}>
                   {labelTipo("MANTENIMIENTO_ARTEFACTOS_A_GAS")}
                 </option>
-                <option value="SISTEMA_DE_CALEFACCION_POR_CALDERA">
+                <option value="SISTEMA_DE_CALEFACCION_POR_CALDERA" style={styles.option}>
                   {labelTipo("SISTEMA_DE_CALEFACCION_POR_CALDERA")}
                 </option>
-                <option value="DESAGUES">{labelTipo("DESAGUES")}</option>
-                <option value="OTROS">{labelTipo("OTROS")}</option>
+                <option value="DESAGUES" style={styles.option}>{labelTipo("DESAGUES")}</option>
+                <option value="OTROS" style={styles.option}>{labelTipo("OTROS")}</option>
               </select>
             </div>
 
