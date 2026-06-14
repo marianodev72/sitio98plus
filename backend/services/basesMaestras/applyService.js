@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const { User } = require("../../models/user");
 const Vivienda = require("../../models/vivienda");
 const AlojamientoNaval = require("../../modules/alojamientos/models/AlojamientoNaval");
+const { MODOS_CARGA } = require("../../models/MasterImportJob");
 const {
   ALOJAMIENTO_ESTADOS,
   GENERO_PERMITIDO,
@@ -34,6 +35,7 @@ const ALOJAMIENTO_UPDATE_FIELDS = new Set([
   "observaciones",
 ]);
 const GRUPOS_JERARQUICOS_VALIDOS = new Set(["OF", "SB_CP", "CB", "TR", "NO_DEFINIDO"]);
+const MODOS_CARGA_SET = new Set(MODOS_CARGA);
 
 function arr(value) {
   return Array.isArray(value) ? value : [];
@@ -138,6 +140,11 @@ function assertApplyable(job) {
   }
   if (job.estado !== APPLYABLE_ESTADO && !(job.__isPersonalLargeApply && job.estado === APPLYING_ESTADO)) {
     const err = new Error("Job no esta pendiente de confirmacion");
+    err.status = 409;
+    throw err;
+  }
+  if (!MODOS_CARGA_SET.has(String(job.modoCarga || "").toUpperCase().trim())) {
+    const err = new Error("Job sin modoCarga valido. Requiere revision y nuevo dry-run con modo de carga explicito.");
     err.status = 409;
     throw err;
   }

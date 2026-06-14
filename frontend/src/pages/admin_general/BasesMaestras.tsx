@@ -14,11 +14,14 @@ import {
 } from "../permisionario/uiStyles";
 
 type ImportTipo = "PERSONAL" | "VIVIENDAS" | "ALOJAMIENTOS";
+type ModoCarga = "TOTAL" | "PARCIAL" | "ACTUALIZACION" | "ALTA_EXCEPCIONAL";
 type JobEstado = "PENDIENTE_CONFIRMACION" | "CANCELADO" | "APLICADO" | "FALLIDO" | string;
 
 type JobListItem = {
   jobId: string;
   tipo?: string;
+  modoCarga?: ModoCarga | "SIN_MODO" | string;
+  modoCargaLegacy?: boolean;
   estado?: JobEstado;
   archivoOriginalNombre?: string;
   warningsCount?: number;
@@ -114,6 +117,7 @@ type JobDetail = JobListItem & {
 type DryRunResult = {
   ok?: boolean;
   jobId?: string;
+  modoCarga?: ModoCarga | string;
   resumen?: Record<string, unknown>;
   summary?: Record<string, unknown>;
   warnings?: unknown[];
@@ -122,6 +126,17 @@ type DryRunResult = {
 
 const MAX_ITEMS = 40;
 const EXCLUDABLE_PERSONAL_BLOCK_CODES = new Set(["USUARIO_ARCHIVADO_EN_IMPORTACION_PERSONAL"]);
+// Fase 1: TOTAL en PERSONAL queda identificado para futura conciliacion de nomina vigente.
+const MODOS_CARGA: ModoCarga[] = ["TOTAL", "PARCIAL", "ACTUALIZACION", "ALTA_EXCEPCIONAL"];
+
+function modoCargaLabel(value?: string) {
+  const modo = String(value || "").toUpperCase().trim();
+  if (modo === "TOTAL") return "Total";
+  if (modo === "PARCIAL") return "Parcial";
+  if (modo === "ACTUALIZACION") return "Actualizacion";
+  if (modo === "ALTA_EXCEPCIONAL") return "Alta excepcional";
+  return "Sin modo";
+}
 
 function formatDate(value?: string | null) {
   if (!value) return "-";
@@ -307,6 +322,7 @@ export default function BasesMaestras() {
   const [tipo, setTipo] = useState("");
   const [estado, setEstado] = useState("");
   const [nuevoTipo, setNuevoTipo] = useState<ImportTipo>("PERSONAL");
+  const [nuevoModoCarga, setNuevoModoCarga] = useState<ModoCarga | "">("");
   const [archivo, setArchivo] = useState<File | null>(null);
   const [submittingDryRun, setSubmittingDryRun] = useState(false);
   const [dryRunResult, setDryRunResult] = useState<DryRunResult | null>(null);
@@ -346,12 +362,15 @@ export default function BasesMaestras() {
   const applyResult = detail?.applyResult || null;
   const summary = detail?.resumen || selectedJob?.resumen || {};
   const isAlojamientosJob = safe(detail?.tipo, "").toUpperCase() === "ALOJAMIENTOS";
+  const modoCargaActual = safe(detail?.modoCarga || selectedJob?.modoCarga, "SIN_MODO");
+  const modoCargaLegacy = Boolean(detail?.modoCargaLegacy || selectedJob?.modoCargaLegacy || modoCargaActual === "SIN_MODO");
   const approvedCount = manualApprovals.filter((approval) => approval.approved).length;
   const createsCount = countValue(detail?.applyPlanSummary?.createsCount);
   const updatesCount = countValue(detail?.applyPlanSummary?.updatesCount);
   const applyBlockReasons = [
     !detail ? "Seleccione un job." : "",
     detail && detail.estado !== "PENDIENTE_CONFIRMACION" ? `Estado incompatible: ${safe(detail.estado)}` : "",
+    modoCargaLegacy ? "Job historico sin modo de carga explicito. Requiere nuevo dry-run con modoCarga." : "",
     detail && !applyPlan ? "Falta generar o consultar el apply-plan." : "",
     errores.length > 0 ? `Errores de dry-run pendientes: ${errores.length}` : "",
     blocked.length > 0 ? `Bloqueos no aprobables: ${blocked.length}` : "",
@@ -361,6 +380,7 @@ export default function BasesMaestras() {
   const canApply =
     Boolean(detail) &&
     detail?.estado === "PENDIENTE_CONFIRMACION" &&
+    !modoCargaLegacy &&
     errores.length === 0 &&
     blocked.length === 0 &&
     unapprovedRisks.length === 0 &&
@@ -435,6 +455,10 @@ export default function BasesMaestras() {
       setErrorMsg("Debe seleccionar un archivo .xlsx.");
       return;
     }
+    if (!nuevoModoCarga || !MODOS_CARGA.includes(nuevoModoCarga as ModoCarga)) {
+      setErrorMsg("Debe seleccionar un modo de carga.");
+      return;
+    }
     if (!archivo.name.toLowerCase().endsWith(".xlsx")) {
       setErrorMsg("Solo se aceptan archivos .xlsx.");
       return;
@@ -446,6 +470,7 @@ export default function BasesMaestras() {
     try {
       const form = new FormData();
       form.append("archivo", archivo);
+      form.append("modoCarga", nuevoModoCarga);
       const path =
         nuevoTipo === "PERSONAL"
           ? "personal"
@@ -458,8 +483,9 @@ export default function BasesMaestras() {
       setInfoMsg("Dry-run generado y persistido como job auditable.");
       await cargarJobs();
       if (result.jobId) await cargarDetalle(result.jobId);
-    } catch {
-      setErrorMsg("No se pudo procesar el dry-run. Por favor, contacte al administrador.");
+    } catch (err: any) {
+      const message = err?.response?.data?.errores?.[0]?.message || "No se pudo procesar el dry-run. Por favor, contacte al administrador.";
+      setErrorMsg(message);
     } finally {
       setSubmittingDryRun(false);
     }
@@ -560,7 +586,7 @@ export default function BasesMaestras() {
   async function ejecutarApply() {
     if (!detail?.jobId || !canApply) return;
     const ok = window.confirm(
-      `APPLY CONTROLADO TRANSACCIONAL\n\nTipo: ${safe(detail.tipo)}\nArchivo: ${safe(detail.archivoOriginalNombre)}\nCreates: ${createsCount}\nUpdates: ${updatesCount}\nRiesgos aprobados: ${approvedCount}\nBlocked pendientes: ${blocked.length}\nRiesgos sin aprobar: ${unapprovedRisks.length}\nRevision manual sin aprobar: ${unapprovedManualReview.length}\nErrores: ${errores.length}\n\nLa operacion se ejecutara en transaccion, quedara auditada y no debe usarse para applies masivos sin revision previa.\n\nDesea continuar?`
+      `APPLY CONTROLADO TRANSACCIONAL\n\nTipo: ${safe(detail.tipo)}\nModo: ${modoCargaLabel(modoCargaActual)}\nArchivo: ${safe(detail.archivoOriginalNombre)}\nCreates: ${createsCount}\nUpdates: ${updatesCount}\nRiesgos aprobados: ${approvedCount}\nBlocked pendientes: ${blocked.length}\nRiesgos sin aprobar: ${unapprovedRisks.length}\nRevision manual sin aprobar: ${unapprovedManualReview.length}\nErrores: ${errores.length}\n\nLa operacion se ejecutara en transaccion, quedara auditada y no debe usarse para applies masivos sin revision previa.\n\nDesea continuar?`
     );
     if (!ok) return;
 
@@ -819,6 +845,17 @@ export default function BasesMaestras() {
             </label>
 
             <label>
+              <span style={smallLabelStyle}>Modo de carga</span>
+              <select value={nuevoModoCarga} onChange={(e) => setNuevoModoCarga(e.target.value as ModoCarga | "")} style={{ ...controlStyle, width: "100%" }}>
+                <option value="" style={optionStyle}>Seleccionar modo</option>
+                <option value="TOTAL" style={optionStyle}>Total</option>
+                <option value="PARCIAL" style={optionStyle}>Parcial</option>
+                <option value="ACTUALIZACION" style={optionStyle}>Actualizacion</option>
+                <option value="ALTA_EXCEPCIONAL" style={optionStyle}>Alta excepcional</option>
+              </select>
+            </label>
+
+            <label>
               <span style={smallLabelStyle}>Archivo XLSX</span>
               <input
                 type="file"
@@ -845,7 +882,7 @@ export default function BasesMaestras() {
                 ))}
               </div>
               <div style={{ marginTop: 10, color: "rgba(255,255,255,0.78)", fontSize: 13 }}>
-                Job: {safe(dryRunResult.jobId)}
+                Job: {safe(dryRunResult.jobId)} - Modo: {modoCargaLabel(safe(dryRunResult.modoCarga || drySummary.modoCarga, ""))}
               </div>
             </div>
           ) : null}
@@ -886,6 +923,7 @@ export default function BasesMaestras() {
                 <tr>
                   <th style={thStyle}>Fecha</th>
                   <th style={thStyle}>Tipo</th>
+                  <th style={thStyle}>Modo</th>
                   <th style={thStyle}>Estado</th>
                   <th style={thStyle}>Archivo</th>
                   <th style={thStyle}>Warnings</th>
@@ -897,18 +935,23 @@ export default function BasesMaestras() {
               <tbody>
                 {loadingJobs ? (
                   <tr>
-                    <td style={tdStyle} colSpan={8}>Cargando jobs...</td>
+                    <td style={tdStyle} colSpan={9}>Cargando jobs...</td>
                   </tr>
                 ) : null}
                 {!loadingJobs && jobs.length === 0 ? (
                   <tr>
-                    <td style={tdStyle} colSpan={8}>Sin jobs para mostrar.</td>
+                    <td style={tdStyle} colSpan={9}>Sin jobs para mostrar.</td>
                   </tr>
                 ) : null}
                 {!loadingJobs && jobs.map((job) => (
                   <tr key={job.jobId}>
                     <td style={tdStyle}>{formatDate(job.createdAt)}</td>
                     <td style={tdStyle}>{safe(job.tipo)}</td>
+                    <td style={tdStyle}>
+                      <span style={{ ...badgeStyle, borderColor: job.modoCargaLegacy ? "rgba(251,191,36,0.36)" : "rgba(96,165,250,0.34)", color: job.modoCargaLegacy ? "#fde68a" : "#bfdbfe" }}>
+                        {modoCargaLabel(job.modoCarga)}
+                      </span>
+                    </td>
                     <td style={tdStyle}>
                       <span style={{ ...badgeStyle, ...estadoTone(job.estado) }}>{safe(job.estado)}</span>
                     </td>
@@ -978,6 +1021,12 @@ export default function BasesMaestras() {
                 </div>
               ) : null}
 
+              {modoCargaLegacy ? (
+                <div style={{ ...softCardStyle, marginTop: 12, border: "1px solid rgba(251,191,36,0.30)", background: "rgba(120,53,15,0.14)", color: "#fde68a" }}>
+                  Job historico sin modo de carga explicito. Requiere nuevo dry-run con modoCarga antes de aplicar.
+                </div>
+              ) : null}
+
               <section
                 style={{
                   ...softCardStyle,
@@ -988,6 +1037,12 @@ export default function BasesMaestras() {
               >
                 <h3 style={{ marginTop: 0, color: "#ffffff", fontSize: 16 }}>Estado operativo</h3>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
+                  <div>
+                    <div style={{ color: "rgba(255,255,255,0.62)", fontSize: 12 }}>Modo de carga</div>
+                    <div style={{ color: modoCargaLegacy ? "#fde68a" : "#bfdbfe", fontSize: 20, fontWeight: 900 }}>
+                      {modoCargaLabel(modoCargaActual)}
+                    </div>
+                  </div>
                   <div>
                     <div style={{ color: "rgba(255,255,255,0.62)", fontSize: 12 }}>Puede aplicar</div>
                     <div style={{ color: canApply ? "#bbf7d0" : "#fde68a", fontSize: 20, fontWeight: 900 }}>
