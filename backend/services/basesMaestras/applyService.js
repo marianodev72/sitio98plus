@@ -668,6 +668,10 @@ async function applyOperation(operation, session, result, actorId, job) {
   if (operation.collection === "viviendas" && operation.action === "UPDATE") return applyViviendaUpdate(op, session, result);
   if (operation.collection === "alojamientos" && operation.action === "CREATE") return applyAlojamientoCreate(op, session, result);
   if (operation.collection === "alojamientos" && operation.action === "UPDATE") return applyAlojamientoUpdate(op, session, result, job);
+  if (operation.collection === "alojamientoPlazas") {
+    pushApplyError(result, operation.key, "Operacion de sincronizacion de plazas requiere fase de apply especifica y aprobacion explicita.");
+    return null;
+  }
   result.blocked += 1;
   result.errors.push({ key: operation.key, message: "Operacion no permitida" });
   return null;

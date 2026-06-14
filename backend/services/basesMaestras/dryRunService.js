@@ -3,6 +3,9 @@ const crypto = require("crypto");
 const { User } = require("../../models/user");
 const Vivienda = require("../../models/vivienda");
 const AlojamientoNaval = require("../../modules/alojamientos/models/AlojamientoNaval");
+const AlojamientoPlaza = require("../../modules/alojamientos/models/AlojamientoPlaza");
+const AsignacionAlojamiento = require("../../modules/alojamientos/models/AsignacionAlojamiento");
+const AlojamientoDocumento = require("../../modules/alojamientos/models/AlojamientoDocumento");
 const {
   normalizeTipoPersonal,
   normalizeTipoDestinoStrict,
@@ -386,8 +389,11 @@ function pushDuplicateWarnings({ rows, key, label, warnings }) {
   }
 }
 
-function baseSummary({ tipoBase, totalFilas, validas, invalidas, nuevos, actualizados, sinCambios, warnings, errores, hash, omitidosNoRegistrados = [] }) {
+function baseSummary({ tipoBase, totalFilas, validas, invalidas, nuevos, actualizados, sinCambios, warnings, errores, hash, omitidosNoRegistrados = [], ...extra }) {
   return {
+    ...Object.fromEntries(
+      Object.entries(extra).map(([key, value]) => [key, Array.isArray(value) ? value.length : value])
+    ),
     tipoBase,
     dryRun: true,
     sha256: hash,
@@ -900,29 +906,288 @@ function alojamientoSensitiveChange(existing, cambios, row, warnings) {
   }
 }
 
-async function dryRunAlojamientos(buffer) {
+function modoCargaValue(value) {
+  return up(value || "PARCIAL");
+}
+
+function isAlojamientoActivo(alojamiento) {
+  return alojamiento?.activo !== false && up(alojamiento?.estado) !== "BAJA";
+}
+
+function isProtectedTransientAlojamiento(alojamiento) {
+  return /^BR-/i.test(String(alojamiento?.codigo || ""));
+}
+
+function alojamientoFunctionalKey(value = {}) {
+  return [
+    normalizeText(value.dependencia),
+    normalizeText(value.lugar),
+    normalizeText(value.sector),
+    String(Number(value.capacidad || 0)),
+    normalizeText(value.generoPermitido),
+    normalizeText(value.aptoParaGrupoJerarquico || "NO_DEFINIDO"),
+  ].join("|");
+}
+
+function alojamientoBaseItem({ row = {}, existing = null, classification, reason = "", stats = null, links = null }) {
+  const db = existing || {};
+  const capacidadArchivo = Number(row.capacidad || 0);
+  const plazasExistentes = Number(stats?.plazasExistentes || 0);
+  const item = {
+    fila: row.fila || null,
+    codigoArchivo: row.codigo || "",
+    codigoDb: db.codigo || "",
+    codigo: row.codigo || db.codigo || "",
+    lugar: row.lugar || db.lugar || "",
+    dependencia: row.dependencia || db.dependencia || "",
+    sector: row.sector || db.sector || "",
+    tipo: row.tipo || db.tipo || row.denominacion || db.denominacion || "",
+    clase: row.clase || db.clase || "",
+    capacidadArchivo: capacidadArchivo || null,
+    capacidadDb: db.capacidad ?? null,
+    plazasExistentes,
+    plazasEsperadas: capacidadArchivo || Number(db.capacidad || 0) || null,
+    deltaPlazas: capacidadArchivo ? capacidadArchivo - plazasExistentes : 0,
+    clasificacion: classification,
+    classification,
+    razon: reason,
+    reason,
+  };
+  if (links) item.vinculos = links;
+  return item;
+}
+
+async function alojamientoStatsById(alojamientos) {
+  const ids = alojamientos.map((a) => a?._id).filter(Boolean);
+  const stats = new Map();
+  for (const alojamiento of alojamientos) {
+    stats.set(String(alojamiento._id), {
+      plazasExistentes: 0,
+      plazasValidas: [],
+      plazasConVinculos: new Set(),
+      asignaciones: 0,
+      documentos: 0,
+      alojadoActual: 0,
+      reservas: 0,
+    });
+  }
+  if (!ids.length) return stats;
+
+  const plazas = await AlojamientoPlaza.find({ alojamiento: { $in: ids } })
+    .select("_id codigo alojamiento numeroPlaza estado activo alojadoActual reservaActual")
+    .lean();
+  const plazaIds = plazas.map((plaza) => plaza._id).filter(Boolean);
+  const asignaciones = await AsignacionAlojamiento.find({
+    $or: [{ alojamiento: { $in: ids } }, { plaza: { $in: plazaIds } }],
+  })
+    .select("_id alojamiento plaza estado")
+    .lean();
+  const documentos = await AlojamientoDocumento.find({
+    activo: { $ne: false },
+    $or: [{ alojamiento: { $in: ids } }, { plaza: { $in: plazaIds } }],
+  })
+    .select("_id alojamiento plaza codigo estado")
+    .lean();
+
+  const asignacionesByPlaza = new Map();
+  for (const asignacion of asignaciones) {
+    const alojamientoId = String(asignacion.alojamiento || "");
+    const plazaId = String(asignacion.plaza || "");
+    if (plazaId) asignacionesByPlaza.set(plazaId, (asignacionesByPlaza.get(plazaId) || 0) + 1);
+    if (stats.has(alojamientoId)) stats.get(alojamientoId).asignaciones += 1;
+  }
+
+  const documentosByPlaza = new Map();
+  for (const documento of documentos) {
+    const alojamientoId = String(documento.alojamiento || "");
+    const plazaId = String(documento.plaza || "");
+    if (plazaId) documentosByPlaza.set(plazaId, (documentosByPlaza.get(plazaId) || 0) + 1);
+    if (stats.has(alojamientoId)) stats.get(alojamientoId).documentos += 1;
+  }
+
+  for (const plaza of plazas) {
+    const alojamientoId = String(plaza.alojamiento || "");
+    const current = stats.get(alojamientoId);
+    if (!current) continue;
+    const plazaId = String(plaza._id || "");
+    const valid = plaza.activo !== false && up(plaza.estado) !== "BAJA";
+    const hasReserva = Boolean(plaza.reservaActual?.usuario || plaza.reservaActual?.anexoId);
+    const hasAlojado = Boolean(plaza.alojadoActual);
+    const hasAsignacion = Number(asignacionesByPlaza.get(plazaId) || 0) > 0;
+    const hasDocumento = Number(documentosByPlaza.get(plazaId) || 0) > 0;
+    const hasLink = hasReserva || hasAlojado || hasAsignacion || hasDocumento;
+
+    if (valid) {
+      current.plazasExistentes += 1;
+      current.plazasValidas.push({
+        _id: plazaId,
+        codigo: plaza.codigo || "",
+        numeroPlaza: Number(plaza.numeroPlaza || 0),
+        estado: plaza.estado || "",
+        hasLink,
+      });
+    }
+    if (hasLink) current.plazasConVinculos.add(plazaId);
+    if (hasAlojado) current.alojadoActual += 1;
+    if (hasReserva) current.reservas += 1;
+  }
+
+  return stats;
+}
+
+function alojamientoLinksSummary(alojamiento, stats = {}) {
+  const ocupacion = alojamiento?.ocupacionActual || {};
+  const ocupadasCache = Number(ocupacion.plazasOcupadas || 0);
+  const reservadasCache = Number(ocupacion.plazasReservadas || 0);
+  return {
+    plazasConVinculos: Number(stats.plazasConVinculos?.size || 0),
+    alojadoActual: Number(stats.alojadoActual || 0),
+    reservas: Number(stats.reservas || 0),
+    asignaciones: Number(stats.asignaciones || 0),
+    documentos: Number(stats.documentos || 0),
+    ocupacionActual: {
+      plazasOcupadas: ocupadasCache,
+      plazasReservadas: reservadasCache,
+      alojados: Array.isArray(ocupacion.alojados) ? ocupacion.alojados.length : 0,
+    },
+  };
+}
+
+function hasAlojamientoLinks(alojamiento, stats = {}) {
+  const links = alojamientoLinksSummary(alojamiento, stats);
+  return (
+    links.plazasConVinculos > 0 ||
+    links.alojadoActual > 0 ||
+    links.reservas > 0 ||
+    links.asignaciones > 0 ||
+    links.documentos > 0 ||
+    links.ocupacionActual.plazasOcupadas > 0 ||
+    links.ocupacionActual.plazasReservadas > 0 ||
+    links.ocupacionActual.alojados > 0
+  );
+}
+
+function buildPlazasDeltaItem(row, existing, stats) {
+  const capacidad = Number(row.capacidad || 0);
+  const plazasExistentes = Number(stats?.plazasExistentes || 0);
+  const base = alojamientoBaseItem({
+    row,
+    existing,
+    stats,
+    classification: "PLAZAS_DELTA",
+    reason: "La cantidad de plazas validas no coincide con la capacidad informada.",
+  });
+  if (plazasExistentes < capacidad) {
+    return {
+      ...base,
+      accionPropuesta: "CREAR_PLAZAS_FALTANTES",
+      plazasACrear: capacidad - plazasExistentes,
+    };
+  }
+
+  const excedentes = [...(stats?.plazasValidas || [])]
+    .sort((a, b) => Number(a.numeroPlaza || 0) - Number(b.numeroPlaza || 0))
+    .slice(capacidad);
+  const bloqueada = excedentes.some((plaza) => plaza.hasLink || ["OCUPADA", "RESERVADA"].includes(up(plaza.estado)));
+  return {
+    ...base,
+    classification: bloqueada ? "CAPACIDAD_REDUCIDA_BLOQUEADA" : "PLAZAS_DELTA",
+    clasificacion: bloqueada ? "CAPACIDAD_REDUCIDA_BLOQUEADA" : "PLAZAS_DELTA",
+    accionPropuesta: bloqueada ? "BLOQUEAR_REDUCCION_CAPACIDAD" : "BAJA_LOGICA_EXCEDENTES",
+    plazasExcedentes: excedentes.map((plaza) => ({
+      codigo: plaza.codigo,
+      numeroPlaza: plaza.numeroPlaza,
+      estado: plaza.estado,
+      conVinculos: Boolean(plaza.hasLink),
+    })),
+  };
+}
+
+async function dryRunAlojamientos(buffer, options = {}) {
   const rows = parseXlsxBuffer(buffer);
   const hash = sha256(buffer);
+  const modoCarga = modoCargaValue(options.modoCarga);
   const { parsed, errors, warnings: parseWarnings } = parseAlojamientoRows(rows);
   const warnings = [...parseWarnings];
   const nuevos = [];
   const actualizados = [];
   const sinCambios = [];
+  const exactMatches = [];
+  const possibleRenames = [];
+  const missingFromFile = [];
+  const protectedTransient = [];
+  const legacyCandidates = [];
+  const conflicts = [];
+  const plazasDelta = [];
+  const capacidadReducidaBloqueada = [];
+  const manualReviewRequired = [];
+  const blocked = [];
 
   pushAlojamientoDuplicateWarnings({ rows: parsed, warnings });
 
   const codigos = parsed.map((row) => row.codigo).filter(Boolean);
-  const alojamientos = await AlojamientoNaval.find({ codigo: { $in: codigos } })
-    .select("codigo dependencia lugar sector capacidad generoPermitido aptoParaGrupoJerarquico estado activo observaciones ocupacionActual")
+  const archivoCodigos = new Set(codigos);
+  const shouldInspectDbActivos = ["TOTAL", "ACTUALIZACION"].includes(modoCarga);
+  const alojamientoFilter = shouldInspectDbActivos
+    ? { $or: [{ codigo: { $in: codigos } }, { activo: { $ne: false }, estado: { $ne: "BAJA" } }] }
+    : { codigo: { $in: codigos } };
+  const alojamientos = await AlojamientoNaval.find(alojamientoFilter)
+    .select("codigo denominacion dependencia lugar sector tipo clase capacidad generoPermitido aptoParaGrupoJerarquico estado activo observaciones ocupacionActual")
+    .limit(5000)
     .lean();
   const byCodigo = new Map(alojamientos.map((alojamiento) => [String(alojamiento.codigo || ""), alojamiento]));
+  const byFunctionalKey = new Map();
+  for (const alojamiento of alojamientos.filter(isAlojamientoActivo)) {
+    const key = alojamientoFunctionalKey(alojamiento);
+    if (!key) continue;
+    const current = byFunctionalKey.get(key) || [];
+    current.push(alojamiento);
+    byFunctionalKey.set(key, current);
+  }
+  const statsById = await alojamientoStatsById(alojamientos);
+  const matchedDbIds = new Set();
 
   for (const row of parsed) {
     const existing = byCodigo.get(row.codigo) || null;
     if (!existing) {
+      const possibleMatches = byFunctionalKey.get(alojamientoFunctionalKey(row)) || [];
+      if (possibleMatches.length) {
+        const match = possibleMatches[0];
+        matchedDbIds.add(String(match._id || ""));
+        const stats = statsById.get(String(match._id)) || {};
+        const links = alojamientoLinksSummary(match, stats);
+        const item = alojamientoBaseItem({
+          row,
+          existing: match,
+          stats,
+          links,
+          classification: "POSSIBLE_RENAME",
+          reason: "No coincide el codigo, pero hay equivalencia funcional fuerte.",
+        });
+        possibleRenames.push(item);
+        manualReviewRequired.push({ ...item, classification: "MANUAL_REVIEW", clasificacion: "MANUAL_REVIEW" });
+        warnings.push({
+          tipo: "POSSIBLE_RENAME",
+          codigoArchivo: row.codigo,
+          codigoDb: match.codigo,
+          message: "Posible cambio de codigo/nomenclatura. No se crea duplicado automaticamente.",
+        });
+        continue;
+      }
       nuevos.push(row);
       continue;
     }
+    matchedDbIds.add(String(existing._id || ""));
+    const existingStats = statsById.get(String(existing._id)) || {};
+    exactMatches.push(
+      alojamientoBaseItem({
+        row,
+        existing,
+        stats: existingStats,
+        classification: "EXACT_MATCH",
+        reason: "Coincidencia exacta por codigo institucional.",
+      })
+    );
 
     const cambios = [];
     const comparable = [
@@ -944,6 +1209,16 @@ async function dryRunAlojamientos(buffer) {
     }
 
     alojamientoSensitiveChange(existing, cambios, row, warnings);
+    const delta = buildPlazasDeltaItem(row, existing, existingStats);
+    if (Number(delta.deltaPlazas || 0) !== 0) {
+      if (delta.classification === "CAPACIDAD_REDUCIDA_BLOQUEADA") {
+        capacidadReducidaBloqueada.push(delta);
+        blocked.push(delta);
+      } else {
+        plazasDelta.push(delta);
+        manualReviewRequired.push({ ...delta, classification: "MANUAL_REVIEW", clasificacion: "MANUAL_REVIEW" });
+      }
+    }
 
     if (cambios.length) {
       actualizados.push({ ...row, existente: publicAlojamiento(existing), cambios });
@@ -952,9 +1227,86 @@ async function dryRunAlojamientos(buffer) {
     }
   }
 
+  if (modoCarga === "TOTAL") {
+    for (const alojamiento of alojamientos.filter(isAlojamientoActivo)) {
+      const codigo = String(alojamiento.codigo || "");
+      const id = String(alojamiento._id || "");
+      if (!codigo || archivoCodigos.has(codigo) || matchedDbIds.has(id)) continue;
+      const stats = statsById.get(id) || {};
+      const links = alojamientoLinksSummary(alojamiento, stats);
+      if (isProtectedTransientAlojamiento(alojamiento)) {
+        protectedTransient.push(
+          alojamientoBaseItem({
+            existing: alojamiento,
+            stats,
+            links,
+            classification: "PROTECTED_TRANSIENT",
+            reason: "Codigo BR-* protegido como alojamiento transitorio/barrio.",
+          })
+        );
+        continue;
+      }
+      const item = alojamientoBaseItem({
+        existing: alojamiento,
+        stats,
+        links,
+        classification: hasAlojamientoLinks(alojamiento, stats) ? "CONFLICT" : "LEGACY_CANDIDATE",
+        reason: hasAlojamientoLinks(alojamiento, stats)
+          ? "Existe en DB pero no en el archivo y tiene vinculos administrativos."
+          : "Existe en DB activa, no figura en el archivo total y no registra vinculos.",
+      });
+      missingFromFile.push({ ...item, classification: "MISSING_FROM_FILE", clasificacion: "MISSING_FROM_FILE" });
+      if (hasAlojamientoLinks(alojamiento, stats)) {
+        conflicts.push(item);
+        manualReviewRequired.push({ ...item, classification: "MANUAL_REVIEW", clasificacion: "MANUAL_REVIEW" });
+      } else {
+        legacyCandidates.push(item);
+      }
+    }
+  }
+
+  if (modoCarga === "ALTA_EXCEPCIONAL") {
+    warnings.push({
+      tipo: "MODO_CARGA_ALOJAMIENTOS_NO_SOPORTADO",
+      modoCarga,
+      message: "ALTA_EXCEPCIONAL no esta soportado para apply automatico de alojamientos en esta fase.",
+    });
+    blocked.push({
+      classification: "CONFLICT",
+      clasificacion: "CONFLICT",
+      reason: "ALTA_EXCEPCIONAL requiere diseno especifico para alojamientos.",
+    });
+  }
+
+  const alojamientosDiff = {
+    modoCarga,
+    exactMatches,
+    creates: nuevos.map((row) =>
+      alojamientoBaseItem({ row, classification: "NEW", reason: "No existe codigo ni equivalencia funcional detectada." })
+    ),
+    updates: actualizados.map((row) =>
+      alojamientoBaseItem({
+        row,
+        existing: row.existente || null,
+        classification: "UPDATE",
+        reason: "Coincidencia exacta con cambios de datos operativos.",
+      })
+    ),
+    possibleRenames,
+    missingFromFile,
+    protectedTransient,
+    legacyCandidates,
+    conflicts,
+    plazasDelta,
+    capacidadReducidaBloqueada,
+    manualReviewRequired,
+    blocked,
+  };
+
   return {
     summary: baseSummary({
       tipoBase: "ALOJAMIENTOS",
+      modoCarga,
       totalFilas: Math.max(rows.length - 1, 0),
       validas: parsed.length,
       invalidas: errors.length,
@@ -964,10 +1316,21 @@ async function dryRunAlojamientos(buffer) {
       warnings,
       errores: errors,
       hash,
+      exactMatches,
+      possibleRenames,
+      missingFromFile,
+      protectedTransient,
+      legacyCandidates,
+      conflicts,
+      plazasDelta,
+      capacidadReducidaBloqueada,
+      manualReviewRequired,
+      blocked,
     }),
     nuevos,
     actualizados,
     sinCambios,
+    alojamientos: alojamientosDiff,
     warnings,
     errores: errors,
   };

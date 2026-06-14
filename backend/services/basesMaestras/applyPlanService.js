@@ -756,6 +756,17 @@ function pushAlojamientoBlocked(blocked, item, field, reason, cambio) {
   });
 }
 
+function pushAlojamientoUnsupportedOperation(blocked, item, action, collection, reason) {
+  blocked.push({
+    action,
+    collection,
+    key: safeKey(item) || item.codigoArchivo || item.codigoDb || item.codigo || "",
+    reason,
+    message: "Operacion de sincronizacion de plazas requiere fase de apply especifica y aprobacion explicita.",
+    preview: item,
+  });
+}
+
 function pushAlojamientoRisks(item, risks, requiresManualReview, blocked) {
   const key = safeKey(item);
   const cambios = arr(item.cambios);
@@ -848,6 +859,7 @@ function pushAlojamientoRisks(item, risks, requiresManualReview, blocked) {
 
 function planAlojamientos(job) {
   const diff = job.diff || {};
+  const alojamientoDiff = diff.alojamientos || {};
   const creates = [];
   const updates = [];
   const blocked = [];
@@ -944,7 +956,59 @@ function planAlojamientos(job) {
     }
   }
 
-  return { creates, updates, blocked, risks, warnings, requiresManualReview };
+  for (const item of arr(alojamientoDiff.possibleRenames)) {
+    risks.push({ tipo: "POSSIBLE_RENAME", key: item.codigoArchivo || item.codigoDb || "", message: item.razon || item.reason || "Posible cambio de nomenclatura" });
+    requiresManualReview.push({ tipo: "POSSIBLE_RENAME", key: item.codigoArchivo || item.codigoDb || "", item });
+    pushAlojamientoUnsupportedOperation(blocked, item, "RENAME_REQUIERE_MAPPING", "alojamientos", "POSSIBLE_RENAME_BLOQUEADO");
+  }
+
+  for (const item of arr(alojamientoDiff.plazasDelta)) {
+    risks.push({ tipo: "PLAZAS_DELTA", key: item.codigoArchivo || item.codigoDb || "", message: item.accionPropuesta || "Delta de plazas detectado" });
+    requiresManualReview.push({ tipo: "PLAZAS_DELTA", key: item.codigoArchivo || item.codigoDb || "", item });
+    pushAlojamientoUnsupportedOperation(blocked, item, item.accionPropuesta || "SYNC_PLAZAS", "alojamientoPlazas", "OPERACION_PLAZAS_NO_IMPLEMENTADA");
+  }
+
+  for (const item of arr(alojamientoDiff.capacidadReducidaBloqueada)) {
+    blocked.push({
+      action: "REDUCIR_CAPACIDAD",
+      collection: "alojamientoPlazas",
+      key: item.codigoArchivo || item.codigoDb || "",
+      reason: "CAPACIDAD_REDUCIDA_BLOQUEADA",
+      message: "La reduccion de capacidad afecta plazas excedentes con vinculos, ocupacion o reservas.",
+      preview: item,
+    });
+  }
+
+  for (const item of arr(alojamientoDiff.conflicts)) {
+    risks.push({ tipo: "CONFLICT", key: item.codigoDb || item.codigo || "", message: item.razon || item.reason || "Conflicto de conciliacion" });
+    requiresManualReview.push({ tipo: "CONFLICT", key: item.codigoDb || item.codigo || "", item });
+    pushAlojamientoUnsupportedOperation(blocked, item, "RESOLUCION_MANUAL", "alojamientos", "CONFLICT_BLOQUEADO");
+  }
+
+  for (const item of arr(alojamientoDiff.legacyCandidates)) {
+    risks.push({ tipo: "LEGACY_CANDIDATE", key: item.codigoDb || item.codigo || "", message: item.razon || item.reason || "Candidato legacy detectado" });
+    requiresManualReview.push({ tipo: "LEGACY_CANDIDATE", key: item.codigoDb || item.codigo || "", item });
+  }
+
+  for (const item of arr(alojamientoDiff.protectedTransient)) {
+    risks.push({ tipo: "PROTECTED_TRANSIENT", key: item.codigoDb || item.codigo || "", message: item.razon || item.reason || "Alojamiento transitorio protegido" });
+  }
+
+  for (const item of arr(alojamientoDiff.blocked)) {
+    if (item.reason === "ALTA_EXCEPCIONAL requiere diseno especifico para alojamientos.") {
+      pushAlojamientoUnsupportedOperation(blocked, item, "MODO_CARGA_NO_SOPORTADO", "alojamientos", "ALTA_EXCEPCIONAL_ALOJAMIENTOS_NO_SOPORTADO");
+    }
+  }
+
+  return {
+    creates,
+    updates,
+    blocked,
+    risks,
+    warnings,
+    requiresManualReview,
+    clasificaciones: alojamientoDiff,
+  };
 }
 
 function buildApplyPlan(job, options = {}) {
