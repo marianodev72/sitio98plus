@@ -15,6 +15,13 @@ function conflict(res) {
   return res.status(409).json({ message: "No es posible procesar la solicitud" });
 }
 
+function serviceMessage(code) {
+  if (code === "MOTIVO_REQUERIDO") return "Debe informar un motivo de rechazo.";
+  if (code === "ANEXO_22_YA_EXISTE") return "No es posible rechazar una solicitud con ANEXO_22 derivado.";
+  if (code === "ESTADO_NO_DISPONIBLE") return "El estado actual de la solicitud no permite esta accion.";
+  return "No es posible procesar la solicitud";
+}
+
 function isObjectId(value) {
   return mongoose.Types.ObjectId.isValid(String(value || ""));
 }
@@ -28,8 +35,8 @@ function sendServiceResult(res, result) {
     return res.status(result.status || 200).json({ ok: true, documento: result.documento });
   }
 
-  if (result?.status === 400) return badRequest(res);
-  if (result?.status === 409) return conflict(res);
+  if (result?.status === 400) return res.status(400).json({ message: serviceMessage(result.code) });
+  if (result?.status === 409) return res.status(409).json({ message: serviceMessage(result.code) });
   return deny(res);
 }
 
@@ -95,6 +102,41 @@ async function anular(req, res) {
     return sendServiceResult(res, result);
   } catch (err) {
     console.error("[alojamientos-documentos][anexo21] anular error:", err?.message || "Error controlado");
+    return res.status(500).json({ message: "Error interno al procesar solicitud" });
+  }
+}
+
+async function aprobar(req, res) {
+  try {
+    const { id } = req.params || {};
+    if (!isObjectId(id)) return deny(res);
+
+    const result = await anexo21Service.aprobarSolicitud({
+      id,
+      user: req.user,
+    });
+
+    return sendServiceResult(res, result);
+  } catch (err) {
+    console.error("[alojamientos-documentos][anexo21] aprobar error:", err?.message || "Error controlado");
+    return res.status(500).json({ message: "Error interno al procesar solicitud" });
+  }
+}
+
+async function rechazar(req, res) {
+  try {
+    const { id } = req.params || {};
+    if (!isObjectId(id)) return deny(res);
+
+    const result = await anexo21Service.rechazarSolicitud({
+      id,
+      user: req.user,
+      motivo: req.body?.motivo,
+    });
+
+    return sendServiceResult(res, result);
+  } catch (err) {
+    console.error("[alojamientos-documentos][anexo21] rechazar error:", err?.message || "Error controlado");
     return res.status(500).json({ message: "Error interno al procesar solicitud" });
   }
 }
@@ -166,6 +208,8 @@ module.exports = {
   actualizar,
   enviar,
   anular,
+  aprobar,
+  rechazar,
   subirAdjunto,
   eliminarAdjunto,
   descargarAdjunto,

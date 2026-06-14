@@ -191,6 +191,8 @@ export default function AlojamientoDocumentoDetalle() {
   const [loadingPlazas, setLoadingPlazas] = useState(false);
   const [plazaSeleccionada, setPlazaSeleccionada] = useState("");
   const [generandoAnexo22, setGenerandoAnexo22] = useState(false);
+  const [aprobandoAnexo21, setAprobandoAnexo21] = useState(false);
+  const [rechazandoAnexo21, setRechazandoAnexo21] = useState(false);
   const [cerrandoAnexo22, setCerrandoAnexo22] = useState(false);
   const [cerrandoAnexo23, setCerrandoAnexo23] = useState(false);
   const [cerrandoAnexo24, setCerrandoAnexo24] = useState(false);
@@ -209,6 +211,7 @@ export default function AlojamientoDocumentoDetalle() {
   const alojamientoSnapshot = datos.alojamientoSnapshot || {};
   const plazaSnapshot = datos.plazaSnapshot || {};
   const adjuntos = useMemo(() => adjuntosFromDatos(datos), [datos]);
+  const esAnexo21 = up(documento?.codigo) === "ANEXO_21";
   const esAnexo22 = up(documento?.codigo) === "ANEXO_22";
   const esAnexo23 = up(documento?.codigo) === "ANEXO_23";
   const esAnexo24 = up(documento?.codigo) === "ANEXO_24";
@@ -224,9 +227,21 @@ export default function AlojamientoDocumentoDetalle() {
   const signerPostulante = signerPorTipo(documento, "POSTULANTE");
   const signerAlojado = signerPorTipo(documento, "ALOJADO");
   const signerAdminGeneral = signerPorTipo(documento, "ADMIN_GENERAL");
+  const resultadoPostulacion = up(datos.resultadoPostulacion);
+  const solicitudAprobada =
+    esAnexo21 &&
+    (up(documento?.estadoInstitucional) === "APROBADO_ADMIN_GENERAL" || resultadoPostulacion === "APROBADO");
+  const solicitudRechazada =
+    esAnexo21 &&
+    (up(documento?.estado) === "RECHAZADO" ||
+      up(documento?.estadoInstitucional) === "RECHAZADO_ADMIN_GENERAL" ||
+      resultadoPostulacion === "RECHAZADO");
+  const solicitudTerminal = ["CERRADO", "ANULADO"].includes(up(documento?.estado));
+  const puedeDecidirAnexo21 =
+    esAdminGeneral && esAnexo21 && !solicitudAprobada && !solicitudRechazada && !solicitudTerminal;
   const puedePrepararAnexo22 =
     esAdminGeneral &&
-    up(documento?.codigo) === "ANEXO_21" && ["ENVIADO", "EN_REVISION"].includes(up(documento?.estado));
+    esAnexo21 && ["ENVIADO", "EN_REVISION"].includes(up(documento?.estado));
   const puedeCerrarAnexo22 =
     esAdminGeneral &&
     esAnexo22 &&
@@ -265,7 +280,7 @@ export default function AlojamientoDocumentoDetalle() {
     !conformidadAdminGeneral;
 
   async function cargarPlazasElegibles() {
-    if (!allowed || !puedePrepararAnexo22) return;
+    if (!allowed || !puedePrepararAnexo22 || !solicitudAprobada) return;
 
     setLoadingPlazas(true);
     setPlazasError("");
@@ -304,6 +319,10 @@ export default function AlojamientoDocumentoDetalle() {
 
   async function generarAnexo22() {
     if (!documento?._id || !plazaSeleccionada || generandoAnexo22) return;
+    if (!solicitudAprobada) {
+      setErrorMsg("Debe aprobar la solicitud antes de generar ANEXO_22.");
+      return;
+    }
 
     setGenerandoAnexo22(true);
     setInfoMsg("");
@@ -323,11 +342,58 @@ export default function AlojamientoDocumentoDetalle() {
 
       setInfoMsg("ANEXO_22 generado correctamente.");
       await cargar();
-    } catch {
-      setErrorMsg("No es posible generar el ANEXO_22 en este momento.");
+    } catch (err: any) {
+      setErrorMsg(err?.response?.data?.error || "No es posible generar el ANEXO_22 en este momento.");
       await cargarPlazasElegibles();
     } finally {
       setGenerandoAnexo22(false);
+    }
+  }
+
+  async function aprobarSolicitudAnexo21() {
+    if (!documento?._id || !puedeDecidirAnexo21 || aprobandoAnexo21) return;
+    const confirmado = window.confirm("Confirma la aprobacion de la solicitud ANEXO_21?");
+    if (!confirmado) return;
+
+    setAprobandoAnexo21(true);
+    setInfoMsg("");
+    setErrorMsg("");
+
+    try {
+      await http.post(`/alojamientos-documentos/anexo-21/${documento._id}/aprobar`, {});
+      setInfoMsg("Solicitud ANEXO_21 aprobada correctamente.");
+      await cargar();
+    } catch (err: any) {
+      setErrorMsg(err?.response?.data?.message || "No es posible aprobar la solicitud en este momento.");
+    } finally {
+      setAprobandoAnexo21(false);
+    }
+  }
+
+  async function rechazarSolicitudAnexo21() {
+    if (!documento?._id || !puedeDecidirAnexo21 || rechazandoAnexo21) return;
+    const motivo = window.prompt("Motivo de rechazo de la solicitud ANEXO_21") || "";
+    const motivoLimpio = motivo.trim();
+    if (!motivoLimpio) return;
+    if (motivoLimpio.length < 5) {
+      setErrorMsg("Debe informar un motivo de rechazo de al menos 5 caracteres.");
+      return;
+    }
+
+    setRechazandoAnexo21(true);
+    setInfoMsg("");
+    setErrorMsg("");
+
+    try {
+      await http.post(`/alojamientos-documentos/anexo-21/${documento._id}/rechazar`, {
+        motivo: motivoLimpio,
+      });
+      setInfoMsg("Solicitud ANEXO_21 rechazada correctamente.");
+      await cargar();
+    } catch (err: any) {
+      setErrorMsg(err?.response?.data?.message || "No es posible rechazar la solicitud en este momento.");
+    } finally {
+      setRechazandoAnexo21(false);
     }
   }
 
@@ -501,9 +567,9 @@ export default function AlojamientoDocumentoDetalle() {
     setPlazas([]);
     setPlazasError("");
     setPlazaSeleccionada("");
-    if (puedePrepararAnexo22) cargarPlazasElegibles();
+    if (puedePrepararAnexo22 && solicitudAprobada) cargarPlazasElegibles();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [puedePrepararAnexo22, documento?._id]);
+  }, [puedePrepararAnexo22, solicitudAprobada, documento?._id]);
 
   if (!allowed) {
     return (
@@ -590,6 +656,21 @@ export default function AlojamientoDocumentoDetalle() {
                 <Field label="Codigo" value={documento.codigo} />
                 <Field label="Estado" value={documento.estado} />
                 <Field label="Estado institucional" value={documento.estadoInstitucional} />
+                {esAnexo21 ? (
+                  <Field
+                    label="Resultado solicitud"
+                    value={
+                      solicitudAprobada
+                        ? "Solicitud aprobada"
+                        : solicitudRechazada
+                        ? "Solicitud rechazada"
+                        : "Pendiente de decision"
+                    }
+                  />
+                ) : null}
+                {esAnexo21 && solicitudRechazada && datos.motivoRechazo ? (
+                  <Field label="Motivo rechazo" value={datos.motivoRechazo} />
+                ) : null}
                 <Field label="Creado" value={fmtDate(documento.createdAt)} />
                 <Field label="Actualizado" value={fmtDate(documento.updatedAt)} />
               </section>
@@ -696,6 +777,48 @@ export default function AlojamientoDocumentoDetalle() {
                     confirmar.
                   </p>
 
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+                    {puedeDecidirAnexo21 ? (
+                      <>
+                        <button
+                          type="button"
+                          style={primaryButtonStyle}
+                          disabled={aprobandoAnexo21 || rechazandoAnexo21}
+                          onClick={aprobarSolicitudAnexo21}
+                        >
+                          {aprobandoAnexo21 ? "Aprobando..." : "Aprobar solicitud"}
+                        </button>
+                        <button
+                          type="button"
+                          style={secondaryButtonStyle}
+                          disabled={aprobandoAnexo21 || rechazandoAnexo21}
+                          onClick={rechazarSolicitudAnexo21}
+                        >
+                          {rechazandoAnexo21 ? "Rechazando..." : "Rechazar solicitud"}
+                        </button>
+                      </>
+                    ) : null}
+                  </div>
+
+                  {!solicitudAprobada ? (
+                    <div
+                      style={{
+                        marginBottom: 12,
+                        padding: 10,
+                        borderRadius: 10,
+                        border: solicitudRechazada
+                          ? "1px solid rgba(239,68,68,0.30)"
+                          : "1px solid rgba(250,204,21,0.30)",
+                        background: solicitudRechazada ? "rgba(127,29,29,0.18)" : "rgba(113,63,18,0.18)",
+                        color: solicitudRechazada ? "#fecaca" : "#fde68a",
+                      }}
+                    >
+                      {solicitudRechazada
+                        ? "Solicitud rechazada. No se puede generar ANEXO_22."
+                        : "Debe aprobar la solicitud antes de generar ANEXO_22."}
+                    </div>
+                  ) : null}
+
                   {plazasError && (
                     <div
                       style={{
@@ -717,7 +840,7 @@ export default function AlojamientoDocumentoDetalle() {
                       <select
                         value={plazaSeleccionada}
                         onChange={(e) => setPlazaSeleccionada(e.target.value)}
-                        disabled={loadingPlazas || plazas.length === 0}
+                        disabled={!solicitudAprobada || loadingPlazas || plazas.length === 0}
                         style={{
                           width: "100%",
                           minHeight: 44,
@@ -752,7 +875,7 @@ export default function AlojamientoDocumentoDetalle() {
                     <button
                       type="button"
                       style={primaryButtonStyle}
-                      disabled={!plazaSeleccionada || loadingPlazas || generandoAnexo22}
+                      disabled={!solicitudAprobada || !plazaSeleccionada || loadingPlazas || generandoAnexo22}
                       onClick={generarAnexo22}
                     >
                       {generandoAnexo22 ? "Generando..." : "Generar ANEXO_22"}
@@ -761,14 +884,14 @@ export default function AlojamientoDocumentoDetalle() {
                     <button
                       type="button"
                       style={secondaryButtonStyle}
-                      disabled={loadingPlazas || generandoAnexo22}
+                      disabled={!solicitudAprobada || loadingPlazas || generandoAnexo22}
                       onClick={cargarPlazasElegibles}
                     >
                       Actualizar plazas
                     </button>
                   </div>
 
-                  {!loadingPlazas && plazas.length === 0 && !plazasError && (
+                  {solicitudAprobada && !loadingPlazas && plazas.length === 0 && !plazasError && (
                     <p style={{ ...subtitleStyle, marginTop: 12 }}>
                       No hay plazas elegibles disponibles para asignacion.
                     </p>

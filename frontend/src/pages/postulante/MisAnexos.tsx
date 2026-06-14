@@ -100,10 +100,14 @@ function safeFileNameDate() {
 }
 
 function resultadoPostulacionLabel(an: Anexo) {
-  if (up(an.codigo) !== "ANEXO_01") return "";
+  const codigo = up(an.codigo);
+  if (codigo !== "ANEXO_01" && codigo !== "ANEXO_21") return "";
   const resultado = up(an.datos?.resultadoPostulacion);
-  if (up(an.estado) === "APROBADO" || resultado === "APROBADO") return "Postulacion aprobada";
-  if (up(an.estado) === "RECHAZADO" || resultado === "RECHAZADO") return "Postulacion rechazada";
+  const aprobado = up(an.estado) === "APROBADO" || up(an.estadoInstitucional) === "APROBADO_ADMIN_GENERAL" || resultado === "APROBADO";
+  const rechazado = up(an.estado) === "RECHAZADO" || up(an.estadoInstitucional) === "RECHAZADO_ADMIN_GENERAL" || resultado === "RECHAZADO";
+  const sujeto = codigo === "ANEXO_21" ? "Solicitud" : "Postulacion";
+  if (aprobado) return `${sujeto} aprobada`;
+  if (rechazado) return `${sujeto} rechazada`;
   return "";
 }
 
@@ -265,7 +269,7 @@ export default function MisAnexos() {
                           {resultadoPostulacionLabel(an)}
                         </div>
                       ) : null}
-                      {up(an.codigo) === "ANEXO_01" && an.datos?.motivoRechazo ? (
+                      {(up(an.codigo) === "ANEXO_01" || up(an.codigo) === "ANEXO_21") && an.datos?.motivoRechazo ? (
                         <div style={{ marginTop: 4, color: "#FCA5A5", maxWidth: 420 }}>
                           Motivo: {safe(an.datos.motivoRechazo)}
                         </div>
