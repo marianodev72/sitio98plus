@@ -73,6 +73,7 @@ type ApplyPlanItem = {
   userId?: string;
   flags?: Record<string, unknown>;
   changes?: unknown[];
+  preview?: unknown;
   excluded?: boolean;
   exclusion?: JobExclusion;
   grouped?: boolean;
@@ -362,6 +363,7 @@ export default function BasesMaestras() {
   const applyResult = detail?.applyResult || null;
   const summary = detail?.resumen || selectedJob?.resumen || {};
   const isAlojamientosJob = safe(detail?.tipo, "").toUpperCase() === "ALOJAMIENTOS";
+  const alojamientoClasificaciones = isAlojamientosJob ? (applyPlan as any)?.clasificaciones || null : null;
   const modoCargaActual = safe(detail?.modoCarga || selectedJob?.modoCarga, "SIN_MODO");
   const modoCargaLegacy = Boolean(detail?.modoCargaLegacy || selectedJob?.modoCargaLegacy || modoCargaActual === "SIN_MODO");
   const approvedCount = manualApprovals.filter((approval) => approval.approved).length;
@@ -680,6 +682,9 @@ export default function BasesMaestras() {
                           ) : null}
                           {item.flags ? (
                             <pre style={{ ...preStyle, marginTop: 6 }}>{compactJson(item.flags)}</pre>
+                          ) : null}
+                          {item.preview ? (
+                            <pre style={{ ...preStyle, marginTop: 6 }}>{compactJson(item.preview)}</pre>
                           ) : null}
                           {item.exclusion ? (
                             <div style={{ color: "rgba(255,255,255,0.74)", fontSize: 12, ...wrapTextStyle }}>
@@ -1098,6 +1103,13 @@ export default function BasesMaestras() {
                   ) : null}
                   <pre style={preStyle}>{compactJson(detail.applyPlanSummary)}</pre>
                 </section>
+
+                {alojamientoClasificaciones ? (
+                  <section style={applyPlanSectionStyle}>
+                    <h3 style={{ marginTop: 0, color: "#ffffff", fontSize: 16 }}>Clasificaciones alojamientos</h3>
+                    <pre style={preStyle}>{compactJson(alojamientoClasificaciones)}</pre>
+                  </section>
+                ) : null}
 
                 <section style={applyPlanSectionStyle}>
                   <h3 style={{ marginTop: 0, color: "#ffffff", fontSize: 16 }}>Aprobaciones manuales</h3>

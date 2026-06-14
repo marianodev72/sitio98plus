@@ -82,6 +82,7 @@ function buildDiff(result) {
     nuevos: Array.isArray(result.nuevos) ? result.nuevos : [],
     actualizados: Array.isArray(result.actualizados) ? result.actualizados : [],
     sinCambios: Array.isArray(result.sinCambios) ? result.sinCambios : [],
+    alojamientos: result.alojamientos && typeof result.alojamientos === "object" ? result.alojamientos : undefined,
   };
 }
 
@@ -250,8 +251,8 @@ async function persistDryRunJob(req, tipo, result) {
 async function runPersistedDryRun(req, res, tipo, runner) {
   try {
     if (!isAdminGeneral(req)) return deny(res);
-    parseModoCarga(req);
-    const result = await runner(getFileBuffer(req));
+    const modoCarga = parseModoCarga(req);
+    const result = await runner(getFileBuffer(req), { modoCarga });
     const job = await persistDryRunJob(req, tipo, result);
     return res.json({
       ok: true,
