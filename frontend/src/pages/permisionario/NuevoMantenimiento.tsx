@@ -1,5 +1,5 @@
 // frontend/src/pages/permisionario/NuevoMantenimiento.tsx
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
 import { crearMantenimiento } from "../../api/misMantenimientos";
 import { useAuth } from "../../auth/useAuth";
@@ -9,6 +9,24 @@ const GENERIC_UI_ERROR = "No es posible procesar su solicitud, contáctese con e
 function up(v: unknown) {
   return String(v || "").toUpperCase().trim();
 }
+
+const selectStyle: CSSProperties = {
+  width: "100%",
+  padding: 8,
+  border: "1px solid #475569",
+  borderRadius: 8,
+  backgroundColor: "#111827",
+  color: "#F8FAFC",
+  appearance: "none",
+  WebkitAppearance: "none",
+  MozAppearance: "none",
+  colorScheme: "dark",
+};
+
+const optionStyle: CSSProperties = {
+  backgroundColor: "#1f2937",
+  color: "#ffffff",
+};
 
 export default function NuevoMantenimiento() {
   const nav = useNavigate();
@@ -80,11 +98,11 @@ export default function NuevoMantenimiento() {
 
       <div style={{ marginTop: 16 }}>
         <label style={{ display: "block", fontWeight: 800 }}>Tipo de mantenimiento</label>
-        <select value={tipo} onChange={(e) => setTipo(e.target.value)} style={{ width: "100%", padding: 8 }}>
-          <option value="MANTENIMIENTO_ARTEFACTOS_A_GAS">Mantenimiento artefactos a gas</option>
-          <option value="SISTEMA_DE_CALEFACCION_POR_CALDERA">Sistema de calefacción por caldera</option>
-          <option value="DESAGUES">Desagües</option>
-          <option value="OTROS">Otros</option>
+        <select value={tipo} onChange={(e) => setTipo(e.target.value)} style={selectStyle}>
+          <option value="MANTENIMIENTO_ARTEFACTOS_A_GAS" style={optionStyle}>Mantenimiento artefactos a gas</option>
+          <option value="SISTEMA_DE_CALEFACCION_POR_CALDERA" style={optionStyle}>Sistema de calefacción por caldera</option>
+          <option value="DESAGUES" style={optionStyle}>Desagües</option>
+          <option value="OTROS" style={optionStyle}>Otros</option>
         </select>
       </div>
 
