@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
 import http from "../../api/http";
-import AlojamientosDashboard from "../alojamientos/AlojamientosDashboard";
 
 /* ================= UTILIDADES ================= */
 
@@ -640,6 +639,9 @@ export default function AdminStats() {
   const [docErrorMsg, setDocErrorMsg] = useState("");
   const [docCodigoFiltro, setDocCodigoFiltro] = useState("TODOS");
   const [docEstadoFiltro, setDocEstadoFiltro] = useState("TODOS");
+  const [alojStats, setAlojStats] = useState<any>(null);
+  const [alojLoading, setAlojLoading] = useState(false);
+  const [alojErrorMsg, setAlojErrorMsg] = useState("");
 
   useEffect(() => {
     if (dominio !== "VIVIENDAS") return;
@@ -737,6 +739,35 @@ export default function AdminStats() {
       alive = false;
     };
   }, [barrio, year, docCodigoFiltro, docEstadoFiltro, dominio]);
+
+  useEffect(() => {
+    if (dominio !== "ALOJAMIENTOS") return;
+    let alive = true;
+
+    setAlojLoading(true);
+    setAlojErrorMsg("");
+    setAlojStats(null);
+
+    http
+      .get("/stats/alojamientos", { params: { year } })
+      .then((r) => {
+        if (alive) setAlojStats(r.data || null);
+      })
+      .catch((err) => {
+        console.error("[STATS] Error cargando alojamientos", err);
+        if (alive) {
+          setAlojStats(null);
+          setAlojErrorMsg("No se pudieron cargar las estadisticas de alojamientos.");
+        }
+      })
+      .finally(() => {
+        if (alive) setAlojLoading(false);
+      });
+
+    return () => {
+      alive = false;
+    };
+  }, [year, dominio]);
 
   const availableYears = useMemo(() => {
     const startYear = 2024;
@@ -906,6 +937,35 @@ export default function AdminStats() {
   const docTotal = Number(docStats?.total || 0);
   const docTiposActivos = docPorTipoRows.filter((x) => x.value > 0).length;
   const docEstadosActivos = docPorEstadoRows.filter((x) => x.value > 0).length;
+  const alojResumen = alojStats?.resumen || {};
+  const alojDocumentos = alojStats?.documentos || {};
+  const alojAsignaciones = alojStats?.asignaciones || {};
+  const alojInconsistencias = alojStats?.inconsistencias || {};
+  const alojRows = (rows: any[] = []) =>
+    rows.map((x: any) => ({
+      label: x._id || "SIN_DATO",
+      value: Number(x.cantidad || 0),
+    }));
+  const alojPlazasEstadoRows = alojRows(alojStats?.plazasPorEstado || []);
+  const alojPlazasLugarRows = alojRows(alojStats?.plazasPorLugar || []);
+  const alojPlazasTipoRows = alojRows(alojStats?.plazasPorTipo || []);
+  const alojPlazasClaseRows = alojRows(alojStats?.plazasPorClase || []);
+  const alojOcupacionLugarRows = (alojStats?.ocupacionPorLugar || []).map((x: any) => ({
+    label: x._id || "SIN_DATO",
+    value: Number(x.ocupadas || 0),
+  }));
+  const alojDocRows = [
+    { label: "ANEXO_21 presentados", value: Number(alojDocumentos.anexo21Presentados || 0) },
+    { label: "ANEXO_22 generados", value: Number(alojDocumentos.anexo22Generados || 0) },
+    { label: "Brecha ANEXO_21 sin ANEXO_22", value: Number(alojDocumentos.brecha || 0) },
+  ];
+  const alojAsignacionRows = [
+    { label: "Activas", value: Number(alojAsignaciones.activas || 0) },
+    { label: "Reservadas", value: Number(alojAsignaciones.reservadas || 0) },
+    { label: `Finalizadas ${year}`, value: Number(alojAsignaciones.finalizadasYear || 0) },
+    { label: `Anuladas ${year}`, value: Number(alojAsignaciones.anuladasYear || 0) },
+  ];
+  const alojPct = (value: unknown) => `${Number(value || 0).toFixed(1)}%`;
 
 const reportBaseName = `estadisticas_${safeFile(
   barrio === "TODOS" ? "todos" : barrio
@@ -1291,9 +1351,180 @@ function onDownloadBoardPDF() {
           </div>
         </div>
 
-        <div style={{ marginTop: 16 }}>
-          <AlojamientosDashboard basePath="/app/admin-general/alojamientos" />
+        <div style={{ marginTop: 14, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <span style={{ fontWeight: 900, fontSize: 18, color: "#ffffff" }}>AÃ±o:</span>
+          <select
+            value={year}
+            onChange={(e) => setYear(Number(e.target.value))}
+            style={selectStyle}
+          >
+            {availableYears.map((y) => (
+              <option key={y} value={y} style={optionStyle}>
+                {y}
+              </option>
+            ))}
+          </select>
+          <span style={{ fontSize: 15, opacity: 0.82, color: "rgba(255,255,255,0.84)" }}>{emittedLabel}</span>
         </div>
+
+        {alojErrorMsg ? <div style={errorBoxStyle}>{alojErrorMsg}</div> : null}
+        {alojLoading ? <div style={infoBoxStyle}>Cargando estadÃ­sticas de alojamientos...</div> : null}
+
+        {alojStats ? (
+          <>
+            <SectionLabel>VISIÃ“N EJECUTIVA ALOJAMIENTOS</SectionLabel>
+
+            <div style={infoBoxStyle}>
+              <strong>Capacidad calculada por plazas:</strong> las plazas activas y no BAJA son la unidad
+              estadÃ­stica principal. Los alojamientos fÃ­sicos sin plazas cargadas no se computan como
+              capacidad disponible.
+            </div>
+
+            {Number(alojResumen.alojamientosActivosSinPlazas || 0) > 0 ? (
+              <div style={errorBoxStyle}>
+                Hay alojamientos activos sin plazas cargadas. No se computan como capacidad disponible.
+              </div>
+            ) : null}
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+                gap: 12,
+                marginTop: 10,
+                justifyItems: "center",
+              }}
+            >
+              <KpiCard
+                title="Alojamientos activos"
+                value={Number(alojResumen.alojamientosActivos || 0)}
+                accent="#64748B"
+                subtitle="Stock fisico activo"
+              />
+              <KpiCard
+                title="Alojamientos con plazas"
+                value={Number(alojResumen.alojamientosConPlazas || 0)}
+                accent="#14B8A6"
+                subtitle="Con capacidad computable"
+              />
+              <KpiCard
+                title="Plazas totales"
+                value={Number(alojResumen.plazasTotal || 0)}
+                accent="#111827"
+                subtitle="Activas y no BAJA"
+              />
+              <KpiCard title="Libres" value={Number(alojResumen.plazasLibres || 0)} accent="#1E88E5" />
+              <KpiCard title="Ocupadas" value={Number(alojResumen.plazasOcupadas || 0)} accent="#43A047" />
+              <KpiCard title="Reservadas" value={Number(alojResumen.plazasReservadas || 0)} accent="#8E24AA" />
+              <KpiCard
+                title="Fuera de servicio"
+                value={Number(alojResumen.plazasFueraServicio || 0)}
+                accent="#FB8C00"
+                subtitle="Mantenimiento + inhabilitadas"
+              />
+              <KpiCard
+                title="OcupaciÃ³n"
+                value={alojPct(alojResumen.ocupacionPct)}
+                accent="#43A047"
+                subtitle="Sobre plazas utiles"
+              />
+              <KpiCard
+                title="Disponibilidad"
+                value={alojPct(alojResumen.disponibilidadPct)}
+                accent="#1E88E5"
+                subtitle="Libres sobre plazas utiles"
+              />
+            </div>
+
+            <SectionLabel>DISTRIBUCIÃ“N DE PLAZAS</SectionLabel>
+
+            <div
+              style={{
+                marginTop: 10,
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(min(320px, 100%), 1fr))",
+                gap: 12,
+              }}
+            >
+              <Card title="Plazas por estado" subtitle="Unidad estadÃ­stica: plaza.">
+                <BarChart data={alojPlazasEstadoRows} />
+              </Card>
+              <Card title="Plazas por lugar" subtitle="Capacidad por ubicaciÃ³n.">
+                <BarChart data={alojPlazasLugarRows} />
+              </Card>
+              <Card title="OcupaciÃ³n por lugar" subtitle="Plazas ocupadas por ubicaciÃ³n.">
+                <BarChart data={alojOcupacionLugarRows} />
+              </Card>
+              <Card title="Plazas por tipo" subtitle="AgrupaciÃ³n del alojamiento asociado.">
+                <BarChart data={alojPlazasTipoRows} />
+              </Card>
+              <Card title="Plazas por clase" subtitle="Clase del alojamiento asociado.">
+                <BarChart data={alojPlazasClaseRows} />
+              </Card>
+            </div>
+
+            <SectionLabel>FLUJO DE TRAMITACIÃ“N</SectionLabel>
+
+            <div
+              style={{
+                marginTop: 10,
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(min(320px, 100%), 1fr))",
+                gap: 12,
+              }}
+            >
+              <Card
+                title="Flujo ANEXO_21 â†’ ANEXO_22"
+                subtitle={`Solicitudes y asignaciones generadas durante ${year}.`}
+              >
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
+                  <KpiCard title="ANEXO_21" value={Number(alojDocumentos.anexo21Presentados || 0)} accent="#8E24AA" />
+                  <KpiCard title="ANEXO_22" value={Number(alojDocumentos.anexo22Generados || 0)} accent="#43A047" />
+                  <KpiCard title="Brecha" value={Number(alojDocumentos.brecha || 0)} accent="#E53935" />
+                  <KpiCard title="DerivaciÃ³n" value={alojPct(alojDocumentos.tasaDerivacion)} accent="#1E88E5" />
+                </div>
+                <div style={{ marginTop: 12 }}>
+                  <BarChart data={alojDocRows} />
+                </div>
+              </Card>
+
+              <Card title="Asignaciones" subtitle="Estados operativos de asignaciÃ³n.">
+                <BarChart data={alojAsignacionRows} />
+              </Card>
+            </div>
+
+            <SectionLabel>INCONSISTENCIAS</SectionLabel>
+
+            <div style={tableWrapStyle}>
+              <table style={tableStyle}>
+                <thead>
+                  <tr>
+                    <th style={thStyle}>Control</th>
+                    <th style={thStyle}>Cantidad</th>
+                    <th style={thStyle}>Criterio</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td style={tdStyle}>Alojamientos activos sin plazas</td>
+                    <td style={tdStyle}>{Number(alojInconsistencias.alojamientosActivosSinPlazas || 0)}</td>
+                    <td style={tdStyle}>No computan como capacidad disponible.</td>
+                  </tr>
+                  <tr>
+                    <td style={tdStyle}>Plazas ocupadas sin asignaciÃ³n activa</td>
+                    <td style={tdStyle}>{Number(alojInconsistencias.plazasOcupadasSinAsignacionActiva || 0)}</td>
+                    <td style={tdStyle}>Plaza OCUPADA sin asignaciÃ³n ACTIVA asociada.</td>
+                  </tr>
+                  <tr>
+                    <td style={tdStyle}>Asignaciones activas sobre plaza no ocupada</td>
+                    <td style={tdStyle}>{Number(alojInconsistencias.asignacionesActivasSobrePlazaNoOcupada || 0)}</td>
+                    <td style={tdStyle}>AsignaciÃ³n ACTIVA cuya plaza no estÃ¡ OCUPADA.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </>
+        ) : null}
       </div>
     );
   }

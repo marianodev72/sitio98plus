@@ -5,6 +5,7 @@ const { authRequired } = require("../middleware/auth");
 const {
   getResumenStats,
   getFormularioStats,
+  getAlojamientosStats,
   getStatsBarrios,
   getStatsPorBarrio,
 } = require("../controllers/statsController");
@@ -12,6 +13,7 @@ const {
 router.get("/resumen", authRequired, getResumenStats);
 router.get("/barrios", authRequired, getStatsBarrios);
 router.get("/formularios", authRequired, getFormularioStats);
+router.get("/alojamientos", authRequired, getAlojamientosStats);
 router.get("/barrio/:barrio", authRequired, getStatsPorBarrio);
 
 router.use((req, res) => {

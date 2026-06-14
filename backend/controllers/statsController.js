@@ -2,6 +2,10 @@
 
 const Vivienda = require("../models/vivienda");
 const { FormSubmission } = require("../models/FormSubmission");
+const AlojamientoNaval = require("../modules/alojamientos/models/AlojamientoNaval");
+const AlojamientoPlaza = require("../modules/alojamientos/models/AlojamientoPlaza");
+const AsignacionAlojamiento = require("../modules/alojamientos/models/AsignacionAlojamiento");
+const AlojamientoDocumento = require("../modules/alojamientos/models/AlojamientoDocumento");
 
 const MIS_DATOS_COLL = "misdatosdeclaradosupdates";
 const STATS_K = 3;
@@ -152,6 +156,108 @@ function monthRows(rows) {
     mes: i + 1,
     cantidad: map.get(i + 1) || 0,
   }));
+}
+
+function cleanFiltroTexto(value) {
+  const raw = String(value || "").trim();
+  if (!raw || up(raw) === "TODOS") return "";
+  return raw;
+}
+
+function alojamientoStatsFilters(query = {}) {
+  return {
+    lugar: cleanFiltroTexto(query.lugar),
+    dependencia: cleanFiltroTexto(query.dependencia),
+    sector: cleanFiltroTexto(query.sector),
+  };
+}
+
+function applyAlojamientoFiltros(match, filtros) {
+  const out = { ...match };
+  if (filtros.lugar) out.lugar = filtros.lugar;
+  if (filtros.dependencia) out.dependencia = filtros.dependencia;
+  if (filtros.sector) out.sector = filtros.sector;
+  return out;
+}
+
+function countFrom(rows, key) {
+  const target = up(key);
+  const row = (rows || []).find((item) => up(item?._id) === target);
+  return Number(row?.cantidad || 0);
+}
+
+function pct(part, total) {
+  const p = Number(part || 0);
+  const t = Number(total || 0);
+  if (!t) return 0;
+  return Number(((p / t) * 100).toFixed(1));
+}
+
+function alojamientoPlazasBasePipeline(filtros = {}) {
+  const alojamientoMatch = {
+    "alojamientoObj.activo": { $ne: false },
+    "alojamientoObj.estado": { $ne: "BAJA" },
+  };
+  if (filtros.lugar) alojamientoMatch["alojamientoObj.lugar"] = filtros.lugar;
+  if (filtros.dependencia) alojamientoMatch["alojamientoObj.dependencia"] = filtros.dependencia;
+  if (filtros.sector) alojamientoMatch["alojamientoObj.sector"] = filtros.sector;
+
+  return [
+    {
+      $match: {
+        activo: { $ne: false },
+        estado: { $ne: "BAJA" },
+      },
+    },
+    {
+      $lookup: {
+        from: "alojamientonavals",
+        localField: "alojamiento",
+        foreignField: "_id",
+        as: "alojamientoObj",
+      },
+    },
+    { $unwind: "$alojamientoObj" },
+    { $match: alojamientoMatch },
+  ];
+}
+
+function alojamientoAsignacionesBasePipeline(filtros = {}) {
+  const alojamientoMatch = {
+    "alojamientoObj.activo": { $ne: false },
+    "alojamientoObj.estado": { $ne: "BAJA" },
+  };
+  if (filtros.lugar) alojamientoMatch["alojamientoObj.lugar"] = filtros.lugar;
+  if (filtros.dependencia) alojamientoMatch["alojamientoObj.dependencia"] = filtros.dependencia;
+  if (filtros.sector) alojamientoMatch["alojamientoObj.sector"] = filtros.sector;
+
+  return [
+    {
+      $lookup: {
+        from: "alojamientoplazas",
+        localField: "plaza",
+        foreignField: "_id",
+        as: "plazaObj",
+      },
+    },
+    { $unwind: "$plazaObj" },
+    {
+      $lookup: {
+        from: "alojamientonavals",
+        localField: "alojamiento",
+        foreignField: "_id",
+        as: "alojamientoObj",
+      },
+    },
+    { $unwind: "$alojamientoObj" },
+    {
+      $match: {
+        "plazaObj.activo": { $ne: false },
+        "plazaObj.estado": { $ne: "BAJA" },
+        ...alojamientoMatch,
+      },
+    },
+  ];
 }
 
 function recientePersonaLabel(item) {
@@ -671,6 +777,263 @@ async function buildResumen(matchExtra = {}, year = new Date().getFullYear()) {
   };
 }
 
+async function buildAlojamientosStats(req) {
+  const year = getRequestedYear(req);
+  const desde = new Date(year, 0, 1);
+  const hasta = new Date(year + 1, 0, 1);
+  const filtros = alojamientoStatsFilters(req.query || {});
+  const alojamientoMatch = applyAlojamientoFiltros(
+    {
+      activo: { $ne: false },
+      estado: { $ne: "BAJA" },
+    },
+    filtros
+  );
+
+  const plazasPipeline = alojamientoPlazasBasePipeline(filtros);
+  const asignacionesPipeline = alojamientoAsignacionesBasePipeline(filtros);
+
+  const [
+    alojamientosActivos,
+    alojamientosConPlazasRows,
+    alojamientosSinPlazasRows,
+    plazasStats,
+    asignacionStats,
+    documentosStats,
+    plazasOcupadasSinAsignacionRows,
+    asignacionesActivasPlazaNoOcupadaRows,
+  ] = await Promise.all([
+    AlojamientoNaval.countDocuments(alojamientoMatch),
+    AlojamientoPlaza.aggregate([
+      ...plazasPipeline,
+      { $group: { _id: "$alojamiento" } },
+      { $count: "cantidad" },
+    ]),
+    AlojamientoNaval.aggregate([
+      { $match: alojamientoMatch },
+      {
+        $lookup: {
+          from: "alojamientoplazas",
+          let: { alojamientoId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $eq: ["$alojamiento", "$$alojamientoId"] },
+                activo: { $ne: false },
+                estado: { $ne: "BAJA" },
+              },
+            },
+            { $limit: 1 },
+          ],
+          as: "plazasValidas",
+        },
+      },
+      { $match: { plazasValidas: { $size: 0 } } },
+      { $count: "cantidad" },
+    ]),
+    AlojamientoPlaza.aggregate([
+      ...plazasPipeline,
+      {
+        $facet: {
+          total: [{ $count: "cantidad" }],
+          porEstado: [
+            { $group: { _id: { $ifNull: ["$estado", "SIN_ESTADO"] }, cantidad: { $sum: 1 } } },
+            { $sort: { cantidad: -1, _id: 1 } },
+          ],
+          porLugar: [
+            { $group: { _id: { $ifNull: ["$alojamientoObj.lugar", "SIN_DATO"] }, cantidad: { $sum: 1 } } },
+            { $sort: { cantidad: -1, _id: 1 } },
+          ],
+          ocupacionPorLugar: [
+            {
+              $group: {
+                _id: { $ifNull: ["$alojamientoObj.lugar", "SIN_DATO"] },
+                plazas: { $sum: 1 },
+                libres: { $sum: { $cond: [{ $eq: ["$estado", "LIBRE"] }, 1, 0] } },
+                ocupadas: { $sum: { $cond: [{ $eq: ["$estado", "OCUPADA"] }, 1, 0] } },
+                reservadas: { $sum: { $cond: [{ $eq: ["$estado", "RESERVADA"] }, 1, 0] } },
+                fueraServicio: {
+                  $sum: { $cond: [{ $in: ["$estado", ["MANTENIMIENTO", "INHABILITADA"]] }, 1, 0] },
+                },
+              },
+            },
+            { $sort: { plazas: -1, _id: 1 } },
+          ],
+          porDependencia: [
+            { $group: { _id: { $ifNull: ["$alojamientoObj.dependencia", "SIN_DATO"] }, cantidad: { $sum: 1 } } },
+            { $sort: { cantidad: -1, _id: 1 } },
+          ],
+          porSector: [
+            { $group: { _id: { $ifNull: ["$alojamientoObj.sector", "SIN_DATO"] }, cantidad: { $sum: 1 } } },
+            { $sort: { cantidad: -1, _id: 1 } },
+          ],
+          porTipo: [
+            { $group: { _id: { $ifNull: ["$alojamientoObj.tipo", "SIN_DATO"] }, cantidad: { $sum: 1 } } },
+            { $sort: { cantidad: -1, _id: 1 } },
+          ],
+          porClase: [
+            { $group: { _id: { $ifNull: ["$alojamientoObj.clase", "SIN_DATO"] }, cantidad: { $sum: 1 } } },
+            { $sort: { cantidad: -1, _id: 1 } },
+          ],
+        },
+      },
+    ]),
+    AsignacionAlojamiento.aggregate([
+      ...asignacionesPipeline,
+      {
+        $facet: {
+          activas: [{ $match: { estado: "ACTIVA" } }, { $count: "cantidad" }],
+          reservadas: [{ $match: { estado: "RESERVADA" } }, { $count: "cantidad" }],
+          finalizadasYear: [
+            { $match: { estado: "FINALIZADA", updatedAt: { $gte: desde, $lt: hasta } } },
+            { $count: "cantidad" },
+          ],
+          anuladasYear: [
+            { $match: { estado: "ANULADA", updatedAt: { $gte: desde, $lt: hasta } } },
+            { $count: "cantidad" },
+          ],
+          evolucionMensual: [
+            { $match: { createdAt: { $gte: desde, $lt: hasta } } },
+            { $group: { _id: { $month: "$createdAt" }, cantidad: { $sum: 1 } } },
+            { $sort: { _id: 1 } },
+          ],
+        },
+      },
+    ]),
+    AlojamientoDocumento.aggregate([
+      {
+        $match: {
+          activo: { $ne: false },
+          codigo: { $in: ["ANEXO_21", "ANEXO_22"] },
+          createdAt: { $gte: desde, $lt: hasta },
+        },
+      },
+      {
+        $facet: {
+          anexo21Presentados: [
+            { $match: { codigo: "ANEXO_21", estado: { $ne: "BORRADOR" } } },
+            { $count: "cantidad" },
+          ],
+          anexo22Generados: [
+            { $match: { codigo: "ANEXO_22" } },
+            { $count: "cantidad" },
+          ],
+          porTipo: [
+            { $group: { _id: "$codigo", cantidad: { $sum: 1 } } },
+            { $sort: { _id: 1 } },
+          ],
+          porEstado: [
+            { $group: { _id: { $ifNull: ["$estado", "SIN_ESTADO"] }, cantidad: { $sum: 1 } } },
+            { $sort: { cantidad: -1, _id: 1 } },
+          ],
+          evolucionMensual: [
+            { $group: { _id: { $month: "$createdAt" }, cantidad: { $sum: 1 } } },
+            { $sort: { _id: 1 } },
+          ],
+        },
+      },
+    ]),
+    AlojamientoPlaza.aggregate([
+      ...plazasPipeline,
+      { $match: { estado: "OCUPADA" } },
+      {
+        $lookup: {
+          from: "asignacionalojamientos",
+          let: { plazaId: "$_id" },
+          pipeline: [
+            { $match: { $expr: { $eq: ["$plaza", "$$plazaId"] }, estado: "ACTIVA" } },
+            { $limit: 1 },
+          ],
+          as: "asignacionActiva",
+        },
+      },
+      { $match: { asignacionActiva: { $size: 0 } } },
+      { $count: "cantidad" },
+    ]),
+    AsignacionAlojamiento.aggregate([
+      ...asignacionesPipeline,
+      { $match: { estado: "ACTIVA", "plazaObj.estado": { $ne: "OCUPADA" } } },
+      { $count: "cantidad" },
+    ]),
+  ]);
+
+  const plazaFacet = plazasStats?.[0] || {};
+  const asignacionFacet = asignacionStats?.[0] || {};
+  const documentoFacet = documentosStats?.[0] || {};
+  const plazasPorEstado = plazaFacet.porEstado || [];
+  const plazasLibres = countFrom(plazasPorEstado, "LIBRE");
+  const plazasOcupadas = countFrom(plazasPorEstado, "OCUPADA");
+  const plazasReservadas = countFrom(plazasPorEstado, "RESERVADA");
+  const plazasMantenimiento = countFrom(plazasPorEstado, "MANTENIMIENTO");
+  const plazasInhabilitadas = countFrom(plazasPorEstado, "INHABILITADA");
+  const plazasFueraServicio = plazasMantenimiento + plazasInhabilitadas;
+  const plazasTotal = Number(plazaFacet.total?.[0]?.cantidad || 0);
+  const plazasUtiles = plazasLibres + plazasOcupadas + plazasReservadas;
+  const anexo21Presentados = Number(documentoFacet.anexo21Presentados?.[0]?.cantidad || 0);
+  const anexo22Generados = Number(documentoFacet.anexo22Generados?.[0]?.cantidad || 0);
+  const brecha = Math.max(0, anexo21Presentados - anexo22Generados);
+
+  return {
+    year,
+    filtros: {
+      lugar: filtros.lugar || "TODOS",
+      dependencia: filtros.dependencia || "TODOS",
+      sector: filtros.sector || "TODOS",
+    },
+    resumen: {
+      alojamientosActivos: Number(alojamientosActivos || 0),
+      alojamientosConPlazas: Number(alojamientosConPlazasRows?.[0]?.cantidad || 0),
+      alojamientosActivosSinPlazas: Number(alojamientosSinPlazasRows?.[0]?.cantidad || 0),
+      plazasTotal,
+      plazasLibres,
+      plazasOcupadas,
+      plazasReservadas,
+      plazasMantenimiento,
+      plazasInhabilitadas,
+      plazasFueraServicio,
+      plazasUtiles,
+      ocupacionPct: pct(plazasOcupadas, plazasUtiles),
+      disponibilidadPct: pct(plazasLibres, plazasUtiles),
+    },
+    plazasPorEstado,
+    plazasPorLugar: plazaFacet.porLugar || [],
+    ocupacionPorLugar: (plazaFacet.ocupacionPorLugar || []).map((row) => ({
+      _id: row._id || "SIN_DATO",
+      plazas: Number(row.plazas || 0),
+      libres: Number(row.libres || 0),
+      ocupadas: Number(row.ocupadas || 0),
+      reservadas: Number(row.reservadas || 0),
+      fueraServicio: Number(row.fueraServicio || 0),
+      ocupacionPct: pct(row.ocupadas, Number(row.libres || 0) + Number(row.ocupadas || 0) + Number(row.reservadas || 0)),
+    })),
+    plazasPorDependencia: plazaFacet.porDependencia || [],
+    plazasPorSector: plazaFacet.porSector || [],
+    plazasPorTipo: plazaFacet.porTipo || [],
+    plazasPorClase: plazaFacet.porClase || [],
+    asignaciones: {
+      activas: Number(asignacionFacet.activas?.[0]?.cantidad || 0),
+      reservadas: Number(asignacionFacet.reservadas?.[0]?.cantidad || 0),
+      finalizadasYear: Number(asignacionFacet.finalizadasYear?.[0]?.cantidad || 0),
+      anuladasYear: Number(asignacionFacet.anuladasYear?.[0]?.cantidad || 0),
+      evolucionMensual: monthRows(asignacionFacet.evolucionMensual),
+    },
+    documentos: {
+      anexo21Presentados,
+      anexo22Generados,
+      brecha,
+      tasaDerivacion: pct(anexo22Generados, anexo21Presentados),
+      porTipo: documentoFacet.porTipo || [],
+      porEstado: documentoFacet.porEstado || [],
+      evolucionMensual: monthRows(documentoFacet.evolucionMensual),
+    },
+    inconsistencias: {
+      plazasOcupadasSinAsignacionActiva: Number(plazasOcupadasSinAsignacionRows?.[0]?.cantidad || 0),
+      asignacionesActivasSobrePlazaNoOcupada: Number(asignacionesActivasPlazaNoOcupadaRows?.[0]?.cantidad || 0),
+      alojamientosActivosSinPlazas: Number(alojamientosSinPlazasRows?.[0]?.cantidad || 0),
+    },
+  };
+}
+
 /* ================= ENDPOINTS ================= */
 
 exports.getResumenStats = async (req, res) => {
@@ -705,6 +1068,17 @@ exports.getFormularioStats = async (req, res) => {
     return res.json(data);
   } catch (e) {
     console.error("[STATS] formularios", e);
+    return deny(res);
+  }
+};
+
+exports.getAlojamientosStats = async (req, res) => {
+  try {
+    if (!isAdminGeneral(req)) return deny(res);
+    const data = await buildAlojamientosStats(req);
+    return res.json(data);
+  } catch (e) {
+    console.error("[STATS] alojamientos", e);
     return deny(res);
   }
 };
