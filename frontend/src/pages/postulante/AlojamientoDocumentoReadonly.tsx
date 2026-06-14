@@ -222,8 +222,18 @@ export default function AlojamientoDocumentoReadonly() {
 
   const datos = documento?.datos || {};
   const adjuntos = useMemo(() => adjuntosFromDatos(datos), [datos]);
+  const esAnexo21 = up(documento?.codigo) === "ANEXO_21";
   const esAnexo22 = up(documento?.codigo) === "ANEXO_22";
   const esAnexo23 = up(documento?.codigo) === "ANEXO_23";
+  const resultadoPostulacion = up(datos.resultadoPostulacion);
+  const solicitudAprobada =
+    esAnexo21 &&
+    (up(documento?.estadoInstitucional) === "APROBADO_ADMIN_GENERAL" || resultadoPostulacion === "APROBADO");
+  const solicitudRechazada =
+    esAnexo21 &&
+    (up(documento?.estado) === "RECHAZADO" ||
+      up(documento?.estadoInstitucional) === "RECHAZADO_ADMIN_GENERAL" ||
+      resultadoPostulacion === "RECHAZADO");
   const userId = String(user?._id || "");
   const conformidadActual = conformidadPostulante(documento, userId);
   const conformidadAlojadoActual = conformidadAlojado(documento, userId);
@@ -384,6 +394,21 @@ export default function AlojamientoDocumentoReadonly() {
               <Field label="Codigo" value={documento.codigo} />
               <Field label="Estado" value={documento.estado} />
               <Field label="Estado institucional" value={documento.estadoInstitucional} />
+              {esAnexo21 ? (
+                <Field
+                  label="Resultado solicitud"
+                  value={
+                    solicitudAprobada
+                      ? "Solicitud aprobada"
+                      : solicitudRechazada
+                      ? "Solicitud rechazada"
+                      : "Pendiente de decision"
+                  }
+                />
+              ) : null}
+              {esAnexo21 && solicitudRechazada && datos.motivoRechazo ? (
+                <Field label="Motivo rechazo" value={datos.motivoRechazo} />
+              ) : null}
               <Field label="Creacion" value={fmtDate(documento.createdAt)} />
               <Field label="Actualizacion" value={fmtDate(documento.updatedAt)} />
               <Field label="Envio" value={fmtDate(envioFecha(documento))} />

@@ -23,11 +23,16 @@ function isAdminGeneral(user) {
 }
 
 function publicError(status, code = "NO_DISPONIBLE") {
+  const message =
+    code === "ANEXO_21_NO_APROBADO"
+      ? "La solicitud debe estar aprobada por ADMIN_GENERAL antes de generar ANEXO_22."
+      : "No es posible generar el ANEXO_22 en este momento.";
+
   return {
     ok: false,
     status,
     code,
-    message: "No es posible generar el ANEXO_22 en este momento.",
+    message,
   };
 }
 
@@ -61,6 +66,13 @@ function tieneConformidadOk(documento, tipo) {
   const tipoUp = up(tipo);
   const conformidades = Array.isArray(documento?.conformidades) ? documento.conformidades : [];
   return conformidades.some((item) => up(item?.tipo) === tipoUp && item?.ok === true);
+}
+
+function tieneAprobacionFormalAnexo21(documento) {
+  return (
+    up(documento?.estadoInstitucional) === "APROBADO_ADMIN_GENERAL" ||
+    up(documento?.datos?.resultadoPostulacion) === "APROBADO"
+  );
 }
 
 function upsertSignerPostulante(documento, user, fecha) {
@@ -212,6 +224,10 @@ async function generarDesdeAnexo21({ id, plazaId, user }) {
       return publicError(409, "ANEXO_22_YA_EXISTE");
     }
     return { ok: true, status: 200, documento: toResponse(existente) };
+  }
+
+  if (!tieneAprobacionFormalAnexo21(origen)) {
+    return publicError(409, "ANEXO_21_NO_APROBADO");
   }
 
   const disponibilidad = await validarDisponibilidadPlaza({

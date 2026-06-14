@@ -41,6 +41,10 @@ function isPostulante(user) {
   return up(user?.role) === "POSTULANTE";
 }
 
+function isAdminGeneral(user) {
+  return up(user?.role) === "ADMIN_GENERAL";
+}
+
 function isOwner(documento, user) {
   return String(documento?.solicitante || "") === String(user?._id || "");
 }
@@ -54,11 +58,41 @@ function toResponse(documento) {
     estadoInstitucional: doc.estadoInstitucional || null,
     datos: sanitizeDatosDocumento(doc.datos),
     historialEstados: Array.isArray(doc.historialEstados) ? doc.historialEstados : [],
+    intervenciones: Array.isArray(doc.intervenciones) ? doc.intervenciones : [],
     intervinientes: Array.isArray(doc.intervinientes) ? doc.intervinientes : [],
     solicitante: doc.solicitante || null,
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
   };
+}
+
+function serviceError(status, code) {
+  return { ok: false, status, code };
+}
+
+function cleanMotivoRechazo(value) {
+  return String(value || "").trim().replace(/\s+/g, " ").slice(0, 1000);
+}
+
+async function existeAnexo22Derivado(anexo21Id) {
+  const count = await AlojamientoDocumento.countDocuments({
+    codigo: "ANEXO_22",
+    derivadoDe: anexo21Id,
+    activo: { $ne: false },
+  });
+  return count > 0;
+}
+
+function registrarIntervencion(documento, { tipo, actor, rolActor, observacion, datos = {} }) {
+  documento.intervenciones = Array.isArray(documento.intervenciones) ? documento.intervenciones : [];
+  documento.intervenciones.push({
+    fecha: new Date(),
+    tipo,
+    actor: actor || null,
+    rolActor: up(rolActor),
+    observacion,
+    datos,
+  });
 }
 
 function mergePreservandoLegacy(actual, oficiales) {
@@ -227,9 +261,139 @@ async function anularBorrador({ id, user }) {
   return { ok: true, status: 200, documento: toResponse(documento) };
 }
 
+async function aprobarSolicitud({ id, user }) {
+  if (!isAdminGeneral(user)) {
+    return serviceError(403, "NO_AUTORIZADO");
+  }
+
+  const documento = await AlojamientoDocumento.findOne({
+    _id: id,
+    codigo: CODIGO,
+    activo: { $ne: false },
+  });
+
+  if (!documento) return serviceError(404, "NO_DISPONIBLE");
+
+  const estado = up(documento.estado);
+  const estadoInstitucional = up(documento.estadoInstitucional);
+  const resultadoActual = up(documento.datos?.resultadoPostulacion);
+
+  if (["RECHAZADO", "CERRADO", "ANULADO"].includes(estado)) {
+    return serviceError(409, "ESTADO_NO_DISPONIBLE");
+  }
+
+  if (estadoInstitucional === "APROBADO_ADMIN_GENERAL" || resultadoActual === "APROBADO") {
+    return { ok: true, status: 200, documento: toResponse(documento) };
+  }
+
+  if (!["ENVIADO", "EN_REVISION"].includes(estado)) {
+    return serviceError(409, "ESTADO_NO_DISPONIBLE");
+  }
+
+  const datos = documento.datos && typeof documento.datos === "object" && !Array.isArray(documento.datos)
+    ? { ...documento.datos }
+    : {};
+
+  datos.resultadoPostulacion = "APROBADO";
+  delete datos.motivoRechazo;
+
+  documento.estadoInstitucional = "APROBADO_ADMIN_GENERAL";
+  documento.datos = datos;
+  documento.actualizadoPor = user._id;
+  documento.markModified("datos");
+
+  registrarIntervencion(documento, {
+    tipo: "APROBACION_ANEXO_21",
+    actor: user._id,
+    rolActor: "ADMIN_GENERAL",
+    observacion: "Solicitud ANEXO_21 aprobada por ADMIN_GENERAL.",
+    datos: {
+      estadoOperativo: estado,
+      estadoInstitucionalAnterior: estadoInstitucional || null,
+      estadoInstitucionalNuevo: "APROBADO_ADMIN_GENERAL",
+    },
+  });
+
+  await documento.save();
+  return { ok: true, status: 200, documento: toResponse(documento) };
+}
+
+async function rechazarSolicitud({ id, user, motivo }) {
+  if (!isAdminGeneral(user)) {
+    return serviceError(403, "NO_AUTORIZADO");
+  }
+
+  const motivoLimpio = cleanMotivoRechazo(motivo);
+  if (motivoLimpio.length < 5) {
+    return serviceError(400, "MOTIVO_REQUERIDO");
+  }
+
+  const documento = await AlojamientoDocumento.findOne({
+    _id: id,
+    codigo: CODIGO,
+    activo: { $ne: false },
+  });
+
+  if (!documento) return serviceError(404, "NO_DISPONIBLE");
+
+  if (await existeAnexo22Derivado(documento._id)) {
+    return serviceError(409, "ANEXO_22_YA_EXISTE");
+  }
+
+  const estado = up(documento.estado);
+  const estadoInstitucional = up(documento.estadoInstitucional);
+
+  if (["CERRADO", "ANULADO"].includes(estado) || !["ENVIADO", "EN_REVISION", "RECHAZADO"].includes(estado)) {
+    return serviceError(409, "ESTADO_NO_DISPONIBLE");
+  }
+
+  if (estado !== "RECHAZADO") {
+    const transition = registrarCambioEstado(documento, {
+      estadoNuevo: "RECHAZADO",
+      actorId: user._id,
+      rolActor: "ADMIN_GENERAL",
+      observacion: motivoLimpio,
+    });
+
+    if (!transition.ok) {
+      return serviceError(409, transition.error);
+    }
+  }
+
+  const datos = documento.datos && typeof documento.datos === "object" && !Array.isArray(documento.datos)
+    ? { ...documento.datos }
+    : {};
+
+  datos.resultadoPostulacion = "RECHAZADO";
+  datos.motivoRechazo = motivoLimpio;
+
+  documento.estadoInstitucional = "RECHAZADO_ADMIN_GENERAL";
+  documento.datos = datos;
+  documento.actualizadoPor = user._id;
+  documento.markModified("datos");
+
+  registrarIntervencion(documento, {
+    tipo: estado === "RECHAZADO" ? "ACTUALIZACION_RECHAZO_ANEXO_21" : "RECHAZO_ANEXO_21",
+    actor: user._id,
+    rolActor: "ADMIN_GENERAL",
+    observacion: motivoLimpio,
+    datos: {
+      estadoAnterior: estado,
+      estadoNuevo: "RECHAZADO",
+      estadoInstitucionalAnterior: estadoInstitucional || null,
+      estadoInstitucionalNuevo: "RECHAZADO_ADMIN_GENERAL",
+    },
+  });
+
+  await documento.save();
+  return { ok: true, status: 200, documento: toResponse(documento) };
+}
+
 module.exports = {
   crearBorrador,
   actualizarBorrador,
   enviarBorrador,
   anularBorrador,
+  aprobarSolicitud,
+  rechazarSolicitud,
 };
