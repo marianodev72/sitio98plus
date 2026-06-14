@@ -309,6 +309,20 @@ export default function GestionarAnexo() {
     (codigo === "ANEXO_02" ? role === "ADMIN_GENERAL" : isAdmin);
 
   const puedeGestionarAdmin11 = isAdmin && esAnexo11 && esEstadoCerrable;
+  const resultadoPostulacion = up(datos?.resultadoPostulacion);
+  const esPostulacionAprobada =
+    codigo === "ANEXO_01" &&
+    (estado === "APROBADO" ||
+      up(anexo?.estadoInstitucional) === "APROBADO_ADMIN_GENERAL" ||
+      resultadoPostulacion === "APROBADO");
+  const esPostulacionRechazada =
+    codigo === "ANEXO_01" &&
+    (estado === "RECHAZADO" ||
+      up(anexo?.estadoInstitucional) === "RECHAZADO_ADMIN_GENERAL" ||
+      resultadoPostulacion === "RECHAZADO");
+  const esPostulacionTerminal = ["CERRADO", "ASIGNADO"].includes(estado);
+  const puedeDecidirPostulacion01 =
+    isAdmin && codigo === "ANEXO_01" && !esPostulacionAprobada && !esPostulacionRechazada && !esPostulacionTerminal;
   const puedeGenerarAnexo02 = isAdmin && codigo === "ANEXO_01";
 
   async function cerrarTramiteAdminClasico() {
@@ -361,11 +375,67 @@ export default function GestionarAnexo() {
     }
   }
 
+  async function aprobarPostulacionAnexo01() {
+    if (!anexo?._id || codigo !== "ANEXO_01" || busy) return;
+    const ok = window.confirm("Confirma la aprobacion formal de la postulacion ANEXO_01?");
+    if (!ok) return;
+
+    setBusy(true);
+    setError(null);
+    setInfoMsg("");
+
+    try {
+      const res = await http.post(`/formularios/${anexo._id}/aprobar-postulacion`, {});
+      const upd = res.data?.anexo || res.data?.formulario || null;
+      if (upd) setAnexo(upd);
+      setInfoMsg("Postulacion ANEXO_01 aprobada. Ya puede generar ANEXO_02.");
+    } catch (e: any) {
+      console.error("[ADMIN] Error aprobando postulacion ANEXO_01", e);
+      setError(e?.response?.data?.message || "No se pudo aprobar la postulacion.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function rechazarPostulacionAnexo01() {
+    if (!anexo?._id || codigo !== "ANEXO_01" || busy) return;
+    const motivo = window.prompt("Ingrese el motivo obligatorio del rechazo de la postulacion:", "");
+    if (motivo === null) return;
+    const motivoTrim = motivo.trim();
+    if (motivoTrim.length < 5) {
+      setError("Debe indicar un motivo de rechazo de al menos 5 caracteres.");
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+    setInfoMsg("");
+
+    try {
+      const res = await http.post(`/formularios/${anexo._id}/rechazar-postulacion`, {
+        motivo: motivoTrim,
+      });
+      const upd = res.data?.anexo || res.data?.formulario || null;
+      if (upd) setAnexo(upd);
+      setInfoMsg("Postulacion ANEXO_01 rechazada.");
+    } catch (e: any) {
+      console.error("[ADMIN] Error rechazando postulacion ANEXO_01", e);
+      setError(e?.response?.data?.message || "No se pudo rechazar la postulacion.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function generarAnexo02Desde01() {
     if (!anexo?._id) return;
 
     if (codigo !== "ANEXO_01") {
       setError("Acción no disponible para este tipo de anexo.");
+      return;
+    }
+
+    if (!esPostulacionAprobada) {
+      setError("Debe aprobar la postulacion antes de generar ANEXO_02.");
       return;
     }
 
@@ -561,6 +631,21 @@ export default function GestionarAnexo() {
               <b>Estado:</b> {safe(anexo.estado)}
               {anexo.estadoInstitucional ? ` / ${anexo.estadoInstitucional}` : ""}
             </div>
+            {codigo === "ANEXO_01" && (
+              <div style={{ marginTop: 6, fontSize: 13 }}>
+                <b>Resultado postulacion:</b>{" "}
+                {esPostulacionAprobada
+                  ? "APROBADA"
+                  : esPostulacionRechazada
+                  ? "RECHAZADA"
+                  : "PENDIENTE"}
+                {esPostulacionRechazada && datos?.motivoRechazo ? (
+                  <div style={{ marginTop: 4 }}>
+                    <b>Motivo rechazo:</b> {safe(datos.motivoRechazo)}
+                  </div>
+                ) : null}
+              </div>
+            )}
             <div><b>Creado:</b> {fmtDate(anexo.createdAt)}</div>
             <div><b>Actualizado:</b> {fmtDate(anexo.updatedAt)}</div>
 
@@ -759,6 +844,35 @@ export default function GestionarAnexo() {
                 <div style={{ ...softCardStyle, marginBottom: 16 }}>
                   <h4 style={{ marginTop: 0, color: "#ffffff" }}>Generación institucional</h4>
 
+                  <div style={{ ...buttonRowStyle, marginBottom: 12 }}>
+                    {puedeDecidirPostulacion01 && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={aprobarPostulacionAnexo01}
+                          disabled={busy}
+                          style={successButtonStyle}
+                        >
+                          Aprobar postulacion
+                        </button>
+                        <button
+                          type="button"
+                          onClick={rechazarPostulacionAnexo01}
+                          disabled={busy}
+                          style={secondaryButtonStyle}
+                        >
+                          Rechazar postulacion
+                        </button>
+                      </>
+                    )}
+                    {esPostulacionAprobada && (
+                      <span style={{ color: "#bbf7d0", fontWeight: 800 }}>Postulacion aprobada</span>
+                    )}
+                    {esPostulacionRechazada && (
+                      <span style={{ color: "#fecaca", fontWeight: 800 }}>Postulacion rechazada</span>
+                    )}
+                  </div>
+
                   <div style={housingActionRowStyle}>
                     <div style={housingFieldStyle}>
                       <label style={housingLabelStyle}>Vivienda elegible</label>
@@ -799,12 +913,22 @@ export default function GestionarAnexo() {
                     <button
                       type="button"
                       onClick={generarAnexo02Desde01}
-                      disabled={busy}
-                      style={successButtonStyle}
+                      disabled={busy || !esPostulacionAprobada}
+                      style={{
+                        ...successButtonStyle,
+                        opacity: busy || !esPostulacionAprobada ? 0.6 : 1,
+                        cursor: busy || !esPostulacionAprobada ? "not-allowed" : "pointer",
+                      }}
                     >
                       Generar ANEXO_02
                     </button>
                   </div>
+
+                  {!esPostulacionAprobada && (
+                    <div style={{ marginTop: 6, fontSize: 12, color: "#fecaca" }}>
+                      Debe aprobar la postulacion antes de generar ANEXO_02.
+                    </div>
+                  )}
 
                   <div style={{ marginTop: 6, fontSize: 12, color: "rgba(255,255,255,0.62)" }}>
                     Se asigna la vivienda en este paso. Si ya existe un ANEXO_02 derivado, se abrirá automáticamente.

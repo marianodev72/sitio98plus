@@ -10,6 +10,7 @@ type Anexo = {
   estado: string;
   estadoInstitucional?: string | null;
   createdAt?: string;
+  datos?: any;
 };
 
 const pageStyle: CSSProperties = {
@@ -96,6 +97,14 @@ function safeFileNameDate() {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(
     d.getHours()
   )}-${pad(d.getMinutes())}`;
+}
+
+function resultadoPostulacionLabel(an: Anexo) {
+  if (up(an.codigo) !== "ANEXO_01") return "";
+  const resultado = up(an.datos?.resultadoPostulacion);
+  if (up(an.estado) === "APROBADO" || resultado === "APROBADO") return "Postulacion aprobada";
+  if (up(an.estado) === "RECHAZADO" || resultado === "RECHAZADO") return "Postulacion rechazada";
+  return "";
 }
 
 export default function MisAnexos() {
@@ -251,6 +260,16 @@ export default function MisAnexos() {
                     <td style={cellStyle}>
                       {safe(an.estado)}
                       {an.estadoInstitucional ? ` / ${safe(an.estadoInstitucional)}` : ""}
+                      {resultadoPostulacionLabel(an) ? (
+                        <div style={{ marginTop: 4, color: up(an.estado) === "RECHAZADO" ? "#FCA5A5" : "#86EFAC" }}>
+                          {resultadoPostulacionLabel(an)}
+                        </div>
+                      ) : null}
+                      {up(an.codigo) === "ANEXO_01" && an.datos?.motivoRechazo ? (
+                        <div style={{ marginTop: 4, color: "#FCA5A5", maxWidth: 420 }}>
+                          Motivo: {safe(an.datos.motivoRechazo)}
+                        </div>
+                      ) : null}
                     </td>
                     <td style={cellStyle}>{fmtDate(an.createdAt)}</td>
                     <td style={{ ...cellStyle, whiteSpace: "nowrap" }}>
