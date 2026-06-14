@@ -5,6 +5,9 @@ const { FormSubmission } = require("../models/FormSubmission");
 const { User } = require("../models/user");
 const Mensaje = require("../models/Mensaje");
 const { Mantenimiento } = require("../models/Mantenimiento");
+const AlojamientoNaval = require("../modules/alojamientos/models/AlojamientoNaval");
+const AlojamientoPlaza = require("../modules/alojamientos/models/AlojamientoPlaza");
+const AsignacionAlojamiento = require("../modules/alojamientos/models/AsignacionAlojamiento");
 
 const MIS_DATOS_COLL = "misdatosdeclaradosupdates";
 
@@ -37,6 +40,30 @@ function countByState(rows = []) {
     map[up(row?._id) || "SIN_ESTADO"] = Number(row?.cantidad || 0);
   }
   return map;
+}
+
+async function countPlazasConAsignacion(estado) {
+  const rows = await AsignacionAlojamiento.aggregate([
+    { $match: { estado } },
+    {
+      $lookup: {
+        from: "alojamientoplazas",
+        localField: "plaza",
+        foreignField: "_id",
+        as: "plazaDoc",
+      },
+    },
+    { $unwind: "$plazaDoc" },
+    {
+      $match: {
+        "plazaDoc.activo": { $ne: false },
+        "plazaDoc.estado": { $ne: "BAJA" },
+      },
+    },
+    { $group: { _id: "$plaza" } },
+    { $count: "cantidad" },
+  ]);
+  return Number(rows?.[0]?.cantidad || 0);
 }
 
 function hacinamientoPipelineBase(matchExtra = {}) {
@@ -162,6 +189,11 @@ exports.getAdminGeneralDashboard = async (req, res) => {
       formulariosRecientes,
       mantenimientosRecientes,
       mensajesRecientes,
+      alojamientosTotal,
+      plazasTotal,
+      plazasOcupadas,
+      plazasReservadas,
+      plazasFueraServicio,
     ] = await Promise.all([
       Vivienda.countDocuments({}),
       Vivienda.aggregate([{ $group: { _id: "$estado", cantidad: { $sum: 1 } } }]),
@@ -213,11 +245,22 @@ exports.getAdminGeneralDashboard = async (req, res) => {
             .limit(5)
             .lean()
         : [],
+      AlojamientoNaval.countDocuments({ activo: { $ne: false }, estado: { $ne: "BAJA" } }),
+      AlojamientoPlaza.countDocuments({ activo: { $ne: false }, estado: { $ne: "BAJA" } }),
+      countPlazasConAsignacion("ACTIVA"),
+      countPlazasConAsignacion("RESERVADA"),
+      AlojamientoPlaza.countDocuments({
+        activo: { $ne: false },
+        estado: { $in: ["MANTENIMIENTO", "INHABILITADA"] },
+      }),
     ]);
 
     const estados = countByState(viviendasPorEstado);
     const viviendasReparacion = estados.REPARACION || 0;
     const hacinamientoRojo = Number(hacRojoRows?.[0]?.cantidad || 0);
+    const plazasNoDisponibles =
+      Number(plazasOcupadas || 0) + Number(plazasReservadas || 0) + Number(plazasFueraServicio || 0);
+    const plazasDisponibles = Math.max(Number(plazasTotal || 0) - plazasNoDisponibles, 0);
 
     const resumen = {
       viviendas: {
@@ -227,6 +270,14 @@ exports.getAdminGeneralDashboard = async (req, res) => {
         reservadas: estados.RESERVADA || 0,
         reparacion: viviendasReparacion,
         hacinamientoRojo,
+      },
+      alojamientos: {
+        alojamientosTotal: Number(alojamientosTotal || 0),
+        plazasTotal: Number(plazasTotal || 0),
+        plazasDisponibles,
+        plazasOcupadas: Number(plazasOcupadas || 0),
+        plazasReservadas: Number(plazasReservadas || 0),
+        plazasFueraServicio: Number(plazasFueraServicio || 0),
       },
       formularios: {
         gestionesPendientes,
