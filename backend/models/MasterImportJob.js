@@ -3,6 +3,7 @@ const { Schema } = mongoose;
 
 const TIPOS_IMPORTACION = ["PERSONAL", "VIVIENDAS", "ALOJAMIENTOS"];
 const ESTADOS_IMPORTACION = ["PENDIENTE_CONFIRMACION", "APLICANDO", "CANCELADO", "APLICADO", "FALLIDO"];
+const MODOS_CARGA = ["TOTAL", "PARCIAL", "ACTUALIZACION", "ALTA_EXCEPCIONAL"];
 
 const masterImportJobSchema = new Schema(
   {
@@ -21,6 +22,14 @@ const masterImportJobSchema = new Schema(
       default: "PENDIENTE_CONFIRMACION",
       uppercase: true,
       trim: true,
+      index: true,
+    },
+    modoCarga: {
+      type: String,
+      enum: [...MODOS_CARGA, null],
+      uppercase: true,
+      trim: true,
+      default: null,
       index: true,
     },
     archivoOriginalNombre: { type: String, default: "", trim: true, maxlength: 255 },
@@ -90,4 +99,5 @@ module.exports = {
   MasterImportJob,
   TIPOS_IMPORTACION,
   ESTADOS_IMPORTACION,
+  MODOS_CARGA,
 };

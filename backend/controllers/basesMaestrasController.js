@@ -1,7 +1,7 @@
 const crypto = require("crypto");
 const mongoose = require("mongoose");
 
-const { MasterImportJob } = require("../models/MasterImportJob");
+const { MasterImportJob, MODOS_CARGA } = require("../models/MasterImportJob");
 const { executeApply } = require("../services/basesMaestras/applyService");
 const {
   buildApplyPlan,
@@ -12,6 +12,8 @@ const { dryRunPersonal, dryRunViviendas, dryRunAlojamientos } = require("../serv
 
 const JOB_TTL_HOURS = 24;
 const MAX_APPLY_PLAN_PERSIST_BYTES = Number(process.env.BASES_MAESTRAS_MAX_APPLY_PLAN_BYTES || 12 * 1024 * 1024);
+const MODOS_CARGA_SET = new Set(MODOS_CARGA);
+const MODO_CARGA_LEGACY = "SIN_MODO";
 
 function deny(res) {
   return res.status(404).json({ message: "Recurso no disponible" });
@@ -38,6 +40,31 @@ function getExpiresAt() {
   return new Date(Date.now() + JOB_TTL_HOURS * 60 * 60 * 1000);
 }
 
+function normalizeModoCarga(value) {
+  return String(value || "").toUpperCase().trim();
+}
+
+function parseModoCarga(req) {
+  const modoCarga = normalizeModoCarga(req.body?.modoCarga || req.query?.modoCarga);
+  if (!modoCarga || !MODOS_CARGA_SET.has(modoCarga)) {
+    const err = new Error(`modoCarga obligatorio. Valores permitidos: ${MODOS_CARGA.join(", ")}`);
+    err.status = 400;
+    throw err;
+  }
+  return modoCarga;
+}
+
+function modoCargaForDisplay(job) {
+  return normalizeModoCarga(job?.modoCarga) || MODO_CARGA_LEGACY;
+}
+
+function assertJobModoCargaAplicable(job) {
+  if (MODOS_CARGA_SET.has(normalizeModoCarga(job?.modoCarga))) return;
+  const err = new Error("Job sin modoCarga valido. Requiere revision y nuevo dry-run con modo de carga explicito.");
+  err.status = 409;
+  throw err;
+}
+
 function jsonSizeBytes(value) {
   return Buffer.byteLength(JSON.stringify(value || {}), "utf8");
 }
@@ -62,6 +89,8 @@ function jobListItem(job) {
   return {
     jobId: String(job._id),
     tipo: job.tipo,
+    modoCarga: modoCargaForDisplay(job),
+    modoCargaLegacy: !normalizeModoCarga(job.modoCarga),
     estado: job.estado,
     archivoOriginalNombre: job.archivoOriginalNombre || "",
     archivoSha256: job.archivoSha256 || "",
@@ -186,15 +215,17 @@ async function persistDryRunJob(req, tipo, result) {
   const buffer = getFileBuffer(req);
   const file = req.file || {};
   const archivoSha256 = sha256(buffer);
+  const modoCarga = parseModoCarga(req);
   const job = await MasterImportJob.create({
     tipo,
+    modoCarga,
     estado: "PENDIENTE_CONFIRMACION",
     archivoOriginalNombre: String(file.originalname || ""),
     archivoSha256,
     mime: String(file.mimetype || ""),
     size: Number(file.size || buffer.length || 0),
     creadoPor: req.user._id,
-    dryRunSummary: { ...(result.summary || {}), sha256: archivoSha256 },
+    dryRunSummary: { ...(result.summary || {}), modoCarga, sha256: archivoSha256 },
     warnings: Array.isArray(result.warnings) ? result.warnings : [],
     errors: Array.isArray(result.errores) ? result.errores : [],
     diff: buildDiff(result),
@@ -205,6 +236,7 @@ async function persistDryRunJob(req, tipo, result) {
   if (req.audit?.addMeta) {
     req.audit.addMeta({
       tipo,
+      modoCarga,
       estado: job.estado,
       archivoSha256,
       size: job.size,
@@ -218,11 +250,13 @@ async function persistDryRunJob(req, tipo, result) {
 async function runPersistedDryRun(req, res, tipo, runner) {
   try {
     if (!isAdminGeneral(req)) return deny(res);
+    parseModoCarga(req);
     const result = await runner(getFileBuffer(req));
     const job = await persistDryRunJob(req, tipo, result);
     return res.json({
       ok: true,
       jobId: String(job._id),
+      modoCarga: job.modoCarga,
       resumen: job.dryRunSummary,
       summary: job.dryRunSummary,
       nuevos: result.nuevos || [],
@@ -286,6 +320,7 @@ async function listJobs(req, res) {
       {
         $project: {
           tipo: 1,
+          modoCarga: 1,
           estado: 1,
           archivoOriginalNombre: 1,
           archivoSha256: 1,
@@ -428,6 +463,7 @@ async function getApplyPlan(req, res) {
     if (req.audit?.addMeta) {
       req.audit.addMeta({
         tipo: sourceJob.tipo,
+        modoCarga: modoCargaForDisplay(sourceJob),
         estado: sourceJob.estado,
         generated,
         summary: applyPlanSummary,
@@ -438,6 +474,7 @@ async function getApplyPlan(req, res) {
       ok: true,
       jobId: String(sourceJob._id),
       tipo: sourceJob.tipo,
+      modoCarga: modoCargaForDisplay(sourceJob),
       estado: sourceJob.estado,
       generated,
       applyPlanSummary,
@@ -456,6 +493,7 @@ async function applyJob(req, res) {
     assertValidObjectId(req.params.id);
     const job = await MasterImportJob.findById(req.params.id).lean();
     if (!job) return deny(res);
+    assertJobModoCargaAplicable(job);
     const actorId = req.user._id;
 
     if (isPersonalLargeApplyJob(job)) {
