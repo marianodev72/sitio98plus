@@ -45,6 +45,7 @@ type DashboardData = {
   generatedAt?: string;
   resumen?: {
     viviendas?: Record<string, number>;
+    alojamientos?: Record<string, number>;
     formularios?: Record<string, number>;
     mantenimientos?: Record<string, number>;
     usuarios?: Record<string, number>;
@@ -168,6 +169,7 @@ export default function AdminGeneralDashboard() {
 
   const resumenItems = useMemo(() => {
     const viviendas = data?.resumen?.viviendas || {};
+    const alojamientos = data?.resumen?.alojamientos || {};
     const formularios = data?.resumen?.formularios || {};
     const mantenimientos = data?.resumen?.mantenimientos || {};
     const usuarios = data?.resumen?.usuarios || {};
@@ -180,6 +182,11 @@ export default function AdminGeneralDashboard() {
       { label: "Reservadas", value: viviendas.reservadas || 0 },
       { label: "Reparacion", value: viviendas.reparacion || 0 },
       { label: "Hacinamiento rojo", value: viviendas.hacinamientoRojo || 0 },
+      { label: "Plazas alojamientos", value: alojamientos.plazasTotal || 0, detail: "Stock operativo" },
+      { label: "Plazas disponibles", value: alojamientos.plazasDisponibles || 0 },
+      { label: "Plazas ocupadas", value: alojamientos.plazasOcupadas || 0 },
+      { label: "Plazas reservadas", value: alojamientos.plazasReservadas || 0 },
+      { label: "Plazas fuera servicio", value: alojamientos.plazasFueraServicio || 0 },
       { label: "ANEXO_11 abiertos", value: formularios.anexo11Abiertos || 0 },
       { label: "Gestiones pendientes", value: formularios.gestionesPendientes || 0 },
       { label: "Mantenimientos", value: mantenimientos.pendientesAdmin || 0, detail: "Pendientes Admin" },
