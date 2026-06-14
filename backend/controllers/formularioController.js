@@ -6989,6 +6989,124 @@ async function darConformidadAdmin(req, res) {
 }
 // ─────────────────────────────
 // GENERAR ANEXO_02 DESDE ANEXO_01 (ADMIN_GENERAL)
+function cleanMotivoPostulacion(value) {
+  return String(value || "").trim().slice(0, 1000);
+}
+
+async function hasAnexo02Derivado(anexo01Id) {
+  if (!isObjectId(anexo01Id)) return false;
+  const existente = await FormSubmission.exists({
+    codigo: "ANEXO_02",
+    derivadoDe: anexo01Id,
+  });
+  return Boolean(existente);
+}
+
+async function aprobarPostulacionAnexo01(req, res) {
+  try {
+    const { id } = req.params;
+    const user = req.user;
+
+    if (!user || up(user?.role) !== "ADMIN_GENERAL") return genericDenied(res);
+    if (!isObjectId(id)) return genericDenied(res);
+
+    const anexo = await FormSubmission.findById(id);
+    if (!anexo || up(anexo.codigo) !== "ANEXO_01") return genericDenied(res);
+    if (!canSeeSubmission(user, anexo)) return genericDenied(res);
+
+    const estadoActual = up(anexo.estado);
+    if (estadoActual === "APROBADO") {
+      return res.json(stripAdjuntoRutas({ anexo: toPlain(anexo) }));
+    }
+
+    if (["RECHAZADO", "CERRADO", "ASIGNADO"].includes(estadoActual)) {
+      return badRequest(res, "La postulación no puede aprobarse en su estado actual.");
+    }
+
+    const existeAnexo02 = await hasAnexo02Derivado(anexo._id);
+    if (existeAnexo02) {
+      return res.status(409).json(stripAdjuntoRutas({
+        message: "La postulación ya tiene un ANEXO_02 derivado.",
+      }));
+    }
+
+    if (!["ENVIADO", "EN_REVISION"].includes(estadoActual)) {
+      return badRequest(res, "La postulación no puede aprobarse en su estado actual.");
+    }
+
+    anexo.datos = anexo.datos && typeof anexo.datos === "object" ? anexo.datos : {};
+    anexo.datos.resultadoPostulacion = "APROBADO";
+    delete anexo.datos.motivoRechazo;
+    anexo.markModified("datos");
+
+    anexo.estadoInstitucional = "APROBADO_ADMIN_GENERAL";
+    anexo.cambiarEstado("APROBADO", user._id, "Postulación ANEXO_01 aprobada por ADMIN_GENERAL");
+
+    await anexo.save();
+    return res.json(stripAdjuntoRutas({ anexo: toPlain(anexo) }));
+  } catch (err) {
+    console.error("[ANEXO_01] Error aprobando postulación:", err);
+    return genericDenied(res);
+  }
+}
+
+async function rechazarPostulacionAnexo01(req, res) {
+  try {
+    const { id } = req.params;
+    const user = req.user;
+
+    if (!user || up(user?.role) !== "ADMIN_GENERAL") return genericDenied(res);
+    if (!isObjectId(id)) return genericDenied(res);
+
+    const motivo = cleanMotivoPostulacion(req.body?.motivo);
+    if (motivo.length < 5) {
+      return badRequest(res, "Debe indicar un motivo de rechazo.");
+    }
+
+    const anexo = await FormSubmission.findById(id);
+    if (!anexo || up(anexo.codigo) !== "ANEXO_01") return genericDenied(res);
+    if (!canSeeSubmission(user, anexo)) return genericDenied(res);
+
+    const estadoActual = up(anexo.estado);
+    if (["CERRADO", "ASIGNADO"].includes(estadoActual)) {
+      return badRequest(res, "La postulación no puede rechazarse en su estado actual.");
+    }
+
+    const existeAnexo02 = await hasAnexo02Derivado(anexo._id);
+    if (existeAnexo02) {
+      return res.status(409).json(stripAdjuntoRutas({
+        message: "No se puede rechazar una postulación con ANEXO_02 derivado.",
+      }));
+    }
+
+    anexo.datos = anexo.datos && typeof anexo.datos === "object" ? anexo.datos : {};
+    anexo.datos.resultadoPostulacion = "RECHAZADO";
+    anexo.datos.motivoRechazo = motivo;
+    anexo.markModified("datos");
+
+    anexo.estadoInstitucional = "RECHAZADO_ADMIN_GENERAL";
+
+    if (estadoActual === "RECHAZADO") {
+      if (!Array.isArray(anexo.historialEstados)) anexo.historialEstados = [];
+      anexo.historialEstados.push({
+        estadoAnterior: anexo.estado,
+        estadoNuevo: anexo.estado,
+        observacion: "Motivo de rechazo ANEXO_01 actualizado por ADMIN_GENERAL",
+        realizadoPor: user._id,
+        fecha: new Date(),
+      });
+    } else {
+      anexo.cambiarEstado("RECHAZADO", user._id, "Postulación ANEXO_01 rechazada por ADMIN_GENERAL");
+    }
+
+    await anexo.save();
+    return res.json(stripAdjuntoRutas({ anexo: toPlain(anexo) }));
+  } catch (err) {
+    console.error("[ANEXO_01] Error rechazando postulación:", err);
+    return genericDenied(res);
+  }
+}
+
 async function generarAnexo02DesdeAnexo01(req, res) {
   try {
     const { id } = req.params;
@@ -7025,6 +7143,17 @@ async function generarAnexo02DesdeAnexo01(req, res) {
       }
 
       return res.json(stripAdjuntoRutas({ anexo: toPlain(existente) }));
+    }
+
+    const anexo01Aprobado =
+      up(anexo01.estado) === "APROBADO" ||
+      up(anexo01.estadoInstitucional) === "APROBADO_ADMIN_GENERAL" ||
+      up(anexo01?.datos?.resultadoPostulacion) === "APROBADO";
+
+    if (!anexo01Aprobado) {
+      return res.status(409).json(stripAdjuntoRutas({
+        message: "La postulación debe estar aprobada por ADMIN_GENERAL antes de generar ANEXO_02.",
+      }));
     }
 
     // FAIL-CLOSED: validar vivienda antes de crear ANEXO_02 nuevo
@@ -8874,5 +9003,7 @@ historialMisDatosDeclaradosPorUsuario,
 previewMisDatosDeclaradosPdf,
 verMisDatosDeclaradosPdf,
 enviarAnexo03,
+aprobarPostulacionAnexo01,
+rechazarPostulacionAnexo01,
 generarAnexo02DesdeAnexo01,
 };

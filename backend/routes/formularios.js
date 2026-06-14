@@ -237,6 +237,26 @@ router.post(
   c.generarAnexo02DesdeAnexo01
 );
 
+router.post(
+  "/:id/aprobar-postulacion",
+  requireRole("ADMIN_GENERAL"),
+  audit("FORM_APROBAR_POSTULACION_01", {
+    targetType: "FORM",
+    metaAllowlist: ["params.id"],
+  }),
+  c.aprobarPostulacionAnexo01
+);
+
+router.post(
+  "/:id/rechazar-postulacion",
+  requireRole("ADMIN_GENERAL"),
+  audit("FORM_RECHAZAR_POSTULACION_01", {
+    targetType: "FORM",
+    metaAllowlist: ["params.id", "body.motivo"],
+  }),
+  c.rechazarPostulacionAnexo01
+);
+
 // 🔥 2. CREAR ANEXOS → agregar validación REAL
 router.post(
   "/:codigo",

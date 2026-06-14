@@ -123,6 +123,9 @@ export default function VerAnexo() {
   const isAnexo01 = codigo === "ANEXO_01";
   const isAnexo02 = codigo === "ANEXO_02";
   const isAnexo03 = codigo === "ANEXO_03";
+  const resultadoPostulacion = up(anexo?.datos?.resultadoPostulacion);
+  const postulacionAprobada = isAnexo01 && (estado === "APROBADO" || resultadoPostulacion === "APROBADO");
+  const postulacionRechazada = isAnexo01 && (estado === "RECHAZADO" || resultadoPostulacion === "RECHAZADO");
 
   const conformidadPostulanteOk = Boolean(anexo?.conformidadPostulante?.ok);
   const conformidadPermisionarioOk = Boolean(
@@ -357,6 +360,26 @@ export default function VerAnexo() {
         {isAnexo01 && (
           <div style={{ marginTop: 6, fontSize: 13 }}>
             <b>Adjuntos:</b> {String((anexo.adjuntos || []).length)}
+          </div>
+        )}
+
+        {isAnexo01 && (postulacionAprobada || postulacionRechazada) && (
+          <div
+            style={{
+              marginTop: 8,
+              padding: 10,
+              borderRadius: 10,
+              border: postulacionRechazada
+                ? "1px solid rgba(239,68,68,0.35)"
+                : "1px solid rgba(34,197,94,0.35)",
+              background: postulacionRechazada ? "rgba(127,29,29,0.18)" : "rgba(22,101,52,0.18)",
+              color: postulacionRechazada ? "#FCA5A5" : "#86EFAC",
+            }}
+          >
+            <b>{postulacionRechazada ? "Postulacion rechazada" : "Postulacion aprobada"}</b>
+            {postulacionRechazada && anexo.datos?.motivoRechazo ? (
+              <div style={{ marginTop: 4 }}>Motivo: {safe(anexo.datos.motivoRechazo)}</div>
+            ) : null}
           </div>
         )}
       </div>
