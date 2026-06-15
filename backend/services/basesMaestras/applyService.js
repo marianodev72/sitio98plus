@@ -4,6 +4,8 @@ const { User } = require("../../models/user");
 const Vivienda = require("../../models/vivienda");
 const AlojamientoNaval = require("../../modules/alojamientos/models/AlojamientoNaval");
 const AlojamientoPlaza = require("../../modules/alojamientos/models/AlojamientoPlaza");
+const AsignacionAlojamiento = require("../../modules/alojamientos/models/AsignacionAlojamiento");
+const AlojamientoDocumento = require("../../modules/alojamientos/models/AlojamientoDocumento");
 const { MODOS_CARGA } = require("../../models/MasterImportJob");
 const {
   ALOJAMIENTO_ESTADOS,
@@ -212,6 +214,7 @@ function resultBase() {
     unapprovedRisks: 0,
     unapprovedManualReview: 0,
     plazasCreadas: [],
+    legacyBajas: [],
     errors: [],
   };
 }
@@ -783,6 +786,170 @@ async function applyCrearPlazasFaltantes(operation, session, result, actorId, jo
   });
 }
 
+function isCodigoProtectedTransient(codigo) {
+  return /^BR-/i.test(String(codigo || "").trim());
+}
+
+function plazaTieneReserva(reservaActual) {
+  return Boolean(reservaActual?.usuario || reservaActual?.anexoId);
+}
+
+function plazaActivaNoBaja(plaza) {
+  return plaza?.activo !== false && String(plaza?.estado || "").toUpperCase().trim() !== "BAJA";
+}
+
+function plazaLibreSinVinculo(plaza) {
+  return !plaza.alojadoActual && !plazaTieneReserva(plaza.reservaActual) && String(plaza.estado || "").toUpperCase().trim() === "LIBRE";
+}
+
+function alojamientoTieneOcupacionCache(alojamiento) {
+  const ocupacion = alojamiento?.ocupacionActual || {};
+  return (
+    Number(ocupacion.plazasOcupadas || 0) > 0 ||
+    Number(ocupacion.plazasReservadas || 0) > 0 ||
+    arr(ocupacion.alojados).length > 0
+  );
+}
+
+async function applyBajaLogicaLegacyAlojamiento(operation, session, result, actorId, job) {
+  const item = operation.preview || {};
+  const key = operation.key || item.codigoDb || item.codigo || "";
+  if (job?.tipo !== "ALOJAMIENTOS") {
+    pushApplyError(result, key, "Baja logica legacy solo permitida para Bases Maestras ALOJAMIENTOS");
+    return;
+  }
+  if (operation.action !== "BAJA_LOGICA_LEGACY" || item.classification !== "LEGACY_CANDIDATE" || item.accionPropuesta !== "BAJA_LOGICA_LEGACY") {
+    pushApplyError(result, key, "Operacion legacy no permitida en esta fase");
+    return;
+  }
+  if (["POSSIBLE_RENAME", "PROTECTED_TRANSIENT", "CAPACIDAD_REDUCIDA_BLOQUEADA", "MISSING_FROM_FILE", "CONFLICT"].includes(item.classification)) {
+    pushApplyError(result, key, "Clasificacion de alojamiento no aplicable para baja logica legacy");
+    return;
+  }
+  if (!requireManualApproval(job, "LEGACY_CANDIDATE", key, result)) return;
+
+  const alojamientoId = idString(item.alojamientoId);
+  if (!mongoose.Types.ObjectId.isValid(alojamientoId)) {
+    pushApplyError(result, key, "Operacion legacy sin alojamientoId valido");
+    return;
+  }
+
+  const alojamiento = await AlojamientoNaval.findById(alojamientoId).session(session);
+  if (!alojamiento) {
+    pushApplyError(result, key, "Alojamiento inexistente para baja logica legacy");
+    return;
+  }
+  const codigo = String(alojamiento.codigo || "").toUpperCase().trim();
+  if (isCodigoProtectedTransient(codigo)) {
+    pushApplyError(result, key, "BR-* protegido: no se aplica baja logica legacy");
+    return;
+  }
+  if (item.codigoDb && codigo !== String(item.codigoDb || "").toUpperCase().trim()) {
+    pushApplyError(result, key, "Codigo de alojamiento legacy no coincide con el dry-run");
+    return;
+  }
+
+  const now = new Date();
+  const motivo = "LEGACY_REEMPLAZADO_POR_BASE_MAESTRA";
+  const plazas = await AlojamientoPlaza.find({ alojamiento: alojamiento._id })
+    .select("_id codigo numeroPlaza estado activo alojadoActual reservaActual")
+    .session(session)
+    .lean();
+  const plazaIds = plazas.map((plaza) => plaza._id).filter(Boolean);
+  const plazasValidas = plazas.filter(plazaActivaNoBaja);
+
+  const asignacionesCount = await AsignacionAlojamiento.countDocuments({
+    $or: [{ alojamiento: alojamiento._id }, { plaza: { $in: plazaIds } }],
+  }).session(session);
+  const documentosCount = await AlojamientoDocumento.countDocuments({
+    activo: { $ne: false },
+    $or: [{ alojamiento: alojamiento._id }, { plaza: { $in: plazaIds } }],
+  }).session(session);
+  const plazasConVinculo = plazasValidas.filter((plaza) => !plazaLibreSinVinculo(plaza));
+
+  if (asignacionesCount > 0 || documentosCount > 0 || plazasConVinculo.length > 0 || alojamientoTieneOcupacionCache(alojamiento)) {
+    pushApplyError(result, key, "Baja logica legacy bloqueada: el alojamiento o sus plazas tienen vinculos administrativos");
+    return;
+  }
+
+  if (alojamiento.activo === false || String(alojamiento.estado || "").toUpperCase().trim() === "BAJA") {
+    result.skipped += 1;
+    result.legacyBajas.push({
+      alojamientoId,
+      codigo,
+      plazasAntes: plazasValidas.length,
+      plazasBajadas: 0,
+      plazaIds: [],
+      motivo,
+      actor: idString(actorId),
+      timestamp: now,
+      observacion: "Alojamiento legacy ya estaba en baja o inactivo",
+    });
+    return;
+  }
+
+  const plazaIdsBajar = plazasValidas.map((plaza) => plaza._id);
+  let plazasBajadas = 0;
+  if (plazaIdsBajar.length) {
+    const plazaUpdate = await AlojamientoPlaza.updateMany(
+      { _id: { $in: plazaIdsBajar }, alojamiento: alojamiento._id },
+      {
+        $set: { activo: false, estado: "BAJA" },
+        $push: {
+          historial: {
+            accion: "BAJA_LOGICA_LEGACY_BASES_MAESTRAS",
+            estadoAnterior: "LIBRE",
+            estadoNuevo: "BAJA",
+            realizadoPor: actorId || null,
+            observacion: motivo,
+            fecha: now,
+          },
+        },
+      },
+      { session }
+    );
+    plazasBajadas = Number(plazaUpdate.modifiedCount || 0);
+  }
+
+  const observacionActual = String(alojamiento.observaciones || "").trim();
+  const observacionLegacy = observacionActual.includes(motivo)
+    ? observacionActual
+    : [observacionActual, motivo].filter(Boolean).join(" | ");
+  await AlojamientoNaval.updateOne(
+    { _id: alojamiento._id },
+    {
+      $set: {
+        activo: false,
+        estado: "BAJA",
+        observaciones: observacionLegacy,
+      },
+      $push: {
+        historialEstados: {
+          estadoAnterior: alojamiento.estado,
+          estadoNuevo: "BAJA",
+          realizadoPor: actorId || null,
+          motivo,
+          origen: "BASES_MAESTRAS",
+          fecha: now,
+        },
+      },
+    },
+    { session }
+  );
+
+  result.updatesApplied += 1;
+  result.legacyBajas.push({
+    alojamientoId,
+    codigo,
+    plazasAntes: plazasValidas.length,
+    plazasBajadas,
+    plazaIds: plazaIdsBajar.map(idString),
+    motivo,
+    actor: idString(actorId),
+    timestamp: now,
+  });
+}
+
 async function applyOperation(operation, session, result, actorId, job) {
   const op = { ...operation, actorId };
   if (operation.collection === "users" && operation.action === "CREATE") {
@@ -794,6 +961,9 @@ async function applyOperation(operation, session, result, actorId, job) {
   if (operation.collection === "viviendas" && operation.action === "UPDATE") return applyViviendaUpdate(op, session, result);
   if (operation.collection === "alojamientos" && operation.action === "CREATE") return applyAlojamientoCreate(op, session, result);
   if (operation.collection === "alojamientos" && operation.action === "UPDATE") return applyAlojamientoUpdate(op, session, result, job);
+  if (operation.collection === "alojamientos" && operation.action === "BAJA_LOGICA_LEGACY") {
+    return applyBajaLogicaLegacyAlojamiento(op, session, result, actorId, job);
+  }
   if (operation.collection === "alojamientoPlazas") {
     if (operation.action === "CREAR_PLAZAS_FALTANTES") return applyCrearPlazasFaltantes(op, session, result, actorId, job);
     pushApplyError(result, operation.key, "Operacion de sincronizacion de plazas requiere fase de apply especifica y aprobacion explicita.");

@@ -776,6 +776,32 @@ function isPlazasFaltantesApplyItem(item = {}) {
   );
 }
 
+function hasAlojamientoDryRunLinks(item = {}) {
+  const vinculos = item.vinculos || {};
+  const ocupacion = vinculos.ocupacionActual || {};
+  return (
+    Number(vinculos.plazasConVinculos || 0) > 0 ||
+    Number(vinculos.alojadoActual || 0) > 0 ||
+    Number(vinculos.reservas || 0) > 0 ||
+    Number(vinculos.asignaciones || 0) > 0 ||
+    Number(vinculos.documentos || 0) > 0 ||
+    Number(ocupacion.plazasOcupadas || 0) > 0 ||
+    Number(ocupacion.plazasReservadas || 0) > 0 ||
+    Number(ocupacion.alojados || 0) > 0
+  );
+}
+
+function isLegacyBajaApplyItem(item = {}) {
+  const codigo = String(item.codigoDb || item.codigo || "").toUpperCase().trim();
+  return (
+    item.classification === "LEGACY_CANDIDATE" &&
+    item.alojamientoId &&
+    codigo &&
+    !codigo.startsWith("BR-") &&
+    !hasAlojamientoDryRunLinks(item)
+  );
+}
+
 function pushAlojamientoRisks(item, risks, requiresManualReview, blocked) {
   const key = safeKey(item);
   const cambios = arr(item.cambios);
@@ -1011,6 +1037,24 @@ function planAlojamientos(job) {
   for (const item of arr(alojamientoDiff.legacyCandidates)) {
     risks.push({ tipo: "LEGACY_CANDIDATE", key: item.codigoDb || item.codigo || "", message: item.razon || item.reason || "Candidato legacy detectado" });
     requiresManualReview.push({ tipo: "LEGACY_CANDIDATE", key: item.codigoDb || item.codigo || "", item });
+    if (isLegacyBajaApplyItem(item)) {
+      updates.push(
+        baseOperation({
+          action: "BAJA_LOGICA_LEGACY",
+          collection: "alojamientos",
+          key: item.codigoDb || item.codigo || "",
+          item: {
+            ...item,
+            accionPropuesta: "BAJA_LOGICA_LEGACY",
+          },
+          allowedFields: ["activo", "estado", "historialEstados", "observaciones"],
+          blockedFields: [],
+          snapshotFields: ["_id", "codigo", "estado", "activo", "ocupacionActual"],
+        })
+      );
+    } else {
+      pushAlojamientoUnsupportedOperation(blocked, item, "BAJA_LOGICA_LEGACY", "alojamientos", "LEGACY_CANDIDATE_NO_APLICABLE");
+    }
   }
 
   for (const item of arr(alojamientoDiff.protectedTransient)) {
