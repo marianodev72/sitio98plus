@@ -767,6 +767,15 @@ function pushAlojamientoUnsupportedOperation(blocked, item, action, collection, 
   });
 }
 
+function isPlazasFaltantesApplyItem(item = {}) {
+  return (
+    item.classification === "PLAZAS_DELTA" &&
+    item.accionPropuesta === "CREAR_PLAZAS_FALTANTES" &&
+    item.alojamientoId &&
+    Number(item.deltaPlazas || 0) > 0
+  );
+}
+
 function pushAlojamientoRisks(item, risks, requiresManualReview, blocked) {
   const key = safeKey(item);
   const cambios = arr(item.cambios);
@@ -965,7 +974,21 @@ function planAlojamientos(job) {
   for (const item of arr(alojamientoDiff.plazasDelta)) {
     risks.push({ tipo: "PLAZAS_DELTA", key: item.codigoArchivo || item.codigoDb || "", message: item.accionPropuesta || "Delta de plazas detectado" });
     requiresManualReview.push({ tipo: "PLAZAS_DELTA", key: item.codigoArchivo || item.codigoDb || "", item });
-    pushAlojamientoUnsupportedOperation(blocked, item, item.accionPropuesta || "SYNC_PLAZAS", "alojamientoPlazas", "OPERACION_PLAZAS_NO_IMPLEMENTADA");
+    if (isPlazasFaltantesApplyItem(item)) {
+      creates.push(
+        baseOperation({
+          action: "CREAR_PLAZAS_FALTANTES",
+          collection: "alojamientoPlazas",
+          key: item.codigoArchivo || item.codigoDb || "",
+          item,
+          allowedFields: ["alojamientoId", "plazasEsperadas", "deltaPlazas", "accionPropuesta"],
+          blockedFields: [],
+          snapshotFields: ["_id", "codigo", "alojamiento", "numeroPlaza", "estado", "activo"],
+        })
+      );
+    } else {
+      pushAlojamientoUnsupportedOperation(blocked, item, item.accionPropuesta || "SYNC_PLAZAS", "alojamientoPlazas", "OPERACION_PLAZAS_NO_IMPLEMENTADA");
+    }
   }
 
   for (const item of arr(alojamientoDiff.capacidadReducidaBloqueada)) {

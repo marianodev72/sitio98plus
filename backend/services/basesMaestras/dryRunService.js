@@ -935,6 +935,7 @@ function alojamientoBaseItem({ row = {}, existing = null, classification, reason
   const plazasExistentes = Number(stats?.plazasExistentes || 0);
   const item = {
     fila: row.fila || null,
+    alojamientoId: db._id ? String(db._id) : "",
     codigoArchivo: row.codigo || "",
     codigoDb: db.codigo || "",
     codigo: row.codigo || db.codigo || "",

@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const { User } = require("../../models/user");
 const Vivienda = require("../../models/vivienda");
 const AlojamientoNaval = require("../../modules/alojamientos/models/AlojamientoNaval");
+const AlojamientoPlaza = require("../../modules/alojamientos/models/AlojamientoPlaza");
 const { MODOS_CARGA } = require("../../models/MasterImportJob");
 const {
   ALOJAMIENTO_ESTADOS,
@@ -210,6 +211,7 @@ function resultBase() {
     blocked: 0,
     unapprovedRisks: 0,
     unapprovedManualReview: 0,
+    plazasCreadas: [],
     errors: [],
   };
 }
@@ -657,6 +659,130 @@ async function applyAlojamientoUpdate(operation, session, result, job) {
   else result.skipped += 1;
 }
 
+function plazaCodigo(alojamientoCodigo, numeroPlaza) {
+  return `${String(alojamientoCodigo || "").toUpperCase()}-P${numeroPlaza}`;
+}
+
+async function applyCrearPlazasFaltantes(operation, session, result, actorId, job) {
+  const item = operation.preview || {};
+  const key = operation.key || item.codigoArchivo || item.codigoDb || "";
+  if (job?.tipo !== "ALOJAMIENTOS") {
+    pushApplyError(result, key, "Creacion de plazas faltantes solo permitida para Bases Maestras ALOJAMIENTOS");
+    return;
+  }
+  if (operation.action !== "CREAR_PLAZAS_FALTANTES" || item.classification !== "PLAZAS_DELTA" || item.accionPropuesta !== "CREAR_PLAZAS_FALTANTES") {
+    pushApplyError(result, key, "Operacion de plazas no permitida en esta fase");
+    return;
+  }
+  if (["POSSIBLE_RENAME", "PROTECTED_TRANSIENT", "LEGACY_CANDIDATE", "CAPACIDAD_REDUCIDA_BLOQUEADA", "MISSING_FROM_FILE", "CONFLICT"].includes(item.classification)) {
+    pushApplyError(result, key, "Clasificacion de alojamiento no aplicable para crear plazas faltantes");
+    return;
+  }
+  if (!item.fila || !item.codigoArchivo) {
+    pushApplyError(result, key, "Operacion de plazas sin referencia a fila del dry-run");
+    return;
+  }
+
+  const alojamientoId = idString(item.alojamientoId);
+  if (!mongoose.Types.ObjectId.isValid(alojamientoId)) {
+    pushApplyError(result, key, "Operacion de plazas sin alojamientoId valido");
+    return;
+  }
+
+  const alojamiento = await AlojamientoNaval.findById(alojamientoId).session(session);
+  if (!alojamiento) {
+    pushApplyError(result, key, "Alojamiento inexistente para crear plazas faltantes");
+    return;
+  }
+  if (alojamiento.activo === false || String(alojamiento.estado || "").toUpperCase().trim() === "BAJA") {
+    pushApplyError(result, key, "Alojamiento inactivo o en BAJA; no se crean plazas");
+    return;
+  }
+  if (item.codigoDb && String(alojamiento.codigo || "").toUpperCase() !== String(item.codigoDb || "").toUpperCase()) {
+    pushApplyError(result, key, "Codigo de alojamiento no coincide con el dry-run");
+    return;
+  }
+
+  const plazasEsperadas = Number(item.plazasEsperadas || item.capacidadArchivo || 0);
+  const deltaPlanificado = Number(item.deltaPlazas || item.plazasACrear || 0);
+  if (!Number.isInteger(plazasEsperadas) || plazasEsperadas < 1 || !Number.isInteger(deltaPlanificado) || deltaPlanificado < 1) {
+    pushApplyError(result, key, "Operacion de plazas con capacidad o delta invalido");
+    return;
+  }
+
+  const plazasValidas = await AlojamientoPlaza.find({
+    alojamiento: alojamiento._id,
+    activo: { $ne: false },
+    estado: { $ne: "BAJA" },
+  })
+    .select("_id")
+    .session(session)
+    .lean();
+  const ultimaPlaza = await AlojamientoPlaza.findOne({ alojamiento: alojamiento._id })
+    .sort({ numeroPlaza: -1 })
+    .select("numeroPlaza")
+    .session(session)
+    .lean();
+
+  const plazasAntes = plazasValidas.length;
+  const deltaReal = plazasEsperadas - plazasAntes;
+  if (deltaReal === 0) {
+    result.skipped += 1;
+    result.plazasCreadas.push({
+      alojamientoId,
+      codigo: alojamiento.codigo,
+      plazasAntes,
+      plazasEsperadas,
+      plazasCreadas: 0,
+      plazaIds: [],
+      actor: idString(actorId),
+      timestamp: new Date(),
+      observacion: "Sin delta real al momento del apply",
+    });
+    return;
+  }
+  if (deltaReal < 0) {
+    pushApplyError(result, key, "Delta real de plazas inconsistente: existen mas plazas validas que la capacidad esperada");
+    return;
+  }
+
+  const cantidadCrear = Math.min(deltaReal, deltaPlanificado);
+  const numeroInicial = Number(ultimaPlaza?.numeroPlaza || 0) + 1;
+  const now = new Date();
+  const docs = [];
+  for (let i = 0; i < cantidadCrear; i += 1) {
+    const numeroPlaza = numeroInicial + i;
+    docs.push({
+      codigo: plazaCodigo(alojamiento.codigo, numeroPlaza),
+      alojamiento: alojamiento._id,
+      numeroPlaza,
+      estado: "LIBRE",
+      activo: true,
+      historial: [
+        {
+          accion: "CREACION_BASES_MAESTRAS",
+          estadoNuevo: "LIBRE",
+          realizadoPor: actorId || null,
+          observacion: "Creacion de plaza faltante aprobada desde Bases Maestras",
+        },
+      ],
+    });
+  }
+
+  const created = await AlojamientoPlaza.create(docs, { session });
+  result.createsApplied += created.length;
+  result.plazasCreadas.push({
+    alojamientoId,
+    codigo: alojamiento.codigo,
+    plazasAntes,
+    plazasEsperadas,
+    plazasCreadas: created.length,
+    plazaIds: created.map((plaza) => idString(plaza._id)),
+    actor: idString(actorId),
+    timestamp: now,
+  });
+}
+
 async function applyOperation(operation, session, result, actorId, job) {
   const op = { ...operation, actorId };
   if (operation.collection === "users" && operation.action === "CREATE") {
@@ -669,6 +795,7 @@ async function applyOperation(operation, session, result, actorId, job) {
   if (operation.collection === "alojamientos" && operation.action === "CREATE") return applyAlojamientoCreate(op, session, result);
   if (operation.collection === "alojamientos" && operation.action === "UPDATE") return applyAlojamientoUpdate(op, session, result, job);
   if (operation.collection === "alojamientoPlazas") {
+    if (operation.action === "CREAR_PLAZAS_FALTANTES") return applyCrearPlazasFaltantes(op, session, result, actorId, job);
     pushApplyError(result, operation.key, "Operacion de sincronizacion de plazas requiere fase de apply especifica y aprobacion explicita.");
     return null;
   }
