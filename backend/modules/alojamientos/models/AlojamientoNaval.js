@@ -114,6 +114,19 @@ const alojamientoNavalSchema = new Schema(
     historialOcupacion: { type: [historialOcupacionSchema], default: [] },
     historialEstados: { type: [historialEstadoSchema], default: [] },
     origenImportacion: { type: origenImportacionSchema, default: null },
+    origenGestion: {
+      type: String,
+      enum: ["ORDINARIO", "TRANSITORIO_BR", "LEGACY"],
+      default: "ORDINARIO",
+      trim: true,
+      uppercase: true,
+      index: true,
+    },
+    vigenciaTransitoriaDesde: { type: Date, default: null },
+    vigenciaTransitoriaHasta: { type: Date, default: null },
+    autorizadoPor: { type: String, trim: true, default: "" },
+    motivoAltaTransitoria: { type: String, trim: true, maxlength: 1000, default: "" },
+    motivoBajaTransitoria: { type: String, trim: true, maxlength: 1000, default: "" },
   },
   { timestamps: true }
 );

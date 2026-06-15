@@ -34,6 +34,7 @@ import PerfilAdminGeneral from "../pages/admin_general/Perfil";
 import AlojamientosInventario from "../pages/alojamientos/AlojamientosInventario";
 import AlojamientosDashboard from "../pages/alojamientos/AlojamientosDashboard";
 import AlojamientoDetalle from "../pages/alojamientos/AlojamientoDetalle";
+import AlojamientosTransitoriosBr from "../pages/alojamientos/AlojamientosTransitoriosBr";
 import AlojamientoDocumentoDetalle from "../pages/alojamientos/AlojamientoDocumentoDetalle";
 import AlojamientosInspectorDashboard from "../pages/alojamientos_inspector/AlojamientosInspectorDashboard";
 import AlojamientosInspectorInventario from "../pages/alojamientos_inspector/AlojamientosInspectorInventario";
@@ -360,6 +361,7 @@ export default function RoleRoutes() {
             path="alojamientos/dashboard"
             element={<AlojamientosDashboard basePath="/app/admin-general/alojamientos" />}
           />
+          <Route path="alojamientos/transitorios-br" element={<AlojamientosTransitoriosBr />} />
           <Route path="alojamientos/:id" element={<AlojamientoDetalle />} />
           <Route path="gestiones" element={<GestionesAdminGeneral />} />
           <Route path="gestiones/alojamientos/:id" element={<AlojamientoDocumentoDetalle />} />

@@ -152,6 +152,7 @@ export default function AlojamientosInventario({ basePath }: Props) {
   const [generoPermitido, setGeneroPermitido] = useState("");
 
   const allowed = roleAllowed(user?.role);
+  const esAdminGeneral = up(user?.role) === "ADMIN_GENERAL";
 
   const dependencias = useMemo(
     () => Array.from(new Set(items.map((x) => safe(x.dependencia, "")).filter(Boolean))).sort(),
@@ -221,6 +222,11 @@ export default function AlojamientosInventario({ basePath }: Props) {
           <button type="button" style={secondaryButtonStyle} onClick={() => navigate(`${basePath}/dashboard`)}>
             Dashboard
           </button>
+          {esAdminGeneral ? (
+            <button type="button" style={secondaryButtonStyle} onClick={() => navigate(`${basePath}/transitorios-br`)}>
+              Transitorios BR
+            </button>
+          ) : null}
           <button type="button" style={secondaryButtonStyle} onClick={cargar} disabled={loading}>
             Actualizar
           </button>
