@@ -132,14 +132,45 @@ app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 
 app.use(morgan("dev"));
 
-app.use(
-  rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 120,
-    standardHeaders: true,
-    legacyHeaders: false,
-  })
-);
+function getRateLimitKey(req) {
+  const cfIp = req.headers["cf-connecting-ip"];
+  if (typeof cfIp === "string" && cfIp.trim()) return cfIp.trim();
+
+  const xff = req.headers["x-forwarded-for"];
+  if (typeof xff === "string" && xff.trim()) {
+    return xff.split(",")[0].trim();
+  }
+
+  return req.ip || req.socket?.remoteAddress || "unknown";
+}
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: getRateLimitKey,
+  message: {
+    message: "Se detectaron demasiados intentos de ingreso. Espere unos minutos e intente nuevamente.",
+  },
+});
+
+const apiGeneralLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 600,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: getRateLimitKey,
+  skip: (req) =>
+    req.originalUrl === "/api/health" ||
+    (req.method === "POST" && req.originalUrl === "/api/auth/login"),
+  message: {
+    message: "Demasiadas solicitudes. Espere unos minutos e intente nuevamente.",
+  },
+});
+
+app.post("/api/auth/login", loginLimiter);
+app.use("/api", apiGeneralLimiter);
 
 app.use("/api", (_req, res, next) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
