@@ -4,6 +4,10 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
 import { crearMantenimiento, TipoMantenimiento } from "../../api/mantenimientos";
 
+const MAX_FILE_SIZE_MB = 5;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+const MAX_FILE_SIZE_MESSAGE = `Cada archivo PDF debe pesar como máximo ${MAX_FILE_SIZE_MB} MB.`;
+
 const GENERIC_UI_ERROR =
   "No es posible procesar su solicitud, contáctese con el Administrador";
 
@@ -316,6 +320,9 @@ export default function MisMantenimientosNuevo() {
       const mime = String((f as any).type || "");
       if (mime && mime !== "application/pdf") {
         return setError("Solo se permiten archivos PDF.");
+      }
+      if (f.size > MAX_FILE_SIZE_BYTES) {
+        return setError(MAX_FILE_SIZE_MESSAGE);
       }
     }
 

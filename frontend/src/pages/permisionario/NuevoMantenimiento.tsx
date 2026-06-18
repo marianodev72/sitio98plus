@@ -4,6 +4,10 @@ import { useNavigate } from "react-router-dom";
 import { crearMantenimiento } from "../../api/misMantenimientos";
 import { useAuth } from "../../auth/useAuth";
 
+const MAX_FILE_SIZE_MB = 5;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+const MAX_FILE_SIZE_MESSAGE = `Cada archivo PDF debe pesar como máximo ${MAX_FILE_SIZE_MB} MB.`;
+
 const GENERIC_UI_ERROR = "No es posible procesar su solicitud, contáctese con el Administrador";
 
 function up(v: unknown) {
@@ -68,6 +72,11 @@ export default function NuevoMantenimiento() {
     }
     if (files.length > 6) {
       setUiError("Máximo 6 PDFs por mantenimiento.");
+      return;
+    }
+
+    if (files.some((file) => file.size > MAX_FILE_SIZE_BYTES)) {
+      setUiError(MAX_FILE_SIZE_MESSAGE);
       return;
     }
 

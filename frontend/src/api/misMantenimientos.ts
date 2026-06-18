@@ -7,6 +7,21 @@ export type TipoMantenimiento =
   | "DESAGUES"
   | "OTROS";
 
+const UPLOAD_TOO_LARGE_ERR =
+  "Uno o más archivos superan el tamaño permitido. Adjunte PDFs de hasta 5 MB cada uno.";
+const UPLOAD_ERR =
+  "No se pudo enviar la documentación. Verifique que los archivos sean PDF de hasta 5 MB e intente nuevamente.";
+
+function uploadError(e: any): Error {
+  const status = e?.response?.status;
+  const raw = String(e?.response?.data?.message || e?.response?.data?.error || e?.message || "");
+  if (status === 413) return new Error(UPLOAD_TOO_LARGE_ERR);
+  if (/MulterError|Unexpected field|LIMIT_FILE_SIZE|Payload Too Large/i.test(raw)) {
+    return new Error(status === 413 ? UPLOAD_TOO_LARGE_ERR : UPLOAD_ERR);
+  }
+  return new Error(UPLOAD_ERR);
+}
+
 export async function listarMisMantenimientos() {
   const res = await http.get("/mis-mantenimientos");
   return res.data?.mantenimientos || [];
@@ -21,14 +36,18 @@ export async function crearMantenimiento(params: {
   fd.append("tipoMantenimiento", params.tipoMantenimiento);
   fd.append("tecnicoInterviniente", params.tecnicoInterviniente || "");
 
-  // ✅ key EXACTA: "archivos"
-  for (const f of params.archivos) fd.append("archivos", f);
+  // Key esperada por Multer en backend/middleware/upload.js
+  for (const f of params.archivos) fd.append("documentos", f);
 
-  const res = await http.post("/mis-mantenimientos", fd, {
-    headers: { "Content-Type": "multipart/form-data" },
-  });
+  try {
+    const res = await http.post("/mis-mantenimientos", fd, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
 
-  return res.data?.mantenimiento;
+    return res.data?.mantenimiento;
+  } catch (e) {
+    throw uploadError(e);
+  }
 }
 
 export function urlFormularioBlank() {
