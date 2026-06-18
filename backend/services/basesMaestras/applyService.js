@@ -13,6 +13,14 @@ const {
 } = require("../../modules/alojamientos/constants/alojamientoConstants");
 const { normalizeTipoDestinoStrict } = require("../../constants/institucional");
 const { buildApplyPlan } = require("./applyPlanService");
+const {
+  loadPadron,
+  loadStagedPadron,
+  mergePadronRecords,
+  padronAlreadyApplied,
+  removeStagedPadron,
+  writePadronAtomic,
+} = require("../padronPersonal/padronPersonalLocalStore");
 
 const APPLYABLE_ESTADO = "PENDIENTE_CONFIRMACION";
 const APPLYING_ESTADO = "APLICANDO";
@@ -215,6 +223,7 @@ function resultBase() {
     unapprovedManualReview: 0,
     plazasCreadas: [],
     legacyBajas: [],
+    padronPersonal: null,
     errors: [],
   };
 }
@@ -395,6 +404,112 @@ async function applyPersonalOperationsInBatches(operations, type, actorId, resul
     else result.processedUpdates += batch.length;
     if (typeof updateProgress === "function") await updateProgress(result);
     if (result.errors.length > 0) break;
+  }
+}
+
+function existingPadronRecordsBestEffort() {
+  try {
+    return arr(loadPadron().payload?.records);
+  } catch (_) {
+    return [];
+  }
+}
+
+function keepPadronStaging() {
+  return String(process.env.PADRON_PERSONAL_KEEP_STAGING || "").toLowerCase().trim() === "true";
+}
+
+function cleanupPadronStagingBestEffort(result) {
+  if (keepPadronStaging()) return;
+  const sourceJobId = result?.padronPersonal?.sourceJobId;
+  if (!sourceJobId) return;
+  try {
+    const cleanup = removeStagedPadron(sourceJobId);
+    result.padronPersonal.stagingRemoved = Boolean(cleanup.removed);
+  } catch (_) {
+    result.padronPersonal.stagingRemoved = false;
+  }
+}
+
+async function applyPadronPersonalLocal(operation, result, job) {
+  if (job?.tipo !== "PERSONAL") {
+    pushApplyError(result, operation.key, "Padron personal solo aplica a importaciones PERSONAL");
+    return;
+  }
+
+  const modoCarga = String(job.modoCarga || "").toUpperCase().trim();
+  try {
+    const alreadyApplied = padronAlreadyApplied({
+      sourceJobId: idString(job._id),
+      sourceSha256: job.archivoSha256 || "",
+      modoCarga,
+    });
+    if (alreadyApplied.applied) {
+      result.padronPersonal = {
+        action: "UPSERT_PADRON",
+        alreadyApplied: true,
+        modoCarga,
+        sourceJobId: idString(job._id),
+        records: alreadyApplied.records,
+        generatedAt: alreadyApplied.generatedAt,
+        fingerprint: alreadyApplied.fingerprint,
+      };
+      return;
+    }
+  } catch (err) {
+    pushApplyError(result, operation.key, err.message || "Padron vigente inconsistente para este job", {
+      code: err.code || "PADRON_SOURCE_CHECK_ERROR",
+    });
+    return;
+  }
+
+  let staged = null;
+  try {
+    staged = loadStagedPadron(idString(job._id));
+  } catch (err) {
+    pushApplyError(result, operation.key, "Padron personal local no tiene staging seguro para este job", {
+      code: err.code || "PADRON_STAGE_NOT_FOUND",
+    });
+    return;
+  }
+  const incoming = arr(staged.records);
+  if (!incoming.length) {
+    pushApplyError(result, operation.key, "Padron personal sin registros para aplicar");
+    return;
+  }
+
+  const records =
+    modoCarga === "TOTAL"
+      ? incoming
+      : mergePadronRecords(existingPadronRecordsBestEffort(), incoming);
+
+  try {
+    const write = writePadronAtomic({
+      records,
+      metadata: {
+        source: {
+          tipo: "BASE_MAESTRA_PERSONAL",
+          modoCarga,
+          sourceJobId: idString(job._id),
+          sourceSha256: job.archivoSha256 || "",
+          archivo: job.archivoOriginalNombre || "",
+        },
+      },
+    });
+    result.updatesApplied += 1;
+    result.padronPersonal = {
+      action: "UPSERT_PADRON",
+      alreadyApplied: false,
+      modoCarga,
+      sourceJobId: idString(job._id),
+      records: write.count,
+      generatedAt: write.generatedAt,
+      fingerprint: write.fingerprint,
+    };
+  } catch (err) {
+    pushApplyError(result, operation.key, err.message || "No se pudo actualizar padron personal local", {
+      code: err.code || "PADRON_WRITE_ERROR",
+    });
   }
 }
 
@@ -952,6 +1067,9 @@ async function applyBajaLogicaLegacyAlojamiento(operation, session, result, acto
 
 async function applyOperation(operation, session, result, actorId, job) {
   const op = { ...operation, actorId };
+  if (operation.collection === "padronPersonal" && operation.action === "UPSERT_PADRON") {
+    return applyPadronPersonalLocal(op, result, job);
+  }
   if (operation.collection === "users" && operation.action === "CREATE") {
     pushApplyError(result, operation.key, "Personal CREATE no permitido: hidratacion only");
     return null;
@@ -1010,6 +1128,7 @@ async function executeApply({ job, actorId, markApplied, markFailed, updateProgr
       }
       await markApplied(result, session);
     });
+    cleanupPadronStagingBestEffort(result);
     return result;
   } catch (err) {
     const failedResult = {
@@ -1035,13 +1154,20 @@ async function executePersonalLargeApply({ applyJob, actorId, markApplied, markF
   result.totalCreates = arr(applyJob.applyPlan.creates).length;
   result.totalUpdates = arr(applyJob.applyPlan.updates).length;
   result.batchSize = PERSONAL_MASSIVE_BATCH_SIZE;
+  const personalUpdates = arr(applyJob.applyPlan.updates).filter((operation) => operation.collection === "users");
+  const padronUpdates = arr(applyJob.applyPlan.updates).filter((operation) => operation.collection === "padronPersonal");
 
   try {
     if (typeof updateProgress === "function") await updateProgress(result);
     if (arr(applyJob.applyPlan.creates).length > 0) {
       await applyPersonalOperationsInBatches(arr(applyJob.applyPlan.creates), "creates", actorId, result, updateProgress);
     }
-    if (result.errors.length === 0) await applyPersonalOperationsInBatches(arr(applyJob.applyPlan.updates), "updates", actorId, result, updateProgress);
+    if (result.errors.length === 0) await applyPersonalOperationsInBatches(personalUpdates, "updates", actorId, result, updateProgress);
+    if (result.errors.length === 0) {
+      for (const operation of padronUpdates) {
+        await applyPadronPersonalLocal(operation, result, applyJob);
+      }
+    }
     result.finishedAt = new Date();
     if (result.errors.length > 0) {
       const err = new Error("Apply PERSONAL masivo abortado por errores de operacion");
@@ -1049,6 +1175,7 @@ async function executePersonalLargeApply({ applyJob, actorId, markApplied, markF
       throw err;
     }
     await markApplied(result, null);
+    cleanupPadronStagingBestEffort(result);
     return result;
   } catch (err) {
     result.finishedAt = result.finishedAt || new Date();

@@ -493,6 +493,8 @@ function planPersonal(job) {
     message: "Persona presente en padron institucional sin usuario SITIO98PLUS; se omite del apply",
     item: compactPersonalItem(item),
   }));
+  const padronLocal = job?.dryRunSummary?.padronPersonalLocal || null;
+  const padronItemsCount = Number(padronLocal?.records || 0);
 
   for (const item of arr(diff.actualizados)) {
     pushPersonalRisks(job, item, risks, requiresManualReview);
@@ -541,6 +543,26 @@ function planPersonal(job) {
   }
 
   pushPersonalPrecedenciaDuplicada(diff, risks, requiresManualReview);
+
+  if (padronLocal?.staged && padronItemsCount > 0) {
+    updates.push(
+      baseOperation({
+        action: "UPSERT_PADRON",
+        collection: "padronPersonal",
+        key: "PADRON_PERSONAL_LOCAL",
+        item: {
+          modoCarga: job.modoCarga || null,
+          registros: padronItemsCount,
+          sourceJobId: idString(job._id),
+          sourceSha256: job.archivoSha256 || "",
+          archivo: job.archivoOriginalNombre || "",
+        },
+        allowedFields: ["padronPersonalLocal"],
+        blockedFields: [],
+        snapshotFields: [],
+      })
+    );
+  }
 
   for (const warning of warnings) {
     if (warning?.tipo === "DUPLICADO_ARCHIVO" && String(warning?.campo || "").toUpperCase() === "MATRICULAS") {

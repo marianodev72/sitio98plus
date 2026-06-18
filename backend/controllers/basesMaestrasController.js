@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const mongoose = require("mongoose");
 
 const { MasterImportJob, MODOS_CARGA } = require("../models/MasterImportJob");
+const { writeStagedPadronAtomic } = require("../services/padronPersonal/padronPersonalLocalStore");
 const { executeApply } = require("../services/basesMaestras/applyService");
 const {
   buildApplyPlan,
@@ -84,6 +85,15 @@ function buildDiff(result) {
     sinCambios: Array.isArray(result.sinCambios) ? result.sinCambios : [],
     alojamientos: result.alojamientos && typeof result.alojamientos === "object" ? result.alojamientos : undefined,
   };
+}
+
+function padronPersonalRowsFromDryRunResult(result) {
+  return [
+    ...(Array.isArray(result.nuevos) ? result.nuevos : []),
+    ...(Array.isArray(result.actualizados) ? result.actualizados : []),
+    ...(Array.isArray(result.sinCambios) ? result.sinCambios : []),
+    ...(Array.isArray(result.omitidosNoRegistrados) ? result.omitidosNoRegistrados : []),
+  ];
 }
 
 function jobListItem(job) {
@@ -232,6 +242,32 @@ async function persistDryRunJob(req, tipo, result) {
     diff: buildDiff(result),
     expiresAt: getExpiresAt(),
   });
+
+  if (tipo === "PERSONAL" && process.env.PADRON_PERSONAL_HMAC_SECRET) {
+    const staged = writeStagedPadronAtomic({
+      sourceJobId: String(job._id),
+      records: padronPersonalRowsFromDryRunResult(result),
+      metadata: {
+        source: {
+          tipo: "BASE_MAESTRA_PERSONAL",
+          modoCarga,
+          sourceJobId: String(job._id),
+          sourceSha256: archivoSha256,
+          archivo: String(file.originalname || ""),
+        },
+      },
+    });
+    job.dryRunSummary = {
+      ...(job.dryRunSummary || {}),
+      padronPersonalLocal: {
+        staged: true,
+        records: staged.count,
+        generatedAt: staged.generatedAt,
+        fingerprint: staged.fingerprint,
+      },
+    };
+    await job.save();
+  }
 
   if (req.audit?.setTarget) req.audit.setTarget("MasterImportJob", String(job._id));
   if (req.audit?.addMeta) {

@@ -15,6 +15,7 @@ try {
 }
 
 const { findMatriculaRecord } = require("../utils/matriculas");
+const { findPadronRecord } = require("../services/padronPersonal/padronPersonalLocalStore");
 
 function up(v) {
   return String(v || "").toUpperCase().trim();
@@ -30,7 +31,7 @@ const MSG_PENDIENTE =
 const MSG_NO_PROCESABLE =
   "No es posible procesar su solicitud en este momento, intente mas tarde o comuníquese con el Administrador";
 
-// ✅ Respuesta NO PROCESABLE (única)
+// Respuesta NO PROCESABLE (única)
 function noProcesable(res) {
   return res.status(200).json({
     status: "NO_PROCESABLE",
@@ -38,7 +39,7 @@ function noProcesable(res) {
   });
 }
 
-// ✅ Respuesta PENDIENTE (creado correctamente)
+// Respuesta PENDIENTE (creado correctamente)
 function pendiente(res) {
   return res.status(200).json({
     status: "PENDIENTE",
@@ -68,6 +69,44 @@ function normName(s) {
     .trim();
 }
 
+function padronSource() {
+  const source = String(process.env.REGISTRO_PADRON_SOURCE || "csv").toLowerCase().trim();
+  if (["csv", "local", "local_with_csv_fallback"].includes(source)) return source;
+  return "csv";
+}
+
+function recordFromCsv(matricula, dni) {
+  const record = findMatriculaRecord(matricula);
+  if (!record) return { ok: false, reason: "REGISTRO_PADRON_NO_ENCONTRADO" };
+  const csvDni = normDni(record.dni);
+  if (!csvDni) return { ok: false, reason: "REGISTRO_PADRON_SOURCE_UNAVAILABLE" };
+  if (csvDni !== dni) return { ok: false, reason: "REGISTRO_DNI_NO_COINCIDE" };
+  return { ok: true, reason: "REGISTRO_OK_CSV", record };
+}
+
+function recordFromLocal(matricula, dni) {
+  try {
+    return findPadronRecord({ matricula, dni });
+  } catch (err) {
+    return { ok: false, reason: "REGISTRO_PADRON_SOURCE_UNAVAILABLE", code: err.code || "PADRON_LOCAL_ERROR" };
+  }
+}
+
+function findRegistroRecord(matricula, dni) {
+  const source = padronSource();
+  if (source === "local") return recordFromLocal(matricula, dni);
+  if (source === "local_with_csv_fallback") {
+    const local = recordFromLocal(matricula, dni);
+    if (local.ok) return local;
+    if (!["REGISTRO_PADRON_NO_ENCONTRADO", "REGISTRO_PADRON_SOURCE_UNAVAILABLE"].includes(local.reason)) {
+      return local;
+    }
+    const csv = recordFromCsv(matricula, dni);
+    return csv.ok ? { ...csv, fallback: true } : local;
+  }
+  return recordFromCsv(matricula, dni);
+}
+
 async function registerPostulante(req, res) {
   try {
     if (!User) {
@@ -83,7 +122,7 @@ async function registerPostulante(req, res) {
     const password = String(body.password || "");
     const confirmarPassword = String(body.confirmarPassword || "");
 
-    // ✅ DNI obligatorio (segundo factor)
+    // DNI obligatorio (segundo factor)
     const dni = normDni(body.dni);
 
     // Opcional
@@ -98,28 +137,18 @@ async function registerPostulante(req, res) {
       return noProcesable(res);
     }
 
-    // 1) Validación institucional contra CSV (obligatoria)
-    const record = findMatriculaRecord(matricula);
-    if (!record) {
+    // 1) Validacion institucional contra fuente configurable.
+    const lookup = findRegistroRecord(matricula, dni);
+    if (!lookup.ok) {
       return noProcesable(res);
     }
-
-    // 2) Validación DNI estricta (obligatoria)
-    // Si el CSV no trae DNI para la matrícula, fallamos cerrado.
-    const csvDni = normDni(record.dni);
-    if (!csvDni) {
-      return noProcesable(res);
-    }
-    if (csvDni !== dni) {
-      return noProcesable(res);
-    }
-
-    // 3) Validación extra opcional: grado (solo si viene y CSV lo trae)
+    const record = lookup.record;
+    // 2) Validación extra opcional: grado (solo si viene y la fuente lo trae)
     if (grado && record.grado && up(record.grado) !== up(grado)) {
       return noProcesable(res);
     }
 
-    // 4) Validación nombre/apellido (opcional, tolera orden)
+    // 3) Validación nombre/apellido (opcional, tolera orden)
     const validateFullName = boolEnv("REG_VALIDATE_FULLNAME", false); // default OFF
     if (validateFullName && record.nombreApellido) {
       const csvFull = normName(record.nombreApellido);
@@ -134,7 +163,7 @@ async function registerPostulante(req, res) {
       }
     }
 
-    // 5) No disclosure por existencia de email/matrícula
+    // 4) No disclosure por existencia de email/matrícula
     const existente = await User.findOne({
       $or: [{ email }, { matricula }],
     }).lean();
@@ -145,7 +174,7 @@ async function registerPostulante(req, res) {
 
     const hash = await bcrypt.hash(String(password), 10);
 
-    // ✅ Usuario creado como POSTULANTE pero INACTIVO (pendiente aprobación ADMIN_GENERAL)
+    // Usuario creado como POSTULANTE pero INACTIVO (pendiente aprobación ADMIN_GENERAL)
     await User.create({
       email,
       passwordHash: hash,
@@ -161,6 +190,7 @@ async function registerPostulante(req, res) {
       meta: {
         grado: grado || record.grado || "",
         origenRegistro: "FORM_PUBLICO",
+        padronSource: padronSource(),
       },
     });
 

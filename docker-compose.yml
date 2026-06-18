@@ -8,12 +8,18 @@ services:
       - ./backend/.env
     environment:
       - ALOJAMIENTOS_STORAGE_ROOT=/DATA/storage/sitio98plus/alojamientos/documentos/anexo-21
+      - REGISTRO_PADRON_SOURCE=csv
+      - PADRON_PERSONAL_PATH=/app/secure-data/padron-personal/padron-personal-vigente.json
+      - PADRON_PERSONAL_BACKUP_DIR=/app/secure-data/padron-personal/backups
+      - PADRON_PERSONAL_STAGING_DIR=/app/secure-data/padron-personal/staging
+      - PADRON_PERSONAL_KEEP_STAGING=false
     expose:
       - "3000"
     volumes:
       - uploads:/app/uploads
       - uploads_private:/app/uploads_private
       - /DATA/storage/sitio98plus/alojamientos:/DATA/storage/sitio98plus/alojamientos
+      - /DATA/sitio98plus/secure/padron-personal:/app/secure-data/padron-personal
     networks:
       - app_net
 
