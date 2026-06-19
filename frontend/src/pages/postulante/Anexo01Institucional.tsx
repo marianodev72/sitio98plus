@@ -174,6 +174,24 @@ const fileNameStyle: CSSProperties = {
   marginTop: 4,
 };
 
+const MAX_ANEXO_01_FILE_MB = 20;
+const MAX_ANEXO_01_FILE_BYTES = MAX_ANEXO_01_FILE_MB * 1024 * 1024;
+const MAX_ANEXO_01_TOTAL_MB = 28;
+const MAX_ANEXO_01_TOTAL_BYTES = MAX_ANEXO_01_TOTAL_MB * 1024 * 1024;
+const FILE_TOO_LARGE_413_MESSAGE =
+  "Uno o más adjuntos superan el tamaño permitido. Reduzca/comprima los archivos e intente nuevamente.";
+
+function fileTooLargeMessage(maxMb: number) {
+  return `Uno o más adjuntos superan el tamaño permitido de ${maxMb} MB por archivo. Reduzca/comprima los archivos e intente nuevamente.`;
+}
+
+function findOversizedFile(files: Array<File | null | undefined>, maxBytes: number) {
+  return files.find((file): file is File => Boolean(file && file.size > maxBytes)) || null;
+}
+
+function totalFileSize(files: Array<File | null | undefined>) {
+  return files.reduce((total, file) => total + (file?.size || 0), 0);
+}
 
 function Box({
   title,
@@ -454,16 +472,24 @@ export default function Anexo01Institucional({
       return;
     }
 
-console.log("[ANEXO_01] validarMinimo FALLÓ", {
-  tipoSolicitud,
-  aceptaReglamento,
-  apellido: apellido.trim(),
-  nombres: nombres.trim(),
-  mr: mr.trim(),
-  lugar: lugar.trim(),
-  fechaLugar: fechaLugar.trim(),
-  zonaNaval: zonaNaval.trim(),
-});
+    const adjuntos = [
+      fidofacFile,
+      reciboHaberesFile,
+      escriturasYContratosFile,
+      ...mascotas.map((m) => m.certificadoFile),
+    ];
+
+    const oversizedFile = findOversizedFile(adjuntos, MAX_ANEXO_01_FILE_BYTES);
+
+    if (oversizedFile) {
+      setErr(fileTooLargeMessage(MAX_ANEXO_01_FILE_MB));
+      return;
+    }
+
+    if (totalFileSize(adjuntos) > MAX_ANEXO_01_TOTAL_BYTES) {
+      setErr(FILE_TOO_LARGE_413_MESSAGE);
+      return;
+    }
     
 // Compatibilidad: mantenemos los campos legacy
     const lugarYFecha = `${lugar}`.trim() + (fechaLugar ? ` ${fechaLugar}` : "");
@@ -578,9 +604,11 @@ console.log("[ANEXO_01] validarMinimo FALLÓ", {
   console.error("[ANEXO_01] error real:", e);
 
   const msg =
-    e?.response?.data?.message ||
-    e?.response?.data?.error ||
-    "No se ha podido procesar su solicitud, contacte al administrador.";
+    e?.response?.status === 413
+      ? FILE_TOO_LARGE_413_MESSAGE
+      : e?.response?.data?.message ||
+        e?.response?.data?.error ||
+        "No se ha podido procesar su solicitud, contacte al administrador.";
 
   setErr(msg);
 } finally {
