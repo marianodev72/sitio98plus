@@ -263,7 +263,7 @@ router.post(
   upload.fields([
     { name: "adjuntos", maxCount: 10 },
     { name: "adj_fidofac", maxCount: 1 },
-    { name: "adj_vacunacion", maxCount: 1 },
+    { name: "adj_vacunacion", maxCount: 10 },
     { name: "adj_recibo_haberes", maxCount: 1 },
     { name: "adj_escrituras_contratos", maxCount: 1 },
     { name: "adj_oficio_socio", maxCount: 1 },
