@@ -142,8 +142,22 @@ async function crear(req, res) {
 
     // Territorialidad: vivienda obligatoria para el módulo
     const viviendaId = req.user?.viviendaAsignada;
-    const barrio = String(req.user?.barrioAsignado || "").trim();
-    if (!viviendaId || !barrio) return deny(res, "CREAR_SIN_TERRITORIALIDAD");
+    let barrio = String(req.user?.barrioAsignado || "").trim();
+    let viviendaDisplay = String(viviendaId || "");
+    let vivienda = null;
+
+    if (Vivienda && viviendaId) {
+      try {
+        vivienda = await Vivienda.findById(viviendaId).select("codigo barrio barrioAsignado").lean();
+      } catch (_) {
+        vivienda = null;
+      }
+    }
+
+    if (vivienda?.codigo) viviendaDisplay = String(vivienda.codigo);
+    if (!barrio) barrio = String(vivienda?.barrio || vivienda?.barrioAsignado || "").trim();
+
+    if (!viviendaId || !vivienda || !barrio) return deny(res, "CREAR_SIN_TERRITORIALIDAD");
 
     const tipo = String(req.body?.tipoMantenimiento || "").trim();
     const tecnico = String(req.body?.tecnicoInterviniente || "").trim();
@@ -197,16 +211,6 @@ async function crear(req, res) {
     }
 
     // ✅ ViviendaDisplay institucional, con fallback seguro
-    let viviendaDisplay = String(viviendaId || "");
-    try {
-      if (Vivienda && viviendaId) {
-        const v = await Vivienda.findById(viviendaId).select("codigo").lean();
-        if (v?.codigo) viviendaDisplay = String(v.codigo);
-      }
-    } catch (_) {
-      // fallback intencional: mantener viviendaId para no romper validaciones
-    }
-
     const permisionarioDisplay =
       `${String(req.user?.apellido || "").trim()} ${String(req.user?.nombre || "").trim()}`.trim() ||
       "Permisionario";
