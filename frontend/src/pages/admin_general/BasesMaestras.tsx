@@ -329,6 +329,9 @@ export default function BasesMaestras() {
   const [dryRunResult, setDryRunResult] = useState<DryRunResult | null>(null);
   const [loadingPlan, setLoadingPlan] = useState(false);
   const [approvingToken, setApprovingToken] = useState("");
+  const [bulkApproving, setBulkApproving] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState("");
+  const [selectedApprovalTokens, setSelectedApprovalTokens] = useState<Set<string>>(() => new Set());
   const [applying, setApplying] = useState(false);
 
   const selectedJob = useMemo(
@@ -388,6 +391,31 @@ export default function BasesMaestras() {
     unapprovedRisks.length === 0 &&
     unapprovedManualReview.length === 0 &&
     Boolean(applyPlan);
+
+  function setApprovalSelected(token: string, selected: boolean) {
+    setSelectedApprovalTokens((current) => {
+      const next = new Set(current);
+      if (selected) next.add(token);
+      else next.delete(token);
+      return next;
+    });
+  }
+
+  function selectApprovalItems(items: ApplyPlanItem[]) {
+    setSelectedApprovalTokens((current) => {
+      const next = new Set(current);
+      items.forEach((item) => next.add(approvalToken(item)));
+      return next;
+    });
+  }
+
+  function clearApprovalItems(items: ApplyPlanItem[]) {
+    setSelectedApprovalTokens((current) => {
+      const next = new Set(current);
+      items.forEach((item) => next.delete(approvalToken(item)));
+      return next;
+    });
+  }
 
   async function cargarJobs() {
     setLoadingJobs(true);
@@ -538,6 +566,59 @@ export default function BasesMaestras() {
     }
   }
 
+  async function aprobarSeleccionados(items: ApplyPlanItem[], label: string) {
+    if (!detail?.jobId || bulkApproving) return;
+    const pendientesSeleccionados = items.filter(
+      (item) => item.tipo && item.key && selectedApprovalTokens.has(approvalToken(item)) && !approvedTokens.has(approvalToken(item))
+    );
+    if (!pendientesSeleccionados.length) {
+      setErrorMsg("No hay riesgos pendientes seleccionados para aprobar.");
+      return;
+    }
+
+    const motivo = window.prompt(
+      `APROBACION MULTIPLE\n\nCategoria: ${label}\nCantidad: ${pendientesSeleccionados.length}\n\nIngrese el motivo institucional documentado:`,
+      ""
+    );
+    if (motivo === null) return;
+    const motivoLimpio = motivo.trim();
+    if (!motivoLimpio) {
+      setErrorMsg("El motivo es obligatorio para aprobar riesgos seleccionados.");
+      return;
+    }
+
+    const ok = window.confirm(
+      `CONFIRMACION DE APROBACION MULTIPLE\n\nCategoria: ${label}\nCantidad: ${pendientesSeleccionados.length}\nMotivo: ${motivoLimpio}\n\nSe registrara una aprobacion individual auditada por cada riesgo seleccionado. No se aplicara el job automaticamente.\n\nDesea continuar?`
+    );
+    if (!ok) return;
+
+    setBulkApproving(true);
+    setErrorMsg("");
+    setInfoMsg("");
+    try {
+      for (let index = 0; index < pendientesSeleccionados.length; index += 1) {
+        const item = pendientesSeleccionados[index];
+        setBulkProgress(`Aprobando ${index + 1}/${pendientesSeleccionados.length}`);
+        await http.post(`/admin/bases-maestras/jobs/${encodeURIComponent(detail.jobId)}/manual-approval`, {
+          tipo: item.tipo,
+          key: item.key,
+          motivo: motivoLimpio,
+        });
+      }
+      clearApprovalItems(pendientesSeleccionados);
+      setInfoMsg(`Aprobaciones registradas: ${pendientesSeleccionados.length}. Revise el plan antes de aplicar.`);
+      await http.get(`/admin/bases-maestras/jobs/${encodeURIComponent(detail.jobId)}/apply-plan`);
+      await cargarDetalle(detail.jobId);
+    } catch (err: any) {
+      const message = err?.response?.data?.errores?.[0]?.message || "No se pudo completar la aprobacion multiple. Revise el estado del job.";
+      setErrorMsg(`${bulkProgress ? `${bulkProgress}. ` : ""}${message}`);
+      if (detail?.jobId) await cargarDetalle(detail.jobId);
+    } finally {
+      setBulkApproving(false);
+      setBulkProgress("");
+    }
+  }
+
   async function excluirItem(item: ApplyPlanItem) {
     if (!detail?.jobId || !item.key) {
       setErrorMsg("El bloqueo seleccionado no tiene key excluible.");
@@ -643,15 +724,57 @@ export default function BasesMaestras() {
       <section style={applyPlanSectionStyle}>
         <h3 style={{ marginTop: 0, color: "#ffffff", fontSize: 16 }}>{title}</h3>
         <div style={applyPlanListStyle}>
-          {entries.map(([group, groupItems]) => (
+          {entries.map(([group, groupItems]) => {
+            const pendientes = groupItems.filter((item) => !approvedTokens.has(approvalToken(item)));
+            const aprobados = groupItems.filter((item) => approvedTokens.has(approvalToken(item)));
+            const aprobadosVisibles = aprobados.slice(0, MAX_ITEMS);
+            const visibleItems = allowApprove ? [...pendientes, ...aprobadosVisibles] : groupItems.slice(0, MAX_ITEMS);
+            const hiddenApproved = allowApprove ? Math.max(0, aprobados.length - aprobadosVisibles.length) : 0;
+            const selectedPending = pendientes.filter((item) => selectedApprovalTokens.has(approvalToken(item))).length;
+            return (
             <div key={group} style={{ display: "grid", gap: 8, minWidth: 0 }}>
-              <div style={{ fontWeight: 800, color: "#ffffff", ...wrapTextStyle }}>
-                {group} ({groupItems.length})
+              <div style={{ display: "grid", gap: 6, minWidth: 0 }}>
+                <div style={{ fontWeight: 800, color: pendientes.length ? "#fde68a" : "#ffffff", ...wrapTextStyle }}>
+                  {group} ({groupItems.length})
+                </div>
+                <div style={{ color: "rgba(255,255,255,0.72)", fontSize: 12, ...wrapTextStyle }}>
+                  Total: {groupItems.length} | Aprobados: {aprobados.length} | Pendientes: {pendientes.length}
+                  {selectedPending ? ` | Seleccionados: ${selectedPending}` : ""}
+                </div>
+                {allowApprove && pendientes.length ? (
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      style={{ ...secondaryButtonStyle, padding: "7px 10px" }}
+                      disabled={bulkApproving || detail?.estado !== "PENDIENTE_CONFIRMACION"}
+                      onClick={() => selectApprovalItems(pendientes)}
+                    >
+                      Seleccionar pendientes de esta categoria
+                    </button>
+                    <button
+                      type="button"
+                      style={{ ...secondaryButtonStyle, padding: "7px 10px" }}
+                      disabled={bulkApproving || selectedPending === 0}
+                      onClick={() => clearApprovalItems(pendientes)}
+                    >
+                      Limpiar seleccion
+                    </button>
+                    <button
+                      type="button"
+                      style={{ ...primaryButtonStyle, padding: "7px 10px" }}
+                      disabled={bulkApproving || selectedPending === 0 || detail?.estado !== "PENDIENTE_CONFIRMACION"}
+                      onClick={() => aprobarSeleccionados(pendientes, group)}
+                    >
+                      {bulkApproving ? bulkProgress || "Aprobando..." : `Aprobar seleccionados (${selectedPending})`}
+                    </button>
+                  </div>
+                ) : null}
               </div>
               <div style={{ display: "grid", gap: 8, minWidth: 0 }}>
-                {groupItems.slice(0, MAX_ITEMS).map((item, index) => {
+                {visibleItems.map((item, index) => {
                   const token = approvalToken(item);
                   const approved = approvedTokens.has(token);
+                  const selectable = allowApprove && !approved && detail?.estado === "PENDIENTE_CONFIRMACION";
                   const code = blockCode(item);
                   const canExclude = allowExclude && EXCLUDABLE_PERSONAL_BLOCK_CODES.has(code) && !item.excluded;
                   const excludingToken = `EXCLUDE::${code}::${item.key}`;
@@ -693,11 +816,22 @@ export default function BasesMaestras() {
                           ) : null}
                         </div>
                         <div style={{ display: "grid", gap: 8, justifyItems: "end" }}>
+                          {selectable ? (
+                            <label style={{ display: "flex", alignItems: "center", gap: 6, color: "rgba(255,255,255,0.78)", fontSize: 12 }}>
+                              <input
+                                type="checkbox"
+                                checked={selectedApprovalTokens.has(token)}
+                                disabled={bulkApproving}
+                                onChange={(event) => setApprovalSelected(token, event.target.checked)}
+                              />
+                              Seleccionar
+                            </label>
+                          ) : null}
                           {allowApprove ? (
                             <button
                               type="button"
                               style={{ ...secondaryButtonStyle, padding: "7px 10px", alignSelf: "start", whiteSpace: "nowrap", position: "relative", zIndex: 1 }}
-                              disabled={approved || approvingToken === token || detail?.estado !== "PENDIENTE_CONFIRMACION"}
+                              disabled={approved || bulkApproving || approvingToken === token || detail?.estado !== "PENDIENTE_CONFIRMACION"}
                               onClick={() => aprobarItem(item)}
                             >
                               {approved ? "Aprobado" : approvingToken === token ? "Aprobando..." : "Aprobar"}
@@ -720,14 +854,20 @@ export default function BasesMaestras() {
                     </div>
                   );
                 })}
-                {groupItems.length > MAX_ITEMS ? (
+                {!allowApprove && groupItems.length > MAX_ITEMS ? (
                   <div style={{ color: "rgba(255,255,255,0.62)", fontSize: 12 }}>
                     Se muestran {MAX_ITEMS} de {groupItems.length}. Use backend/auditoria para revisar el resto.
                   </div>
                 ) : null}
+                {allowApprove && hiddenApproved > 0 ? (
+                  <div style={{ color: "rgba(255,255,255,0.62)", fontSize: 12 }}>
+                    Se muestran todos los pendientes y {aprobadosVisibles.length} aprobados. Aprobados ocultos: {hiddenApproved}.
+                  </div>
+                ) : null}
               </div>
             </div>
-          ))}
+          );
+          })}
         </div>
       </section>
     );
@@ -777,6 +917,10 @@ export default function BasesMaestras() {
       </section>
     );
   }
+
+  useEffect(() => {
+    setSelectedApprovalTokens(new Set());
+  }, [detail?.jobId]);
 
   useEffect(() => {
     cargarJobs();
