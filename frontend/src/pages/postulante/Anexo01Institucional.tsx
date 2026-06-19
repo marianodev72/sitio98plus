@@ -589,7 +589,7 @@ export default function Anexo01Institucional({
 
     // Certificados por mascota (si adjuntan)
     mascotas.forEach((m, idx) => {
-      if (m.certificadoFile) fd.append(`mascota_cert_${idx}`, m.certificadoFile);
+      if (m.certificadoFile) fd.append("adj_vacunacion", m.certificadoFile);
     });
 
     try {
