@@ -62,7 +62,7 @@ const TERRITORIOS_ALOJAMIENTO_TIPOS = ["LUGAR"];
 
 function normalizarTerritoriosAlojamiento(value) {
   if (!Array.isArray(value)) {
-    const err = new Error("Territorios invÃ¡lidos");
+    const err = new Error("Territorios inválidos");
     err.code = "TERRITORIOS_INVALIDOS";
     throw err;
   }
@@ -72,7 +72,7 @@ function normalizarTerritoriosAlojamiento(value) {
     const tipo = up(item?.tipo);
     const valor = safeStr(item?.valor);
     if (!TERRITORIOS_ALOJAMIENTO_TIPOS.includes(tipo) || !valor) {
-      const err = new Error("Territorios invÃ¡lidos");
+      const err = new Error("Territorios inválidos");
       err.code = "TERRITORIOS_INVALIDOS";
       throw err;
     }
@@ -199,7 +199,7 @@ function buildFiltro(req) {
   const q = safeStr(req.query?.q || req.query?.buscar || req.query?.texto);
   if (q) {
     const regex = new RegExp(escapeRegex(q), "i");
-    filtro.$or = [{ email: regex }, { nombre: regex }, { apellido: regex }, { matricula: regex }];
+    filtro.$or = [{ email: regex }, { nombre: regex }, { apellido: regex }, { dni: regex }, { matricula: regex }];
   }
 
   return filtro;
@@ -209,9 +209,21 @@ function buildSort(req) {
   const by = safeStr(req.query?.sortBy || "apellido").toLowerCase();
   const dir = String(req.query?.sortDir || "asc").toLowerCase() === "desc" ? -1 : 1;
 
-  const allowed = new Set(["apellido", "nombre", "email", "role", "barrioasignado", "activo", "tipopersonal", "precedencia"]);
+  const allowed = new Set([
+    "apellido",
+    "nombre",
+    "email",
+    "dni",
+    "matricula",
+    "role",
+    "barrioasignado",
+    "activo",
+    "tipopersonal",
+    "precedencia",
+    "archivadoat",
+  ]);
   const key = allowed.has(by) ? by : "apellido";
-  const map = { barrioasignado: "barrioAsignado", tipopersonal: "tipoPersonal" };
+  const map = { barrioasignado: "barrioAsignado", tipopersonal: "tipoPersonal", archivadoat: "archivadoAt" };
 
   return { [map[key] || key]: dir };
 }
@@ -372,13 +384,31 @@ async function listar(req, res) {
 
     const limitQ = Number.parseInt(String(req.query?.limit || "200"), 10);
     const limit = Number.isFinite(limitQ) ? Math.max(1, Math.min(1000, limitQ)) : 200;
+    const pageQ = Number.parseInt(String(req.query?.page || "1"), 10);
+    const page = Number.isFinite(pageQ) ? Math.max(1, pageQ) : 1;
+    const skip = (page - 1) * limit;
 
-    const usuarios = await User.find(filtro).select(ADMIN_READ_SELECT).sort(sort).limit(limit).lean();
+    const total = await User.countDocuments(filtro);
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const usuarios = await User.find(filtro)
+      .select(ADMIN_READ_SELECT)
+      .sort(sort)
+      .skip(skip)
+      .limit(limit)
+      .lean();
     await attachViviendaOcupadaLabel(usuarios);
     await attachAlojamientoActivoLabel(usuarios);
     usuarios.forEach(sanitizeUsuarioListItem);
 
-    return res.json({ usuarios });
+    return res.json({
+      usuarios,
+      total,
+      page,
+      limit,
+      totalPages,
+      hasNext: page < totalPages,
+      hasPrev: page > 1,
+    });
   } catch (err) {
     console.error("[USERS] Error listar:", err);
     return res.status(500).json({ message: "Error interno" });
@@ -493,7 +523,7 @@ async function asignarBarrio(req, res) {
 
 /**
  * PATCH /api/users/:id/territorios-alojamiento
- * âœ… SOLO ADMIN_GENERAL (escritura)
+ * SOLO ADMIN_GENERAL (escritura)
  */
 async function asignarTerritoriosAlojamiento(req, res) {
   try {
@@ -525,7 +555,7 @@ async function asignarTerritoriosAlojamiento(req, res) {
     return res.json({ message: "Territorios de alojamiento asignados" });
   } catch (err) {
     if (err?.code === "TERRITORIOS_INVALIDOS") {
-      return res.status(400).json({ message: "Territorios invÃ¡lidos" });
+      return res.status(400).json({ message: "Territorios inválidos" });
     }
     console.error("[USERS] Error asignarTerritoriosAlojamiento:", err);
     return res.status(500).json({ message: "Error interno" });

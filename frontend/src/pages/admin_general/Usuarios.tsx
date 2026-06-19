@@ -28,6 +28,7 @@ type TerritorioAlojamiento = {
 
 const ROLES_BASE = ["POSTULANTE", "PERMISIONARIO", "ALOJADO", "ADMIN", "ADMIN_GENERAL"] as const;
 const PERMISOS_VALIDOS = ["INSPECTOR", "JEFE_DE_BARRIO", "INSPECTOR_ALOJAMIENTOS"] as const;
+const PAGE_SIZE_OPTIONS = [50, 100, 200, 500] as const;
 
 type SortKey =
   | "apellido"
@@ -109,6 +110,10 @@ export default function UsuariosAdminGeneral() {
   const [filtroBarrio, setFiltroBarrio] = useState<string>("");
   const [filtroActivo, setFiltroActivo] = useState<"todos" | "true" | "false">("todos");
   const [filtroArchivado, setFiltroArchivado] = useState<"false" | "true" | "todos">("false");
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState<number>(100);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
   const [sortBy, setSortBy] = useState<SortKey>("apellido");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -166,7 +171,10 @@ export default function UsuariosAdminGeneral() {
     setLoading(true);
     clearMessages();
     try {
-      const params: Record<string, string> = {};
+      const params: Record<string, string | number> = {
+        page,
+        limit,
+      };
 
       if (filtroQ.trim()) params.q = filtroQ.trim();
       if (filtroRole) params.role = filtroRole;
@@ -181,7 +189,16 @@ export default function UsuariosAdminGeneral() {
 
       const res = await http.get("/users/admin-list", { params });
       const list = Array.isArray(res.data?.usuarios) ? (res.data.usuarios as Usuario[]) : [];
+      const nextTotal = Number(res.data?.total);
+      const nextPage = Number(res.data?.page);
+      const nextLimit = Number(res.data?.limit);
+      const nextTotalPages = Number(res.data?.totalPages);
+
       setUsuarios(list);
+      setTotal(Number.isFinite(nextTotal) ? nextTotal : list.length);
+      setPage(Number.isFinite(nextPage) && nextPage > 0 ? nextPage : page);
+      setLimit(Number.isFinite(nextLimit) && nextLimit > 0 ? nextLimit : limit);
+      setTotalPages(Number.isFinite(nextTotalPages) && nextTotalPages > 0 ? nextTotalPages : 1);
 
       // sincronizar drafts de barrio
       setBarrioDraft((curr) => {
@@ -208,6 +225,8 @@ export default function UsuariosAdminGeneral() {
       });
     } catch (e) {
       setUsuarios([]);
+      setTotal(0);
+      setTotalPages(1);
       setError("No se pudieron cargar los usuarios. Por favor, intente nuevamente o contacte al administrador.");
     } finally {
       setLoading(false);
@@ -392,6 +411,7 @@ export default function UsuariosAdminGeneral() {
   }
 
   function toggleSort(key: SortKey) {
+    setPage(1);
     setSortBy((prevKey) => {
       if (prevKey === key) {
         setSortDir((prevDir) => (prevDir === "asc" ? "desc" : "asc"));
@@ -411,9 +431,11 @@ export default function UsuariosAdminGeneral() {
   useEffect(() => {
     cargar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtroRole, filtroPermiso, filtroBarrio, filtroActivo, filtroArchivado, sortBy, sortDir]);
+  }, [filtroQ, filtroRole, filtroPermiso, filtroBarrio, filtroActivo, filtroArchivado, sortBy, sortDir, page, limit]);
 
   const rows = useMemo(() => usuarios || [], [usuarios]);
+  const safeTotalPages = Math.max(1, totalPages || 1);
+  const safePage = Math.min(Math.max(1, page), safeTotalPages);
 
 const controlStyle: CSSProperties = {
   padding: "10px 12px",
@@ -510,7 +532,10 @@ if (loading) return <p style={{ color: "#E5E7EB" }}>Cargando usuarios…</p>;
             <input
               type="text"
               value={filtroQ}
-              onChange={(e) => setFiltroQ(e.target.value)}
+              onChange={(e) => {
+                setFiltroQ(e.target.value);
+                setPage(1);
+              }}
               style={{
                 width: 260,
                 padding: "10px 12px",
@@ -530,7 +555,10 @@ if (loading) return <p style={{ color: "#E5E7EB" }}>Cargando usuarios…</p>;
             Rol base:{" "}
             <select
   value={filtroRole}
-  onChange={(e) => setFiltroRole(e.target.value)}
+  onChange={(e) => {
+    setFiltroRole(e.target.value);
+    setPage(1);
+  }}
   style={selectStyle}
 >
   <option value="" style={optionStyle}>
@@ -550,7 +578,10 @@ if (loading) return <p style={{ color: "#E5E7EB" }}>Cargando usuarios…</p>;
             Permiso:{" "}
             <select
   value={filtroPermiso}
-  onChange={(e) => setFiltroPermiso(e.target.value)}
+  onChange={(e) => {
+    setFiltroPermiso(e.target.value);
+    setPage(1);
+  }}
   style={selectStyle}
 >
   <option value="" style={optionStyle}>
@@ -570,7 +601,10 @@ if (loading) return <p style={{ color: "#E5E7EB" }}>Cargando usuarios…</p>;
             Barrio:{" "}
             <select
   value={filtroBarrio}
-  onChange={(e) => setFiltroBarrio(e.target.value)}
+  onChange={(e) => {
+    setFiltroBarrio(e.target.value);
+    setPage(1);
+  }}
   disabled={loadingBarrios}
   style={selectStyle}
 >
@@ -591,9 +625,10 @@ if (loading) return <p style={{ color: "#E5E7EB" }}>Cargando usuarios…</p>;
             Activo:{" "}
             <select
   value={filtroActivo}
-  onChange={(e) =>
-    setFiltroActivo(e.target.value as "todos" | "true" | "false")
-  }
+  onChange={(e) => {
+    setFiltroActivo(e.target.value as "todos" | "true" | "false");
+    setPage(1);
+  }}
   style={selectStyle}
 >
   <option value="todos" style={optionStyle}>
@@ -614,9 +649,10 @@ if (loading) return <p style={{ color: "#E5E7EB" }}>Cargando usuarios…</p>;
             Archivado:{" "}
             <select
   value={filtroArchivado}
-  onChange={(e) =>
-    setFiltroArchivado(e.target.value as "todos" | "true" | "false")
-  }
+  onChange={(e) => {
+    setFiltroArchivado(e.target.value as "todos" | "true" | "false");
+    setPage(1);
+  }}
   style={selectStyle}
 >
   <option value="false" style={optionStyle}>
@@ -647,6 +683,83 @@ if (loading) return <p style={{ color: "#E5E7EB" }}>Cargando usuarios…</p>;
             }}
           >
             Aplicar filtros / Recargar
+          </button>
+        </div>
+      </div>
+
+      <div
+        style={{
+          marginBottom: 12,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 12,
+          flexWrap: "wrap",
+          color: "#CBD5E1",
+          fontSize: 14,
+        }}
+      >
+        <div style={{ fontWeight: 700 }}>
+          Mostrando {rows.length} de {total} usuarios
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <span style={{ fontWeight: 700 }}>
+            PÃ¡gina {safePage} de {safeTotalPages}
+          </span>
+
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700 }}>
+            Por pÃ¡gina:
+            <select
+              value={limit}
+              onChange={(e) => {
+                setLimit(Number(e.target.value));
+                setPage(1);
+              }}
+              style={selectStyle}
+            >
+              {PAGE_SIZE_OPTIONS.map((size) => (
+                <option key={size} value={size} style={optionStyle}>
+                  {size}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <button
+            type="button"
+            disabled={safePage <= 1}
+            onClick={() => setPage((curr) => Math.max(1, curr - 1))}
+            style={{
+              padding: "10px 14px",
+              fontSize: 14,
+              fontWeight: 700,
+              color: "#F8FAFC",
+              background: safePage <= 1 ? "#334155" : "#1E293B",
+              border: "1px solid #475569",
+              borderRadius: 8,
+              cursor: safePage <= 1 ? "not-allowed" : "pointer",
+            }}
+          >
+            Anterior
+          </button>
+
+          <button
+            type="button"
+            disabled={safePage >= safeTotalPages}
+            onClick={() => setPage((curr) => Math.min(safeTotalPages, curr + 1))}
+            style={{
+              padding: "10px 14px",
+              fontSize: 14,
+              fontWeight: 700,
+              color: "#F8FAFC",
+              background: safePage >= safeTotalPages ? "#334155" : "#1E293B",
+              border: "1px solid #475569",
+              borderRadius: 8,
+              cursor: safePage >= safeTotalPages ? "not-allowed" : "pointer",
+            }}
+          >
+            Siguiente
           </button>
         </div>
       </div>
