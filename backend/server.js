@@ -210,6 +210,7 @@ const mantenimientoRoutes = safeRequire("mantenimientoRoutes", "./routes/manteni
 const formularioRoutes = safeRequire("formularioRoutes", "./routes/formularios");
 const tareasRoutes = safeRequire("tareasRoutes", "./routes/tareasRoutes");
 const mensajeRoutes = safeRequire("mensajeRoutes", "./routes/mensajeRoutes");
+const notificacionesRoutes = safeRequire("notificacionesRoutes", "./routes/notificacionesRoutes");
 const adminRoutes = safeRequire("adminRoutes", "./routes/adminRoutes");
 const templateRoutes = safeRequire("templateRoutes", "./routes/templateRoutes");
 const viviendaRoutes = safeRequire("viviendaRoutes", "./routes/viviendaRoutes");
@@ -268,6 +269,7 @@ app.use("/api/formularios", formularioRoutes);
 app.use("/api/tareas", tareasRoutes);
 app.use("/api/templates", templateRoutes);
 app.use("/api/mensajes", mensajeRoutes);
+app.use("/api/notificaciones", notificacionesRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/viviendas", viviendaRoutes);
 app.use("/api/users", usersRoutes);

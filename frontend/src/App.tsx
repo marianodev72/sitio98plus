@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import PublicRoutes from "./routes/PublicRoutes";
 import RoleRoutes from "./routes/RoleRoutes";
 import { useAuth } from "./auth/useAuth";
+import NotificacionesPostLoginGate from "./components/notificaciones/NotificacionesPostLoginGate";
 
 function ProtectedAppRoutes() {
   const { user, initialized } = useAuth();
@@ -19,7 +20,12 @@ function ProtectedAppRoutes() {
     return <Navigate to="/change-password" replace />;
   }
 
-  return <RoleRoutes />;
+  return (
+    <>
+      <RoleRoutes />
+      <NotificacionesPostLoginGate />
+    </>
+  );
 }
 
 export default function App() {
