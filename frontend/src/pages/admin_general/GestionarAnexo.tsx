@@ -39,6 +39,7 @@ type Adjunto = {
 
 type Anexo = {
   _id: string;
+  id?: string;
   codigo: string;
   estado: string;
   estadoInstitucional?: string | null;
@@ -74,7 +75,9 @@ function formatTipoDestino(value: unknown): string {
 
 function viviendaElegibleLabel(v: any): string {
   const base = safe(v?.codigo || v?.nombre || v?.direccion || prettyId(v?._id));
-  return `${base} - Destino: ${formatTipoDestino(v?.tipoDestino)}`;
+  const barrio = safe(v?.barrio);
+  const dormitorios = v?.dormitorios === null || v?.dormitorios === undefined ? "—" : String(v.dormitorios);
+  return `${base} - ${barrio} - ${dormitorios} dorm. - ${formatTipoDestino(v?.tipoDestino)}`;
 }
 
 function prettyId(v: unknown) {
@@ -108,11 +111,14 @@ export default function GestionarAnexo() {
   const [origen, setOrigen] = useState<Anexo | null>(null);
 
   async function cargarViviendasElegiblesAsignacion() {
-    const anexo01Id = String(anexo?._id || "").trim();
+    const anexo01Id = String(anexo?._id || anexo?.id || id || "").trim();
     setViviendasElegibles([]);
     setViviendaId("");
 
-    if (!anexo01Id) return;
+    if (!anexo01Id) {
+      setError("No se pudo determinar el ANEXO_01 para listar viviendas elegibles.");
+      return;
+    }
 
     setLoadingViviendas(true);
     try {
@@ -132,9 +138,12 @@ export default function GestionarAnexo() {
     } catch (e: any) {
       console.error("[ADMIN] Error cargando viviendas elegibles", e);
       setViviendasElegibles([]);
+      setViviendaId("");
       setError(
-        e?.response?.data?.message ||
-          "No se pudieron cargar viviendas compatibles para la postulacion."
+        e?.response?.data?.code === "ANEXO_01_REQUERIDO" || [400, 409].includes(Number(e?.response?.status))
+          ? "No se pudieron cargar viviendas elegibles: falta contexto del ANEXO_01."
+          : e?.response?.data?.message ||
+              "No se pudieron cargar viviendas compatibles para la postulacion."
       );
     } finally {
       setLoadingViviendas(false);
@@ -178,6 +187,15 @@ export default function GestionarAnexo() {
   const codigo = useMemo(() => up(anexo?.codigo), [anexo?.codigo]);
   const estado = useMemo(() => up(anexo?.estado), [anexo?.estado]);
   const datos = anexo?.datos || {};
+  const viviendasDisponibles = useMemo(
+    () => viviendasElegibles.filter((v: any) => up(v?.estado) === "DISPONIBLE"),
+    [viviendasElegibles]
+  );
+  const viviendasADesocuparse = useMemo(
+    () => viviendasElegibles.filter((v: any) => up(v?.estado) === "A_DESOCUPARSE"),
+    [viviendasElegibles]
+  );
+  const totalViviendasElegibles = viviendasDisponibles.length + viviendasADesocuparse.length;
   const adjuntosParaMostrar: Adjunto[] =
     codigo === "ANEXO_02" ? origen?.adjuntos || [] : anexo?.adjuntos || [];
 
@@ -897,27 +915,31 @@ export default function GestionarAnexo() {
                         {loadingViviendas ? "Cargando viviendas…" : "Seleccionar vivienda…"}
                       </option>
 
-                      <optgroup label="DISPONIBLE" style={housingOptgroupStyle}>
-                        {Array.isArray(viviendasElegibles) &&
-                          viviendasElegibles
-                            .filter((v: any) => up(v?.estado) === "DISPONIBLE")
-                            .map((v: any) => (
-                              <option key={String(v?._id)} value={String(v?._id)} style={housingOptionStyle}>
-                                {viviendaElegibleLabel(v)}
-                              </option>
-                            ))}
-                      </optgroup>
+                      {!loadingViviendas && totalViviendasElegibles === 0 && (
+                        <option value="" disabled style={housingOptionStyle}>
+                          No hay viviendas elegibles para este ANEXO_01
+                        </option>
+                      )}
 
-                      <optgroup label="A_DESOCUPARSE" style={housingOptgroupStyle}>
-                        {Array.isArray(viviendasElegibles) &&
-                          viviendasElegibles
-                            .filter((v: any) => up(v?.estado) === "A_DESOCUPARSE")
-                            .map((v: any) => (
+                      {viviendasDisponibles.length > 0 && (
+                        <optgroup label="DISPONIBLE" style={housingOptgroupStyle}>
+                          {viviendasDisponibles.map((v: any) => (
                               <option key={String(v?._id)} value={String(v?._id)} style={housingOptionStyle}>
                                 {viviendaElegibleLabel(v)}
                               </option>
                             ))}
-                      </optgroup>
+                        </optgroup>
+                      )}
+
+                      {viviendasADesocuparse.length > 0 && (
+                        <optgroup label="A_DESOCUPARSE" style={housingOptgroupStyle}>
+                          {viviendasADesocuparse.map((v: any) => (
+                              <option key={String(v?._id)} value={String(v?._id)} style={housingOptionStyle}>
+                                {viviendaElegibleLabel(v)}
+                              </option>
+                            ))}
+                        </optgroup>
+                      )}
                     </select>
                     </div>
 
