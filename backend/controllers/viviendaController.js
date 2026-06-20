@@ -781,17 +781,22 @@ async function listarElegiblesAsignacion(req, res) {
     };
 
     const anexo01Id = safeStr(req.query?.anexo01Id);
-    if (anexo01Id) {
-      const resGrupo = await resolverGrupoViviendaPostulanteDesdeAnexo01(anexo01Id);
-      if (!resGrupo.ok) {
-        return res.status(resGrupo.status || 409).json({ message: resGrupo.message || "Recurso no disponible" });
-      }
-
-      const tiposDestinoCompatibles = ["OF", "SO", "MIXTO"].filter((tipo) =>
-        isTipoDestinoCompatibleConGrupoVivienda(resGrupo.grupo, tipo)
-      );
-      filtro.tipoDestino = { $in: tiposDestinoCompatibles };
+    if (!anexo01Id) {
+      return res.status(400).json({
+        code: "ANEXO_01_REQUERIDO",
+        message: "Debe indicarse ANEXO_01 para listar viviendas compatibles.",
+      });
     }
+
+    const resGrupo = await resolverGrupoViviendaPostulanteDesdeAnexo01(anexo01Id);
+    if (!resGrupo.ok) {
+      return res.status(resGrupo.status || 409).json({ message: resGrupo.message || "Recurso no disponible" });
+    }
+
+    const tiposDestinoCompatibles = ["OF", "SO", "MIXTO"].filter((tipo) =>
+      isTipoDestinoCompatibleConGrupoVivienda(resGrupo.grupo, tipo)
+    );
+    filtro.tipoDestino = { $in: tiposDestinoCompatibles };
 
     const viviendas = await Vivienda.find(filtro)
       .select("_id codigo barrio dormitorios estado tipoDestino")

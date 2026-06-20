@@ -108,10 +108,16 @@ export default function GestionarAnexo() {
   const [origen, setOrigen] = useState<Anexo | null>(null);
 
   async function cargarViviendasElegiblesAsignacion() {
+    const anexo01Id = String(anexo?._id || "").trim();
+    setViviendasElegibles([]);
+    setViviendaId("");
+
+    if (!anexo01Id) return;
+
     setLoadingViviendas(true);
     try {
       const res = await http.get(`/viviendas/elegibles-asignacion`, {
-        params: id ? { anexo01Id: id } : undefined,
+        params: { anexo01Id },
         withCredentials: true,
       });
 
