@@ -5563,7 +5563,6 @@ async function listarPorCodigo(req, res) {
   try {
     const user = req.user;
     const role = up(user?.role);
-console.log("[listarPorCodigo] user:", req.user);
 
     if (!user || !user.role) return genericDenied(res);
 
@@ -6993,6 +6992,30 @@ function cleanMotivoPostulacion(value) {
   return String(value || "").trim().slice(0, 1000);
 }
 
+function isPostulacion01Terminal(anexo) {
+  if (!anexo || up(anexo.codigo) !== "ANEXO_01") return false;
+  const estado = up(anexo.estado);
+  const estadoInstitucional = up(anexo.estadoInstitucional);
+  const resultado = up(anexo?.datos?.resultadoPostulacion);
+  return (
+    estado === "APROBADO" ||
+    estado === "RECHAZADO" ||
+    estadoInstitucional === "APROBADO_ADMIN_GENERAL" ||
+    estadoInstitucional === "RECHAZADO_ADMIN_GENERAL" ||
+    resultado === "APROBADO" ||
+    resultado === "RECHAZADO"
+  );
+}
+
+function postulacionYaIntervenida(res) {
+  return res.status(409).json(
+    stripAdjuntoRutas({
+      code: "FORMULARIO_YA_INTERVENIDO",
+      message: "La postulacion ya fue intervenida por ADMIN_GENERAL.",
+    })
+  );
+}
+
 async function hasAnexo02Derivado(anexo01Id) {
   if (!isObjectId(anexo01Id)) return false;
   const existente = await FormSubmission.exists({
@@ -7015,9 +7038,7 @@ async function aprobarPostulacionAnexo01(req, res) {
     if (!canSeeSubmission(user, anexo)) return genericDenied(res);
 
     const estadoActual = up(anexo.estado);
-    if (estadoActual === "APROBADO") {
-      return res.json(stripAdjuntoRutas({ anexo: toPlain(anexo) }));
-    }
+    if (isPostulacion01Terminal(anexo)) return postulacionYaIntervenida(res);
 
     if (["RECHAZADO", "CERRADO", "ASIGNADO"].includes(estadoActual)) {
       return badRequest(res, "La postulación no puede aprobarse en su estado actual.");
@@ -7068,6 +7089,8 @@ async function rechazarPostulacionAnexo01(req, res) {
     if (!canSeeSubmission(user, anexo)) return genericDenied(res);
 
     const estadoActual = up(anexo.estado);
+    if (isPostulacion01Terminal(anexo)) return postulacionYaIntervenida(res);
+
     if (["CERRADO", "ASIGNADO"].includes(estadoActual)) {
       return badRequest(res, "La postulación no puede rechazarse en su estado actual.");
     }
