@@ -111,6 +111,7 @@ export default function GestionarAnexo() {
     setLoadingViviendas(true);
     try {
       const res = await http.get(`/viviendas/elegibles-asignacion`, {
+        params: id ? { anexo01Id: id } : undefined,
         withCredentials: true,
       });
 
@@ -122,9 +123,13 @@ export default function GestionarAnexo() {
         [];
 
       setViviendasElegibles(lista);
-    } catch (e) {
+    } catch (e: any) {
       console.error("[ADMIN] Error cargando viviendas elegibles", e);
       setViviendasElegibles([]);
+      setError(
+        e?.response?.data?.message ||
+          "No se pudieron cargar viviendas compatibles para la postulacion."
+      );
     } finally {
       setLoadingViviendas(false);
     }

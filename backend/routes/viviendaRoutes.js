@@ -62,7 +62,10 @@ router.get(
 
 router.get(
   "/elegibles-asignacion",
-  audit("ADMIN_HOUSES_ELIGIBLE_ASSIGNMENT", { targetType: "Vivienda" }),
+  audit("ADMIN_HOUSES_ELIGIBLE_ASSIGNMENT", {
+    targetType: "Vivienda",
+    metaAllowlist: ["query.anexo01Id"],
+  }),
   h("listarElegiblesAsignacion")
 );
 

@@ -3,6 +3,12 @@
 
 const Vivienda = require("../models/vivienda");
 const PDFDocument = require("pdfkit");
+const {
+  deriveGrupoViviendaFromGradoEscalafon,
+  deriveGrupoViviendaFromGrupoJerarquico,
+  isTipoDestinoCompatibleConGrupoVivienda,
+  normalizeTipoPersonal,
+} = require("../constants/institucional");
 
 // User model (para vincular ocupación con permisionario; fail-closed)
 let User = null;
@@ -24,6 +30,13 @@ try {
   MisDatosDeclaradosUpdate = null;
 }
 
+let FormSubmission = null;
+try {
+  ({ FormSubmission } = require("../models/FormSubmission"));
+} catch {
+  FormSubmission = null;
+}
+
 // Nombre de colección para $lookup (fallback seguro)
 const MIS_DATOS_COLL = "misdatosdeclaradosupdates";
 const FORM_SUBMISSIONS_COLL = "formsubmissions";
@@ -34,6 +47,10 @@ function up(v) {
 
 function safeStr(v) {
   return String(v || "").trim();
+}
+
+function isObjectIdLike(v) {
+  return /^[a-f\d]{24}$/i.test(String(v || ""));
 }
 
 function hasPerm(user, perm) {
@@ -722,6 +739,36 @@ async function listar(req, res) {
 
 // ─────────────────────────────
 // LISTAR ELEGIBLES PARA ASIGNACIÓN (ANEXO_02) — ADMIN_GENERAL
+async function resolverGrupoViviendaPostulanteDesdeAnexo01(anexo01Id) {
+  if (!FormSubmission || !User || !isObjectIdLike(anexo01Id)) {
+    return { ok: false, status: 400, message: "No se pudo determinar el grupo institucional del postulante." };
+  }
+
+  const anexo01 = await FormSubmission.findById(anexo01Id)
+    .select("codigo datos usuario")
+    .lean();
+
+  if (!anexo01 || up(anexo01.codigo) !== "ANEXO_01") {
+    return { ok: false, status: 404, message: "Recurso no disponible" };
+  }
+
+  const postulante = await User.findById(anexo01.usuario)
+    .select("_id tipoPersonal grupoJerarquico")
+    .lean();
+
+  const gradoEscalafon = safeStr(anexo01?.datos?.gradoEscalafon);
+  const grupo =
+    deriveGrupoViviendaFromGradoEscalafon(gradoEscalafon) ||
+    deriveGrupoViviendaFromGrupoJerarquico(postulante?.grupoJerarquico) ||
+    normalizeTipoPersonal(postulante?.tipoPersonal);
+
+  if (!grupo) {
+    return { ok: false, status: 409, message: "No se pudo determinar el grupo institucional del postulante." };
+  }
+
+  return { ok: true, grupo };
+}
+
 async function listarElegiblesAsignacion(req, res) {
   try {
     const user = req.user;
@@ -729,9 +776,24 @@ async function listarElegiblesAsignacion(req, res) {
 
     if (!user || role !== "ADMIN_GENERAL") return res.status(404).json({ message: "Recurso no disponible" });
 
-    const viviendas = await Vivienda.find({
+    const filtro = {
       estado: { $in: ["DISPONIBLE", "A_DESOCUPARSE"] },
-    })
+    };
+
+    const anexo01Id = safeStr(req.query?.anexo01Id);
+    if (anexo01Id) {
+      const resGrupo = await resolverGrupoViviendaPostulanteDesdeAnexo01(anexo01Id);
+      if (!resGrupo.ok) {
+        return res.status(resGrupo.status || 409).json({ message: resGrupo.message || "Recurso no disponible" });
+      }
+
+      const tiposDestinoCompatibles = ["OF", "SO", "MIXTO"].filter((tipo) =>
+        isTipoDestinoCompatibleConGrupoVivienda(resGrupo.grupo, tipo)
+      );
+      filtro.tipoDestino = { $in: tiposDestinoCompatibles };
+    }
+
+    const viviendas = await Vivienda.find(filtro)
       .select("_id codigo barrio dormitorios estado tipoDestino")
       .sort({ barrio: 1, codigo: 1 })
       .lean();

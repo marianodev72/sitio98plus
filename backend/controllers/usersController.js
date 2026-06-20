@@ -265,7 +265,7 @@ async function attachViviendaOcupadaLabel(usuarios) {
 
     if (!Vivienda) {
       for (const u of usuarios) {
-        if (u && up(u.role) === "PERMISIONARIO") u.viviendaLabel = "Sin asignar";
+        if (u && up(u.role) === "PERMISIONARIO" && !safeStr(u.viviendaLabel)) u.viviendaLabel = "Sin asignar";
       }
       return usuarios;
     }
@@ -308,6 +308,7 @@ async function attachViviendaOcupadaLabel(usuarios) {
     for (const u of usuarios) {
       if (!u || up(u.role) !== "PERMISIONARIO") continue;
       const uid = u._id?.toString?.();
+      if (safeStr(u.viviendaLabel)) continue;
       u.viviendaLabel = uid && mapUserToVivienda.get(uid) ? mapUserToVivienda.get(uid) : "Sin asignar";
     }
 
