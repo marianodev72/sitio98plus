@@ -4,6 +4,7 @@ import PublicRoutes from "./routes/PublicRoutes";
 import RoleRoutes from "./routes/RoleRoutes";
 import { useAuth } from "./auth/useAuth";
 import NotificacionesPostLoginGate from "./components/notificaciones/NotificacionesPostLoginGate";
+import MensajesNoLeidosPostLoginGate from "./components/notificaciones/MensajesNoLeidosPostLoginGate";
 
 function ProtectedAppRoutes() {
   const { user, initialized } = useAuth();
@@ -24,6 +25,7 @@ function ProtectedAppRoutes() {
     <>
       <RoleRoutes />
       <NotificacionesPostLoginGate />
+      <MensajesNoLeidosPostLoginGate />
     </>
   );
 }

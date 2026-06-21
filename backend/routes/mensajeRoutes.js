@@ -9,6 +9,7 @@ const uploadMensajes = require("../middleware/uploadMensajes");
 const {
   getAgenda,
   getEntrada,
+  getResumenNoLeidos,
   getEnviados,
   getMensaje,
   marcarLeido,
@@ -24,6 +25,7 @@ router.get("/agenda", getAgenda);
 // bandejas
 router.get("/entrada", getEntrada);
 router.get("/enviados", getEnviados);
+router.get("/no-leidos/resumen", getResumenNoLeidos);
 
 // detalle + leído
 router.get("/:id/adjuntos/:fileId", descargarAdjunto);
