@@ -9,6 +9,10 @@ const {
   isTipoDestinoCompatibleConGrupoVivienda,
   normalizeTipoPersonal,
 } = require("../constants/institucional");
+const {
+  SEMAFORO,
+  calcularHacinamientoAnexo17,
+} = require("../services/hacinamientoService");
 
 // User model (para vincular ocupación con permisionario; fail-closed)
 let User = null;
@@ -60,59 +64,6 @@ function hasPerm(user, perm) {
 }
 
 // ─────────────────────────────
-// ✅ ANEXO 17 — dormitorios mínimos (aproximación institucional)
-// Regla: 1 adulto + hijos se trata como pareja (adulto no comparte con menores)
-// Nota: hijosUnknown se trata conservador (si no lo pasás, queda 0)
-function dormitoriosMinimosANEXO17({ adultos = 0, hijosM = 0, hijosF = 0, hijosUnknown = 0 }) {
-  const a0 = Number(adultos) || 0;
-  const hm0 = Number(hijosM) || 0;
-  const hf0 = Number(hijosF) || 0;
-  const hu0 = Number(hijosUnknown) || 0;
-
-  const hijos = hm0 + hf0 + hu0;
-
-  // fail-closed
-  if (a0 <= 0 && hijos <= 0) return 0;
-
-  // normalización institucional:
-  // 1 adulto + hijos => se trata como pareja
-  const adultosNorm = a0 === 1 && hijos > 0 ? 2 : a0;
-
-  // dormitorios para adultos:
-  // - 1–2 adultos => 1 dormitorio
-  // - 3–4 adultos => 2 dormitorios, etc.
-  const aSafe = Math.max(1, Number(adultosNorm || 1));
-  const dormAdultos = aSafe <= 2 ? 1 : Math.ceil(aSafe / 2);
-
-  // sin hijos
-  if (hijos === 0) return dormAdultos;
-
-  // 1 hijo => +1
-  if (hijos === 1) return dormAdultos + 1;
-
-  // 2 hijos => unknown conservador: +2, distinto sexo: +2, mismo sexo: +1
-  if (hijos === 2) {
-    if (hu0 > 0) return dormAdultos + 2;
-    const distintoSexo = hm0 > 0 && hf0 > 0;
-    return dormAdultos + (distintoSexo ? 2 : 1);
-  }
-
-  // 3 hijos => +2
-  if (hijos === 3) return dormAdultos + 2;
-
-  // 4 hijos => unknown conservador: +3, 3 de un sexo: +3, 2 y 2: +2
-  if (hijos === 4) {
-    if (hu0 > 0) return dormAdultos + 3;
-    const tresDeUnSexo = hm0 >= 3 || hf0 >= 3;
-    return dormAdultos + (tresDeUnSexo ? 3 : 2);
-  }
-
-  // 5+ => base (adultos + 4 hijos) = dormAdultos + 2; cada 2 hijos extra suma 1 dormitorio
-  const extra = Math.max(0, hijos - 4);
-  const dormExtra = Math.ceil(extra / 2);
-  return dormAdultos + 2 + dormExtra;
-}
-
 function escapeRegex(str) {
   return String(str || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -315,16 +266,74 @@ function buildViviendasPipeline(query = {}) {
           { $gt: [{ $size: "$_a01Convivientes" }, 0] },
         ],
       },
+      _mdTieneCantidades: {
+        $or: [
+          { $ne: ["$_mdDatos.cantidadAdultos", null] },
+          { $ne: ["$_mdDatos.cantidadHijos", null] },
+        ],
+      },
+      _a01TieneCantidades: {
+        $or: [
+          { $ne: ["$_a01Datos.cantidadAdultos", null] },
+          { $ne: ["$_a01Datos.cantidadHijos", null] },
+        ],
+      },
     },
   });
 
   pipeline.push({
     $addFields: {
       _mdConvivientes: {
-        $cond: ["$_mdTieneConvivientes", "$_mdConvivientesCandidatos", "$_a01Convivientes"],
+        $switch: {
+          branches: [
+            { case: "$_mdTieneConvivientes", then: "$_mdConvivientesCandidatos" },
+            {
+              case: {
+                $and: [
+                  { $not: ["$_mdTieneCantidades"] },
+                  "$_a01TieneConvivientes",
+                ],
+              },
+              then: "$_a01Convivientes",
+            },
+          ],
+          default: [],
+        },
       },
       _datosHabitantes: {
-        $cond: ["$_mdTieneConvivientes", "$_mdDatos", "$_a01Datos"],
+        $switch: {
+          branches: [
+            {
+              case: { $or: ["$_mdTieneConvivientes", "$_mdTieneCantidades"] },
+              then: "$_mdDatos",
+            },
+            {
+              case: { $or: ["$_a01TieneConvivientes", "$_a01TieneCantidades"] },
+              then: "$_a01Datos",
+            },
+          ],
+          default: {},
+        },
+      },
+      _cantidadHabitantesBase: toIntOrZero("$cantidadHabitantes"),
+      fuenteHacinamiento: {
+        $switch: {
+          branches: [
+            {
+              case: { $or: ["$_mdTieneConvivientes", "$_mdTieneCantidades"] },
+              then: "MIS_DATOS_DECLARADOS",
+            },
+            {
+              case: { $or: ["$_a01TieneConvivientes", "$_a01TieneCantidades"] },
+              then: "ANEXO_01",
+            },
+            {
+              case: { $gt: [toIntOrZero("$cantidadHabitantes"), 0] },
+              then: "VIVIENDA",
+            },
+          ],
+          default: "SIN_DATOS",
+        },
       },
     },
   });
@@ -449,111 +458,6 @@ function buildViviendasPipeline(query = {}) {
     },
   });
 
-  // Dormitorios mínimos ANEXO 17 (en pipeline)
-  pipeline.push({
-    $addFields: {
-      dormitoriosMinimos: {
-        $let: {
-          vars: {
-            hijos: "$_mdHijosTotal",
-            hm: "$_mdHijosM",
-            hf: "$_mdHijosF",
-            hu: "$_mdHijosUnknown",
-            adultosRaw: "$_mdAdultosTotal",
-          },
-          in: {
-            $let: {
-              vars: {
-                adultosNorm: {
-                  $cond: [
-                    { $and: [{ $eq: ["$$adultosRaw", 1] }, { $gt: ["$$hijos", 0] }] },
-                    2,
-                    "$$adultosRaw",
-                  ],
-                },
-              },
-              in: {
-                $switch: {
-                  branches: [
-                    { case: { $and: [{ $eq: ["$$adultosNorm", 2] }, { $eq: ["$$hijos", 0] }] }, then: 1 },
-                    {
-                      case: {
-                        $and: [{ $eq: ["$$adultosNorm", 2] }, { $lte: ["$$hijos", 2] }, { $gt: ["$$hijos", 0] }],
-                      },
-                      then: 2,
-                    },
-                    {
-                      case: {
-                        $and: [{ $eq: ["$$adultosNorm", 2] }, { $lte: ["$$hijos", 4] }, { $gt: ["$$hijos", 2] }],
-                      },
-                      then: 3,
-                    },
-                    {
-                      case: {
-                        $and: [{ $eq: ["$$adultosNorm", 2] }, { $lte: ["$$hijos", 6] }, { $gt: ["$$hijos", 4] }],
-                      },
-                      then: 4,
-                    },
-
-                    // Detalle por sexo de 2 y 4 hijos (conservador)
-                    {
-                      case: { $and: [{ $eq: ["$$adultosNorm", 2] }, { $eq: ["$$hijos", 2] }] },
-                      then: {
-                        $cond: [
-                          { $gt: ["$$hu", 0] },
-                          3,
-                          { $cond: [{ $and: [{ $gt: ["$$hm", 0] }, { $gt: ["$$hf", 0] }] }, 3, 2] },
-                        ],
-                      },
-                    },
-                    {
-                      case: { $and: [{ $eq: ["$$adultosNorm", 2] }, { $eq: ["$$hijos", 4] }] },
-                      then: {
-                        $cond: [
-                          { $gt: ["$$hu", 0] },
-                          4,
-                          { $cond: [{ $or: [{ $gte: ["$$hm", 3] }, { $gte: ["$$hf", 3] }] }, 4, 3] },
-                        ],
-                      },
-                    },
-                  ],
-                  default: {
-                    // fallback razonable
-                    $ceil: { $divide: [{ $add: ["$$adultosNorm", "$$hijos"] }, 2] },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-  });
-
-  // Semáforo ANEXO 17 + porcentaje
-  pipeline.push({
-    $addFields: {
-      hacinamientoColor: {
-        $cond: [
-          { $lt: ["$_dormitoriosNum", "$dormitoriosMinimos"] },
-          "ROJO",
-          { $cond: [{ $eq: ["$_dormitoriosNum", "$dormitoriosMinimos"] }, "AMARILLO", "VERDE"] },
-        ],
-      },
-      hacinamientoPct: {
-        $cond: [
-          { $gt: ["$dormitoriosMinimos", 0] },
-          { $round: [{ $multiply: [{ $divide: ["$_dormitoriosNum", "$dormitoriosMinimos"] }, 100] }, 0] },
-          0,
-        ],
-      },
-      // compatibilidad histórica
-      hacinamientoRatio: {
-        $cond: [{ $gt: ["$_dormitoriosNum", 0] }, { $divide: ["$cantidadHabitantesEfectiva", "$_dormitoriosNum"] }, 0],
-      },
-    },
-  });
-
   // 6) Aplicar filtros por personas usando EFECTIVA
   if (personasMinNum !== null || personasMaxNum !== null) {
     const mm = {};
@@ -591,6 +495,14 @@ function buildViviendasPipeline(query = {}) {
       dormitoriosMinimos: 1,
       hacinamientoColor: 1,
       hacinamientoPct: 1,
+      hacinamientoBase: {
+        fuente: "$fuenteHacinamiento",
+        adultos: "$_mdAdultosTotal",
+        hijos: "$_mdHijosTotal",
+        hijosM: "$_mdHijosM",
+        hijosF: "$_mdHijosF",
+        hijosUnknown: "$_mdHijosUnknown",
+      },
 
       permisionario: {
         nombre: "$permisionarioDoc.nombre",
@@ -612,6 +524,58 @@ function buildViviendasPipeline(query = {}) {
     pipeline,
     meta: { sortBy: sortKey, sortDir: dir === -1 ? "desc" : "asc" },
   };
+}
+
+const SEMAFOROS_COLOR = new Set([SEMAFORO.VERDE, SEMAFORO.AMARILLO, SEMAFORO.ROJO]);
+
+function isNumber(value) {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function enriquecerHacinamientoAnexo17(vivienda = {}) {
+  const { hacinamientoBase = {}, ...out } = vivienda || {};
+  const fuenteHacinamiento = safeStr(hacinamientoBase.fuente) || "SIN_DATOS";
+  const tieneComposicion = fuenteHacinamiento === "MIS_DATOS_DECLARADOS" || fuenteHacinamiento === "ANEXO_01";
+
+  const hacinamiento = calcularHacinamientoAnexo17({
+    estadoVivienda: out.estado,
+    dormitoriosReales: out.dormitorios,
+    adultos: tieneComposicion ? hacinamientoBase.adultos : null,
+    hijos: tieneComposicion ? hacinamientoBase.hijos : null,
+    hijosM: tieneComposicion ? hacinamientoBase.hijosM : null,
+    hijosF: tieneComposicion ? hacinamientoBase.hijosF : null,
+    hijosUnknown: tieneComposicion ? hacinamientoBase.hijosUnknown : null,
+  });
+
+  const dormitoriosReales = isNumber(hacinamiento.dormitoriosReales)
+    ? hacinamiento.dormitoriosReales
+    : Number(out.dormitorios || 0);
+  const dormitoriosMinimos = hacinamiento.dormitoriosMinimosAnexo17;
+  const hacinamientoPct =
+    isNumber(dormitoriosReales) && dormitoriosReales > 0 && isNumber(dormitoriosMinimos) && dormitoriosMinimos > 0
+      ? Math.round((dormitoriosReales / dormitoriosMinimos) * 100)
+      : null;
+
+  return {
+    ...out,
+    cantidadHabitantes: isNumber(hacinamiento.habitantes) ? hacinamiento.habitantes : out.cantidadHabitantes,
+    hacinamientoRatio: isNumber(hacinamiento.ratioPersonasPorDormitorio)
+      ? hacinamiento.ratioPersonasPorDormitorio
+      : (isNumber(out.hacinamientoRatio) ? out.hacinamientoRatio : null),
+    dormitoriosMinimos,
+    hacinamientoColor: SEMAFOROS_COLOR.has(hacinamiento.semaforo) ? hacinamiento.semaforo : null,
+    hacinamientoPct,
+    dormitoriosMinimosAnexo17: dormitoriosMinimos,
+    semaforo: hacinamiento.semaforo,
+    requiereEvaluacion: Boolean(hacinamiento.requiereEvaluacion),
+    motivo: hacinamiento.motivo || "",
+    criterio: hacinamiento.criterio,
+    fuenteHacinamiento,
+  };
+}
+
+function enriquecerViviendasHacinamiento(viviendas = []) {
+  return (Array.isArray(viviendas) ? viviendas : []).map(enriquecerHacinamientoAnexo17);
 }
 
 function buildFiltrosResumen(query = {}) {
@@ -728,7 +692,8 @@ async function listar(req, res) {
     }
 
     const { pipeline } = buildViviendasPipeline(q);
-    const viviendas = await Vivienda.aggregate(pipeline);
+    const viviendasBase = await Vivienda.aggregate(pipeline);
+    const viviendas = enriquecerViviendasHacinamiento(viviendasBase);
 
     return res.json({ viviendas });
   } catch (err) {
