@@ -26,8 +26,15 @@ type Vivienda = {
   cantidadHabitantes?: number; // EFECTIVA (adultos + hijos)
   dormitoriosMinimos?: number; // ANEXO 17
   hacinamientoRatio?: number; // personas / dormitorios (legacy)
-  hacinamientoColor?: "VERDE" | "AMARILLO" | "ROJO";
+  hacinamientoColor?: "VERDE" | "AMARILLO" | "ROJO" | null;
   hacinamientoPct?: number; // % dormitorios / mínimos
+
+  dormitoriosMinimosAnexo17?: number | null;
+  semaforo?: HacinamientoSemaforo;
+  requiereEvaluacion?: boolean;
+  motivo?: string;
+  criterio?: string;
+  fuenteHacinamiento?: string;
 
   permisionario?: {
     _id?: string;
@@ -38,6 +45,13 @@ type Vivienda = {
 };
 
 type Semaforo = "verde" | "amarillo" | "rojo";
+type HacinamientoSemaforo =
+  | "NO_APLICA"
+  | "SIN_DATOS"
+  | "REQUIERE_EVALUACION"
+  | "ROJO"
+  | "AMARILLO"
+  | "VERDE";
 
 type EstadoVivienda =
   | "DISPONIBLE"
@@ -118,6 +132,25 @@ function formatTipoDestino(value: unknown): string {
   if (normalized === "SO") return "SUBOFICIALES";
   if (normalized === "MIXTO") return "MIXTO";
   return "SIN DEFINIR";
+}
+
+function getHacinamientoView(v: Vivienda): { label: string; color: string; detail: string } | null {
+  const semaforo = up(v.semaforo || v.hacinamientoColor) as HacinamientoSemaforo | "";
+
+  if (!semaforo) return null;
+
+  const ratio = typeof v.hacinamientoRatio === "number" ? v.hacinamientoRatio.toFixed(2) : "";
+
+  if (semaforo === "VERDE") return { label: "Verde", color: "green", detail: ratio };
+  if (semaforo === "AMARILLO") return { label: "Amarillo", color: "orange", detail: ratio };
+  if (semaforo === "ROJO") return { label: "Rojo", color: "red", detail: ratio };
+  if (semaforo === "NO_APLICA") return { label: "No aplica", color: "#94a3b8", detail: "" };
+  if (semaforo === "SIN_DATOS") return { label: "Sin datos", color: "#60a5fa", detail: "" };
+  if (semaforo === "REQUIERE_EVALUACION") {
+    return { label: "Requiere evaluacion", color: "#a78bfa", detail: "" };
+  }
+
+  return null;
 }
 
 function isEstadoVivienda(value: string): value is EstadoVivienda {
@@ -653,9 +686,7 @@ export default function Viviendas({ readOnly = false }: Props) {
 
                     const personas = v.estado === "OCUPADA" && personasNum !== null ? personasNum : "-";
 
-                    const color = v.hacinamientoColor ?? null;
-
-                    const pct = typeof v.hacinamientoPct === "number" ? v.hacinamientoPct : null;
+                    const hacinamientoView = getHacinamientoView(v);
 
                     return (
                       <tr key={v._id}>
@@ -706,7 +737,7 @@ export default function Viviendas({ readOnly = false }: Props) {
                         </td>
 
                         <td style={tdStyle}>
-                          {v.estado !== "OCUPADA" || !v.hacinamientoColor ? (
+                          {!hacinamientoView ? (
                             "-"
                           ) : (
                             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
@@ -715,20 +746,12 @@ export default function Viviendas({ readOnly = false }: Props) {
                                   width: 10,
                                   height: 10,
                                   borderRadius: "50%",
-                                  background:
-                                    v.hacinamientoColor === "VERDE"
-                                      ? "green"
-                                      : v.hacinamientoColor === "AMARILLO"
-                                      ? "orange"
-                                      : "red",
+                                  background: hacinamientoView.color,
                                   display: "inline-block",
                                 }}
                               />
-                              <span>
-                                {typeof v.hacinamientoRatio === "number"
-                                  ? v.hacinamientoRatio.toFixed(2)
-                                  : "-"}
-                              </span>
+                              <span>{hacinamientoView.label}</span>
+                              {hacinamientoView.detail ? <span>({hacinamientoView.detail})</span> : null}
                             </span>
                           )}
                         </td>
