@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { useEffect, type CSSProperties } from "react";
 import type { Notificacion } from "../../api/notificaciones";
 
 type Props = {
@@ -6,6 +6,8 @@ type Props = {
   busy?: boolean;
   onVerAhora: () => void;
   onEntendido: () => void;
+  entendidoTexto?: string;
+  verAhoraTexto?: string;
 };
 
 function colorFor(prioridad: string) {
@@ -19,10 +21,19 @@ export default function PostLoginNotificationModal({
   busy = false,
   onVerAhora,
   onEntendido,
+  entendidoTexto = "Entendido",
+  verAhoraTexto = "Ver ahora",
 }: Props) {
   const colors = colorFor(notificacion.prioridad);
   const accionUrl = String(notificacion.accionUrl || "").trim();
   const accionTexto = String(notificacion.accionTexto || "Ver ahora").trim();
+
+  useEffect(() => {
+    (window as any).__sitio98PostLoginModalActivo = true;
+    return () => {
+      (window as any).__sitio98PostLoginModalActivo = false;
+    };
+  }, []);
 
   const backdropStyle: CSSProperties = {
     position: "fixed",
@@ -117,7 +128,7 @@ export default function PostLoginNotificationModal({
             disabled={busy}
             style={{ ...buttonBase, background: "rgba(255,255,255,0.10)", color: "#f8fafc" }}
           >
-            Entendido
+            {entendidoTexto}
           </button>
           {accionUrl && (
             <button
@@ -126,7 +137,7 @@ export default function PostLoginNotificationModal({
               disabled={busy}
               style={{ ...buttonBase, background: colors.main, color: "#020617" }}
             >
-              Ver ahora
+              {verAhoraTexto}
             </button>
           )}
         </div>

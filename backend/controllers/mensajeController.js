@@ -519,6 +519,41 @@ async function getEntrada(req, res) {
   }
 }
 
+async function getResumenNoLeidos(req, res) {
+  try {
+    const myId = String(req.user?._id || "").trim();
+    if (!myId) return res.status(401).json({ message: "No autenticado" });
+
+    const query = {
+      $or: [{ para: myId }, { destinatarios: myId }],
+      leidoPor: { $ne: myId },
+    };
+
+    const [totalNoLeidos, ultimoMensaje] = await Promise.all([
+      Mensaje.countDocuments(query),
+      Mensaje.findOne(query)
+        .select("asunto creadoEn")
+        .sort({ creadoEn: -1, _id: -1 })
+        .lean(),
+    ]);
+
+    return res.json({
+      totalNoLeidos,
+      ultimoMensaje:
+        totalNoLeidos > 0 && ultimoMensaje
+          ? {
+              asunto: String(ultimoMensaje.asunto || "").trim().slice(0, 120),
+              fecha: ultimoMensaje.creadoEn || null,
+              origen: "Mensajeria",
+            }
+          : null,
+    });
+  } catch (error) {
+    console.error("[mensajes][no-leidos] error:", error);
+    return res.status(500).json({ message: "No es posible procesar su solicitud" });
+  }
+}
+
 // ==========================
 // BANDEJA ENVIADOS
 // ==========================
@@ -796,6 +831,7 @@ async function enviarMensaje(req, res) {
 module.exports = {
   getAgenda,
   getEntrada,
+  getResumenNoLeidos,
   getEnviados,
   getMensaje,
   marcarLeido,
