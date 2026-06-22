@@ -569,6 +569,45 @@ function isSexoFemenino(value) {
   return ["F", "FEMENINO", "MUJER"].includes(up(value));
 }
 
+function normalizarTextoInstitucional(value) {
+  return up(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function vinculoIntegrante(integrante = {}) {
+  return normalizarTextoInstitucional(
+    integrante.parentesco ||
+      integrante.relacion ||
+      integrante["relación"] ||
+      integrante.vinculo ||
+      integrante["vínculo"] ||
+      integrante.tipoVinculo
+  );
+}
+
+function esVinculoPareja(vinculo) {
+  const v = normalizarTextoInstitucional(vinculo);
+  return (
+    v.includes("CONYUGE") ||
+    v.includes("ESPOS") ||
+    v.includes("CONVIVIENT") ||
+    v.includes("CONCUBIN") ||
+    v.includes("PAREJA")
+  );
+}
+
+function esVinculoDescendiente(vinculo) {
+  const v = normalizarTextoInstitucional(vinculo);
+  return (
+    v.includes("HIJO") ||
+    v.includes("HIJA") ||
+    v.includes("HIJASTR") ||
+    v.includes("NIETO") ||
+    v.includes("NIETA")
+  );
+}
+
 function composicionDesdeDatos(datos = {}, grupoLegacy = {}) {
   const fuenteDatos = isPlainObject(datos) ? datos : {};
   const fuenteGrupo = isPlainObject(grupoLegacy) || Array.isArray(grupoLegacy) ? grupoLegacy : {};
@@ -597,8 +636,34 @@ function composicionDesdeDatos(datos = {}, grupoLegacy = {}) {
   let hijosF = 0;
   let hijosSinSexo = 0;
   let integrantesSinEdad = 0;
+  let pareja = 0;
+  let descendientes = 0;
+  let descendientesM = 0;
+  let descendientesF = 0;
+  let descendientesUnknown = 0;
+  let otrosNoClasificables = 0;
 
   for (const integrante of convivientes) {
+    const vinculo = vinculoIntegrante(integrante || {});
+    if (esVinculoPareja(vinculo)) {
+      pareja += 1;
+      continue;
+    }
+
+    if (esVinculoDescendiente(vinculo)) {
+      descendientes += 1;
+      const sexoDesc = pickSexoGenero(integrante || {});
+      if (isSexoMasculino(sexoDesc)) descendientesM += 1;
+      else if (isSexoFemenino(sexoDesc)) descendientesF += 1;
+      else descendientesUnknown += 1;
+      continue;
+    }
+
+    if (vinculo) {
+      otrosNoClasificables += 1;
+      continue;
+    }
+
     const edad = toIntOrNullValue(integrante && integrante.edad);
     if (edad === null) {
       integrantesSinEdad += 1;
@@ -617,18 +682,30 @@ function composicionDesdeDatos(datos = {}, grupoLegacy = {}) {
     else hijosSinSexo += 1;
   }
 
-  const adultos = adultosPreferidos !== null ? adultosPreferidos : 1 + adultosPorEdad;
-  const hijos = hijosPreferidos !== null ? hijosPreferidos : hijosPorEdad;
-  const sexoInformado = hijosM + hijosF + hijosSinSexo;
-  const hijosUnknown = Math.max(0, hijos - hijosM - hijosF);
+  const hayDescendientesPorVinculo = descendientes > 0;
+  const adultosBase = adultosPreferidos !== null ? adultosPreferidos : 1 + pareja + adultosPorEdad;
+  const adultos = adultosBase + otrosNoClasificables + Math.max(0, pareja - 1);
+  const hijos = hijosPreferidos !== null ? hijosPreferidos : (hayDescendientesPorVinculo ? descendientes : hijosPorEdad);
+  const hijosMFinal = hayDescendientesPorVinculo ? descendientesM : hijosM;
+  const hijosFFinal = hayDescendientesPorVinculo ? descendientesF : hijosF;
+  const hijosSinSexoFinal = hayDescendientesPorVinculo ? descendientesUnknown : hijosSinSexo;
+  const sexoInformado = hijosMFinal + hijosFFinal + hijosSinSexoFinal;
+  const hijosUnknown = Math.max(0, hijos - hijosMFinal - hijosFFinal);
   const edadesInsuficientes = !tieneCantidades && integrantesSinEdad > 0;
 
   return {
     adultos,
     hijos,
-    hijosM,
-    hijosF,
+    hijosM: hijosMFinal,
+    hijosF: hijosFFinal,
     hijosUnknown: sexoInformado > 0 || hijos === 2 || hijos === 4 ? hijosUnknown : 0,
+    distribucionRazonable: {
+      descendientes: hayDescendientesPorVinculo ? descendientes : hijos,
+      descendientesM: hayDescendientesPorVinculo ? descendientesM : hijosM,
+      descendientesF: hayDescendientesPorVinculo ? descendientesF : hijosF,
+      descendientesUnknown: hayDescendientesPorVinculo ? descendientesUnknown : hijosSinSexo,
+      otrosNoClasificables: otrosNoClasificables + Math.max(0, pareja - 1),
+    },
     tieneCantidades,
     tieneConvivientes,
     usableComoFuenteVigente: !edadesInsuficientes,
@@ -683,6 +760,7 @@ function enriquecerHacinamientoAnexo17(vivienda = {}) {
     hijosM: tieneComposicion ? composicion.hijosM : null,
     hijosF: tieneComposicion ? composicion.hijosF : null,
     hijosUnknown: tieneComposicion ? composicion.hijosUnknown : null,
+    distribucionRazonable: tieneComposicion ? composicion.distribucionRazonable : null,
   });
 
   const dormitoriosReales = isNumber(hacinamiento.dormitoriosReales)
