@@ -184,6 +184,72 @@ function clasificarSemaforoHacinamiento({
   return { semaforo: SEMAFORO.VERDE, requiereEvaluacion: false, motivo: "" };
 }
 
+function sexGroupsConPresuncion({ masculino, femenino, desconocido } = {}) {
+  let m = toIntegerOrNull(masculino) || 0;
+  let f = toIntegerOrNull(femenino) || 0;
+  let u = toIntegerOrNull(desconocido) || 0;
+
+  if (u > 0) {
+    if (m > 0 && f > 0) {
+      if (m >= f) m += u;
+      else f += u;
+    } else if (m > 0) {
+      m += u;
+    } else if (f > 0) {
+      f += u;
+    } else {
+      m = u;
+    }
+    u = 0;
+  }
+
+  return {
+    masculino: m,
+    femenino: f,
+    desconocido: u,
+    grupos: (m > 0 ? 1 : 0) + (f > 0 ? 1 : 0),
+  };
+}
+
+function calcularDistribucionRazonable({
+  dormitoriosReales,
+  adultos,
+  descendientes,
+  descendientesM,
+  descendientesF,
+  descendientesUnknown,
+  otrosNoClasificables,
+} = {}) {
+  const dormitorios = toIntegerOrNull(dormitoriosReales);
+  const adultosNum = toIntegerOrNull(adultos);
+  const descendientesNum = toIntegerOrNull(descendientes);
+  const otrosNum = toIntegerOrNull(otrosNoClasificables) || 0;
+
+  if (!dormitorios || dormitorios <= 0) return null;
+  if (adultosNum !== 2 || descendientesNum === null || otrosNum > 0) return null;
+
+  const gruposSexo = sexGroupsConPresuncion({
+    masculino: descendientesM,
+    femenino: descendientesF,
+    desconocido: descendientesUnknown,
+  });
+  const dormitoriosDescendientes = descendientesNum > 0 ? Math.max(1, gruposSexo.grupos) : 0;
+  const dormitoriosMinimos = 1 + dormitoriosDescendientes;
+
+  let semaforo;
+  if (dormitorios < dormitoriosMinimos) semaforo = SEMAFORO.ROJO;
+  else if (descendientesNum >= 3 && dormitorios >= dormitoriosMinimos) semaforo = SEMAFORO.VERDE;
+  else if (dormitorios === dormitoriosMinimos) semaforo = SEMAFORO.AMARILLO;
+  else semaforo = SEMAFORO.VERDE;
+
+  return {
+    dormitoriosMinimosAnexo17: dormitoriosMinimos,
+    semaforo,
+    requiereEvaluacion: false,
+    motivo: "",
+  };
+}
+
 function calcularHacinamientoAnexo17({
   estadoVivienda,
   dormitoriosReales,
@@ -192,6 +258,7 @@ function calcularHacinamientoAnexo17({
   hijosM,
   hijosF,
   hijosUnknown,
+  distribucionRazonable,
 } = {}) {
   const adultosNum = toIntegerOrNull(adultos);
   const hijosMNum = toIntegerOrNull(hijosM) || 0;
@@ -254,12 +321,26 @@ function calcularHacinamientoAnexo17({
     motivo: minimos.motivo,
   });
 
+  const razonable = minimos.requiereEvaluacion || hijosNum >= 3
+    ? calcularDistribucionRazonable({
+        dormitoriosReales: dormitorios,
+        adultos: adultosNum,
+        descendientes: distribucionRazonable && distribucionRazonable.descendientes,
+        descendientesM: distribucionRazonable && distribucionRazonable.descendientesM,
+        descendientesF: distribucionRazonable && distribucionRazonable.descendientesF,
+        descendientesUnknown: distribucionRazonable && distribucionRazonable.descendientesUnknown,
+        otrosNoClasificables: distribucionRazonable && distribucionRazonable.otrosNoClasificables,
+      })
+    : null;
+
   return {
     ...base,
-    dormitoriosMinimosAnexo17: minimos.dormitoriosMinimosAnexo17,
-    semaforo: clasificacion.semaforo,
-    requiereEvaluacion: clasificacion.requiereEvaluacion,
-    motivo: clasificacion.motivo,
+    dormitoriosMinimosAnexo17: razonable
+      ? razonable.dormitoriosMinimosAnexo17
+      : minimos.dormitoriosMinimosAnexo17,
+    semaforo: razonable ? razonable.semaforo : clasificacion.semaforo,
+    requiereEvaluacion: razonable ? razonable.requiereEvaluacion : clasificacion.requiereEvaluacion,
+    motivo: razonable ? razonable.motivo : clasificacion.motivo,
   };
 }
 
