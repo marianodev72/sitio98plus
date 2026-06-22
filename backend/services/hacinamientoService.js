@@ -47,14 +47,46 @@ function resultadoMinimos(dormitoriosMinimosAnexo17, requiereEvaluacion = false,
   };
 }
 
+function distribuirHijosConSexoPresumido({ hijos, hijosM, hijosF, hijosUnknown } = {}) {
+  let hijosMNum = toIntegerOrNull(hijosM) || 0;
+  let hijosFNum = toIntegerOrNull(hijosF) || 0;
+  let hijosUnknownNum = toIntegerOrNull(hijosUnknown) || 0;
+  const hijosNumRaw = toIntegerOrNull(hijos);
+  const hijosInformados = hijosMNum + hijosFNum + hijosUnknownNum;
+  const hijosNum = hijosNumRaw === null ? hijosInformados : hijosNumRaw;
+
+  if (hijosNum === null) {
+    return { hijos: null, hijosM: hijosMNum, hijosF: hijosFNum, hijosUnknown: hijosUnknownNum, inconsistente: false };
+  }
+
+  if (hijosMNum + hijosFNum > hijosNum || hijosInformados > hijosNum) {
+    return { hijos: hijosNum, hijosM: hijosMNum, hijosF: hijosFNum, hijosUnknown: hijosUnknownNum, inconsistente: true };
+  }
+
+  hijosUnknownNum += Math.max(0, hijosNum - hijosInformados);
+
+  if (hijosUnknownNum > 0) {
+    if (hijosMNum > 0 && hijosFNum > 0) {
+      if (hijosMNum >= hijosFNum) hijosMNum += hijosUnknownNum;
+      else hijosFNum += hijosUnknownNum;
+    } else if (hijosMNum > 0) {
+      hijosMNum += hijosUnknownNum;
+    } else if (hijosFNum > 0) {
+      hijosFNum += hijosUnknownNum;
+    } else {
+      hijosMNum = hijosUnknownNum;
+    }
+  }
+
+  return { hijos: hijosNum, hijosM: hijosMNum, hijosF: hijosFNum, hijosUnknown: 0, inconsistente: false };
+}
+
 function calcularDormitoriosMinimosAnexo17({ adultos, hijos, hijosM, hijosF, hijosUnknown } = {}) {
   const adultosNum = toIntegerOrNull(adultos);
-  const hijosMNum = toIntegerOrNull(hijosM) || 0;
-  const hijosFNum = toIntegerOrNull(hijosF) || 0;
-  const hijosUnknownNum = toIntegerOrNull(hijosUnknown) || 0;
-  const hijosNumRaw = toIntegerOrNull(hijos);
-  const hijosPorSexo = hijosMNum + hijosFNum + hijosUnknownNum;
-  const hijosNum = hijosNumRaw === null ? hijosPorSexo : hijosNumRaw;
+  const distribucion = distribuirHijosConSexoPresumido({ hijos, hijosM, hijosF, hijosUnknown });
+  const hijosNum = distribucion.hijos;
+  const hijosMNum = distribucion.hijosM;
+  const hijosFNum = distribucion.hijosF;
 
   if (adultosNum === null || hijosNum === null) {
     return resultadoMinimos(null, true, "COMPOSICION_FAMILIAR_INSUFICIENTE");
@@ -64,7 +96,7 @@ function calcularDormitoriosMinimosAnexo17({ adultos, hijos, hijosM, hijosF, hij
     return resultadoMinimos(null, true, "COMPOSICION_FAMILIAR_NO_CONTEMPLADA_ANEXO_17");
   }
 
-  if (hijosNum !== hijosPorSexo) {
+  if (distribucion.inconsistente) {
     return resultadoMinimos(null, true, "DISTRIBUCION_DE_HIJOS_INCONSISTENTE");
   }
 
@@ -76,10 +108,6 @@ function calcularDormitoriosMinimosAnexo17({ adultos, hijos, hijosM, hijosF, hij
   if (hijosNum === 1) return resultadoMinimos(2);
 
   if (hijosNum === 2) {
-    if (hijosUnknownNum > 0) {
-      return resultadoMinimos(null, true, "SEXO_GENERO_FALTANTE_DECISIVO");
-    }
-
     if (hijosMNum === 2 || hijosFNum === 2) return resultadoMinimos(2);
     if (hijosMNum === 1 && hijosFNum === 1) return resultadoMinimos(3);
 
@@ -89,10 +117,6 @@ function calcularDormitoriosMinimosAnexo17({ adultos, hijos, hijosM, hijosF, hij
   if (hijosNum === 3) return resultadoMinimos(3);
 
   if (hijosNum === 4) {
-    if (hijosUnknownNum > 0) {
-      return resultadoMinimos(null, true, "SEXO_GENERO_FALTANTE_DECISIVO");
-    }
-
     if (hijosMNum === 4 || hijosFNum === 4) return resultadoMinimos(3);
     if (hijosMNum === 2 && hijosFNum === 2) return resultadoMinimos(3);
     if (

@@ -621,8 +621,6 @@ function composicionDesdeDatos(datos = {}, grupoLegacy = {}) {
   const hijos = hijosPreferidos !== null ? hijosPreferidos : hijosPorEdad;
   const sexoInformado = hijosM + hijosF + hijosSinSexo;
   const hijosUnknown = Math.max(0, hijos - hijosM - hijosF);
-  const requiereSexoCompleto = hijos === 2 || hijos === 4;
-  const sexoDecisivoIncompleto = requiereSexoCompleto && hijosUnknown > 0;
   const edadesInsuficientes = !tieneCantidades && integrantesSinEdad > 0;
 
   return {
@@ -630,10 +628,10 @@ function composicionDesdeDatos(datos = {}, grupoLegacy = {}) {
     hijos,
     hijosM,
     hijosF,
-    hijosUnknown: sexoInformado > 0 || requiereSexoCompleto ? hijosUnknown : 0,
+    hijosUnknown: sexoInformado > 0 || hijos === 2 || hijos === 4 ? hijosUnknown : 0,
     tieneCantidades,
     tieneConvivientes,
-    usableComoFuenteVigente: !edadesInsuficientes && !sexoDecisivoIncompleto,
+    usableComoFuenteVigente: !edadesInsuficientes,
   };
 }
 
