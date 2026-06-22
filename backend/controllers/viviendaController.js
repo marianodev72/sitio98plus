@@ -165,11 +165,11 @@ function buildViviendasPipeline(query = {}) {
             },
           },
         },
-        { $sort: { createdAt: -1 } },
-        { $limit: 1 },
-        { $project: { _id: 1, createdAt: 1, datosActualizados: 1, datos: 1, grupoFamiliar: 1 } },
+        { $sort: { updatedAt: -1, createdAt: -1, _id: -1 } },
+        { $limit: 10 },
+        { $project: { _id: 1, createdAt: 1, updatedAt: 1, datosActualizados: 1, datos: 1, grupoFamiliar: 1 } },
       ],
-      as: "misDatosUltimos",
+      as: "misDatosCandidatos",
     },
   });
 
@@ -201,7 +201,7 @@ function buildViviendasPipeline(query = {}) {
   pipeline.push({
     $addFields: {
       permisionarioDoc: { $arrayElemAt: ["$permisionarioDoc", 0] },
-      misDatosUltimo: { $arrayElemAt: ["$misDatosUltimos", 0] }, // objeto (o null)
+      misDatosUltimo: { $arrayElemAt: ["$misDatosCandidatos", 0] }, // compatibilidad interna del pipeline
       anexo01Ultimo: { $arrayElemAt: ["$anexo01Ultimos", 0] },
     },
   });
@@ -502,6 +502,8 @@ function buildViviendasPipeline(query = {}) {
         hijosM: "$_mdHijosM",
         hijosF: "$_mdHijosF",
         hijosUnknown: "$_mdHijosUnknown",
+        misDatosCandidatos: "$misDatosCandidatos",
+        anexo01Ultimo: "$anexo01Ultimo",
       },
 
       permisionario: {
@@ -532,19 +534,157 @@ function isNumber(value) {
   return typeof value === "number" && Number.isFinite(value);
 }
 
+function toIntOrNullValue(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  const int = Math.trunc(n);
+  return int >= 0 ? int : null;
+}
+
+function isPlainObject(value) {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function objectWithContent(value) {
+  return isPlainObject(value) && Object.keys(value).length > 0;
+}
+
+function pickArray(...values) {
+  for (const value of values) {
+    if (Array.isArray(value) && value.length > 0) return value;
+  }
+  return [];
+}
+
+function pickSexoGenero(value = {}) {
+  return up(value.sexo || value.genero || value["género"] || value.gender);
+}
+
+function isSexoMasculino(value) {
+  return ["M", "MASCULINO", "VARON", "VARÓN", "HOMBRE"].includes(up(value));
+}
+
+function isSexoFemenino(value) {
+  return ["F", "FEMENINO", "MUJER"].includes(up(value));
+}
+
+function composicionDesdeDatos(datos = {}, grupoLegacy = {}) {
+  const fuenteDatos = isPlainObject(datos) ? datos : {};
+  const fuenteGrupo = isPlainObject(grupoLegacy) || Array.isArray(grupoLegacy) ? grupoLegacy : {};
+  const grupoEnDatos = fuenteDatos.grupoFamiliar;
+  const convivientes = pickArray(
+    fuenteDatos.convivientes,
+    fuenteDatos.integrantes,
+    isPlainObject(grupoEnDatos) ? grupoEnDatos.convivientes : null,
+    isPlainObject(grupoEnDatos) ? grupoEnDatos.integrantes : null,
+    Array.isArray(grupoEnDatos) ? grupoEnDatos : null,
+    isPlainObject(fuenteGrupo) ? fuenteGrupo.convivientes : null,
+    isPlainObject(fuenteGrupo) ? fuenteGrupo.integrantes : null,
+    Array.isArray(fuenteGrupo) ? fuenteGrupo : null
+  );
+
+  const adultosPreferidos = toIntOrNullValue(fuenteDatos.cantidadAdultos);
+  const hijosPreferidos = toIntOrNullValue(fuenteDatos.cantidadHijos);
+  const tieneCantidades = adultosPreferidos !== null || hijosPreferidos !== null;
+  const tieneConvivientes = convivientes.length > 0;
+
+  if (!tieneCantidades && !tieneConvivientes) return null;
+
+  let adultosPorEdad = 0;
+  let hijosPorEdad = 0;
+  let hijosM = 0;
+  let hijosF = 0;
+  let hijosSinSexo = 0;
+  let integrantesSinEdad = 0;
+
+  for (const integrante of convivientes) {
+    const edad = toIntOrNullValue(integrante && integrante.edad);
+    if (edad === null) {
+      integrantesSinEdad += 1;
+      continue;
+    }
+
+    if (edad >= 18) {
+      adultosPorEdad += 1;
+      continue;
+    }
+
+    hijosPorEdad += 1;
+    const sexo = pickSexoGenero(integrante || {});
+    if (isSexoMasculino(sexo)) hijosM += 1;
+    else if (isSexoFemenino(sexo)) hijosF += 1;
+    else hijosSinSexo += 1;
+  }
+
+  const adultos = adultosPreferidos !== null ? adultosPreferidos : 1 + adultosPorEdad;
+  const hijos = hijosPreferidos !== null ? hijosPreferidos : hijosPorEdad;
+  const sexoInformado = hijosM + hijosF + hijosSinSexo;
+  const hijosUnknown = Math.max(0, hijos - hijosM - hijosF);
+  const requiereSexoCompleto = hijos === 2 || hijos === 4;
+  const sexoDecisivoIncompleto = requiereSexoCompleto && hijosUnknown > 0;
+  const edadesInsuficientes = !tieneCantidades && integrantesSinEdad > 0;
+
+  return {
+    adultos,
+    hijos,
+    hijosM,
+    hijosF,
+    hijosUnknown: sexoInformado > 0 || requiereSexoCompleto ? hijosUnknown : 0,
+    tieneCantidades,
+    tieneConvivientes,
+    usableComoFuenteVigente: !edadesInsuficientes && !sexoDecisivoIncompleto,
+  };
+}
+
+function datosMisDatosDeclarados(update = {}) {
+  if (!isPlainObject(update)) return {};
+  if (objectWithContent(update.datosActualizados)) return update.datosActualizados;
+  if (objectWithContent(update.datos)) return update.datos;
+  return {};
+}
+
+function resolverFuenteFamiliarHacinamiento(hacinamientoBase = {}) {
+  const candidatos = Array.isArray(hacinamientoBase.misDatosCandidatos)
+    ? hacinamientoBase.misDatosCandidatos
+    : [];
+
+  for (const candidato of candidatos) {
+    const composicion = composicionDesdeDatos(datosMisDatosDeclarados(candidato), candidato && candidato.grupoFamiliar);
+    if (composicion && composicion.usableComoFuenteVigente) {
+      return { fuente: "MIS_DATOS_DECLARADOS", composicion };
+    }
+  }
+
+  const anexo01Datos = isPlainObject(hacinamientoBase.anexo01Ultimo && hacinamientoBase.anexo01Ultimo.datos)
+    ? hacinamientoBase.anexo01Ultimo.datos
+    : {};
+  const composicionAnexo01 = composicionDesdeDatos(anexo01Datos);
+  if (composicionAnexo01) {
+    return { fuente: "ANEXO_01", composicion: composicionAnexo01 };
+  }
+
+  return {
+    fuente: safeStr(hacinamientoBase.fuente) || "SIN_DATOS",
+    composicion: null,
+  };
+}
+
 function enriquecerHacinamientoAnexo17(vivienda = {}) {
   const { hacinamientoBase = {}, ...out } = vivienda || {};
-  const fuenteHacinamiento = safeStr(hacinamientoBase.fuente) || "SIN_DATOS";
-  const tieneComposicion = fuenteHacinamiento === "MIS_DATOS_DECLARADOS" || fuenteHacinamiento === "ANEXO_01";
+  const fuenteResuelta = resolverFuenteFamiliarHacinamiento(hacinamientoBase);
+  const fuenteHacinamiento = fuenteResuelta.fuente;
+  const composicion = fuenteResuelta.composicion;
+  const tieneComposicion = Boolean(composicion);
 
   const hacinamiento = calcularHacinamientoAnexo17({
     estadoVivienda: out.estado,
     dormitoriosReales: out.dormitorios,
-    adultos: tieneComposicion ? hacinamientoBase.adultos : null,
-    hijos: tieneComposicion ? hacinamientoBase.hijos : null,
-    hijosM: tieneComposicion ? hacinamientoBase.hijosM : null,
-    hijosF: tieneComposicion ? hacinamientoBase.hijosF : null,
-    hijosUnknown: tieneComposicion ? hacinamientoBase.hijosUnknown : null,
+    adultos: tieneComposicion ? composicion.adultos : null,
+    hijos: tieneComposicion ? composicion.hijos : null,
+    hijosM: tieneComposicion ? composicion.hijosM : null,
+    hijosF: tieneComposicion ? composicion.hijosF : null,
+    hijosUnknown: tieneComposicion ? composicion.hijosUnknown : null,
   });
 
   const dormitoriosReales = isNumber(hacinamiento.dormitoriosReales)
