@@ -722,6 +722,13 @@ async function cambiarBloqueo(req, res) {
     const { bloqueado, observacion } = req.body || {};
     if (!mongoose.Types.ObjectId.isValid(id)) return deny(res);
 
+    if (typeof bloqueado !== "boolean") {
+      return res.status(400).json({
+        code: "BLOQUEADO_BOOLEAN_REQUERIDO",
+        message: "El campo bloqueado debe ser booleano true/false.",
+      });
+    }
+
     const selfId = String(req.user?._id || "");
     if (selfId && String(id) === selfId) return deny(res);
 
