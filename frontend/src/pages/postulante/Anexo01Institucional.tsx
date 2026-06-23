@@ -276,6 +276,19 @@ function options00a99() {
   return arr;
 }
 
+const VINCULOS_FAMILIARES = [
+  "Cónyuge",
+  "Conviviente",
+  "Concubino/a",
+  "Hijo/a",
+  "Hijastro/a",
+  "Nieto/a",
+  "Padre/Madre",
+  "Hermano/a",
+  "Suegro/a",
+  "Otro",
+];
+
 export default function Anexo01Institucional({
   defaultTipoSolicitud = "",
   lockTipoSolicitud = false,
@@ -1053,13 +1066,20 @@ export default function Anexo01Institucional({
                         />
                       </td>
                       <td style={tdStyle}>
-                        <input
+                        <select
                           value={c.relacion}
                           onChange={(e) =>
                             updateConviviente(idx, { relacion: e.target.value })
                           }
-                          style={controlStyle}
-                        />
+                          style={selectStyle}
+                        >
+                          <option value="" style={optionStyle}>—</option>
+                          {VINCULOS_FAMILIARES.map((vinculo) => (
+                            <option key={vinculo} value={vinculo} style={optionStyle}>
+                              {vinculo}
+                            </option>
+                          ))}
+                        </select>
                       </td>
                       <td style={tdStyle}>
                         <select
