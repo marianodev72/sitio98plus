@@ -608,6 +608,20 @@ function esVinculoDescendiente(vinculo) {
   );
 }
 
+function esVinculoAdultoNoDescendiente(vinculo) {
+  const v = normalizarTextoInstitucional(vinculo);
+  return (
+    v.includes("PADRE") ||
+    v.includes("MADRE") ||
+    v.includes("HERMAN") ||
+    v.includes("SUEGR") ||
+    v.includes("TIO") ||
+    v.includes("TIA") ||
+    v.includes("PRIM") ||
+    v.includes("ABUEL")
+  );
+}
+
 function composicionDesdeDatos(datos = {}, grupoLegacy = {}) {
   const fuenteDatos = isPlainObject(datos) ? datos : {};
   const fuenteGrupo = isPlainObject(grupoLegacy) || Array.isArray(grupoLegacy) ? grupoLegacy : {};
@@ -659,12 +673,27 @@ function composicionDesdeDatos(datos = {}, grupoLegacy = {}) {
       continue;
     }
 
+    const edad = toIntOrNullValue(integrante && integrante.edad);
+
     if (vinculo) {
+      if (esVinculoAdultoNoDescendiente(vinculo)) {
+        otrosNoClasificables += 1;
+        continue;
+      }
+
+      if (edad !== null && edad < 18) {
+        descendientes += 1;
+        const sexoProbable = pickSexoGenero(integrante || {});
+        if (isSexoMasculino(sexoProbable)) descendientesM += 1;
+        else if (isSexoFemenino(sexoProbable)) descendientesF += 1;
+        else descendientesUnknown += 1;
+        continue;
+      }
+
       otrosNoClasificables += 1;
       continue;
     }
 
-    const edad = toIntOrNullValue(integrante && integrante.edad);
     if (edad === null) {
       integrantesSinEdad += 1;
       continue;
