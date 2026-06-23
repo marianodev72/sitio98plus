@@ -18,6 +18,7 @@ type Usuario = {
   viviendaLabel?: string;
   alojamientoLabel?: string;
   activo?: boolean;
+  bloqueado?: boolean;
   archivado?: boolean;
 };
 
@@ -323,6 +324,37 @@ export default function UsuariosAdminGeneral() {
       await refreshIfSelf(userId);
     } catch {
       setError("No se pudo actualizar el estado del usuario. Si el problema persiste, contacte al administrador.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function cambiarBloqueo(userId: string, nextBloqueado: boolean) {
+    clearMessages();
+    if (userId === myId) {
+      setError("No es posible modificar el bloqueo del usuario con el que está autenticado.");
+      return;
+    }
+
+    const accion = nextBloqueado ? "bloquear" : "desbloquear";
+    const ok = window.confirm(`Va a ${accion} al usuario seleccionado.\n\n¿Desea continuar?`);
+    if (!ok) return;
+
+    setBusyId(userId);
+    try {
+      await http.patch(`/users/${userId}/bloqueo`, {
+        bloqueado: nextBloqueado,
+        observacion: nextBloqueado
+          ? "Bloqueo manual por ADMIN_GENERAL"
+          : "Desbloqueo manual por ADMIN_GENERAL",
+      });
+      setInfo(nextBloqueado ? "Usuario bloqueado correctamente." : "Usuario desbloqueado correctamente.");
+      await cargar();
+    } catch (e: any) {
+      const message =
+        String(e?.response?.data?.message || "").trim() ||
+        "No se pudo actualizar el bloqueo del usuario. Si el problema persiste, contacte al administrador.";
+      setError(message);
     } finally {
       setBusyId(null);
     }
@@ -968,6 +1000,17 @@ if (loading) return <p style={{ color: "#E5E7EB" }}>Cargando usuarios…</p>;
                   whiteSpace: "nowrap",
                 }}
               >
+                Bloqueo
+              </th>
+              <th
+                style={{
+                  padding: "12px 14px",
+                  fontSize: 14,
+                  border: "1px solid #334155",
+                  color: "#F8FAFC",
+                  whiteSpace: "nowrap",
+                }}
+              >
                 Acciones
               </th>
             </tr>
@@ -1201,6 +1244,66 @@ if (loading) return <p style={{ color: "#E5E7EB" }}>Cargando usuarios…</p>;
 
         <td
           style={{
+            textAlign: "center",
+            padding: "12px 14px",
+            border: "1px solid #334155",
+            fontSize: 14,
+            whiteSpace: "nowrap",
+          }}
+        >
+          <span
+            style={{
+              display: "inline-block",
+              marginRight: 8,
+              padding: "4px 8px",
+              borderRadius: 999,
+              fontWeight: 800,
+              color: u.bloqueado ? "#FCA5A5" : "#86EFAC",
+              background: u.bloqueado ? "#3F1113" : "#0F2A1B",
+              border: u.bloqueado ? "1px solid #7F1D1D" : "1px solid #166534",
+            }}
+          >
+            {u.bloqueado ? "Bloqueado" : "Sin bloqueo"}
+          </span>
+          {u.bloqueado ? (
+            <button
+              disabled={busy || u._id === myId}
+              onClick={() => cambiarBloqueo(u._id, false)}
+              style={{
+                padding: "9px 12px",
+                fontSize: 14,
+                fontWeight: 700,
+                color: "#F8FAFC",
+                background: "#1E293B",
+                border: "1px solid #475569",
+                borderRadius: 8,
+                cursor: busy || u._id === myId ? "not-allowed" : "pointer",
+              }}
+            >
+              Desbloquear
+            </button>
+          ) : (
+            <button
+              disabled={busy || u._id === myId}
+              onClick={() => cambiarBloqueo(u._id, true)}
+              style={{
+                padding: "9px 12px",
+                fontSize: 14,
+                fontWeight: 700,
+                color: "#F8FAFC",
+                background: "#3F1D1D",
+                border: "1px solid #7F1D1D",
+                borderRadius: 8,
+                cursor: busy || u._id === myId ? "not-allowed" : "pointer",
+              }}
+            >
+              Bloquear
+            </button>
+          )}
+        </td>
+
+        <td
+          style={{
             whiteSpace: "nowrap",
             padding: "12px 14px",
             border: "1px solid #334155",
@@ -1248,7 +1351,7 @@ if (loading) return <p style={{ color: "#E5E7EB" }}>Cargando usuarios…</p>;
   {rows.length === 0 && (
     <tr>
       <td
-        colSpan={14}
+        colSpan={15}
         style={{
           textAlign: "center",
           padding: 16,

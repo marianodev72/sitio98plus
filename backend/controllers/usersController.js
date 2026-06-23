@@ -171,6 +171,13 @@ function registrarAdminEvento(user, req, tipo, detalles = {}, observacionRaw = "
   }
 }
 
+function limpiarBloqueoLogin(user) {
+  if (!user) return;
+  user.bloqueado = false;
+  user.loginFallidos = 0;
+  user.loginBloqueadoHasta = null;
+}
+
 function buildFiltro(req) {
   const filtro = {};
 
@@ -703,6 +710,59 @@ async function cambiarActivo(req, res) {
   }
 }
 
+/**
+ * PATCH /api/users/:id/bloqueo
+ * SOLO ADMIN_GENERAL (escritura)
+ */
+async function cambiarBloqueo(req, res) {
+  try {
+    if (!isAdminGeneral(req)) return deny(res);
+
+    const { id } = req.params;
+    const { bloqueado, observacion } = req.body || {};
+    if (!mongoose.Types.ObjectId.isValid(id)) return deny(res);
+
+    const selfId = String(req.user?._id || "");
+    if (selfId && String(id) === selfId) return deny(res);
+
+    const user = await User.findById(id).select(
+      "+adminEventos +tokenVersion +loginFallidos +loginBloqueadoHasta"
+    );
+    if (!user) return deny(res);
+
+    const nextBloqueado = bloqueado === true;
+
+    if (nextBloqueado) {
+      user.bloqueado = true;
+    } else {
+      limpiarBloqueoLogin(user);
+    }
+
+    registrarAdminEvento(
+      user,
+      req,
+      nextBloqueado ? "BLOQUEAR_USUARIO" : "DESBLOQUEAR_USUARIO",
+      {
+        bloqueado: nextBloqueado,
+        loginFallidosReiniciados: !nextBloqueado,
+        loginBloqueadoHastaLimpiado: !nextBloqueado,
+      },
+      observacion
+    );
+
+    bumpTokenVersion(user);
+    await user.save();
+
+    return res.json({
+      message: nextBloqueado ? "Usuario bloqueado" : "Usuario desbloqueado",
+      bloqueado: user.bloqueado === true,
+    });
+  } catch (err) {
+    console.error("[USERS] Error cambiarBloqueo:", err);
+    return res.status(500).json({ message: "Error interno" });
+  }
+}
+
 function makeTempPassword() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%";
   let out = "";
@@ -756,18 +816,26 @@ async function resetPassword(req, res) {
     const adminConfirmed = await confirmAdminPassword(req, res);
     if (!adminConfirmed) return;
 
-    const user = await User.findById(id).select("+adminEventos +passwordHash +tokenVersion");
+    const user = await User.findById(id).select(
+      "+adminEventos +passwordHash +tokenVersion +loginFallidos +loginBloqueadoHasta"
+    );
     if (!user) return deny(res);
 
     const tempPassword = makeTempPassword();
     await user.setPassword(tempPassword);
     user.mustChangePassword = true;
+    limpiarBloqueoLogin(user);
 
     registrarAdminEvento(
       user,
       req,
       "RESET_PASSWORD",
-      { tempPasswordEmitida: true },
+      {
+        tempPasswordEmitida: true,
+        desbloqueado: true,
+        loginFallidosReiniciados: true,
+        loginBloqueadoHastaLimpiado: true,
+      },
       observacion
     );
 
@@ -964,6 +1032,7 @@ module.exports = {
   asignarTerritoriosAlojamiento,
   asignarVivienda,
   cambiarActivo,
+  cambiarBloqueo,
   resetPassword,
   resetMFA,
   archivar,

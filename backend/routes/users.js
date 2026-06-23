@@ -306,6 +306,16 @@ router.patch(
   usersController.cambiarActivo
 );
 
+router.patch(
+  "/:id/bloqueo",
+  requireRole("ADMIN_GENERAL"),
+  audit("ADMIN_TOGGLE_BLOCK", {
+    targetType: "User",
+    metaAllowlist: ["params.id", "body.bloqueado"],
+  }),
+  usersController.cambiarBloqueo
+);
+
 router.post(
   "/:id/reset-password",
   requireRole("ADMIN", "ADMIN_GENERAL"),
