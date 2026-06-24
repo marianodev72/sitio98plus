@@ -93,27 +93,53 @@ function safePdfHeaders(res, disposition, filename) {
 // --------- Storage root (tiene que coincidir con crear)
 function storageRoot() {
   // mismo root que usás hoy en crear()
+  return primaryStorageRoot();
+}
+function primaryStorageRoot() {
+  return (
+    process.env.MANTENIMIENTOS_STORAGE_DIR ||
+    path.join(process.cwd(), "uploads_private", "mis-mantenimientos")
+  );
+}
+
+function legacyStorageRoot() {
   return path.join(__dirname, "..", "storage", "mis-mantenimientos");
 }
+
+function allowedStorageRoots() {
+  return [primaryStorageRoot(), legacyStorageRoot()];
+}
+
+function resolveRootName(root) {
+  const resolved = path.resolve(root);
+  if (resolved === path.resolve(primaryStorageRoot())) return "ARCH_PRIVATE_OK";
+  if (resolved === path.resolve(legacyStorageRoot())) return "ARCH_LEGACY_OK";
+  return "ARCH_STORAGE_OK";
+}
+
+function isInsideRoot(filePath, root) {
+  const resolvedRoot = path.resolve(root);
+  const resolvedFile = path.resolve(filePath);
+  return resolvedFile.startsWith(resolvedRoot + path.sep);
+}
+
 function canonicalPathForFileId(fileId) {
   const root = storageRoot();
   const full = path.join(root, `${fileId}.pdf`);
-  const resolvedRoot = path.resolve(root);
   const resolvedFull = path.resolve(full);
 
   // Anti traversal
-  if (!resolvedFull.startsWith(resolvedRoot + path.sep)) return null;
+  if (!isInsideRoot(resolvedFull, root)) return null;
   return resolvedFull;
 }
 function resolveReadablePath(p) {
   if (!p) return null;
   try {
     const rp = path.resolve(String(p));
-    const rr = path.resolve(storageRoot());
-    // anti traversal: solo permitimos dentro del root
-    if (!rp.startsWith(rr + path.sep)) return null;
+    const root = allowedStorageRoots().find((candidate) => isInsideRoot(rp, candidate));
+    if (!root) return null;
     if (!fs.existsSync(rp)) return null;
-    return rp;
+    return { path: rp, code: resolveRootName(root) };
   } catch {
     return null;
   }
@@ -492,12 +518,29 @@ async function servirArchivo(req, res, disposition) {
 
     if (!readable) {
       const cand = canonicalPathForFileId(fileId);
-      if (!cand || !fs.existsSync(cand)) return deny(res, "ARCH_NO_DISCO");
-      readable = cand;
+      if (cand && fs.existsSync(cand)) {
+        readable = { path: cand, code: "ARCH_PRIVATE_OK" };
+      }
+    }
+
+    if (!readable) {
+      const legacyCand = path.join(legacyStorageRoot(), `${fileId}.pdf`);
+      if (isInsideRoot(legacyCand, legacyStorageRoot()) && fs.existsSync(legacyCand)) {
+        readable = { path: path.resolve(legacyCand), code: "ARCH_LEGACY_OK" };
+      }
+    }
+
+    if (!readable) {
+      return deny(res, "ARCH_NO_DISCO");
+    }
+
+    try {
+      console.info("[MIS-MANTENIMIENTOS][ARCH]", readable.code);
+    } catch (_) {
     }
 
     safePdfHeaders(res, disposition, a.nombre || "documento.pdf");
-    return fs.createReadStream(readable).pipe(res);
+    return fs.createReadStream(readable.path).pipe(res);
   } catch {
     return fail(res);
   }
