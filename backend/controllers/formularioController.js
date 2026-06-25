@@ -629,7 +629,9 @@ async function getById(req, res) {
         }
       }
 
-      return res.json(stripAdjuntoRutas({ anexo: stripEstadoInstitucionalIfNeeded(user, anexo.toObject ? anexo.toObject() : anexo), origen }));
+      const anexoBase = anexo.toObject ? anexo.toObject() : anexo;
+      const anexoConDerivacion = await hydrateAnexo01Derivacion(anexoBase);
+      return res.json(stripAdjuntoRutas({ anexo: stripEstadoInstitucionalIfNeeded(user, anexoConDerivacion), origen }));
     }
 
     // Resto de roles: visibilidad normal
@@ -755,7 +757,8 @@ origen = {
   }
 }
 
-    const anexoObj = anexo.toObject ? anexo.toObject() : anexo;
+    let anexoObj = anexo.toObject ? anexo.toObject() : anexo;
+    anexoObj = await hydrateAnexo01Derivacion(anexoObj);
 
     if (codigoUp === "ANEXO_11" && anexoObj && typeof anexoObj === "object") {
       const d = anexoObj.datos && typeof anexoObj.datos === "object" ? anexoObj.datos : {};
@@ -5563,6 +5566,7 @@ async function listarPorCodigo(req, res) {
   try {
     const user = req.user;
     const role = up(user?.role);
+    const escapeRegex = (v) => String(v).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
     if (!user || !user.role) return genericDenied(res);
 
@@ -5584,6 +5588,7 @@ if (!isAdmin && !(isInspector && codigo === "ANEXO_02")) {
 }
 
     const filter = listarTodos ? {} : { codigo };
+    const andFilters = [];
 
 // ✅ Inspector queda limitado SIEMPRE a su barrio asignado
 if (isInspector) {
@@ -5597,7 +5602,6 @@ if (isInspector) {
 
     const barrioFiltro = String(req.query?.barrio || "").trim();
     if (barrioFiltro) {
-      const escapeRegex = (v) => String(v).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const barrioRegex = new RegExp(escapeRegex(barrioFiltro), "i");
       const barrioOr = [
         { barrio: barrioRegex },
@@ -5619,8 +5623,52 @@ if (isInspector) {
           );
         }
       }
-      filter.$or = barrioOr;
+      andFilters.push({ $or: barrioOr });
     }
+
+    const qFiltro = String(req.query?.q || "").trim();
+    if (qFiltro) {
+      const qRegex = new RegExp(escapeRegex(qFiltro), "i");
+      const qOr = [
+        { "datos.apellidoNombres": qRegex },
+        { "datos.apellidoNombre": qRegex },
+        { "datos.nombreCompleto": qRegex },
+        { "datos.postulanteNombre": qRegex },
+        { "datos.titularNombre": qRegex },
+        { "datos.permisionarioNombre": qRegex },
+        { "datos.email": qRegex },
+        { "datos.matricula": qRegex },
+        { "datos.mr": qRegex },
+      ];
+
+      if (User) {
+        const usuarios = await User.find({
+          $or: [
+            { nombre: qRegex },
+            { apellido: qRegex },
+            { email: qRegex },
+            { matricula: qRegex },
+            { mr: qRegex },
+            { "meta.matricula": qRegex },
+            { "meta.mr": qRegex },
+          ],
+        })
+          .select("_id")
+          .lean();
+
+        const userIds = usuarios.map((u) => u?._id).filter(Boolean);
+        if (userIds.length) {
+          qOr.push(
+            { usuario: { $in: userIds } },
+            { "datos.postulanteId": { $in: [...userIds, ...userIds.map(String)] } }
+          );
+        }
+      }
+
+      andFilters.push({ $or: qOr });
+    }
+
+    if (andFilters.length) filter.$and = andFilters;
 
     const sortDir = String(req.query?.sortDir || "desc").toLowerCase() === "asc" ? 1 : -1;
     const pageRaw = Number.parseInt(String(req.query?.page || "1"), 10);
@@ -5647,7 +5695,12 @@ const anexos = await query;
     }
 
     if (listarTodos) {
-      const anexosHidratados = await hydrateViviendaCodigo(anexos);
+      const anexosHidratados = await hydrateAnexo01Derivacion(await hydrateViviendaCodigo(anexos));
+      return res.json(stripAdjuntoRutas({ anexos: anexosHidratados.map((a) => stripEstadoInstitucionalIfNeeded(user, a)) }));
+    }
+
+    if (codigo === "ANEXO_01") {
+      const anexosHidratados = await hydrateAnexo01Derivacion(anexos);
       return res.json(stripAdjuntoRutas({ anexos: anexosHidratados.map((a) => stripEstadoInstitucionalIfNeeded(user, a)) }));
     }
 
@@ -6250,6 +6303,55 @@ async function getMisDatosDeclaradosUpdateById(req, res) {
 // Helpers para PDF de Mis Datos
 function objectWithContent(value) {
   return value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length > 0;
+}
+
+async function hydrateAnexo01Derivacion(docs) {
+  const isArrayInput = Array.isArray(docs);
+  const arr = isArrayInput ? docs : docs ? [docs] : [];
+  const anexo01Ids = arr
+    .filter((a) => up(a?.codigo) === "ANEXO_01" && a?._id)
+    .map((a) => a._id);
+
+  if (!anexo01Ids.length) return isArrayInput ? arr : docs;
+
+  const derivados = await FormSubmission.find({
+    codigo: "ANEXO_02",
+    derivadoDe: { $in: anexo01Ids },
+  })
+    .select("_id codigo estado derivadoDe datos vivienda")
+    .sort({ updatedAt: -1, createdAt: -1, _id: -1 })
+    .lean();
+
+  const derivadosHidratados = await hydrateViviendaCodigo(derivados);
+  const derivadosPorOrigen = new Map();
+  for (const der of derivadosHidratados) {
+    const key = String(der?.derivadoDe || "");
+    if (key && !derivadosPorOrigen.has(key)) derivadosPorOrigen.set(key, der);
+  }
+
+  const decorate = (a) => {
+    if (up(a?.codigo) !== "ANEXO_01") return a;
+    const der = derivadosPorOrigen.get(String(a?._id || ""));
+    const viviendaCodigo =
+      der?.viviendaCodigo ||
+      der?.datos?.viviendaCodigo ||
+      der?.datos?.viviendaLabel ||
+      null;
+
+    return {
+      ...a,
+      tieneAnexo02Derivado: Boolean(der),
+      anexo02DerivadoId: der?._id ? String(der._id) : null,
+      anexo02DerivadoCodigo: der ? "ANEXO_02" : null,
+      anexo02DerivadoEstado: der?.estado || null,
+      anexo02DerivadoViviendaCodigo: viviendaCodigo,
+      estadoDerivacion: der ? "ANEXO_02_GENERADO" : null,
+      tramiteCerradoPorDerivacion: Boolean(der),
+    };
+  };
+
+  const result = arr.map(decorate);
+  return isArrayInput ? result : result[0] || docs;
 }
 
 function getDatosDeclaradosUpdate(upd) {
@@ -7140,33 +7242,28 @@ async function generarAnexo02DesdeAnexo01(req, res) {
     if (role !== "ADMIN_GENERAL") return genericDenied(res);
     if (!isObjectId(id)) return genericDenied(res);
 
-    let { viviendaId } = req.body || {};
-    if (!viviendaId || !isObjectId(viviendaId)) return badRequest(res);
-
     const anexo01 = await FormSubmission.findById(id);
     if (!anexo01) return genericDenied(res);
     if (up(anexo01.codigo) !== "ANEXO_01") return genericDenied(res);
 
     if (!canSeeSubmission(user, anexo01)) return genericDenied(res);
 
-    // NO tocar idempotencia existente por derivadoDe
     const existente = await FormSubmission.findOne({
       codigo: "ANEXO_02",
       derivadoDe: anexo01._id,
     });
 
     if (existente) {
-      const existenteVivienda = existente.datos?.viviendaId?.toString?.() || null;
-
-      if (existenteVivienda && existenteVivienda !== viviendaId) {
-        return res.status(409).json({
-          message: "Recurso no disponible",
-          existingId: existente._id,
-        });
-      }
-
-      return res.json(stripAdjuntoRutas({ anexo: toPlain(existente) }));
+      return res.status(409).json(stripAdjuntoRutas({
+        code: "ANEXO_01_YA_DERIVADO",
+        message: "Este ANEXO_01 ya tiene un ANEXO_02 generado.",
+        existingId: String(existente._id),
+        existingCodigo: "ANEXO_02",
+      }));
     }
+
+    let { viviendaId } = req.body || {};
+    if (!viviendaId || !isObjectId(viviendaId)) return badRequest(res);
 
     const anexo01Aprobado =
       up(anexo01.estado) === "APROBADO" ||

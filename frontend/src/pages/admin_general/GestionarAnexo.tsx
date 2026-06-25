@@ -48,6 +48,13 @@ type Anexo = {
   derivadoDe?: string | null;
   datos?: any;
   adjuntos?: Adjunto[];
+  tieneAnexo02Derivado?: boolean;
+  anexo02DerivadoId?: string | null;
+  anexo02DerivadoCodigo?: string | null;
+  anexo02DerivadoEstado?: string | null;
+  anexo02DerivadoViviendaCodigo?: string | null;
+  estadoDerivacion?: string | null;
+  tramiteCerradoPorDerivacion?: boolean;
 };
 
 function up(v: unknown) {
@@ -198,18 +205,23 @@ export default function GestionarAnexo() {
   const totalViviendasElegibles = viviendasDisponibles.length + viviendasADesocuparse.length;
   const adjuntosParaMostrar: Adjunto[] =
     codigo === "ANEXO_02" ? origen?.adjuntos || [] : anexo?.adjuntos || [];
+  const tieneAnexo02Derivado =
+    codigo === "ANEXO_01" &&
+    (!!anexo?.tieneAnexo02Derivado ||
+      !!anexo?.tramiteCerradoPorDerivacion ||
+      up(anexo?.estadoDerivacion) === "ANEXO_02_GENERADO");
 
   useEffect(() => {
     if (!anexo?._id) return;
 
-    if (codigo === "ANEXO_01") {
+    if (codigo === "ANEXO_01" && !tieneAnexo02Derivado) {
       cargarViviendasElegiblesAsignacion();
     } else {
       setViviendasElegibles([]);
       setViviendaId("");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [anexo?._id, codigo]);
+  }, [anexo?._id, codigo, tieneAnexo02Derivado]);
 
   useEffect(() => {
     async function cargarAnexo01Derivado() {
@@ -352,7 +364,12 @@ export default function GestionarAnexo() {
   const esPostulacionTerminal = ["CERRADO", "ASIGNADO"].includes(estado);
   const puedeDecidirPostulacion01 =
     isAdmin && codigo === "ANEXO_01" && !esPostulacionAprobada && !esPostulacionRechazada && !esPostulacionTerminal;
-  const puedeGenerarAnexo02 = isAdmin && codigo === "ANEXO_01";
+  const puedeGenerarAnexo02 = isAdmin && codigo === "ANEXO_01" && !tieneAnexo02Derivado;
+  const mostrarIntervencionAdmin =
+    puedeCerrarAdminClasico ||
+    puedeGestionarAdmin11 ||
+    puedeGenerarAnexo02 ||
+    (codigo === "ANEXO_01" && tieneAnexo02Derivado);
 
   async function cerrarTramiteAdminClasico() {
     if (!anexo?._id) return;
@@ -468,6 +485,11 @@ export default function GestionarAnexo() {
       return;
     }
 
+    if (tieneAnexo02Derivado) {
+      setError("Este ANEXO_01 ya tiene un ANEXO_02 generado.");
+      return;
+    }
+
     const idTrim = viviendaId.trim();
 
     if (!idTrim) {
@@ -499,11 +521,11 @@ export default function GestionarAnexo() {
       setError("No se ha podido procesar su solicitud.");
     } catch (e: any) {
       if (e?.response?.status === 409) {
-        const existingId = e?.response?.data?.existingId;
-        if (existingId) {
-          navigate(`/app/admin-general/gestiones/${existingId}`);
-          return;
-        }
+        setError(
+          e?.response?.data?.message ||
+            "Este ANEXO_01 ya tiene un ANEXO_02 generado."
+        );
+        return;
       }
 
       console.error("[ADMIN] Error generando ANEXO_02", e);
@@ -842,7 +864,7 @@ export default function GestionarAnexo() {
             <AdjuntosList formularioId={anexo._id} adjuntos={adjuntosParaMostrar} />
           </div>
 
-          {(puedeCerrarAdminClasico || puedeGestionarAdmin11 || puedeGenerarAnexo02) && (
+          {mostrarIntervencionAdmin && (
             <div style={{ ...softCardStyle, marginBottom: 18 }}>
               <h3 style={sectionTitleStyle}>Intervención ADMIN GENERAL</h3>
 
@@ -873,6 +895,40 @@ export default function GestionarAnexo() {
                 <div style={{ ...softCardStyle, marginBottom: 16 }}>
                   <h4 style={{ marginTop: 0, color: "#ffffff" }}>Generación institucional</h4>
 
+                  {tieneAnexo02Derivado && (
+                    <div
+                      style={{
+                        marginBottom: 12,
+                        padding: 12,
+                        borderRadius: 12,
+                        border: "1px solid rgba(56,189,248,0.34)",
+                        background: "rgba(14,116,144,0.18)",
+                        color: "#cffafe",
+                      }}
+                    >
+                      <div style={{ fontWeight: 900 }}>
+                        Este ANEXO_01 ya tiene un ANEXO_02 generado.
+                      </div>
+                      <div style={{ marginTop: 4, fontSize: 13 }}>
+                        {anexo.anexo02DerivadoCodigo || "ANEXO_02"}
+                        {anexo.anexo02DerivadoEstado ? ` - ${anexo.anexo02DerivadoEstado}` : ""}
+                        {anexo.anexo02DerivadoViviendaCodigo
+                          ? ` - Vivienda ${anexo.anexo02DerivadoViviendaCodigo}`
+                          : ""}
+                      </div>
+                      {anexo.anexo02DerivadoId ? (
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/app/admin-general/gestiones/${anexo.anexo02DerivadoId}`)}
+                          disabled={busy}
+                          style={{ ...primaryButtonStyle, marginTop: 10 }}
+                        >
+                          Abrir ANEXO_02 generado
+                        </button>
+                      ) : null}
+                    </div>
+                  )}
+
                   <div style={{ ...buttonRowStyle, marginBottom: 12 }}>
                     {puedeDecidirPostulacion01 && (
                       <>
@@ -902,6 +958,7 @@ export default function GestionarAnexo() {
                     )}
                   </div>
 
+                  {!tieneAnexo02Derivado && (
                   <div style={housingActionRowStyle}>
                     <div style={housingFieldStyle}>
                       <label style={housingLabelStyle}>Vivienda elegible</label>
@@ -956,16 +1013,19 @@ export default function GestionarAnexo() {
                       Generar ANEXO_02
                     </button>
                   </div>
+                  )}
 
-                  {!esPostulacionAprobada && (
+                  {!tieneAnexo02Derivado && !esPostulacionAprobada && (
                     <div style={{ marginTop: 6, fontSize: 12, color: "#fecaca" }}>
                       Debe aprobar la postulacion antes de generar ANEXO_02.
                     </div>
                   )}
 
-                  <div style={{ marginTop: 6, fontSize: 12, color: "rgba(255,255,255,0.62)" }}>
-                    Se asigna la vivienda en este paso. Si ya existe un ANEXO_02 derivado, se abrirá automáticamente.
-                  </div>
+                  {!tieneAnexo02Derivado && (
+                    <div style={{ marginTop: 6, fontSize: 12, color: "rgba(255,255,255,0.62)" }}>
+                      Se asigna la vivienda en este paso y se crea un unico ANEXO_02 derivado.
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -978,7 +1038,7 @@ export default function GestionarAnexo() {
                     Cerrar trámite ANEXO 11 (ADMIN GENERAL)
                   </button>
                 </div>
-              ) : (
+              ) : puedeCerrarAdminClasico ? (
                 <button
                   onClick={cerrarTramiteAdminClasico}
                   disabled={busy}
@@ -986,7 +1046,7 @@ export default function GestionarAnexo() {
                 >
                   Cerrar trámite (ADMIN GENERAL)
                 </button>
-              )}
+              ) : null}
             </div>
           )}
         </div>
