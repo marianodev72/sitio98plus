@@ -34,6 +34,13 @@ type Anexo = {
     email?: string;
     role?: string;
   };
+  tieneAnexo02Derivado?: boolean;
+  anexo02DerivadoId?: string | null;
+  anexo02DerivadoCodigo?: string | null;
+  anexo02DerivadoEstado?: string | null;
+  anexo02DerivadoViviendaCodigo?: string | null;
+  estadoDerivacion?: string | null;
+  tramiteCerradoPorDerivacion?: boolean;
 };
 
 type Panel = "PERMISIONARIOS" | "ALOJADOS";
@@ -181,6 +188,70 @@ function personaLabel(a: Anexo): string {
   return full || "—";
 }
 
+function estadoOperativo(a: Anexo) {
+  const codigo = up(a.codigo);
+  const estado = up(a.estado);
+  const estadoInstitucional = up(a.estadoInstitucional);
+  const resultadoPostulacion = up(a.datos?.resultadoPostulacion);
+  const tieneDerivado =
+    codigo === "ANEXO_01" &&
+    (!!a.tieneAnexo02Derivado ||
+      !!a.tramiteCerradoPorDerivacion ||
+      up(a.estadoDerivacion) === "ANEXO_02_GENERADO");
+  const anexo01Aprobado =
+    codigo === "ANEXO_01" &&
+    (estado === "APROBADO" ||
+      estadoInstitucional === "APROBADO_ADMIN_GENERAL" ||
+      resultadoPostulacion === "APROBADO");
+
+  if (estado.includes("RECHAZ") || estadoInstitucional.includes("RECHAZ") || resultadoPostulacion === "RECHAZADO") {
+    return {
+      texto: "Rechazado",
+      border: "rgba(248,113,113,0.42)",
+      background: "rgba(127,29,29,0.22)",
+      color: "#fecaca",
+    };
+  }
+
+  if (tieneDerivado) {
+    return {
+      texto: "ANEXO_02 generado",
+      border: "rgba(56,189,248,0.42)",
+      background: "rgba(14,116,144,0.20)",
+      color: "#cffafe",
+    };
+  }
+
+  if (anexo01Aprobado) {
+    return {
+      texto: "Disponible para asignar",
+      border: "rgba(251,191,36,0.42)",
+      background: "rgba(146,64,14,0.20)",
+      color: "#fde68a",
+    };
+  }
+
+  if (codigo === "ANEXO_02" && ["BORRADOR", "ENVIADO", "EN_REVISION"].includes(estado)) {
+    return {
+      texto: "En curso",
+      border: "rgba(167,139,250,0.42)",
+      background: "rgba(76,29,149,0.20)",
+      color: "#ddd6fe",
+    };
+  }
+
+  if (["CERRADO", "ASIGNADO"].includes(estado) || estadoInstitucional.includes("CERRADO")) {
+    return {
+      texto: "Cerrado",
+      border: "rgba(74,222,128,0.36)",
+      background: "rgba(20,83,45,0.20)",
+      color: "#bbf7d0",
+    };
+  }
+
+  return null;
+}
+
 export default function Gestiones() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -198,6 +269,7 @@ export default function Gestiones() {
   const [codigo, setCodigo] = useState<string>(TODOS_CODIGOS);
   const [estadoFiltro, setEstadoFiltro] = useState("");
   const [barrioFiltro, setBarrioFiltro] = useState("");
+  const [qFiltro, setQFiltro] = useState("");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(50);
@@ -214,6 +286,7 @@ export default function Gestiones() {
     setCodigo(panel === "PERMISIONARIOS" ? TODOS_CODIGOS : "ANEXO_21");
     setEstadoFiltro("");
     setBarrioFiltro("");
+    setQFiltro("");
     setPage(1);
     if (panel === "PERMISIONARIOS") setLimit((value) => Math.min(value, 100));
   }, [panel]);
@@ -246,6 +319,7 @@ export default function Gestiones() {
         }
 
         if (barrioFiltro.trim()) params.barrio = barrioFiltro.trim();
+        if (qFiltro.trim()) params.q = qFiltro.trim();
 
         const res = await http.get(`/formularios/anexo/${codigo}`, { params });
         setItems(Array.isArray(res.data?.anexos) ? res.data.anexos : []);
@@ -296,7 +370,7 @@ export default function Gestiones() {
   useEffect(() => {
     cargarLista();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [codigo, estadoFiltro, barrioFiltro, sortDir, esAdmin, page, limit]);
+  }, [codigo, estadoFiltro, barrioFiltro, qFiltro, sortDir, esAdmin, page, limit]);
 
   const isAlojados = panel === "ALOJADOS";
   const limitOptions = isAlojados ? ALOJADOS_LIMIT_OPTIONS : FORM_LIMIT_OPTIONS;
@@ -450,6 +524,20 @@ const optionStyle: CSSProperties = {
                 />
               )}
 
+              {!isAlojados && (
+                <input
+                  value={qFiltro}
+                  onChange={(e) => {
+                    setQFiltro(e.target.value);
+                    setPage(1);
+                  }}
+                  disabled={loading}
+                  placeholder="Buscar por nombre, apellido, matricula o email"
+                  style={{ ...controlStyle, minWidth: 280 }}
+                  aria-label="Buscar por nombre, apellido, matricula o email"
+                />
+              )}
+
               <select
                 value={sortDir}
                 onChange={(e) => {
@@ -561,6 +649,7 @@ const optionStyle: CSSProperties = {
                   <tbody>
                     {items.map((an) => {
                       const busy = busyId === an._id;
+                      const operativo = estadoOperativo(an);
 
                       return (
                         <tr key={an._id}>
@@ -568,6 +657,24 @@ const optionStyle: CSSProperties = {
                           <td style={tdStyle}>
                             {safe(an.estado)}
                             {an.estadoInstitucional ? ` / ${safe(an.estadoInstitucional)}` : ""}
+                            {operativo ? (
+                              <div
+                                style={{
+                                  display: "inline-flex",
+                                  marginTop: 6,
+                                  padding: "4px 8px",
+                                  borderRadius: 999,
+                                  border: `1px solid ${operativo.border}`,
+                                  background: operativo.background,
+                                  color: operativo.color,
+                                  fontSize: 12,
+                                  fontWeight: 800,
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                {operativo.texto}
+                              </div>
+                            ) : null}
                           </td>
                           <td style={tdStyle}>
                             {isAlojados ? alojamientoLabel(an) : viviendaLabel(an)}
