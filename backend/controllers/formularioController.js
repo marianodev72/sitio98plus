@@ -6305,6 +6305,18 @@ function objectWithContent(value) {
   return value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length > 0;
 }
 
+function withDatosEfectivosMisDatos(upd) {
+  const baseDatos = objectWithContent(upd?.baseDatos) ? upd.baseDatos : {};
+  const datosActualizados = objectWithContent(upd?.datosActualizados) ? upd.datosActualizados : {};
+  return {
+    ...upd,
+    datosEfectivos: {
+      ...baseDatos,
+      ...datosActualizados,
+    },
+  };
+}
+
 async function hydrateAnexo01Derivacion(docs) {
   const isArrayInput = Array.isArray(docs);
   const arr = isArrayInput ? docs : docs ? [docs] : [];
@@ -6777,7 +6789,10 @@ async function ultimoMisDatosDeclaradosPorUsuario(req, res) {
       .sort({ createdAt: -1 })
       .lean();
 
-    return res.json(stripAdjuntoRutas({ ok: true, item: item || null }));
+    return res.json(stripAdjuntoRutas({
+      ok: true,
+      item: item ? withDatosEfectivosMisDatos(item) : null,
+    }));
   } catch (e) {
     console.error("[MIS_DATOS][ADMIN] Error último por usuario:", e);
     return res.status(500).json(stripAdjuntoRutas({ message: "Error interno" }));
