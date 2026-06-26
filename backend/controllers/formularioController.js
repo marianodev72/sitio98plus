@@ -6807,6 +6807,300 @@ async function ultimoMisDatosDeclaradosPorUsuario(req, res) {
   }
 }
 
+
+function isAnexo01Aprobado(anexo) {
+  const estado = up(anexo?.estado);
+  const estadoInstitucional = up(anexo?.estadoInstitucional);
+  return estado.includes("APROB") || estadoInstitucional.includes("APROB");
+}
+
+function compareMisDatosValue(left, right) {
+  return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
+}
+
+function buildDiferenciasMisDatos(datosHistoricos = {}, datosVigentes = {}) {
+  return MIS_DATOS_PREVIEW_CAMPOS.map(([campo]) => {
+    const historico = datosHistoricos?.[campo];
+    const vigente = datosVigentes?.[campo];
+    return {
+      campo,
+      historico: historico ?? null,
+      vigente: vigente ?? null,
+      cambio: !compareMisDatosValue(historico, vigente),
+    };
+  });
+}
+
+async function findAnexo01BaseForMisDatos(userId, baseAnexoId) {
+  if (baseAnexoId && isObjectId(baseAnexoId)) {
+    const base = await FormSubmission.findOne({ _id: baseAnexoId, codigo: "ANEXO_01", usuario: userId })
+      .select("_id codigo estado estadoInstitucional createdAt updatedAt datos usuario")
+      .lean();
+    if (base) return base;
+  }
+
+  const anexos = await FormSubmission.find({ codigo: "ANEXO_01", usuario: userId })
+    .select("_id codigo estado estadoInstitucional createdAt updatedAt datos usuario")
+    .sort({ createdAt: -1, updatedAt: -1, _id: -1 })
+    .limit(20)
+    .lean();
+
+  return anexos.find(isAnexo01Aprobado) || anexos[0] || null;
+}
+
+const MIS_DATOS_PREVIEW_CAMPOS = [
+  ["gradoEscalafon", "Grado / Escalafon"],
+  ["matricula", "Matrícula"],
+  ["apellido", "Apellido"],
+  ["nombres", "Nombres"],
+  ["destinoActual", "Destino actual"],
+  ["telefonoActual", "Telefono actual"],
+  ["aniosServicioRecibo", "Anios de servicio"],
+  ["convivientes", "Convivientes"],
+  ["mascotas", "Mascotas"],
+];
+
+function campoMisDatosLabel(campo) {
+  return MIS_DATOS_PREVIEW_CAMPOS.find(([key]) => key === campo)?.[1] || campo;
+}
+
+async function buildPreviewDatosDeclaradosUsuario(userId) {
+  const usuario = await User.findById(userId)
+    .select("_id apellido nombre nombres email dni matricula tipoPersonal grupoJerarquico role permisos activo archivado bloqueado")
+    .lean();
+
+  if (!usuario) {
+    const err = new Error("Usuario no encontrado");
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const historialRaw = await MisDatosDeclaradosUpdate.find({ usuario: userId })
+    .sort({ createdAt: -1, _id: -1 })
+    .limit(100)
+    .lean();
+  const historial = historialRaw.map(withDatosEfectivosMisDatos);
+  const ultimo = historial[0] || null;
+
+  const anexo01Base = await findAnexo01BaseForMisDatos(userId, ultimo?.baseAnexoId);
+  const datosHistoricos = objectWithContent(ultimo?.baseDatos)
+    ? ultimo.baseDatos
+    : objectWithContent(anexo01Base?.datos)
+      ? anexo01Base.datos
+      : {};
+  const datosVigentes = ultimo ? buildDatosEfectivosMisDatos(ultimo) : datosHistoricos;
+  const diferencias = buildDiferenciasMisDatos(datosHistoricos, datosVigentes);
+
+  return {
+    ok: true,
+    usuario,
+    anexo01Base,
+    ultimo,
+    historial,
+    datosHistoricos,
+    datosVigentes,
+    diferencias,
+  };
+}
+
+function pdfTextValue(value) {
+  if (value === null || value === undefined || value === "") return "-";
+  if (Array.isArray(value)) return value.length ? `${value.length} registro(s)` : "Sin registros";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
+function pdfDateValue(value) {
+  return fmtDate(value) || "-";
+}
+
+function ensurePdfSpace(doc, height = 80) {
+  const bottom = doc.page.height - doc.page.margins.bottom;
+  if (doc.y + height > bottom) doc.addPage();
+}
+
+function renderPdfSectionTitle(doc, title) {
+  ensurePdfSpace(doc, 50);
+  doc.moveDown(0.8);
+  doc.font("Helvetica-Bold").fontSize(12).text(title);
+  doc.moveDown(0.25);
+}
+
+function renderPdfField(doc, label, value) {
+  ensurePdfSpace(doc, 28);
+  doc.font("Helvetica-Bold").fontSize(9).text(`${label}: `, { continued: true });
+  doc.font("Helvetica").fontSize(9).text(pdfTextValue(value));
+}
+
+function renderPdfDatosPrincipales(doc, datos = {}) {
+  for (const [key, label] of MIS_DATOS_PREVIEW_CAMPOS.filter(([key]) => key !== "convivientes" && key !== "mascotas")) {
+    renderPdfField(doc, label, datos?.[key]);
+  }
+}
+
+function renderPdfList(doc, title, value) {
+  renderPdfSectionTitle(doc, title);
+  const list = Array.isArray(value) ? value : [];
+  if (!list.length) {
+    doc.font("Helvetica").fontSize(9).text("Sin registros");
+    return;
+  }
+
+  list.forEach((item, index) => {
+    ensurePdfSpace(doc, 45);
+    const prefix = `${index + 1}. `;
+    if (item && typeof item === "object") {
+      const summary = Object.entries(item)
+        .filter(([, v]) => String(v ?? "").trim())
+        .map(([k, v]) => `${k}: ${String(v)}`)
+        .join(" | ");
+      doc.font("Helvetica").fontSize(9).text(`${prefix}${summary || "(sin detalle)"}`);
+    } else {
+      doc.font("Helvetica").fontSize(9).text(`${prefix}${pdfTextValue(item)}`);
+    }
+  });
+}
+
+function renderPreviewDatosDeclaradosPdf(doc, preview) {
+  const usuario = preview?.usuario || {};
+  const anexo01 = preview?.anexo01Base || {};
+  const historicos = preview?.datosHistoricos || {};
+  const vigentes = preview?.datosVigentes || {};
+  const diferencias = Array.isArray(preview?.diferencias) ? preview.diferencias : [];
+  const historial = Array.isArray(preview?.historial) ? preview.historial : [];
+
+  doc.font("Helvetica-Bold").fontSize(16).text("Datos declarados del usuario", { align: "center" });
+  doc.moveDown(0.4);
+  doc.font("Helvetica").fontSize(9).text(`Fecha de emisión: ${pdfDateValue(new Date())}`, { align: "center" });
+  doc.moveDown(0.7);
+  doc.font("Helvetica").fontSize(9).text(
+    "ANEXO_01 conserva la declaración histórica. MIS DATOS DECLARADOS registra actualizaciones posteriores. El dato vigente surge de aplicar la última actualización válida sobre la declaración base."
+  );
+
+  renderPdfSectionTitle(doc, "Datos del usuario");
+  renderPdfField(doc, "Apellido y nombres", `${pdfTextValue(usuario.apellido)} ${pdfTextValue(usuario.nombre || usuario.nombres)}`);
+  renderPdfField(doc, "Email", usuario.email);
+  renderPdfField(doc, "Matrícula", usuario.matricula);
+  renderPdfField(doc, "Rol", usuario.role);
+  renderPdfField(doc, "Tipo personal", usuario.tipoPersonal);
+  renderPdfField(doc, "Grupo jerárquico", usuario.grupoJerarquico);
+  renderPdfField(doc, "Activo", usuario.activo === false ? "No" : "Si");
+  renderPdfField(doc, "Archivado", usuario.archivado ? "Si" : "No");
+  renderPdfField(doc, "Bloqueado", usuario.bloqueado ? "Si" : "No");
+
+  renderPdfSectionTitle(doc, "ANEXO_01 histórico");
+  renderPdfField(doc, "ID", anexo01?._id);
+  renderPdfField(doc, "Estado", anexo01?.estado || anexo01?.estadoInstitucional);
+  renderPdfField(doc, "Fecha", pdfDateValue(anexo01?.createdAt));
+  renderPdfDatosPrincipales(doc, historicos);
+  renderPdfList(doc, "Convivientes historicos", historicos.convivientes);
+  renderPdfList(doc, "Mascotas historicas", historicos.mascotas);
+
+  renderPdfSectionTitle(doc, "Dato vigente institucional");
+  renderPdfDatosPrincipales(doc, vigentes);
+  renderPdfList(doc, "Convivientes vigentes", vigentes.convivientes);
+  renderPdfList(doc, "Mascotas vigentes", vigentes.mascotas);
+
+  renderPdfSectionTitle(doc, "Cambios detectados");
+  doc.font("Helvetica-Bold").fontSize(9).text("Campo | Histórico | Vigente");
+  diferencias.forEach((d) => {
+    ensurePdfSpace(doc, 35);
+    const marker = d.cambio ? "* " : "  ";
+    doc.font("Helvetica").fontSize(8).text(
+      `${marker}${campoMisDatosLabel(d.campo)} | ${pdfTextValue(d.historico)} | ${pdfTextValue(d.vigente)}`
+    );
+  });
+
+  renderPdfSectionTitle(doc, "Historial de Mis Datos Declarados");
+  if (!historial.length) {
+    doc.font("Helvetica").fontSize(9).text("Sin actualizaciones registradas.");
+  } else {
+    historial.forEach((item) => {
+      ensurePdfSpace(doc, 70);
+      doc.font("Helvetica-Bold").fontSize(9).text(`Registro: ${pdfTextValue(item._id)}`);
+      doc.font("Helvetica").fontSize(8).text(`Fecha: ${pdfDateValue(item.createdAt)}`);
+      doc.text(`Estado: ${pdfTextValue(item.estado)} | Motivo: ${pdfTextValue(item.motivo)} | Resumen: ${pdfTextValue(item.resumen)}`);
+      doc.text(`baseAnexoId: ${pdfTextValue(item.baseAnexoId)}`);
+      doc.moveDown(0.2);
+    });
+  }
+}
+
+async function previewMisDatosDeclaradosPorUsuario(req, res) {
+  try {
+    const user = req.user;
+    if (!user || !user.role) return genericDenied(res);
+
+    const role = up(user.role);
+    const isAdmin = role === "ADMIN" || role === "ADMIN_GENERAL";
+    if (!isAdmin) return genericDenied(res);
+
+    const { userId } = req.params;
+    if (!isObjectId(userId)) return res.status(400).json(stripAdjuntoRutas({ message: "userId invalido" }));
+
+    const preview = await buildPreviewDatosDeclaradosUsuario(userId);
+    return res.json(stripAdjuntoRutas(preview));
+  } catch (e) {
+    if (e?.statusCode === 404) return res.status(404).json(stripAdjuntoRutas({ message: e.message }));
+    console.error("[MIS_DATOS][ADMIN] Error preview por usuario:", e);
+    return res.status(500).json(stripAdjuntoRutas({ message: "Error interno" }));
+  }
+}
+
+async function descargarPreviewMisDatosDeclaradosPdfPorUsuario(req, res) {
+  let doc = null;
+
+  try {
+    const user = req.user;
+    if (!user || !user.role) return genericDenied(res);
+
+    const role = up(user.role);
+    const isAdmin = role === "ADMIN" || role === "ADMIN_GENERAL";
+    if (!isAdmin) return genericDenied(res);
+
+    const { userId } = req.params;
+    if (!isObjectId(userId)) return res.status(400).json(stripAdjuntoRutas({ message: "userId invalido" }));
+
+    const preview = await buildPreviewDatosDeclaradosUsuario(userId);
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="datos_declarados_usuario_${String(userId)}.pdf"`
+    );
+
+    doc = new PDFDocument({ margin: 45, size: "A4" });
+
+    res.on("close", () => {
+      try {
+        if (doc && !doc.ended) doc.end();
+      } catch (_) {}
+    });
+
+    doc.on("error", (err) => {
+      console.error("[MIS_DATOS][ADMIN] PDF preview usuario error:", err);
+      try {
+        if (!res.headersSent) res.status(500).end();
+      } catch (_) {}
+    });
+
+    doc.pipe(res);
+    renderPreviewDatosDeclaradosPdf(doc, preview);
+    if (!doc.ended) doc.end();
+  } catch (e) {
+    if (e?.statusCode === 404 && !res.headersSent) {
+      return res.status(404).json(stripAdjuntoRutas({ message: e.message }));
+    }
+    console.error("[MIS_DATOS][ADMIN] Error PDF preview por usuario:", e);
+    if (res.headersSent) {
+      try {
+        if (doc && !doc.ended) doc.end();
+      } catch (_) {}
+      return;
+    }
+    return res.status(500).json(stripAdjuntoRutas({ message: "Error interno" }));
+  }
+}
 async function getAnexosPropios(req, res) {
   try {
     const user = req.user;
@@ -9142,6 +9436,8 @@ darConformidadJefeBarrio04,
 getMisDatosDeclaradosUpdateById,
 descargarMisDatosDeclaradosPdf,
 historialMisDatosDeclaradosPorUsuario,
+previewMisDatosDeclaradosPorUsuario,
+descargarPreviewMisDatosDeclaradosPdfPorUsuario,
   ultimoMisDatosDeclaradosPorUsuario,
 previewMisDatosDeclaradosPdf,
 verMisDatosDeclaradosPdf,

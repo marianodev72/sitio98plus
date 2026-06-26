@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useNavigate } from "react-router-dom";
 import { http } from "../../api/http";
 import { useAuth } from "../../auth/useAuth";
 
@@ -98,6 +99,7 @@ function territorioLabel(t: TerritorioAlojamiento) {
 }
 
 export default function UsuariosAdminGeneral() {
+  const navigate = useNavigate();
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -1028,7 +1030,24 @@ if (loading) return <p style={{ color: "#E5E7EB" }}>Cargando usuarios…</p>;
     return (
       <tr key={u._id} style={{ background: "#020817" }}>
         <td style={{ padding: "12px 14px", border: "1px solid #334155", fontSize: 14 }}>
-          {fallback(u.apellido)} {fallback(u.nombre)}
+          <div style={{ fontWeight: 700 }}>{fallback(u.apellido)} {fallback(u.nombre)}</div>
+          <button
+            type="button"
+            onClick={() => navigate(`/app/admin-general/usuarios/${u._id}/datos-declarados`)}
+            style={{
+              marginTop: 8,
+              padding: "6px 9px",
+              borderRadius: 8,
+              border: "1px solid rgba(96,165,250,0.55)",
+              background: "rgba(37,99,235,0.16)",
+              color: "#BFDBFE",
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            Datos declarados
+          </button>
         </td>
         <td style={{ padding: "12px 14px", border: "1px solid #334155", fontSize: 14 }}>
           {fallback(u.email)}

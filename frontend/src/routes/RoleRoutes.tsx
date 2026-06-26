@@ -17,6 +17,7 @@ import { ErrorBoundary } from "../components/ErrorBoundary";
 /* Admin General */
 import AdminGeneralDashboard from "../pages/admin_general/AdminGeneralDashboard";
 import UsuariosAdminGeneral from "../pages/admin_general/Usuarios";
+import UsuarioDatosDeclaradosPreview from "../pages/admin_general/UsuarioDatosDeclaradosPreview";
 import RegistrosAdminGeneral from "../pages/admin_general/RegistrosAdminGeneral";
 import ViviendasAdminGeneral from "../pages/admin_general/Viviendas";
 import GestionesAdminGeneral from "../pages/admin_general/Gestiones";
@@ -346,6 +347,7 @@ export default function RoleRoutes() {
         <Route path="admin-general" element={<AdminGeneralLayout />}>
           <Route index element={<AdminGeneralDashboard />} />
           <Route path="usuarios" element={<UsuariosAdminGeneral />} />
+          <Route path="usuarios/:userId/datos-declarados" element={<UsuarioDatosDeclaradosPreview />} />
           <Route path="estadisticas" element={<EstadisticasAdminGeneral />} />
           <Route path="registros" element={<RegistrosAdminGeneral />} />
           <Route path="viviendas" element={<ViviendasAdminGeneral />} />
@@ -381,6 +383,7 @@ export default function RoleRoutes() {
         <Route path="admin" element={<AdminLayout />}>
           <Route index element={<AdminDashboard />} />
           <Route path="usuarios" element={<UsuariosAdmin />} />
+          <Route path="usuarios/:userId/datos-declarados" element={<UsuarioDatosDeclaradosPreview />} />
           <Route path="viviendas" element={<ViviendasAdmin />} />
           <Route
             path="alojamientos"
