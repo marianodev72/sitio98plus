@@ -1,5 +1,6 @@
 // frontend/src/pages/admin/UsuariosAdmin.tsx
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useNavigate } from "react-router-dom";
 import { http } from "../../api/http";
 
 type Usuario = {
@@ -98,6 +99,7 @@ function countResumen(value: unknown, singular: string, plural: string) {
 }
 
 export default function UsuariosAdmin() {
+  const navigate = useNavigate();
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -563,7 +565,20 @@ export default function UsuariosAdmin() {
               return (
   <tr key={u._id}>
     <td style={tdStyle}>
-      {fallback(u.apellido)} {fallback(u.nombre)}
+      <div style={{ fontWeight: 700 }}>{fallback(u.apellido)} {fallback(u.nombre)}</div>
+      <button
+        type="button"
+        disabled={!isPermisionario}
+        onClick={() => navigate(`/app/admin/usuarios/${u._id}/datos-declarados`)}
+        title={
+          !isPermisionario
+            ? "Solo disponible para PERMISIONARIO"
+            : "Abrir preview institucional de datos declarados"
+        }
+        style={{ ...buttonStyle, marginTop: 6, padding: "6px 8px", fontSize: 12 }}
+      >
+        Datos declarados
+      </button>
     </td>
     <td style={tdStyle}>{fallback(u.email)}</td>
     <td style={tdStyle}>{fallback(u.dni)}</td>

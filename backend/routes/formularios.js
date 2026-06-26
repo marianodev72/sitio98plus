@@ -167,6 +167,18 @@ router.get(
 );
 
 router.get(
+  "/mis-datos-declarados/usuario/:userId/preview/pdf",
+  authRequired,
+  c.descargarPreviewMisDatosDeclaradosPdfPorUsuario
+);
+
+router.get(
+  "/mis-datos-declarados/usuario/:userId/preview",
+  authRequired,
+  c.previewMisDatosDeclaradosPorUsuario
+);
+
+router.get(
   "/mis-datos-declarados/usuario/:userId/ultimo",
   authRequired,
   c.ultimoMisDatosDeclaradosPorUsuario
