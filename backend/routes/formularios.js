@@ -166,6 +166,17 @@ router.get(
   c.historialMisDatosDeclarados
 );
 
+router.get(
+  "/mis-datos-declarados/usuario/:userId/ultimo",
+  authRequired,
+  c.ultimoMisDatosDeclaradosPorUsuario
+);
+
+router.get(
+  "/mis-datos-declarados/usuario/:userId/historial",
+  authRequired,
+  c.historialMisDatosDeclaradosPorUsuario
+);
 router.get("/mis-datos-declarados/:id/pdf/preview", c.verMisDatosDeclaradosPdf);
 router.get("/mis-datos-declarados/:id/pdf", c.descargarMisDatosDeclaradosPdf);
 router.get("/mis-datos-declarados/:id", c.getMisDatosDeclaradosUpdateById);
