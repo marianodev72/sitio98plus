@@ -496,6 +496,90 @@ const optionStyle: CSSProperties = {
   color: "#ffffff",
 };
 
+function renderPaginacion(position: "top" | "bottom") {
+  const isBottom = position === "bottom";
+
+  return (
+    <div
+      style={{
+        marginTop: isBottom ? 12 : 0,
+        marginBottom: isBottom ? 0 : 12,
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        gap: 12,
+        flexWrap: "wrap",
+        color: "#CBD5E1",
+        fontSize: 14,
+      }}
+    >
+      <div style={{ fontWeight: 700 }}>
+        Mostrando {rows.length} de {total} usuarios
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <span style={{ fontWeight: 700 }}>
+          Página {safePage} de {safeTotalPages}
+        </span>
+
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700 }}>
+          Por página:
+          <select
+            value={limit}
+            onChange={(e) => {
+              setLimit(Number(e.target.value));
+              setPage(1);
+            }}
+            style={selectStyle}
+          >
+            {PAGE_SIZE_OPTIONS.map((size) => (
+              <option key={size} value={size} style={optionStyle}>
+                {size}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <button
+          type="button"
+          disabled={safePage <= 1}
+          onClick={() => setPage((curr) => Math.max(1, curr - 1))}
+          style={{
+            padding: "10px 14px",
+            fontSize: 14,
+            fontWeight: 700,
+            color: "#F8FAFC",
+            background: safePage <= 1 ? "#334155" : "#1E293B",
+            border: "1px solid #475569",
+            borderRadius: 8,
+            cursor: safePage <= 1 ? "not-allowed" : "pointer",
+          }}
+        >
+          Anterior
+        </button>
+
+        <button
+          type="button"
+          disabled={safePage >= safeTotalPages}
+          onClick={() => setPage((curr) => Math.min(safeTotalPages, curr + 1))}
+          style={{
+            padding: "10px 14px",
+            fontSize: 14,
+            fontWeight: 700,
+            color: "#F8FAFC",
+            background: safePage >= safeTotalPages ? "#334155" : "#1E293B",
+            border: "1px solid #475569",
+            borderRadius: 8,
+            cursor: safePage >= safeTotalPages ? "not-allowed" : "pointer",
+          }}
+        >
+          Siguiente
+        </button>
+      </div>
+    </div>
+  );
+}
+
 if (loading) return <p style={{ color: "#E5E7EB" }}>Cargando usuarios…</p>;
 
   return (
@@ -720,83 +804,7 @@ if (loading) return <p style={{ color: "#E5E7EB" }}>Cargando usuarios…</p>;
           </button>
         </div>
       </div>
-
-      <div
-        style={{
-          marginBottom: 12,
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: 12,
-          flexWrap: "wrap",
-          color: "#CBD5E1",
-          fontSize: 14,
-        }}
-      >
-        <div style={{ fontWeight: 700 }}>
-          Mostrando {rows.length} de {total} usuarios
-        </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <span style={{ fontWeight: 700 }}>
-            PÃ¡gina {safePage} de {safeTotalPages}
-          </span>
-
-          <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700 }}>
-            Por pÃ¡gina:
-            <select
-              value={limit}
-              onChange={(e) => {
-                setLimit(Number(e.target.value));
-                setPage(1);
-              }}
-              style={selectStyle}
-            >
-              {PAGE_SIZE_OPTIONS.map((size) => (
-                <option key={size} value={size} style={optionStyle}>
-                  {size}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <button
-            type="button"
-            disabled={safePage <= 1}
-            onClick={() => setPage((curr) => Math.max(1, curr - 1))}
-            style={{
-              padding: "10px 14px",
-              fontSize: 14,
-              fontWeight: 700,
-              color: "#F8FAFC",
-              background: safePage <= 1 ? "#334155" : "#1E293B",
-              border: "1px solid #475569",
-              borderRadius: 8,
-              cursor: safePage <= 1 ? "not-allowed" : "pointer",
-            }}
-          >
-            Anterior
-          </button>
-
-          <button
-            type="button"
-            disabled={safePage >= safeTotalPages}
-            onClick={() => setPage((curr) => Math.min(safeTotalPages, curr + 1))}
-            style={{
-              padding: "10px 14px",
-              fontSize: 14,
-              fontWeight: 700,
-              color: "#F8FAFC",
-              background: safePage >= safeTotalPages ? "#334155" : "#1E293B",
-              border: "1px solid #475569",
-              borderRadius: 8,
-              cursor: safePage >= safeTotalPages ? "not-allowed" : "pointer",
-            }}
-          >
-            Siguiente
-          </button>
-        </div>
-      </div>
+      {renderPaginacion("top")}
 
       <div
         style={{
@@ -1386,6 +1394,8 @@ if (loading) return <p style={{ color: "#E5E7EB" }}>Cargando usuarios…</p>;
 </tbody>
         </table>
       </div>
+
+      {renderPaginacion("bottom")}
 
       <div style={{ marginTop: 10 }}>
         <button
