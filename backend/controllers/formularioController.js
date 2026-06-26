@@ -6174,7 +6174,7 @@ async function historialMisDatosDeclarados(req, res) {
       .limit(limit)
       .lean();
 
-    return res.json(stripAdjuntoRutas({ ok: true, items }));
+    return res.json(stripAdjuntoRutas({ ok: true, items: items.map(withDatosEfectivosMisDatos) }));
   } catch (e) {
     console.error("[MIS_DATOS] Error historial:", e);
     return res.status(500).json(stripAdjuntoRutas({ message: "Error interno" }));
@@ -6293,7 +6293,7 @@ async function getMisDatosDeclaradosUpdateById(req, res) {
       return genericDenied(res);
     }
 
-    return res.json(stripAdjuntoRutas({ ok: true, item: upd }));
+    return res.json(stripAdjuntoRutas({ ok: true, item: withDatosEfectivosMisDatos(upd) }));
   } catch (e) {
     console.error("[MIS_DATOS] Error getById:", e);
     return res.status(500).json(stripAdjuntoRutas({ message: "Error interno" }));
@@ -6305,15 +6305,19 @@ function objectWithContent(value) {
   return value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length > 0;
 }
 
-function withDatosEfectivosMisDatos(upd) {
+function buildDatosEfectivosMisDatos(upd) {
   const baseDatos = objectWithContent(upd?.baseDatos) ? upd.baseDatos : {};
   const datosActualizados = objectWithContent(upd?.datosActualizados) ? upd.datosActualizados : {};
   return {
+    ...baseDatos,
+    ...datosActualizados,
+  };
+}
+
+function withDatosEfectivosMisDatos(upd) {
+  return {
     ...upd,
-    datosEfectivos: {
-      ...baseDatos,
-      ...datosActualizados,
-    },
+    datosEfectivos: buildDatosEfectivosMisDatos(upd),
   };
 }
 
@@ -6367,7 +6371,11 @@ async function hydrateAnexo01Derivacion(docs) {
 }
 
 function getDatosDeclaradosUpdate(upd) {
-  if (objectWithContent(upd?.datosActualizados)) return upd.datosActualizados;
+  if (objectWithContent(upd?.datosEfectivos)) return upd.datosEfectivos;
+
+  const datosEfectivos = buildDatosEfectivosMisDatos(upd);
+  if (objectWithContent(datosEfectivos)) return datosEfectivos;
+
   if (objectWithContent(upd?.datos)) return upd.datos;
 
   const datosPersonales =
@@ -6538,10 +6546,10 @@ async function descargarMisDatosDeclaradosPdf(req, res) {
 
       if (u) {
         userInfo = {
-          apellido: u.apellido || userInfo.apellido,
-          nombres: u.nombres || u.nombre || userInfo.nombres,
-          matricula: u.matricula || userInfo.matricula,
-          gradoEscalafon: u.gradoEscalafon || userInfo.gradoEscalafon,
+          apellido: userInfo.apellido || u.apellido || "",
+          nombres: userInfo.nombres || u.nombres || u.nombre || "",
+          matricula: userInfo.matricula || u.matricula || "",
+          gradoEscalafon: userInfo.gradoEscalafon || u.gradoEscalafon || "",
           destinoActual: userInfo.destinoActual,
           telefonoActual: userInfo.telefonoActual || u.telefono || "",
         };
@@ -6628,10 +6636,10 @@ async function verMisDatosDeclaradosPdf(req, res) {
 
       if (u) {
         userInfo = {
-          apellido: u.apellido || userInfo.apellido,
-          nombres: u.nombres || u.nombre || userInfo.nombres,
-          matricula: u.matricula || userInfo.matricula,
-          gradoEscalafon: u.gradoEscalafon || userInfo.gradoEscalafon,
+          apellido: userInfo.apellido || u.apellido || "",
+          nombres: userInfo.nombres || u.nombres || u.nombre || "",
+          matricula: userInfo.matricula || u.matricula || "",
+          gradoEscalafon: userInfo.gradoEscalafon || u.gradoEscalafon || "",
           destinoActual: userInfo.destinoActual,
           telefonoActual: userInfo.telefonoActual || u.telefono || "",
         };
@@ -6709,10 +6717,10 @@ async function previewMisDatosDeclaradosPdf(req, res) {
         .lean();
       if (u) {
         userInfo = {
-          apellido: u.apellido || userInfo.apellido,
-          nombres: u.nombres || u.nombre || userInfo.nombres,
-          matricula: u.matricula || userInfo.matricula,
-          gradoEscalafon: u.gradoEscalafon || userInfo.gradoEscalafon,
+          apellido: userInfo.apellido || u.apellido || "",
+          nombres: userInfo.nombres || u.nombres || u.nombre || "",
+          matricula: userInfo.matricula || u.matricula || "",
+          gradoEscalafon: userInfo.gradoEscalafon || u.gradoEscalafon || "",
           destinoActual: userInfo.destinoActual,
           telefonoActual: userInfo.telefonoActual || u.telefono || "",
         };
@@ -6765,7 +6773,7 @@ async function historialMisDatosDeclaradosPorUsuario(req, res) {
       .limit(limit)
       .lean();
 
-    return res.json(stripAdjuntoRutas({ ok: true, items }));
+    return res.json(stripAdjuntoRutas({ ok: true, items: items.map(withDatosEfectivosMisDatos) }));
   } catch (e) {
     console.error("[MIS_DATOS][ADMIN] Error historial por usuario:", e);
     return res.status(500).json(stripAdjuntoRutas({ message: "Error interno" }));

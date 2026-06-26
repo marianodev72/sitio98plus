@@ -76,6 +76,27 @@ function territoriosAlojamientoLabel(u: Usuario) {
   return labels.join(", ");
 }
 
+function datosVigentesDeclarados(item: any) {
+  if (item?.datosEfectivos && typeof item.datosEfectivos === "object" && !Array.isArray(item.datosEfectivos)) {
+    return item.datosEfectivos;
+  }
+
+  const baseDatos = item?.baseDatos && typeof item.baseDatos === "object" && !Array.isArray(item.baseDatos) ? item.baseDatos : {};
+  const datosActualizados =
+    item?.datosActualizados && typeof item.datosActualizados === "object" && !Array.isArray(item.datosActualizados)
+      ? item.datosActualizados
+      : {};
+
+  return { ...baseDatos, ...datosActualizados };
+}
+
+function countResumen(value: unknown, singular: string, plural: string) {
+  const count = Array.isArray(value) ? value.length : 0;
+  if (count === 0) return `Sin ${plural}`;
+  if (count === 1) return `1 ${singular}`;
+  return `${count} ${plural}`;
+}
+
 export default function UsuariosAdmin() {
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [loading, setLoading] = useState(true);
@@ -331,6 +352,22 @@ export default function UsuariosAdmin() {
     boxShadow: "0 10px 40px rgba(0,0,0,0.25)",
     border: "1px solid rgba(255,255,255,0.12)",
     color: "#eaf0ff",
+  };
+
+  const ultimoDatosVigentes = datosVigentesDeclarados(ultimoDeclarado);
+  const datoVigenteRowStyle: CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: "180px 1fr",
+    gap: 8,
+    padding: "8px 0",
+    borderBottom: "1px solid rgba(255,255,255,0.08)",
+  };
+  const datoVigenteLabelStyle: CSSProperties = {
+    color: "rgba(255,255,255,0.65)",
+    fontWeight: 700,
+    fontSize: 12,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
   };
 
   if (loading) {
@@ -618,7 +655,27 @@ export default function UsuariosAdmin() {
             {ultimoDeclarado?.motivo ? String(ultimoDeclarado.motivo) : "—"}
           </p>
 
-          <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <div style={{ marginTop: 14 }}>
+            <h4 style={{ margin: "0 0 8px", color: "#ffffff" }}>Dato vigente</h4>
+            {[
+              ["Grado / Escalafón", ultimoDatosVigentes.gradoEscalafon],
+              ["Matrícula", ultimoDatosVigentes.matricula || ultimoDatosVigentes.mr || ultimoDatosVigentes.MR],
+              ["Apellido", ultimoDatosVigentes.apellido],
+              ["Nombres", ultimoDatosVigentes.nombres || ultimoDatosVigentes.nombre],
+              ["Destino actual", ultimoDatosVigentes.destinoActual],
+              ["Teléfono actual", ultimoDatosVigentes.telefonoActual || ultimoDatosVigentes.telefono],
+              ["Años de servicio", ultimoDatosVigentes.aniosServicioRecibo],
+              ["Convivientes", countResumen(ultimoDatosVigentes.convivientes, "conviviente", "convivientes")],
+              ["Mascotas", countResumen(ultimoDatosVigentes.mascotas, "mascota", "mascotas")],
+            ].map(([label, value]) => (
+              <div key={String(label)} style={datoVigenteRowStyle}>
+                <div style={datoVigenteLabelStyle}>{label}</div>
+                <div>{fallback(value)}</div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button
               onClick={() => verPdfDeclarado(String(ultimoDeclarado._id))}
               style={buttonStyle}
