@@ -30,6 +30,13 @@ function getNotificacionId(alerta: AlertaPostLogin) {
   return String(alerta.metadata?.notificacionId || "").trim();
 }
 
+function getAccionTexto(alerta: AlertaPostLogin) {
+  const value = String(alerta.metadata?.accionTexto || "").trim();
+  if (value) return value;
+  if (alerta.modulo === "MENSAJES") return "Ver mensajes";
+  return "Ver";
+}
+
 async function cerrarNotificacionFormal(alerta: AlertaPostLogin) {
   if (alerta.tipo !== "NOTIFICACION") return;
   const id = getNotificacionId(alerta);
@@ -100,7 +107,8 @@ export default function CentroAlertasPostLoginGate() {
 
   const visibles = alertas.filter((item) => item.prioridad !== "INFO");
   const informativas = alertas.filter((item) => item.prioridad === "INFO");
-  const total = visibles.reduce((acc, item) => acc + Number(item.cantidad || 0), 0);
+  const totalAlertas = visibles.length;
+  const totalEntidades = visibles.reduce((acc, item) => acc + Number(item.cantidad || 0), 0);
 
   function cerrarMasTarde() {
     sessionStorage.setItem(dismissedKey(userId), "1");
@@ -151,10 +159,10 @@ export default function CentroAlertasPostLoginGate() {
           <div>
             <div style={styles.eyebrow}>Centro de alertas</div>
             <h2 id="centro-alertas-title" style={styles.title}>
-              Tiene pendientes institucionales
+              Tiene alertas institucionales
             </h2>
             <p style={styles.subtitle}>
-              {total} pendiente(s) requieren lectura, seguimiento o intervencion segun su rol.
+              {totalAlertas} alerta(s) activa(s), con {totalEntidades} pendiente(s) asociados segun su rol.
             </p>
           </div>
         </div>
@@ -177,7 +185,7 @@ export default function CentroAlertasPostLoginGate() {
                   <span style={styles.tipo}>{item.tipo}</span>
                   {isInternalAppPath(item.accionUrl) ? (
                     <button type="button" disabled={busy} style={styles.linkButton} onClick={() => verAlerta(item)}>
-                      {item.modulo === "MENSAJES" ? "Ver mensajes" : "Ver"}
+                      {getAccionTexto(item)}
                     </button>
                   ) : null}
                 </div>
@@ -188,7 +196,14 @@ export default function CentroAlertasPostLoginGate() {
 
         {informativas.length > 0 ? (
           <div style={styles.infoBox}>
-            {informativas.length} notificacion(es) informativa(s) disponible(s) en el centro de alertas.
+            <div style={{ fontWeight: 900, marginBottom: 6 }}>
+              Informativas ({informativas.length})
+            </div>
+            {informativas.slice(0, 5).map((item) => (
+              <div key={item.id} style={{ marginTop: 4 }}>
+                {item.titulo}
+              </div>
+            ))}
           </div>
         ) : null}
 

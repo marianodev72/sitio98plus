@@ -90,6 +90,227 @@ function alerta({
   };
 }
 
+function isTerminalEstado(estado) {
+  return ["CERRADO", "ASIGNADO", "RECHAZADO"].includes(up(estado));
+}
+
+function isAnexo01Aprobado(anexo) {
+  const estado = up(anexo?.estado);
+  const estadoInstitucional = up(anexo?.estadoInstitucional);
+  const resultado = up(anexo?.datos?.resultadoPostulacion);
+  return (
+    estado === "APROBADO" ||
+    estadoInstitucional === "APROBADO_ADMIN_GENERAL" ||
+    resultado === "APROBADO"
+  );
+}
+
+function isAnexo01Rechazado(anexo) {
+  const estado = up(anexo?.estado);
+  const estadoInstitucional = up(anexo?.estadoInstitucional);
+  const resultado = up(anexo?.datos?.resultadoPostulacion);
+  return (
+    estado === "RECHAZADO" ||
+    estadoInstitucional === "RECHAZADO_ADMIN_GENERAL" ||
+    resultado === "RECHAZADO"
+  );
+}
+
+async function anexo01IdsConAnexo02Derivado(anexo01Ids) {
+  const ids = Array.isArray(anexo01Ids) ? anexo01Ids.filter(Boolean) : [];
+  if (!ids.length) return new Set();
+
+  const idsAsString = ids.map((id) => String(id));
+  const derivados = await FormSubmission.find({
+    codigo: "ANEXO_02",
+    $or: [
+      { derivadoDe: { $in: ids } },
+      { "datos.anexo01Id": { $in: idsAsString } },
+    ],
+  })
+    .select("derivadoDe datos.anexo01Id")
+    .lean();
+
+  const set = new Set();
+  for (const item of derivados) {
+    if (item?.derivadoDe) set.add(String(item.derivadoDe));
+    if (item?.datos?.anexo01Id) set.add(String(item.datos.anexo01Id));
+  }
+  return set;
+}
+
+async function countAnexo01ByPredicate(predicate) {
+  const anexos = await FormSubmission.find({ codigo: "ANEXO_01" })
+    .select("_id estado estadoInstitucional datos.resultadoPostulacion")
+    .lean();
+
+  const derivados = await anexo01IdsConAnexo02Derivado(anexos.map((item) => item._id));
+  return anexos.filter((item) => predicate(item, derivados)).length;
+}
+
+function adminGeneralGestionAlerta({ id, titulo, descripcion, cantidad, prioridad = "ALTA", accionTexto }) {
+  if (cantidad <= 0) return null;
+  return alerta({
+    id,
+    tipo: "ACCION",
+    modulo: "GESTIONES",
+    prioridad,
+    titulo,
+    descripcion,
+    accionUrl: "/app/admin-general/gestiones",
+    entidadTipo: "FormSubmission",
+    cantidad,
+    requiereAccion: true,
+    metadata: { accionTexto },
+  });
+}
+
+async function collectGestionesAdminGeneral() {
+  const [
+    anexo01Decision,
+    anexo01GenerarAnexo02,
+    anexo02Cierre,
+    anexo03Cierre,
+    anexo07Cierre,
+    anexo08Cierre,
+    anexo09Cierre,
+    anexo11Revision,
+  ] = await Promise.all([
+    countAnexo01ByPredicate((item, derivados) => {
+      if (derivados.has(String(item._id))) return false;
+      if (isTerminalEstado(item.estado)) return false;
+      if (isAnexo01Aprobado(item) || isAnexo01Rechazado(item)) return false;
+      return true;
+    }),
+    countAnexo01ByPredicate((item, derivados) => {
+      if (derivados.has(String(item._id))) return false;
+      if (isTerminalEstado(item.estado)) return false;
+      return isAnexo01Aprobado(item);
+    }),
+    FormSubmission.countDocuments({
+      codigo: "ANEXO_02",
+      estado: "EN_REVISION",
+      $or: [
+        { "conformidadPostulante.ok": true },
+        { "datos.conformidadPostulante.ok": true },
+      ],
+      "datos.conformidadAdminGeneral.ok": { $ne: true },
+    }),
+    FormSubmission.countDocuments({
+      codigo: "ANEXO_03",
+      estado: "EN_REVISION",
+      "datos.conformidadPermisionario.ok": true,
+      "datos.conformidadAdminGeneral.ok": { $ne: true },
+    }),
+    FormSubmission.countDocuments({
+      codigo: "ANEXO_07",
+      estado: { $in: ["ENVIADO", "EN_REVISION"] },
+      "datos.conformidadAdminGeneral.ok": { $ne: true },
+    }),
+    FormSubmission.countDocuments({
+      codigo: "ANEXO_08",
+      estado: "EN_REVISION",
+      "datos.conformidadPermisionario.ok": true,
+      "datos.conformidadAdminGeneral.ok": { $ne: true },
+    }),
+    FormSubmission.countDocuments({
+      codigo: "ANEXO_09",
+      estado: "EN_REVISION",
+      "datos.conformidadPermisionario.ok": true,
+      "datos.conformidadAdminGeneral.ok": { $ne: true },
+    }),
+    FormSubmission.countDocuments({
+      codigo: "ANEXO_11",
+      estadoInstitucional: "EN_REVISION_ADMIN_GENERAL",
+    }),
+  ]);
+
+  return [
+    adminGeneralGestionAlerta({
+      id: "admin-general:anexo-01-decision",
+      titulo: "ANEXO_01 pendientes de decision",
+      descripcion: "Hay postulaciones ANEXO_01 sin decision administrativa y sin ANEXO_02 derivado.",
+      cantidad: anexo01Decision,
+      accionTexto: "Revisar",
+    }),
+    adminGeneralGestionAlerta({
+      id: "admin-general:anexo-01-generar-anexo-02",
+      titulo: "ANEXO_01 aprobados sin ANEXO_02",
+      descripcion: "Hay postulaciones aprobadas que todavia no tienen ANEXO_02 generado.",
+      cantidad: anexo01GenerarAnexo02,
+      prioridad: "MEDIA",
+      accionTexto: "Generar ANEXO_02",
+    }),
+    adminGeneralGestionAlerta({
+      id: "admin-general:anexo-02-cierre",
+      titulo: "ANEXO_02 listos para cierre admin",
+      descripcion: "Hay ANEXO_02 con conformidad del postulante y cierre administrativo pendiente.",
+      cantidad: anexo02Cierre,
+      accionTexto: "Revisar cierre",
+    }),
+    adminGeneralGestionAlerta({
+      id: "admin-general:anexo-03-cierre",
+      titulo: "ANEXO_03 listos para cierre admin",
+      descripcion: "Hay ANEXO_03 con conformidades previas registradas y cierre administrativo pendiente.",
+      cantidad: anexo03Cierre,
+      accionTexto: "Revisar cierre",
+    }),
+    adminGeneralGestionAlerta({
+      id: "admin-general:anexo-07-cierre",
+      titulo: "ANEXO_07 pendientes de revision admin",
+      descripcion: "Hay ANEXO_07 enviados por el flujo inspector y pendientes de cierre administrativo.",
+      cantidad: anexo07Cierre,
+      prioridad: "MEDIA",
+      accionTexto: "Revisar",
+    }),
+    adminGeneralGestionAlerta({
+      id: "admin-general:anexo-08-cierre",
+      titulo: "ANEXO_08 listos para cierre admin",
+      descripcion: "Hay ANEXO_08 con conformidad del permisionario y cierre administrativo pendiente.",
+      cantidad: anexo08Cierre,
+      accionTexto: "Revisar cierre",
+    }),
+    adminGeneralGestionAlerta({
+      id: "admin-general:anexo-09-cierre",
+      titulo: "ANEXO_09 listos para cierre admin",
+      descripcion: "Hay ANEXO_09 con conformidad del permisionario y cierre administrativo pendiente.",
+      cantidad: anexo09Cierre,
+      accionTexto: "Revisar cierre",
+    }),
+    adminGeneralGestionAlerta({
+      id: "admin-general:anexo-11-revision-admin",
+      titulo: "ANEXO_11 en revision administrativa",
+      descripcion: "Hay pedidos de trabajo ANEXO_11 cuyo actor esperado es ADMIN_GENERAL.",
+      cantidad: anexo11Revision,
+      prioridad: "MEDIA",
+      accionTexto: "Revisar",
+    }),
+  ].filter(Boolean);
+}
+
+async function collectGestionesAdmin() {
+  const anexo11Seguimiento = await FormSubmission.countDocuments({
+    codigo: "ANEXO_11",
+    estadoInstitucional: "EN_REVISION_ADMIN_GENERAL",
+  });
+
+  if (anexo11Seguimiento <= 0) return [];
+  return [
+    alerta({
+      id: "admin:gestiones-seguimiento-anexo-11",
+      tipo: "SEGUIMIENTO",
+      modulo: "GESTIONES",
+      prioridad: "INFO",
+      titulo: "Gestiones ANEXO_11 para seguimiento",
+      descripcion: "Hay ANEXO_11 en revision administrativa disponibles para seguimiento institucional.",
+      accionUrl: "/app/admin/gestiones",
+      entidadTipo: "FormSubmission",
+      cantidad: anexo11Seguimiento,
+      requiereAccion: false,
+      metadata: { accionTexto: "Ver" },
+    }),
+  ];
+}
 async function collectNotificaciones(user) {
   const uid = user?._id;
   if (!uid) return [];
@@ -126,7 +347,7 @@ async function collectNotificaciones(user) {
       requiereConfirmacion: Boolean(item.requiereConfirmacion || item.prioridad === "CRITICA"),
       metadata: {
         notificacionId: String(item._id),
-        accionTexto: item.accionTexto || "",
+        accionTexto: item.accionTexto || "Ver",
         prioridadOriginal: item.prioridad || "INFO",
         tipoOriginal: item.tipo || "",
       },
@@ -159,9 +380,47 @@ async function collectMensajes(user) {
       requiereLectura: true,
       metadata: {
         rutaConfiable: Boolean(mensajeriaUrl(user)),
+        accionTexto: "Leer",
       },
     }),
   ];
+}
+
+async function collectLiquidacionesPendientes({ accionUrl, adminGeneral }) {
+  const now = new Date();
+  const min = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+  const minPeriodo = `${min.getFullYear()}-${String(min.getMonth() + 1).padStart(2, "0")}`;
+
+  const rows = await Liquidacion.aggregate([
+    {
+      $match: {
+        periodo: { $gte: minPeriodo },
+        estadoEntrega: { $ne: "ENTREGADA" },
+      },
+    },
+    { $group: { _id: "$estadoEntrega", cantidad: { $sum: 1 } } },
+  ]);
+
+  const total = rows.reduce((acc, row) => acc + Number(row?.cantidad || 0), 0);
+  if (total <= 0) return null;
+
+  const detalle = rows
+    .map((row) => `${row?._id || "SIN_ESTADO"}: ${Number(row?.cantidad || 0)}`)
+    .join("; ");
+
+  return alerta({
+    id: adminGeneral ? "admin-general:liquidaciones-pendientes-entrega" : "admin:liquidaciones-pendientes-entrega",
+    tipo: "SEGUIMIENTO",
+    modulo: "LIQUIDACIONES",
+    prioridad: adminGeneral ? "MEDIA" : "INFO",
+    titulo: "Liquidaciones pendientes de entrega",
+    descripcion: `Hay liquidaciones de los ultimos 12 meses con entrega pendiente (${detalle}).`,
+    accionUrl,
+    entidadTipo: "Liquidacion",
+    cantidad: total,
+    requiereAccion: false,
+    metadata: { accionTexto: "Ver", minPeriodo, estados: rows },
+  });
 }
 
 async function collectAdminGeneral() {
@@ -174,7 +433,7 @@ async function collectAdminGeneral() {
     usuariosPendientes,
     liquidacionesPendientes,
   ] = await Promise.all([
-    FormSubmission.countDocuments({ estado: { $in: ["ENVIADO", "EN_REVISION", "ASIGNADO"] } }),
+    collectGestionesAdminGeneral(),
     Mantenimiento.countDocuments({ isClosed: false, adminDecision: "PENDIENTE" }),
     ServicioVivienda.countDocuments({ requiereAdministracion: true, alertaActiva: { $ne: false } }),
     MasterImportJob.countDocuments({ estado: "PENDIENTE_CONFIRMACION" }),
@@ -185,24 +444,11 @@ async function collectAdminGeneral() {
       archivado: { $ne: true },
       bloqueado: { $ne: true },
     }),
-    Liquidacion.countDocuments({ estadoEntrega: { $ne: "ENTREGADA" } }),
+    collectLiquidacionesPendientes({ accionUrl: "/app/admin-general/liquidaciones", adminGeneral: true }),
   ]);
 
   return [
-    gestiones > 0 &&
-      alerta({
-        id: "admin-general:gestiones-abiertas",
-        tipo: "SEGUIMIENTO",
-        modulo: "GESTIONES",
-        prioridad: "MEDIA",
-        titulo: "Gestiones documentales abiertas",
-        descripcion: "Hay formularios o anexos en estado ENVIADO, EN_REVISION o ASIGNADO.",
-        accionUrl: "/app/admin-general/gestiones",
-        entidadTipo: "FormSubmission",
-        cantidad: gestiones,
-        requiereAccion: true,
-        metadata: { estados: ["ENVIADO", "EN_REVISION", "ASIGNADO"] },
-      }),
+    ...gestiones,
     mantenimientos > 0 &&
       alerta({
         id: "admin-general:mantenimientos-admin-pendientes",
@@ -215,7 +461,7 @@ async function collectAdminGeneral() {
         entidadTipo: "Mantenimiento",
         cantidad: mantenimientos,
         requiereAccion: true,
-        metadata: { adminDecision: "PENDIENTE", isClosed: false },
+        metadata: { adminDecision: "PENDIENTE", isClosed: false, accionTexto: "Resolver" },
       }),
     servicios > 0 &&
       alerta({
@@ -229,7 +475,7 @@ async function collectAdminGeneral() {
         entidadTipo: "ServicioVivienda",
         cantidad: servicios,
         requiereAccion: true,
-        metadata: { requiereAdministracion: true },
+        metadata: { requiereAdministracion: true, accionTexto: "Resolver" },
       }),
     basesPendientes > 0 &&
       alerta({
@@ -244,7 +490,7 @@ async function collectAdminGeneral() {
         cantidad: basesPendientes,
         requiereAccion: true,
         requiereConfirmacion: true,
-        metadata: { estado: "PENDIENTE_CONFIRMACION" },
+        metadata: { estado: "PENDIENTE_CONFIRMACION", accionTexto: "Confirmar" },
       }),
     basesFallidas > 0 &&
       alerta({
@@ -257,8 +503,8 @@ async function collectAdminGeneral() {
         accionUrl: "/app/admin-general/bases-maestras",
         entidadTipo: "MasterImportJob",
         cantidad: basesFallidas,
-        requiereAccion: true,
-        metadata: { estado: "FALLIDO" },
+        requiereAccion: false,
+        metadata: { estado: "FALLIDO", accionTexto: "Revisar" },
       }),
     usuariosPendientes > 0 &&
       alerta({
@@ -272,30 +518,17 @@ async function collectAdminGeneral() {
         entidadTipo: "User",
         cantidad: usuariosPendientes,
         requiereAccion: true,
-        metadata: { role: "POSTULANTE", activo: false },
+        metadata: { role: "POSTULANTE", activo: false, accionTexto: "Revisar" },
       }),
-    liquidacionesPendientes > 0 &&
-      alerta({
-        id: "admin-general:liquidaciones-pendientes-entrega",
-        tipo: "SEGUIMIENTO",
-        modulo: "LIQUIDACIONES",
-        prioridad: "MEDIA",
-        titulo: "Liquidaciones pendientes de entrega",
-        descripcion: "Hay liquidaciones persistidas con estado de entrega pendiente o con error.",
-        accionUrl: "/app/admin-general/liquidaciones",
-        entidadTipo: "Liquidacion",
-        cantidad: liquidacionesPendientes,
-        requiereAccion: true,
-        metadata: { estadoEntrega: "NO_ENTREGADA" },
-      }),
+    liquidacionesPendientes,
   ].filter(Boolean);
 }
 
 async function collectAdmin() {
   const [servicios, gestiones, liquidacionesPendientes] = await Promise.all([
     ServicioVivienda.countDocuments({ requiereAdministracion: true, alertaActiva: { $ne: false } }),
-    FormSubmission.countDocuments({ estado: { $in: ["ENVIADO", "EN_REVISION", "ASIGNADO"] } }),
-    Liquidacion.countDocuments({ estadoEntrega: { $ne: "ENTREGADA" } }),
+    collectGestionesAdmin(),
+    collectLiquidacionesPendientes({ accionUrl: "/app/admin/liquidaciones", adminGeneral: false }),
   ]);
 
   return [
@@ -304,46 +537,19 @@ async function collectAdmin() {
         id: "admin:servicios-pendientes",
         tipo: "SEGUIMIENTO",
         modulo: "SERVICIOS",
-        prioridad: "MEDIA",
+        prioridad: "INFO",
         titulo: "Servicios con seguimiento administrativo",
         descripcion: "Hay registros de servicios que requieren revision administrativa.",
         accionUrl: "/app/admin/servicios",
         entidadTipo: "ServicioVivienda",
         cantidad: servicios,
         requiereAccion: false,
-        metadata: { requiereAdministracion: true },
+        metadata: { requiereAdministracion: true, accionTexto: "Ver" },
       }),
-    gestiones > 0 &&
-      alerta({
-        id: "admin:gestiones-abiertas",
-        tipo: "SEGUIMIENTO",
-        modulo: "GESTIONES",
-        prioridad: "MEDIA",
-        titulo: "Gestiones documentales abiertas",
-        descripcion: "Hay formularios o anexos abiertos para seguimiento.",
-        accionUrl: "/app/admin/gestiones",
-        entidadTipo: "FormSubmission",
-        cantidad: gestiones,
-        requiereAccion: false,
-        metadata: { estados: ["ENVIADO", "EN_REVISION", "ASIGNADO"] },
-      }),
-    liquidacionesPendientes > 0 &&
-      alerta({
-        id: "admin:liquidaciones-pendientes-entrega",
-        tipo: "SEGUIMIENTO",
-        modulo: "LIQUIDACIONES",
-        prioridad: "MEDIA",
-        titulo: "Liquidaciones pendientes de entrega",
-        descripcion: "Hay liquidaciones persistidas con estado de entrega pendiente o con error.",
-        accionUrl: "/app/admin/liquidaciones",
-        entidadTipo: "Liquidacion",
-        cantidad: liquidacionesPendientes,
-        requiereAccion: false,
-        metadata: { estadoEntrega: "NO_ENTREGADA" },
-      }),
+    ...gestiones,
+    liquidacionesPendientes,
   ].filter(Boolean);
 }
-
 function prioridadPeso(item) {
   const p = up(item?.prioridad);
   if (p === "CRITICA") return 0;
