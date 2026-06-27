@@ -41,6 +41,12 @@ type Anexo = {
   anexo02DerivadoViviendaCodigo?: string | null;
   estadoDerivacion?: string | null;
   tramiteCerradoPorDerivacion?: boolean;
+  usuarioTieneAnexo02?: boolean;
+  anexo02DerivadoDesdeEsteAnexo01?: boolean;
+  anexo02RelacionadoId?: string | null;
+  anexo02RelacionadoEstado?: string | null;
+  anexo02RelacionadoCodigo?: string | null;
+  marcaTexto?: string | null;
 };
 
 type Panel = "PERMISIONARIOS" | "ALOJADOS";
@@ -219,6 +225,15 @@ function estadoOperativo(a: Anexo) {
       border: "rgba(56,189,248,0.42)",
       background: "rgba(14,116,144,0.20)",
       color: "#cffafe",
+    };
+  }
+
+  if (codigo === "ANEXO_01" && a.usuarioTieneAnexo02 && !a.anexo02DerivadoDesdeEsteAnexo01) {
+    return {
+      texto: "Usuario con ANEXO_02",
+      border: "rgba(250,204,21,0.45)",
+      background: "rgba(113,63,18,0.22)",
+      color: "#fef3c7",
     };
   }
 
@@ -696,6 +711,15 @@ const optionStyle: CSSProperties = {
                               >
                                 Gestionar
                               </button>
+                              {!isAlojados && an.anexo02RelacionadoId && up(an.codigo) === "ANEXO_01" && (
+                                <button
+                                  disabled={busy}
+                                  onClick={() => navigate(`/app/admin-general/gestiones/${an.anexo02RelacionadoId}`)}
+                                  style={secondaryButtonStyle}
+                                >
+                                  Ver ANEXO_02
+                                </button>
+                              )}
                               {!isAlojados && (
                                 <button
                                   disabled={busy}
