@@ -3,8 +3,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import PublicRoutes from "./routes/PublicRoutes";
 import RoleRoutes from "./routes/RoleRoutes";
 import { useAuth } from "./auth/useAuth";
-import NotificacionesPostLoginGate from "./components/notificaciones/NotificacionesPostLoginGate";
-import MensajesNoLeidosPostLoginGate from "./components/notificaciones/MensajesNoLeidosPostLoginGate";
+import CentroAlertasPostLoginGate from "./components/notificaciones/CentroAlertasPostLoginGate";
 
 function ProtectedAppRoutes() {
   const { user, initialized } = useAuth();
@@ -24,8 +23,7 @@ function ProtectedAppRoutes() {
   return (
     <>
       <RoleRoutes />
-      <NotificacionesPostLoginGate />
-      <MensajesNoLeidosPostLoginGate />
+      <CentroAlertasPostLoginGate />
     </>
   );
 }
