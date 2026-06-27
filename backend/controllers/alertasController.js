@@ -7,6 +7,19 @@ const { Notificacion } = require("../models/Notificacion");
 const { ServicioVivienda } = require("../models/ServicioVivienda");
 const { User } = require("../models/user");
 
+let Vivienda = null;
+try {
+  const viviendaModule = require("../models/vivienda");
+  Vivienda = viviendaModule?.Vivienda || viviendaModule || null;
+} catch (_) {}
+
+let AlojamientoDocumento = null;
+let buildFiltroTerritorialDocumento = null;
+try {
+  AlojamientoDocumento = require("../modules/alojamientos/models/AlojamientoDocumento");
+  ({ buildFiltroTerritorialDocumento } = require("../modules/alojamientos/services/documentos/alojamientoDocumentoVisibilityService"));
+} catch (_) {}
+
 function up(value) {
   return String(value || "").toUpperCase().trim();
 }
@@ -20,6 +33,100 @@ function hasPermiso(user, permiso) {
   return list.map(up).includes(up(permiso));
 }
 
+function getUserId(user) {
+  return user?._id || null;
+}
+
+function getIdVariants(value) {
+  if (!value) return [];
+  return Array.from(new Set([value, String(value)]));
+}
+
+function getBarrioAsignado(user) {
+  return String(user?.barrioAsignado || "").trim();
+}
+
+function userFormVinculo(user, rol = "") {
+  const ids = getIdVariants(getUserId(user));
+  if (!ids.length) return [];
+  const or = [
+    { usuario: { $in: ids } },
+    { "datos.postulanteId": { $in: ids } },
+    { "datos.permisionarioId": { $in: ids } },
+    { "intervinientes.userId": { $in: ids } },
+  ];
+  if (rol) {
+    or.push({
+      intervinientes: {
+        $elemMatch: {
+          userId: { $in: ids },
+          rol: up(rol),
+        },
+      },
+    });
+  }
+  return or;
+}
+
+function userAlojamientoVinculo(user) {
+  const ids = getIdVariants(getUserId(user));
+  if (!ids.length) return [];
+  return [
+    { solicitante: { $in: ids } },
+    { alojado: { $in: ids } },
+    { creadoPor: { $in: ids } },
+    { "intervinientes.userId": { $in: ids } },
+  ];
+}
+
+function sinConformidadUsuario(tipo, user) {
+  const ids = getIdVariants(getUserId(user));
+  return {
+    conformidades: {
+      $not: {
+        $elemMatch: {
+          tipo: up(tipo),
+          usuario: { $in: ids },
+          ok: true,
+        },
+      },
+    },
+  };
+}
+
+function alertaAgregada({
+  id,
+  tipo = "ACCION",
+  modulo,
+  prioridad = "ALTA",
+  titulo,
+  descripcion,
+  accionUrl,
+  entidadTipo,
+  cantidad,
+  requiereAccion = true,
+  requiereLectura = false,
+  requiereConfirmacion = false,
+  accionTexto = "Ver",
+  metadata = {},
+}) {
+  if (Number(cantidad || 0) <= 0) return null;
+  return alerta({
+    id,
+    tipo,
+    modulo,
+    prioridad,
+    titulo,
+    descripcion,
+    accionUrl,
+    entidadTipo,
+    cantidad,
+    requiereAccion,
+    requiereLectura,
+    requiereConfirmacion,
+    metadata: { ...metadata, accionTexto },
+  });
+}
 function hasTerritorioLugar(user) {
   const list = Array.isArray(user?.territoriosAlojamiento)
     ? user.territoriosAlojamiento
@@ -311,6 +418,430 @@ async function collectGestionesAdmin() {
     }),
   ];
 }
+async function collectPostulante(user) {
+  const vinculo = userFormVinculo(user, "POSTULANTE");
+  const alojamientoVinculo = userAlojamientoVinculo(user);
+  if (!vinculo.length) return [];
+
+  const [anexo02Conformidad, anexo22Conformidad] = await Promise.all([
+    FormSubmission.countDocuments({
+      codigo: "ANEXO_02",
+      estado: "ENVIADO",
+      $or: vinculo,
+      "conformidadPostulante.ok": { $ne: true },
+      "datos.conformidadPostulante.ok": { $ne: true },
+    }),
+    AlojamientoDocumento && alojamientoVinculo.length
+      ? AlojamientoDocumento.countDocuments({
+          codigo: "ANEXO_22",
+          activo: { $ne: false },
+          estado: "ENVIADO",
+          $or: alojamientoVinculo,
+          ...sinConformidadUsuario("POSTULANTE", user),
+        })
+      : 0,
+  ]);
+
+  return [
+    alertaAgregada({
+      id: "postulante:anexo-02-conformidad",
+      tipo: "CONFIRMACION",
+      modulo: "GESTIONES",
+      titulo: "ANEXO_02 pendiente de conformidad",
+      descripcion: "Tiene ANEXO_02 enviados que requieren su conformidad.",
+      accionUrl: "/app/postulante/mis-anexos",
+      entidadTipo: "FormSubmission",
+      cantidad: anexo02Conformidad,
+      requiereConfirmacion: true,
+      accionTexto: "Prestar conformidad",
+    }),
+    alertaAgregada({
+      id: "postulante:anexo-22-conformidad",
+      tipo: "CONFIRMACION",
+      modulo: "ALOJAMIENTOS",
+      titulo: "ANEXO_22 pendiente de conformidad",
+      descripcion: "Tiene ANEXO_22 de alojamientos que requieren su conformidad.",
+      accionUrl: "/app/postulante/mis-anexos",
+      entidadTipo: "AlojamientoDocumento",
+      cantidad: anexo22Conformidad,
+      requiereConfirmacion: true,
+      accionTexto: "Prestar conformidad",
+    }),
+  ].filter(Boolean);
+}
+
+async function collectPermisionario(user) {
+  const vinculo = userFormVinculo(user, "PERMISIONARIO");
+  if (!vinculo.length) return [];
+
+  const estadosPermisionario11 = [
+    "VISITA_PENDIENTE_ACEPTACION_PERM",
+    "TAREA_PENDIENTE_CONFIRMACION_PERM",
+    "CUMPLIMIENTO_PENDIENTE_ACEPTACION_PERM",
+  ];
+
+  const [anexo03, anexos0809, a11Visita, a11Tarea, a11Cumplimiento, servicios] = await Promise.all([
+    FormSubmission.countDocuments({
+      codigo: "ANEXO_03",
+      estado: "ENVIADO",
+      $or: vinculo,
+      "datos.conformidadPermisionario.ok": { $ne: true },
+    }),
+    FormSubmission.countDocuments({
+      codigo: { $in: ["ANEXO_08", "ANEXO_09"] },
+      estado: "ENVIADO",
+      $or: vinculo,
+      "datos.conformidadPermisionario.ok": { $ne: true },
+    }),
+    FormSubmission.countDocuments({
+      codigo: "ANEXO_11",
+      estadoInstitucional: estadosPermisionario11[0],
+      $or: vinculo,
+    }),
+    FormSubmission.countDocuments({
+      codigo: "ANEXO_11",
+      estadoInstitucional: estadosPermisionario11[1],
+      $or: vinculo,
+    }),
+    FormSubmission.countDocuments({
+      codigo: "ANEXO_11",
+      estadoInstitucional: estadosPermisionario11[2],
+      $or: vinculo,
+    }),
+    countServiciosPropiosNoLeidos(user),
+  ]);
+
+  return [
+    alertaAgregada({
+      id: "permisionario:anexo-03-conformidad",
+      tipo: "CONFIRMACION",
+      modulo: "GESTIONES",
+      titulo: "ANEXO_03 pendiente de conformidad",
+      descripcion: "Tiene actas ANEXO_03 enviadas que requieren su conformidad.",
+      accionUrl: "/app/permisionario/anexos",
+      entidadTipo: "FormSubmission",
+      cantidad: anexo03,
+      requiereConfirmacion: true,
+      accionTexto: "Prestar conformidad",
+    }),
+    alertaAgregada({
+      id: "permisionario:anexo-08-09-conformidad",
+      tipo: "CONFIRMACION",
+      modulo: "GESTIONES",
+      titulo: "ANEXO_08/09 pendientes de conformidad",
+      descripcion: "Tiene ANEXO_08 o ANEXO_09 enviados que requieren su conformidad.",
+      accionUrl: "/app/permisionario/anexos",
+      entidadTipo: "FormSubmission",
+      cantidad: anexos0809,
+      requiereConfirmacion: true,
+      accionTexto: "Prestar conformidad",
+    }),
+    alertaAgregada({
+      id: "permisionario:anexo-11-visita",
+      tipo: "CONFIRMACION",
+      modulo: "GESTIONES",
+      titulo: "ANEXO_11 visita pendiente de aceptación",
+      descripcion: "Tiene visitas de ANEXO_11 pendientes de aceptación.",
+      accionUrl: "/app/permisionario/anexos",
+      entidadTipo: "FormSubmission",
+      cantidad: a11Visita,
+      requiereConfirmacion: true,
+      accionTexto: "Aceptar",
+    }),
+    alertaAgregada({
+      id: "permisionario:anexo-11-tarea",
+      tipo: "CONFIRMACION",
+      modulo: "GESTIONES",
+      titulo: "ANEXO_11 tarea pendiente de confirmación",
+      descripcion: "Tiene tareas de ANEXO_11 pendientes de confirmación.",
+      accionUrl: "/app/permisionario/anexos",
+      entidadTipo: "FormSubmission",
+      cantidad: a11Tarea,
+      requiereConfirmacion: true,
+      accionTexto: "Confirmar",
+    }),
+    alertaAgregada({
+      id: "permisionario:anexo-11-cumplimiento",
+      tipo: "CONFIRMACION",
+      modulo: "GESTIONES",
+      titulo: "ANEXO_11 cumplimiento pendiente de aceptación",
+      descripcion: "Tiene cumplimientos de ANEXO_11 pendientes de aceptación.",
+      accionUrl: "/app/permisionario/anexos",
+      entidadTipo: "FormSubmission",
+      cantidad: a11Cumplimiento,
+      requiereConfirmacion: true,
+      accionTexto: "Aceptar",
+    }),
+    alertaAgregada({
+      id: "permisionario:servicios-no-leidos",
+      tipo: "LECTURA",
+      modulo: "SERVICIOS",
+      prioridad: "MEDIA",
+      titulo: "Servicios propios sin leer",
+      descripcion: "Tiene registros de servicios de su vivienda pendientes de lectura.",
+      accionUrl: "/app/permisionario/servicios",
+      entidadTipo: "ServicioVivienda",
+      cantidad: servicios,
+      requiereAccion: false,
+      requiereLectura: true,
+      accionTexto: "Leer",
+    }),
+  ].filter(Boolean);
+}
+
+async function countServiciosPropiosNoLeidos(user) {
+  const uid = getUserId(user);
+  if (!uid || !Vivienda) return 0;
+
+  const vivienda = await Vivienda.findOne({
+    estado: "OCUPADA",
+    "ocupacionActual.permisionario": uid,
+  })
+    .select("codigo")
+    .lean();
+
+  const codigo = up(vivienda?.codigo);
+  if (!codigo) return 0;
+
+  return ServicioVivienda.countDocuments({
+    viviendaCodigo: codigo,
+    alertaActiva: { $ne: false },
+    leidoPorUsuario: { $ne: true },
+  });
+}
+
+async function collectAlojado(user) {
+  if (!AlojamientoDocumento) return [];
+  const vinculo = userAlojamientoVinculo(user);
+  if (!vinculo.length) return [];
+
+  const [conformidades, borradores] = await Promise.all([
+    AlojamientoDocumento.countDocuments({
+      codigo: { $in: ["ANEXO_23", "ANEXO_25", "ANEXO_26"] },
+      activo: { $ne: false },
+      estado: "ENVIADO",
+      $or: vinculo,
+      ...sinConformidadUsuario("ALOJADO", user),
+    }),
+    AlojamientoDocumento.countDocuments({
+      codigo: { $in: ["ANEXO_24", "ANEXO_28"] },
+      activo: { $ne: false },
+      estado: "BORRADOR",
+      $or: vinculo,
+    }),
+  ]);
+
+  return [
+    alertaAgregada({
+      id: "alojado:anexos-conformidad",
+      tipo: "CONFIRMACION",
+      modulo: "ALOJAMIENTOS",
+      titulo: "Documentos de alojamiento pendientes de conformidad",
+      descripcion: "Tiene ANEXO_23, ANEXO_25 o ANEXO_26 enviados que requieren su conformidad.",
+      accionUrl: "/app/alojado/anexos",
+      entidadTipo: "AlojamientoDocumento",
+      cantidad: conformidades,
+      requiereConfirmacion: true,
+      accionTexto: "Prestar conformidad",
+    }),
+    alertaAgregada({
+      id: "alojado:anexos-borrador-enviar",
+      tipo: "ACCION",
+      modulo: "ALOJAMIENTOS",
+      prioridad: "MEDIA",
+      titulo: "Documentos de alojamiento pendientes de envío",
+      descripcion: "Tiene ANEXO_24 o ANEXO_28 en borrador propio para enviar.",
+      accionUrl: "/app/alojado/anexos",
+      entidadTipo: "AlojamientoDocumento",
+      cantidad: borradores,
+      accionTexto: "Enviar",
+    }),
+  ].filter(Boolean);
+}
+
+async function collectInspector(user) {
+  const barrio = getBarrioAsignado(user);
+  const vinculoInspector = userFormVinculo(user, "INSPECTOR");
+  const orInspector = [...vinculoInspector];
+  if (barrio) orInspector.push({ barrio });
+  if (!orInspector.length) return [];
+
+  const estados = {
+    visita: "VISITA_PENDIENTE_AGENDA",
+    resolver: "VISITA_CONFIRMADA",
+    programar: "TAREA_PENDIENTE_PROGRAMACION",
+    devuelto: "DEVUELTO_A_INSPECTOR_POR_ADMIN_GENERAL",
+    cumplido: "TAREA_CONFIRMADA",
+  };
+
+  const [visita, resolver, programar, devuelto, cumplido, mantenimientos] = await Promise.all([
+    FormSubmission.countDocuments({ codigo: "ANEXO_11", estadoInstitucional: estados.visita, $or: orInspector }),
+    FormSubmission.countDocuments({ codigo: "ANEXO_11", estadoInstitucional: estados.resolver, $or: orInspector }),
+    FormSubmission.countDocuments({ codigo: "ANEXO_11", estadoInstitucional: estados.programar, $or: orInspector }),
+    FormSubmission.countDocuments({ codigo: "ANEXO_11", estadoInstitucional: estados.devuelto, $or: orInspector }),
+    FormSubmission.countDocuments({ codigo: "ANEXO_11", estadoInstitucional: estados.cumplido, $or: orInspector }),
+    barrio
+      ? Mantenimiento.countDocuments({ barrio, isClosed: false, inspectorDecision: "PENDIENTE" })
+      : 0,
+  ]);
+
+  return [
+    alertaAgregada({
+      id: "inspector:anexo-11-agendar",
+      modulo: "GESTIONES",
+      titulo: "ANEXO_11 pendientes de agenda",
+      descripcion: "Tiene pedidos ANEXO_11 pendientes de agendar visita.",
+      accionUrl: "/app/permisionario/mi-barrio-inspector/gestiones",
+      entidadTipo: "FormSubmission",
+      cantidad: visita,
+      accionTexto: "Agendar",
+    }),
+    alertaAgregada({
+      id: "inspector:anexo-11-resolver-visita",
+      modulo: "GESTIONES",
+      titulo: "ANEXO_11 con visita confirmada",
+      descripcion: "Tiene pedidos ANEXO_11 con visita confirmada para resolver.",
+      accionUrl: "/app/permisionario/mi-barrio-inspector/gestiones",
+      entidadTipo: "FormSubmission",
+      cantidad: resolver,
+      accionTexto: "Resolver",
+    }),
+    alertaAgregada({
+      id: "inspector:anexo-11-programar",
+      modulo: "GESTIONES",
+      titulo: "ANEXO_11 pendientes de programación",
+      descripcion: "Tiene tareas ANEXO_11 pendientes de programación.",
+      accionUrl: "/app/permisionario/mi-barrio-inspector/gestiones",
+      entidadTipo: "FormSubmission",
+      cantidad: programar,
+      accionTexto: "Programar",
+    }),
+    alertaAgregada({
+      id: "inspector:anexo-11-devuelto",
+      modulo: "GESTIONES",
+      titulo: "ANEXO_11 devueltos por ADMIN_GENERAL",
+      descripcion: "Tiene pedidos ANEXO_11 devueltos por ADMIN_GENERAL para revisión.",
+      accionUrl: "/app/permisionario/mi-barrio-inspector/gestiones",
+      entidadTipo: "FormSubmission",
+      cantidad: devuelto,
+      accionTexto: "Revisar",
+    }),
+    alertaAgregada({
+      id: "inspector:anexo-11-marcar-cumplido",
+      modulo: "GESTIONES",
+      titulo: "ANEXO_11 tareas confirmadas",
+      descripcion: "Tiene tareas ANEXO_11 confirmadas para marcar como cumplidas.",
+      accionUrl: "/app/permisionario/mi-barrio-inspector/gestiones",
+      entidadTipo: "FormSubmission",
+      cantidad: cumplido,
+      accionTexto: "Marcar cumplido",
+    }),
+    alertaAgregada({
+      id: "inspector:mantenimientos-pendientes",
+      modulo: "MANTENIMIENTOS",
+      titulo: "Mantenimientos pendientes de decisión inspector",
+      descripcion: "Tiene solicitudes de mantenimiento de su barrio pendientes de decisión inspector.",
+      accionUrl: "/app/permisionario/mi-barrio-inspector/mantenimientos",
+      entidadTipo: "Mantenimiento",
+      cantidad: mantenimientos,
+      accionTexto: "Resolver",
+    }),
+  ].filter(Boolean);
+}
+
+async function collectJefeBarrio(user) {
+  const barrio = getBarrioAsignado(user);
+  const vinculoJefe = userFormVinculo(user, "JEFE_DE_BARRIO");
+  if (!barrio && !vinculoJefe.length) return [];
+
+  const [anexo04, anexo11] = await Promise.all([
+    barrio
+      ? FormSubmission.countDocuments({
+          codigo: "ANEXO_04",
+          estado: "ENVIADO",
+          barrio,
+          "datos.acuseRecibo.ok": { $ne: true },
+        })
+      : 0,
+    FormSubmission.countDocuments({
+      codigo: "ANEXO_11",
+      estado: { $nin: ["CERRADO", "RECHAZADO", "ANULADO"] },
+      estadoInstitucional: { $nin: ["CERRADO_ADMIN_GENERAL", "RECHAZADO_POR_INSPECTOR"] },
+      $or: vinculoJefe,
+    }),
+  ]);
+
+  return [
+    alertaAgregada({
+      id: "jefe-barrio:anexo-04-acuse",
+      modulo: "GESTIONES",
+      titulo: "ANEXO_04 pendientes de acuse",
+      descripcion: "Tiene ANEXO_04 enviados en su barrio pendientes de acuse o intervención territorial.",
+      accionUrl: "/app/permisionario/mi-barrio-jefe/gestiones",
+      entidadTipo: "FormSubmission",
+      cantidad: anexo04,
+      accionTexto: "Acusar recibo",
+    }),
+    alertaAgregada({
+      id: "jefe-barrio:anexo-11-propios",
+      tipo: "SEGUIMIENTO",
+      modulo: "GESTIONES",
+      prioridad: "MEDIA",
+      titulo: "ANEXO_11 propios en curso",
+      descripcion: "Tiene ANEXO_11 propios o asignados a su perfil territorial para revisar.",
+      accionUrl: "/app/permisionario/mi-barrio-jefe/gestiones",
+      entidadTipo: "FormSubmission",
+      cantidad: anexo11,
+      requiereAccion: false,
+      accionTexto: "Revisar",
+    }),
+  ].filter(Boolean);
+}
+
+async function collectInspectorAlojamientos(user) {
+  if (!AlojamientoDocumento || typeof buildFiltroTerritorialDocumento !== "function") return [];
+
+  const territorialFilter = await buildFiltroTerritorialDocumento(user);
+  if (!territorialFilter) return [];
+
+  const [anexo24, anexo28] = await Promise.all([
+    AlojamientoDocumento.countDocuments({
+      codigo: "ANEXO_24",
+      estado: "ENVIADO",
+      activo: { $ne: false },
+      $and: [territorialFilter],
+    }),
+    AlojamientoDocumento.countDocuments({
+      codigo: "ANEXO_28",
+      estado: { $in: ["ENVIADO", "DEVUELTO_A_INSPECTOR"] },
+      activo: { $ne: false },
+      $and: [territorialFilter],
+    }),
+  ]);
+
+  return [
+    alertaAgregada({
+      id: "inspector-alojamientos:anexo-24-revision",
+      modulo: "ALOJAMIENTOS",
+      titulo: "ANEXO_24 pendientes de revisión",
+      descripcion: "Tiene ANEXO_24 enviados dentro de su territorio para revisión inspector.",
+      accionUrl: "/app/permisionario/alojamientos-inspector/documentos",
+      entidadTipo: "AlojamientoDocumento",
+      cantidad: anexo24,
+      accionTexto: "Revisar",
+    }),
+    alertaAgregada({
+      id: "inspector-alojamientos:anexo-28-gestion",
+      modulo: "ALOJAMIENTOS",
+      titulo: "ANEXO_28 pendientes de gestión inspector",
+      descripcion: "Tiene ANEXO_28 enviados o devueltos dentro de su territorio para gestionar.",
+      accionUrl: "/app/permisionario/alojamientos-inspector/documentos",
+      entidadTipo: "AlojamientoDocumento",
+      cantidad: anexo28,
+      accionTexto: "Gestionar",
+    }),
+  ].filter(Boolean);
+}
 async function collectNotificaciones(user) {
   const uid = user?._id;
   if (!uid) return [];
@@ -570,6 +1101,21 @@ async function getPostLoginResumen(req, res) {
       alertas = alertas.concat(await collectAdminGeneral());
     } else if (isRole(user, "ADMIN")) {
       alertas = alertas.concat(await collectAdmin());
+    } else {
+      const dinamicas = [];
+      if (isRole(user, "POSTULANTE")) dinamicas.push(collectPostulante(user));
+      if (isRole(user, "PERMISIONARIO")) dinamicas.push(collectPermisionario(user));
+      if (isRole(user, "ALOJADO")) dinamicas.push(collectAlojado(user));
+      if (isRole(user, "PERMISIONARIO") && hasPermiso(user, "INSPECTOR")) {
+        dinamicas.push(collectInspector(user));
+      }
+      if (isRole(user, "PERMISIONARIO") && hasPermiso(user, "JEFE_DE_BARRIO")) {
+        dinamicas.push(collectJefeBarrio(user));
+      }
+      if (isRole(user, "PERMISIONARIO") && hasPermiso(user, "INSPECTOR_ALOJAMIENTOS")) {
+        dinamicas.push(collectInspectorAlojamientos(user));
+      }
+      if (dinamicas.length) alertas = alertas.concat((await Promise.all(dinamicas)).flat());
     }
 
     alertas.sort((a, b) => {
