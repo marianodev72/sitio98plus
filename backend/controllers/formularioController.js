@@ -6324,45 +6324,83 @@ function withDatosEfectivosMisDatos(upd) {
 async function hydrateAnexo01Derivacion(docs) {
   const isArrayInput = Array.isArray(docs);
   const arr = isArrayInput ? docs : docs ? [docs] : [];
-  const anexo01Ids = arr
-    .filter((a) => up(a?.codigo) === "ANEXO_01" && a?._id)
-    .map((a) => a._id);
+  const anexos01 = arr.filter((a) => up(a?.codigo) === "ANEXO_01" && a?._id);
+  const anexo01Ids = anexos01.map((a) => a._id);
+  const anexo01IdStrings = anexo01Ids.map(String);
+  const usuarioIds = anexos01
+    .map((a) => a?.usuario?._id || a?.usuario || a?.datos?.usuarioId || a?.datos?.postulanteId)
+    .filter((x) => isObjectId(x));
+  const usuarioIdStrings = [...new Set(usuarioIds.map(String))];
 
   if (!anexo01Ids.length) return isArrayInput ? arr : docs;
 
+  const orFilters = [{ derivadoDe: { $in: anexo01Ids } }];
+  if (usuarioIds.length) orFilters.push({ usuario: { $in: usuarioIds } });
+  if (usuarioIdStrings.length) orFilters.push({ "datos.postulanteId": { $in: usuarioIdStrings } });
+  if (anexo01IdStrings.length) orFilters.push({ "datos.anexo01Id": { $in: anexo01IdStrings } });
+
   const derivados = await FormSubmission.find({
     codigo: "ANEXO_02",
-    derivadoDe: { $in: anexo01Ids },
+    $or: orFilters,
   })
-    .select("_id codigo estado derivadoDe datos vivienda")
+    .select("_id codigo estado derivadoDe datos vivienda usuario updatedAt createdAt")
     .sort({ updatedAt: -1, createdAt: -1, _id: -1 })
     .lean();
 
   const derivadosHidratados = await hydrateViviendaCodigo(derivados);
   const derivadosPorOrigen = new Map();
+  const derivadosPorUsuario = new Map();
+  const derivadosLegacyPorOrigen = new Map();
+  const derivadosLegacyPorUsuario = new Map();
+
+  const setFirst = (map, key, der) => {
+    if (key && !map.has(key)) map.set(key, der);
+  };
+
   for (const der of derivadosHidratados) {
-    const key = String(der?.derivadoDe || "");
-    if (key && !derivadosPorOrigen.has(key)) derivadosPorOrigen.set(key, der);
+    const origenKey = String(der?.derivadoDe || "");
+    const usuarioKey = String(der?.usuario || der?.datos?.postulanteId || "");
+    const legacyOrigenKey = String(der?.datos?.anexo01Id || "");
+    const legacyUsuarioKey = String(der?.datos?.postulanteId || "");
+
+    setFirst(derivadosPorOrigen, origenKey, der);
+    setFirst(derivadosPorUsuario, usuarioKey, der);
+    setFirst(derivadosLegacyPorOrigen, legacyOrigenKey, der);
+    setFirst(derivadosLegacyPorUsuario, legacyUsuarioKey, der);
   }
 
   const decorate = (a) => {
     if (up(a?.codigo) !== "ANEXO_01") return a;
-    const der = derivadosPorOrigen.get(String(a?._id || ""));
+
+    const anexo01Key = String(a?._id || "");
+    const usuarioKey = String(a?.usuario?._id || a?.usuario || a?.datos?.usuarioId || a?.datos?.postulanteId || "");
+    const derDirecto = derivadosPorOrigen.get(anexo01Key) || null;
+    const derUsuario = derivadosPorUsuario.get(usuarioKey) || null;
+    const derLegacy = derivadosLegacyPorOrigen.get(anexo01Key) || derivadosLegacyPorUsuario.get(usuarioKey) || null;
+    const derRelacionado = derDirecto || derUsuario || derLegacy || null;
+    const anexo02DerivadoDesdeEsteAnexo01 = Boolean(derDirecto);
+    const usuarioTieneAnexo02 = Boolean(derRelacionado);
     const viviendaCodigo =
-      der?.viviendaCodigo ||
-      der?.datos?.viviendaCodigo ||
-      der?.datos?.viviendaLabel ||
+      derDirecto?.viviendaCodigo ||
+      derDirecto?.datos?.viviendaCodigo ||
+      derDirecto?.datos?.viviendaLabel ||
       null;
 
     return {
       ...a,
-      tieneAnexo02Derivado: Boolean(der),
-      anexo02DerivadoId: der?._id ? String(der._id) : null,
-      anexo02DerivadoCodigo: der ? "ANEXO_02" : null,
-      anexo02DerivadoEstado: der?.estado || null,
+      tieneAnexo02Derivado: Boolean(derDirecto),
+      anexo02DerivadoId: derDirecto?._id ? String(derDirecto._id) : null,
+      anexo02DerivadoCodigo: derDirecto ? "ANEXO_02" : null,
+      anexo02DerivadoEstado: derDirecto?.estado || null,
       anexo02DerivadoViviendaCodigo: viviendaCodigo,
-      estadoDerivacion: der ? "ANEXO_02_GENERADO" : null,
-      tramiteCerradoPorDerivacion: Boolean(der),
+      estadoDerivacion: derDirecto ? "ANEXO_02_GENERADO" : null,
+      tramiteCerradoPorDerivacion: Boolean(derDirecto),
+      usuarioTieneAnexo02,
+      anexo02DerivadoDesdeEsteAnexo01,
+      anexo02RelacionadoId: derRelacionado?._id ? String(derRelacionado._id) : null,
+      anexo02RelacionadoEstado: derRelacionado?.estado || null,
+      anexo02RelacionadoCodigo: derRelacionado ? "ANEXO_02" : null,
+      marcaTexto: derDirecto ? "ANEXO_02 generado" : derRelacionado ? "Usuario con ANEXO_02" : null,
     };
   };
 
