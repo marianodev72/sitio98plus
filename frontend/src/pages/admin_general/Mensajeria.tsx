@@ -770,6 +770,13 @@ export default function Mensajeria(props: MensajeriaProps = {}) {
       setLoading(false);
     }
   }
+  function renderBotonEnviar() {
+    return (
+      <button type="button" onClick={enviarMensaje} disabled={loading} style={styles.primaryButton}>
+        {loading ? "Enviando..." : "Enviar"}
+      </button>
+    );
+  }
 
   useEffect(() => {
     cargarUsuarios();
@@ -975,6 +982,10 @@ export default function Mensajeria(props: MensajeriaProps = {}) {
                   </div>
                 </div>
 
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {renderBotonEnviar()}
+                </div>
+
                 <div
                   style={{
                     display: "flex",
@@ -1103,9 +1114,7 @@ export default function Mensajeria(props: MensajeriaProps = {}) {
                 </p>
 
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <button onClick={enviarMensaje} disabled={loading} style={styles.primaryButton}>
-                    Enviar
-                  </button>
+                  {renderBotonEnviar()}
                   <button
                     onClick={limpiarFormularioNuevo}
                     disabled={loading}
