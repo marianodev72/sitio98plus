@@ -52,6 +52,15 @@ type Anexo = {
 
 type Panel = "PERMISIONARIOS" | "ALOJADOS";
 
+type FiltrosGestiones = {
+  codigo: string;
+  estado: string;
+  barrio: string;
+  q: string;
+  sortDir: "asc" | "desc";
+  limit: number;
+};
+
 const TODOS_CODIGOS = "TODOS";
 
 const ANEXOS_PERMISIONARIO = [
@@ -288,8 +297,16 @@ export default function Gestiones() {
   const [barrioFiltro, setBarrioFiltro] = useState("");
   const [qFiltro, setQFiltro] = useState("");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-  const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(50);
+  const [appliedFilters, setAppliedFilters] = useState<FiltrosGestiones>({
+    codigo: TODOS_CODIGOS,
+    estado: "",
+    barrio: "",
+    q: "",
+    sortDir: "desc",
+    limit: 50,
+  });
+  const [page, setPage] = useState(1);
   const [total, setTotal] = useState<number | null>(null);
   const [items, setItems] = useState<Anexo[]>([]);
   const [loading, setLoading] = useState(false);
@@ -300,12 +317,25 @@ export default function Gestiones() {
   const esAdmin = myRole === "ADMIN" || myRole === "ADMIN_GENERAL";
 
   useEffect(() => {
-    setCodigo(panel === "PERMISIONARIOS" ? TODOS_CODIGOS : "ANEXO_21");
+    const nextCodigo = panel === "PERMISIONARIOS" ? TODOS_CODIGOS : "ANEXO_21";
+    const nextLimit = panel === "PERMISIONARIOS" ? Math.min(limit, 100) : limit;
+    const nextFilters: FiltrosGestiones = {
+      codigo: nextCodigo,
+      estado: "",
+      barrio: "",
+      q: "",
+      sortDir: "desc",
+      limit: nextLimit,
+    };
+
+    setCodigo(nextCodigo);
     setEstadoFiltro("");
     setBarrioFiltro("");
     setQFiltro("");
+    setSortDir("desc");
+    setLimit(nextLimit);
+    setAppliedFilters(nextFilters);
     setPage(1);
-    if (panel === "PERMISIONARIOS") setLimit((value) => Math.min(value, 100));
   }, [panel]);
 
   async function cargarLista() {
@@ -315,34 +345,34 @@ export default function Gestiones() {
     setTotal(null);
 
     try {
-      if (!codigo) return;
+      if (!appliedFilters.codigo) return;
 
       if (esAdmin) {
-        const requestLimit = panel === "ALOJADOS" ? limit : Math.min(limit, 100);
+        const requestLimit = panel === "ALOJADOS" ? appliedFilters.limit : Math.min(appliedFilters.limit, 100);
         const params: Record<string, string | number> = {
-          sortDir,
+          sortDir: appliedFilters.sortDir,
           limit: requestLimit,
           page,
         };
 
-        if (estadoFiltro) params.estado = estadoFiltro;
+        if (appliedFilters.estado) params.estado = appliedFilters.estado;
 
         if (panel === "ALOJADOS") {
-          if (codigo && codigo !== TODOS_CODIGOS) params.codigo = codigo;
+          if (appliedFilters.codigo && appliedFilters.codigo !== TODOS_CODIGOS) params.codigo = appliedFilters.codigo;
           const res = await http.get("/alojamientos-documentos", { params });
           setItems(Array.isArray(res.data?.documentos) ? res.data.documentos : []);
           setTotal(typeof res.data?.total === "number" ? res.data.total : null);
           return;
         }
 
-        if (barrioFiltro.trim()) params.barrio = barrioFiltro.trim();
-        if (qFiltro.trim()) params.q = qFiltro.trim();
+        if (appliedFilters.barrio.trim()) params.barrio = appliedFilters.barrio.trim();
+        if (appliedFilters.q.trim()) params.q = appliedFilters.q.trim();
 
-        const res = await http.get(`/formularios/anexo/${codigo}`, { params });
+        const res = await http.get(`/formularios/anexo/${appliedFilters.codigo}`, { params });
         setItems(Array.isArray(res.data?.anexos) ? res.data.anexos : []);
         setTotal(typeof res.data?.total === "number" ? res.data.total : null);
       } else {
-        const res = await http.get(`/formularios/mios`, { params: { codigo } });
+        const res = await http.get(`/formularios/mios`, { params: { codigo: appliedFilters.codigo } });
         setItems(Array.isArray(res.data?.anexos) ? res.data.anexos : []);
       }
     } catch (err) {
@@ -384,14 +414,48 @@ export default function Gestiones() {
     }
   }
 
+  function aplicarFiltros() {
+    setAppliedFilters({
+      codigo,
+      estado: estadoFiltro,
+      barrio: barrioFiltro,
+      q: qFiltro,
+      sortDir,
+      limit,
+    });
+    setPage(1);
+  }
+
+  function limpiarFiltros() {
+    const nextCodigo = panel === "PERMISIONARIOS" ? TODOS_CODIGOS : "ANEXO_21";
+    const nextLimit = 50;
+    const nextFilters: FiltrosGestiones = {
+      codigo: nextCodigo,
+      estado: "",
+      barrio: "",
+      q: "",
+      sortDir: "desc",
+      limit: nextLimit,
+    };
+
+    setCodigo(nextCodigo);
+    setEstadoFiltro("");
+    setBarrioFiltro("");
+    setQFiltro("");
+    setSortDir("desc");
+    setLimit(nextLimit);
+    setAppliedFilters(nextFilters);
+    setPage(1);
+  }
+
   useEffect(() => {
     cargarLista();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [codigo, estadoFiltro, barrioFiltro, qFiltro, sortDir, esAdmin, page, limit]);
+  }, [appliedFilters, esAdmin, page]);
 
   const isAlojados = panel === "ALOJADOS";
   const limitOptions = isAlojados ? ALOJADOS_LIMIT_OPTIONS : FORM_LIMIT_OPTIONS;
-  const effectiveLimit = isAlojados ? limit : Math.min(limit, 100);
+  const effectiveLimit = isAlojados ? appliedFilters.limit : Math.min(appliedFilters.limit, 100);
   const totalPages = total !== null ? Math.max(1, Math.ceil(total / effectiveLimit)) : null;
   const canGoNext = totalPages !== null ? page < totalPages : items.length === effectiveLimit;
 
@@ -488,10 +552,7 @@ const optionStyle: CSSProperties = {
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
               <select
   value={codigo}
-  onChange={(e) => {
-    setCodigo(e.target.value);
-    setPage(1);
-  }}
+  onChange={(e) => setCodigo(e.target.value)}
   disabled={loading}
   style={selectStyle}
 >
@@ -509,10 +570,7 @@ const optionStyle: CSSProperties = {
 
               <select
                 value={estadoFiltro}
-                onChange={(e) => {
-                  setEstadoFiltro(e.target.value);
-                  setPage(1);
-                }}
+                onChange={(e) => setEstadoFiltro(e.target.value)}
                 disabled={loading}
                 style={selectStyle}
                 aria-label="Estado"
@@ -530,10 +588,7 @@ const optionStyle: CSSProperties = {
               {!isAlojados && (
                 <input
                   value={barrioFiltro}
-                  onChange={(e) => {
-                    setBarrioFiltro(e.target.value);
-                    setPage(1);
-                  }}
+                  onChange={(e) => setBarrioFiltro(e.target.value)}
                   disabled={loading}
                   placeholder="Barrio"
                   style={{ ...controlStyle, minWidth: 180 }}
@@ -544,10 +599,7 @@ const optionStyle: CSSProperties = {
               {!isAlojados && (
                 <input
                   value={qFiltro}
-                  onChange={(e) => {
-                    setQFiltro(e.target.value);
-                    setPage(1);
-                  }}
+                  onChange={(e) => setQFiltro(e.target.value)}
                   disabled={loading}
                   placeholder="Buscar por nombre, apellido, matricula o email"
                   style={{ ...controlStyle, minWidth: 280 }}
@@ -557,10 +609,7 @@ const optionStyle: CSSProperties = {
 
               <select
                 value={sortDir}
-                onChange={(e) => {
-                  setSortDir(e.target.value === "asc" ? "asc" : "desc");
-                  setPage(1);
-                }}
+                onChange={(e) => setSortDir(e.target.value === "asc" ? "asc" : "desc")}
                 disabled={loading}
                 style={selectStyle}
                 aria-label="Orden por fecha"
@@ -574,11 +623,8 @@ const optionStyle: CSSProperties = {
               </select>
 
               <select
-                value={effectiveLimit}
-                onChange={(e) => {
-                  setLimit(Number(e.target.value));
-                  setPage(1);
-                }}
+                value={limit}
+                onChange={(e) => setLimit(Number(e.target.value))}
                 disabled={loading}
                 style={selectStyle}
                 aria-label="Cantidad por pagina"
@@ -590,8 +636,12 @@ const optionStyle: CSSProperties = {
                 ))}
               </select>
 
-              <button onClick={cargarLista} disabled={loading} style={primaryButtonStyle}>
-                {loading ? "Cargando…" : "Actualizar"}
+              <button onClick={aplicarFiltros} disabled={loading} style={primaryButtonStyle}>
+                {loading ? "Cargando..." : "Aplicar filtros"}
+              </button>
+
+              <button onClick={limpiarFiltros} disabled={loading} style={secondaryButtonStyle}>
+                Limpiar filtros
               </button>
 
               <span style={{ color: "rgba(255,255,255,0.72)" }}>
