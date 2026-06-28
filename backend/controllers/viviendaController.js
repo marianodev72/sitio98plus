@@ -3,6 +3,7 @@
 
 const Vivienda = require("../models/vivienda");
 const PDFDocument = require("pdfkit");
+const ExcelJS = require("exceljs");
 const {
   deriveGrupoViviendaFromGradoEscalafon,
   deriveGrupoViviendaFromGrupoJerarquico,
@@ -917,7 +918,152 @@ function isInspectorLike(user) {
   return role === "INSPECTOR" || hasPerm(user, "INSPECTOR");
 }
 
-// ✅ PDF local (sin utils/pdf)
+function asExcelValue(value) {
+  if (value === null || value === undefined || value === "") return "-";
+  return value;
+}
+
+function getHacinamientoEstado(vivienda = {}) {
+  return safeStr(vivienda.semaforo || vivienda.hacinamientoColor) || "SIN_DATOS";
+}
+
+function getPermisionarioLabel(vivienda = {}) {
+  const p = vivienda.permisionario || {};
+  return safeStr((p.apellido || "") + " " + (p.nombre || "")) || safeStr(p.matricula) || "-";
+}
+
+function getPermisionarioMatricula(vivienda = {}) {
+  return safeStr(vivienda && vivienda.permisionario && vivienda.permisionario.matricula) || "-";
+}
+
+function formatTipoDestinoExcel(value) {
+  const normalized = up(value);
+  if (normalized === "OF") return "OFICIALES";
+  if (normalized === "SO") return "SUBOFICIALES";
+  if (normalized === "MIXTO") return "MIXTO";
+  return "SIN DEFINIR";
+}
+
+function resumenHacinamiento(viviendas = []) {
+  const resumen = { VERDE: 0, AMARILLO: 0, ROJO: 0, REQUIERE_EVALUACION: 0, SIN_DATOS: 0, NO_APLICA: 0 };
+  for (const vivienda of Array.isArray(viviendas) ? viviendas : []) {
+    const key = getHacinamientoEstado(vivienda);
+    if (Object.prototype.hasOwnProperty.call(resumen, key)) resumen[key] += 1;
+    else resumen.SIN_DATOS += 1;
+  }
+  return resumen;
+}
+
+function applyHeaderStyle(row) {
+  row.font = { bold: true, color: { argb: "FFFFFFFF" } };
+  row.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+  row.eachCell((cell) => {
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1F2937" } };
+    cell.border = {
+      top: { style: "thin", color: { argb: "FFCBD5E1" } },
+      left: { style: "thin", color: { argb: "FFCBD5E1" } },
+      bottom: { style: "thin", color: { argb: "FFCBD5E1" } },
+      right: { style: "thin", color: { argb: "FFCBD5E1" } },
+    };
+  });
+}
+
+function aplicarFormatoTabla(sheet) {
+  sheet.views = [{ state: "frozen", ySplit: 1 }];
+  sheet.autoFilter = { from: "A1", to: "N1" };
+  applyHeaderStyle(sheet.getRow(1));
+  sheet.eachRow((row, rowNumber) => {
+    row.height = rowNumber === 1 ? 24 : 20;
+    row.eachCell((cell) => {
+      cell.alignment = { vertical: "middle", wrapText: true };
+    });
+  });
+}
+
+function buildViviendasWorkbook({ viviendas = [], filtros = {}, user = null, fecha = new Date() } = {}) {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "Sitio98Plus";
+  workbook.created = fecha;
+  workbook.modified = fecha;
+
+  const resumenSheet = workbook.addWorksheet("Resumen");
+  resumenSheet.columns = [
+    { header: "Concepto", key: "concepto", width: 34 },
+    { header: "Valor", key: "valor", width: 48 },
+  ];
+  applyHeaderStyle(resumenSheet.getRow(1));
+
+  const filtrosKeys = filtros && typeof filtros === "object" ? Object.keys(filtros) : [];
+  resumenSheet.addRow({ concepto: "Titulo", valor: "Listado de Viviendas Fiscales" });
+  resumenSheet.addRow({ concepto: "Fecha/hora de emision", valor: fecha.toLocaleString("es-AR") });
+  resumenSheet.addRow({ concepto: "Usuario", valor: safeStr((user && (user.email || user.username || user.nombre)) || "") || "-" });
+  resumenSheet.addRow({ concepto: "Rol", valor: safeStr(user && user.role) || "-" });
+  resumenSheet.addRow({ concepto: "Total de viviendas", valor: Array.isArray(viviendas) ? viviendas.length : 0 });
+  resumenSheet.addRow({ concepto: "Filtros aplicados", valor: filtrosKeys.length ? "Ver detalle debajo" : "Sin filtros" });
+
+  if (filtrosKeys.length) {
+    resumenSheet.addRow({ concepto: "", valor: "" });
+    resumenSheet.addRow({ concepto: "Filtro", valor: "Valor" });
+    applyHeaderStyle(resumenSheet.getRow(resumenSheet.rowCount));
+    for (const key of filtrosKeys) resumenSheet.addRow({ concepto: key, valor: String(filtros[key]) });
+  }
+
+  const resumen = resumenHacinamiento(viviendas);
+  resumenSheet.addRow({ concepto: "", valor: "" });
+  resumenSheet.addRow({ concepto: "Resumen por hacinamiento", valor: "Cantidad" });
+  applyHeaderStyle(resumenSheet.getRow(resumenSheet.rowCount));
+  for (const key of ["VERDE", "AMARILLO", "ROJO", "REQUIERE_EVALUACION", "SIN_DATOS", "NO_APLICA"]) {
+    resumenSheet.addRow({ concepto: key, valor: resumen[key] || 0 });
+  }
+
+  resumenSheet.eachRow((row) => {
+    row.eachCell((cell) => {
+      cell.alignment = { vertical: "middle", wrapText: true };
+    });
+  });
+
+  const viviendasSheet = workbook.addWorksheet("Viviendas");
+  viviendasSheet.columns = [
+    { header: "Barrio", key: "barrio", width: 24 },
+    { header: "Vivienda / Codigo", key: "codigo", width: 20 },
+    { header: "Dormitorios", key: "dormitorios", width: 14 },
+    { header: "Estado vivienda", key: "estado", width: 18 },
+    { header: "Destino", key: "destino", width: 18 },
+    { header: "Permisionario", key: "permisionario", width: 30 },
+    { header: "Matricula", key: "matricula", width: 16 },
+    { header: "Grupo familiar / personas", key: "personas", width: 24 },
+    { header: "Adultos", key: "adultos", width: 12 },
+    { header: "Menores", key: "menores", width: 12 },
+    { header: "Hacinamiento", key: "hacinamiento", width: 22 },
+    { header: "Motivo / criterio", key: "criterio", width: 42 },
+    { header: "Fuente", key: "fuente", width: 24 },
+    { header: "Observaciones", key: "observaciones", width: 42 },
+  ];
+
+  for (const vivienda of Array.isArray(viviendas) ? viviendas : []) {
+    viviendasSheet.addRow({
+      barrio: asExcelValue(vivienda.barrio),
+      codigo: asExcelValue(vivienda.codigo),
+      dormitorios: asExcelValue(vivienda.dormitorios),
+      estado: asExcelValue(vivienda.estado),
+      destino: formatTipoDestinoExcel(vivienda.tipoDestino),
+      permisionario: getPermisionarioLabel(vivienda),
+      matricula: getPermisionarioMatricula(vivienda),
+      personas: asExcelValue(vivienda.cantidadHabitantes),
+      adultos: asExcelValue(vivienda.cantidadAdultos),
+      menores: asExcelValue(vivienda.cantidadMenores),
+      hacinamiento: getHacinamientoEstado(vivienda),
+      criterio: asExcelValue(vivienda.criterio || vivienda.motivo),
+      fuente: asExcelValue(vivienda.fuenteHacinamiento),
+      observaciones: asExcelValue(vivienda.motivo),
+    });
+  }
+
+  aplicarFormatoTabla(viviendasSheet);
+  return workbook;
+}
+
+// PDF local (sin utils/pdf)
 function generateViviendasListadoPDF(res, payload) {
   const { titulo, fecha, filtros, orden, viviendas } = payload || {};
 
@@ -1218,25 +1364,37 @@ async function listarCodigos(req, res) {
 
 // ─────────────────────────────
 // PDF (ADMIN/ADMIN_GENERAL + INSPECTOR-LIKE SOLO SU BARRIO)
+async function prepararExportViviendas(req, res) {
+  const user = req.user;
+  const role = up(user && user.role);
+  const inspectorLike = isInspectorLike(user);
+
+  if (!user || !(role === "ADMIN" || role === "ADMIN_GENERAL" || inspectorLike)) {
+    res.status(404).json({ message: "Recurso no disponible" });
+    return null;
+  }
+
+  const q = Object.assign({}, req.query || {});
+
+  if (inspectorLike && !(role === "ADMIN" || role === "ADMIN_GENERAL")) {
+    const barrioAsignado = safeStr(user && user.barrioAsignado);
+    if (!barrioAsignado) {
+      res.status(404).json({ message: "Recurso no disponible" });
+      return null;
+    }
+    q.barrio = barrioAsignado;
+  }
+
+  const result = await listarViviendasFiltradas(q, user, { paginate: false });
+  return { ...result, q, user };
+}
+
 async function generarPdf(req, res) {
   try {
-    const user = req.user;
-    const role = up(user && user.role);
-    const inspectorLike = isInspectorLike(user);
+    const exportData = await prepararExportViviendas(req, res);
+    if (!exportData) return null;
 
-    if (!user || !(role === "ADMIN" || role === "ADMIN_GENERAL" || inspectorLike)) {
-      return res.status(404).json({ message: "Recurso no disponible" });
-    }
-
-    const q = Object.assign({}, req.query || {});
-
-    if (inspectorLike && !(role === "ADMIN" || role === "ADMIN_GENERAL")) {
-      const barrioAsignado = safeStr(user && user.barrioAsignado);
-      if (!barrioAsignado) return res.status(404).json({ message: "Recurso no disponible" });
-      q.barrio = barrioAsignado;
-    }
-
-    const { viviendas, meta } = await listarViviendasFiltradas(q, user, { paginate: false });
+    const { viviendas, meta, q } = exportData;
 
     const filtros = buildFiltrosResumen(q);
 
@@ -1267,11 +1425,39 @@ async function generarPdf(req, res) {
   }
 }
 
+async function generarExcel(req, res) {
+  try {
+    const exportData = await prepararExportViviendas(req, res);
+    if (!exportData) return null;
+
+    const { viviendas, q, user } = exportData;
+    const filtros = buildFiltrosResumen(q);
+    const now = new Date();
+    const safe = now.toISOString().slice(0, 16).replace(/[:T]/g, "-");
+    const filename = "viviendas_fiscales_" + safe + ".xlsx";
+    const workbook = buildViviendasWorkbook({ viviendas, filtros, user, fecha: now });
+
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+
+    await workbook.xlsx.write(res);
+    return res.end();
+  } catch (err) {
+    console.error("[VIVIENDAS] Error generando Excel:", err);
+    return res.status(500).json({ message: "Error interno" });
+  }
+}
+
 module.exports = {
   listar,
   listarBarrios,
   listarCodigos,
   listarElegiblesAsignacion,
   generarPdf,
+  generarExcel,
   cambiarEstado,
 };

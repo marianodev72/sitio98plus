@@ -222,6 +222,7 @@ export default function Viviendas({ readOnly = false }: Props) {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [downloadingExcel, setDownloadingExcel] = useState(false);
 
   // ✅ Barrios dropdown (ADMIN_GENERAL)
   const [barrios, setBarrios] = useState<string[]>([]);
@@ -359,6 +360,35 @@ export default function Viviendas({ readOnly = false }: Props) {
       setErrorMsg("La operación solicitada no está disponible. Por favor, contacte al administrador.");
     } finally {
       setDownloadingPdf(false);
+    }
+  }
+
+  async function descargarExcel() {
+    setErrorMsg("");
+    setDownloadingExcel(true);
+
+    try {
+      const params = buildParams({ includePagination: false });
+      const res = await http.get("/viviendas/excel", { params, responseType: "blob" });
+
+      const blob = new Blob([res.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = window.URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "viviendas_fiscales_" + safeFileNameDate() + ".xlsx";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Error descargando Excel de viviendas", err);
+      setErrorMsg("La operacion solicitada no esta disponible. Por favor, contacte al administrador.");
+    } finally {
+      setDownloadingExcel(false);
     }
   }
 
@@ -666,7 +696,7 @@ export default function Viviendas({ readOnly = false }: Props) {
 
               <button
                 onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
-                disabled={loading || downloadingPdf}
+                disabled={loading || downloadingPdf || downloadingExcel}
                 style={secondaryButtonStyle}
               >
                 {sortDir === "asc" ? "Asc ↑" : "Desc ↓"}
@@ -674,7 +704,7 @@ export default function Viviendas({ readOnly = false }: Props) {
 
               <button
                 onClick={aplicarFiltros}
-                disabled={loading || downloadingPdf}
+                disabled={loading || downloadingPdf || downloadingExcel}
                 style={primaryButtonStyle}
               >
                 Aplicar
@@ -682,7 +712,7 @@ export default function Viviendas({ readOnly = false }: Props) {
 
               <button
                 onClick={limpiarFiltros}
-                disabled={loading || downloadingPdf}
+                disabled={loading || downloadingPdf || downloadingExcel}
                 style={secondaryButtonStyle}
               >
                 Limpiar filtros
@@ -690,10 +720,17 @@ export default function Viviendas({ readOnly = false }: Props) {
 
               <button
                 onClick={descargarPdf}
-                disabled={loading || downloadingPdf}
+                disabled={loading || downloadingPdf || downloadingExcel}
                 style={secondaryButtonStyle}
               >
                 {downloadingPdf ? "Generando PDF…" : "Descargar PDF (con filtros)"}
+              </button>
+              <button
+                onClick={descargarExcel}
+                disabled={loading || downloadingPdf || downloadingExcel}
+                style={secondaryButtonStyle}
+              >
+                {downloadingExcel ? "Generando Excel..." : "Descargar Excel"}
               </button>
             </div>
 
@@ -713,14 +750,14 @@ export default function Viviendas({ readOnly = false }: Props) {
               <span>Orden actual: {sortLabel(sortBy)} {sortDir === "asc" ? "(Asc)" : "(Desc)"}</span>
               <button
                 onClick={() => cambiarPagina(page - 1)}
-                disabled={loading || downloadingPdf || page <= 1}
+                disabled={loading || downloadingPdf || downloadingExcel || page <= 1}
                 style={secondaryButtonStyle}
               >
                 Anterior
               </button>
               <button
                 onClick={() => cambiarPagina(page + 1)}
-                disabled={loading || downloadingPdf || page >= totalPages}
+                disabled={loading || downloadingPdf || downloadingExcel || page >= totalPages}
                 style={secondaryButtonStyle}
               >
                 Siguiente
