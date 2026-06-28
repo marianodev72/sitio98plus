@@ -529,6 +529,12 @@ function buildViviendasPipeline(query = {}) {
 }
 
 const SEMAFOROS_COLOR = new Set([SEMAFORO.VERDE, SEMAFORO.AMARILLO, SEMAFORO.ROJO]);
+const HACINAMIENTO_FILTROS = new Set([
+  SEMAFORO.VERDE,
+  SEMAFORO.AMARILLO,
+  SEMAFORO.ROJO,
+  SEMAFORO.REQUIERE_EVALUACION,
+]);
 
 function isNumber(value) {
   return typeof value === "number" && Number.isFinite(value);
@@ -823,6 +829,64 @@ function enriquecerViviendasHacinamiento(viviendas = []) {
   return (Array.isArray(viviendas) ? viviendas : []).map(enriquecerHacinamientoAnexo17);
 }
 
+function normalizeHacinamientoFiltro(value) {
+  const filtro = up(value);
+  return HACINAMIENTO_FILTROS.has(filtro) ? filtro : "";
+}
+
+function getPagination(query = {}, options = {}) {
+  const pageRaw = Number.parseInt(String(query.page || "1"), 10);
+  const limitRaw = Number.parseInt(String(query.limit || ""), 10);
+  const allowedLimits = new Set([50, 100]);
+  const page = Number.isFinite(pageRaw) && pageRaw > 0 ? pageRaw : 1;
+  const defaultLimit = options.defaultLimit === 50 || options.defaultLimit === 100 ? options.defaultLimit : null;
+  const limit = allowedLimits.has(limitRaw) ? limitRaw : defaultLimit;
+
+  return { page, limit };
+}
+
+function filtrarPorHacinamiento(viviendas = [], hacinamiento) {
+  const filtro = normalizeHacinamientoFiltro(hacinamiento);
+  if (!filtro) return viviendas;
+
+  return (Array.isArray(viviendas) ? viviendas : []).filter((v) => up(v && (v.semaforo || v.hacinamientoColor)) === filtro);
+}
+
+async function listarViviendasFiltradas(query = {}, _user = null, options = {}) {
+  const { pipeline, meta } = buildViviendasPipeline(query);
+  const viviendasBase = await Vivienda.aggregate(pipeline);
+  const enriquecidas = enriquecerViviendasHacinamiento(viviendasBase);
+  const filtradas = filtrarPorHacinamiento(enriquecidas, query.hacinamiento);
+
+  const total = filtradas.length;
+  const paginate = options.paginate === true;
+  const { page, limit } = getPagination(query, { defaultLimit: options.defaultLimit });
+
+  if (!paginate || !limit) {
+    return {
+      viviendas: filtradas,
+      total,
+      page: 1,
+      limit: total,
+      totalPages: 1,
+      meta,
+    };
+  }
+
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const safePage = Math.min(page, totalPages);
+  const start = (safePage - 1) * limit;
+
+  return {
+    viviendas: filtradas.slice(start, start + limit),
+    total,
+    page: safePage,
+    limit,
+    totalPages,
+    meta,
+  };
+}
+
 function buildFiltrosResumen(query = {}) {
   const clean = (v) => (v === undefined || v === null ? "" : String(v).trim());
   const out = {};
@@ -834,6 +898,7 @@ function buildFiltrosResumen(query = {}) {
   const permisionario = clean(query.permisionario);
   const personasMin = clean(query.personasMin);
   const personasMax = clean(query.personasMax);
+  const hacinamiento = normalizeHacinamientoFiltro(query.hacinamiento);
 
   if (codigo) out["Código"] = codigo;
   if (barrio) out["Barrio"] = barrio;
@@ -842,6 +907,7 @@ function buildFiltrosResumen(query = {}) {
   if (permisionario) out["Permisionario"] = permisionario;
   if (personasMin) out["Personas mín."] = personasMin;
   if (personasMax) out["Personas máx."] = personasMax;
+  if (hacinamiento) out["Hacinamiento"] = hacinamiento;
 
   return out;
 }
@@ -896,7 +962,7 @@ function generateViviendasListadoPDF(res, payload) {
     const personas = v && v.cantidadHabitantes !== undefined ? v.cantidadHabitantes : "-";
 
     const pctText = typeof v.hacinamientoPct === "number" ? `${v.hacinamientoPct.toFixed(0)}%` : "-";
-    const color = v && v.hacinamientoColor ? v.hacinamientoColor : "-";
+    const color = v && (v.semaforo || v.hacinamientoColor) ? (v.semaforo || v.hacinamientoColor) : "-";
 
     const p = (v && v.permisionario) || {};
     const permStr =
@@ -936,11 +1002,9 @@ async function listar(req, res) {
       q.barrio = barrioAsignado;
     }
 
-    const { pipeline } = buildViviendasPipeline(q);
-    const viviendasBase = await Vivienda.aggregate(pipeline);
-    const viviendas = enriquecerViviendasHacinamiento(viviendasBase);
+    const result = await listarViviendasFiltradas(q, user, { paginate: true });
 
-    return res.json({ viviendas });
+    return res.json(result);
   } catch (err) {
     console.error("[VIVIENDAS] Error listando:", err);
     return res.status(500).json({ message: "Error interno" });
@@ -1172,8 +1236,7 @@ async function generarPdf(req, res) {
       q.barrio = barrioAsignado;
     }
 
-    const { pipeline, meta } = buildViviendasPipeline(q);
-    const viviendas = await Vivienda.aggregate(pipeline);
+    const { viviendas, meta } = await listarViviendasFiltradas(q, user, { paginate: false });
 
     const filtros = buildFiltrosResumen(q);
 
