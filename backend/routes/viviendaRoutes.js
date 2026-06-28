@@ -83,6 +83,27 @@ router.get(
 );
 
 // ✅ PDF respetando filtros actuales (lectura/export sensible → auditar)
+// Export Excel respetando filtros actuales (lectura/export sensible)
+router.get(
+  "/excel",
+  audit("ADMIN_HOUSES_EXPORT_EXCEL", {
+    targetType: "Vivienda",
+    metaAllowlist: [
+      "query.codigo",
+      "query.barrio",
+      "query.estado",
+      "query.dormitorios",
+      "query.permisionario",
+      "query.personasMin",
+      "query.personasMax",
+      "query.hacinamiento",
+      "query.sortBy",
+      "query.sortDir",
+    ],
+  }),
+  h("generarExcel")
+);
+
 router.get(
   "/pdf",
   audit("ADMIN_HOUSES_EXPORT_PDF", {
