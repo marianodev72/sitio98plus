@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { http } from "../../api/http";
 import { useAuth } from "../../auth/useAuth";
+import { decodeHtmlEntities } from "../../utils/decodeHtmlEntities";
 import Anexo23InspectorForm from "../../components/alojamientos/Anexo23InspectorForm";
 import Anexo25InspectorForm, { type Anexo25Datos } from "../../components/alojamientos/Anexo25InspectorForm";
 import Anexo26InspectorForm, { type Anexo26Datos } from "../../components/alojamientos/Anexo26InspectorForm";
@@ -51,7 +52,7 @@ type AlojamientoDocumento = {
 };
 
 function safe(value: unknown, fallback = "-") {
-  const text = String(value ?? "").trim();
+  const text = decodeHtmlEntities(String(value ?? "")).trim();
   return text || fallback;
 }
 

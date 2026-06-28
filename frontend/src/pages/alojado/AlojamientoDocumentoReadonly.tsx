@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import http from "../../api/http";
 import Anexo28PedidoForm, { type Anexo28PedidoDatos } from "../../components/alojamientos/Anexo28PedidoForm";
+import { decodeHtmlEntities } from "../../utils/decodeHtmlEntities";
 import {
   badgeStyle,
   buttonRowStyle,
@@ -49,7 +50,7 @@ type Anexo24Form = {
 };
 
 function safe(value: unknown) {
-  const text = String(value ?? "").trim();
+  const text = decodeHtmlEntities(String(value ?? "")).trim();
   return text || "-";
 }
 

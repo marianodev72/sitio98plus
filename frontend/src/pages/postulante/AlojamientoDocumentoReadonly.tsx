@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { http } from "../../api/http";
 import { useAuth } from "../../auth/useAuth";
+import { decodeHtmlEntities } from "../../utils/decodeHtmlEntities";
 
 type AdjuntoPublico = {
   id?: string;
@@ -128,7 +129,8 @@ function up(v: unknown) {
 }
 
 function safe(v: unknown) {
-  return v === null || v === undefined || v === "" ? "-" : String(v);
+  if (v === null || v === undefined || v === "") return "-";
+  return decodeHtmlEntities(String(v));
 }
 
 function fmtDate(v?: string) {

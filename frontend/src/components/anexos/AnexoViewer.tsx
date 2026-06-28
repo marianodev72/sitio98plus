@@ -2,6 +2,7 @@
 // Visualización de anexos (01, 02, 03, 07, 08, 09, 11, etc.) en paneles institucionales
 
 import React from "react";
+import { decodeHtmlEntities } from "../../utils/decodeHtmlEntities";
 
 type AnexoViewerProps = {
   codigo?: string;
@@ -18,7 +19,7 @@ function up(v: unknown) {
 
 function safe(v: unknown, fallback: string = "—") {
   if (v === null || v === undefined) return fallback;
-  const s = String(v).trim();
+  const s = decodeHtmlEntities(String(v)).trim();
   return s || fallback;
 }
 
