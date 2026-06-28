@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
 import { http } from "../../api/http";
 import { useAuth } from "../../auth/useAuth";
+import { decodeHtmlEntities } from "../../utils/decodeHtmlEntities";
 import {
   buttonRowStyle,
   cardStyle,
@@ -97,7 +98,8 @@ const FORM_LIMIT_OPTIONS = [50, 100];
 const ALOJADOS_LIMIT_OPTIONS = [50, 100, 200];
 
 function safe(v: unknown) {
-  return v === null || v === undefined || v === "" ? "-" : String(v);
+  if (v === null || v === undefined || v === "") return "-";
+  return decodeHtmlEntities(String(v));
 }
 
 function up(v: unknown) {

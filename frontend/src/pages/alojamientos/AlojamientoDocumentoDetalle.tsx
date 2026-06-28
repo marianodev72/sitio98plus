@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { http } from "../../api/http";
 import { useAuth } from "../../auth/useAuth";
+import { decodeHtmlEntities } from "../../utils/decodeHtmlEntities";
 import {
   badgeStyle,
   cardStyle,
@@ -66,7 +67,7 @@ function up(value: unknown) {
 }
 
 function safe(value: unknown, fallback = "-") {
-  const text = String(value ?? "").trim();
+  const text = decodeHtmlEntities(String(value ?? "")).trim();
   return text || fallback;
 }
 
