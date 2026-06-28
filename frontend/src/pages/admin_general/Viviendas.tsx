@@ -53,6 +53,9 @@ type HacinamientoSemaforo =
   | "AMARILLO"
   | "VERDE";
 
+type HacinamientoFiltro = "" | "VERDE" | "AMARILLO" | "ROJO" | "REQUIERE_EVALUACION";
+type PageLimit = 50 | 100;
+
 type EstadoVivienda =
   | "DISPONIBLE"
   | "A_DESOCUPARSE"
@@ -79,6 +82,14 @@ const ESTADOS: { value: EstadoVivienda; label: string }[] = [
   { value: "RESERVADA", label: "Reservada" },
   { value: "REPARACION", label: "Reparación" },
   { value: "BAJA", label: "Baja" },
+];
+
+const HACINAMIENTO_FILTROS: { value: HacinamientoFiltro; label: string }[] = [
+  { value: "", label: "Hacinamiento: Todos" },
+  { value: "VERDE", label: "Verde" },
+  { value: "AMARILLO", label: "Amarillo" },
+  { value: "ROJO", label: "Rojo" },
+  { value: "REQUIERE_EVALUACION", label: "Requiere evaluacion" },
 ];
 
 function up(v: unknown) {
@@ -224,12 +235,18 @@ export default function Viviendas({ readOnly = false }: Props) {
   const [permisionario, setPermisionario] = useState("");
   const [personasMin, setPersonasMin] = useState("");
   const [personasMax, setPersonasMax] = useState("");
+  const [hacinamiento, setHacinamiento] = useState<HacinamientoFiltro>("");
+
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState<PageLimit>(50);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
   // orden
   const [sortBy, setSortBy] = useState<SortBy>("barrio");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
 
-  function buildParams(): Record<string, string> {
+  function buildParams(options: { pageValue?: number; limitValue?: PageLimit; includePagination?: boolean } = {}): Record<string, string> {
     const params: Record<string, string> = {};
 
     if (codigo.trim()) params.codigo = codigo.trim();
@@ -239,9 +256,15 @@ export default function Viviendas({ readOnly = false }: Props) {
     if (permisionario.trim()) params.permisionario = permisionario.trim();
     if (personasMin) params.personasMin = personasMin;
     if (personasMax) params.personasMax = personasMax;
+    if (hacinamiento) params.hacinamiento = hacinamiento;
 
     params.sortBy = sortBy;
     params.sortDir = sortDir;
+
+    if (options.includePagination !== false) {
+      params.page = String(options.pageValue || page);
+      params.limit = String(options.limitValue || limit);
+    }
 
     return params;
   }
@@ -261,20 +284,30 @@ export default function Viviendas({ readOnly = false }: Props) {
     }
   }
 
-  async function cargarViviendas() {
+  async function cargarViviendas(pageValue = page, limitValue: PageLimit = limit) {
     setLoading(true);
     setErrorMsg("");
     try {
-      const params = buildParams();
+      const params = buildParams({ pageValue, limitValue });
       const res = await http.get("/viviendas", { params });
 
       const data = res.data;
       const lista = Array.isArray(data) ? data : data?.viviendas;
+      const viviendasLista = Array.isArray(lista) ? lista : [];
+      const totalBackend = typeof data?.total === "number" ? data.total : viviendasLista.length;
+      const totalPagesBackend =
+        typeof data?.totalPages === "number" ? data.totalPages : Math.max(1, Math.ceil(totalBackend / limitValue));
+      const pageBackend = typeof data?.page === "number" ? data.page : pageValue;
 
-      setViviendas(Array.isArray(lista) ? lista : []);
+      setViviendas(viviendasLista);
+      setTotal(totalBackend);
+      setTotalPages(Math.max(1, totalPagesBackend));
+      setPage(Math.max(1, pageBackend));
     } catch (err) {
       console.error("Error cargando viviendas", err);
       setViviendas([]);
+      setTotal(0);
+      setTotalPages(1);
       setErrorMsg("La página solicitada no está disponible. Por favor, contacte al administrador.");
     } finally {
       setLoading(false);
@@ -292,7 +325,7 @@ export default function Viviendas({ readOnly = false }: Props) {
 
     try {
       await http.patch(`/viviendas/${viviendaId}/estado`, { estado: nuevoEstado });
-      await cargarViviendas();
+      await cargarViviendas(page, limit);
     } catch (err) {
       console.error("Error actualizando estado de vivienda", err);
       setViviendas(prev);
@@ -307,7 +340,7 @@ export default function Viviendas({ readOnly = false }: Props) {
     setDownloadingPdf(true);
 
     try {
-      const params = buildParams();
+      const params = buildParams({ includePagination: false });
       const res = await http.get("/viviendas/pdf", { params, responseType: "blob" });
 
       const blob = new Blob([res.data], { type: "application/pdf" });
@@ -337,12 +370,15 @@ export default function Viviendas({ readOnly = false }: Props) {
     setPermisionario("");
     setPersonasMin("");
     setPersonasMax("");
+    setHacinamiento("");
+    setPage(1);
+    setLimit(50);
 
     setSortBy("barrio");
     setSortDir("asc");
 
     setTimeout(() => {
-      cargarViviendas();
+      cargarViviendas(1, 50);
     }, 0);
   }
 
@@ -356,9 +392,28 @@ export default function Viviendas({ readOnly = false }: Props) {
       return nextSortBy;
     });
 
+    setPage(1);
     setTimeout(() => {
-      cargarViviendas();
+      cargarViviendas(1, limit);
     }, 0);
+  }
+
+  function aplicarFiltros() {
+    setPage(1);
+    cargarViviendas(1, limit);
+  }
+
+  function cambiarLimit(nextLimit: PageLimit) {
+    setLimit(nextLimit);
+    setPage(1);
+    cargarViviendas(1, nextLimit);
+  }
+
+  function cambiarPagina(nextPage: number) {
+    const safePage = Math.min(Math.max(1, nextPage), totalPages);
+    if (safePage === page) return;
+    setPage(safePage);
+    cargarViviendas(safePage, limit);
   }
 
   function sortIndicator(col: SortBy) {
@@ -375,7 +430,6 @@ export default function Viviendas({ readOnly = false }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const total = viviendas.length;
 
   const controlStyle: CSSProperties = {
     padding: "10px 12px",
@@ -560,6 +614,32 @@ export default function Viviendas({ readOnly = false }: Props) {
                 style={{ ...inputStyle, width: 120 }}
               />
 
+              <select
+                value={hacinamiento}
+                onChange={(e) => setHacinamiento(e.target.value as HacinamientoFiltro)}
+                style={{ ...selectStyle, minWidth: 190 }}
+              >
+                {HACINAMIENTO_FILTROS.map((opt) => (
+                  <option key={opt.value || "TODOS"} value={opt.value} style={optionStyle}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={limit}
+                onChange={(e) => cambiarLimit(Number(e.target.value) as PageLimit)}
+                title="Filas por pagina"
+                style={{ ...selectStyle, width: 130 }}
+              >
+                <option value={50} style={optionStyle}>
+                  50 filas
+                </option>
+                <option value={100} style={optionStyle}>
+                  100 filas
+                </option>
+              </select>
+
               <select value={sortBy} onChange={(e) => setSortBy(e.target.value as SortBy)} style={selectStyle}>
                 <option value="barrio" style={optionStyle}>
                   Orden: Barrio
@@ -593,7 +673,7 @@ export default function Viviendas({ readOnly = false }: Props) {
               </button>
 
               <button
-                onClick={cargarViviendas}
+                onClick={aplicarFiltros}
                 disabled={loading || downloadingPdf}
                 style={primaryButtonStyle}
               >
@@ -617,9 +697,35 @@ export default function Viviendas({ readOnly = false }: Props) {
               </button>
             </div>
 
-            <p style={{ marginTop: "0.75rem", color: "rgba(255,255,255,0.72)" }}>
-              Resultados: {total} — Orden actual: {sortLabel(sortBy)} {sortDir === "asc" ? "(Asc)" : "(Desc)"}
-            </p>
+            <div
+              style={{
+                marginTop: "0.75rem",
+                display: "flex",
+                gap: 10,
+                flexWrap: "wrap",
+                alignItems: "center",
+                color: "rgba(255,255,255,0.72)",
+              }}
+            >
+              <span>
+                Mostrando {viviendas.length} de {total} viviendas - Pagina {page} de {totalPages}
+              </span>
+              <span>Orden actual: {sortLabel(sortBy)} {sortDir === "asc" ? "(Asc)" : "(Desc)"}</span>
+              <button
+                onClick={() => cambiarPagina(page - 1)}
+                disabled={loading || downloadingPdf || page <= 1}
+                style={secondaryButtonStyle}
+              >
+                Anterior
+              </button>
+              <button
+                onClick={() => cambiarPagina(page + 1)}
+                disabled={loading || downloadingPdf || page >= totalPages}
+                style={secondaryButtonStyle}
+              >
+                Siguiente
+              </button>
+            </div>
           </section>
 
           {loading ? (

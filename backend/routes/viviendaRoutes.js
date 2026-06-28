@@ -39,7 +39,20 @@ router.get(
   audit("ADMIN_HOUSES_LIST", {
     targetType: "Vivienda",
     // solo query (filtros) + params vacío
-    metaAllowlist: ["query.estado", "query.barrio", "query.sortBy", "query.sortDir", "query.page", "query.limit"],
+    metaAllowlist: [
+      "query.codigo",
+      "query.barrio",
+      "query.estado",
+      "query.dormitorios",
+      "query.permisionario",
+      "query.personasMin",
+      "query.personasMax",
+      "query.hacinamiento",
+      "query.sortBy",
+      "query.sortDir",
+      "query.page",
+      "query.limit",
+    ],
   }),
   h("listar")
 );
@@ -74,7 +87,18 @@ router.get(
   "/pdf",
   audit("ADMIN_HOUSES_EXPORT_PDF", {
     targetType: "Vivienda",
-    metaAllowlist: ["query.estado", "query.barrio", "query.sortBy", "query.sortDir"],
+    metaAllowlist: [
+      "query.codigo",
+      "query.barrio",
+      "query.estado",
+      "query.dormitorios",
+      "query.permisionario",
+      "query.personasMin",
+      "query.personasMax",
+      "query.hacinamiento",
+      "query.sortBy",
+      "query.sortDir",
+    ],
   }),
   h("generarPdf")
 );
