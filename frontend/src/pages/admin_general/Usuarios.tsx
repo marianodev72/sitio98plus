@@ -107,12 +107,14 @@ export default function UsuariosAdminGeneral() {
   const [info, setInfo] = useState("");
 
   // filtros
+  const [filtroQInput, setFiltroQInput] = useState("");
   const [filtroQ, setFiltroQ] = useState("");
   const [filtroRole, setFiltroRole] = useState<string>("");
   const [filtroPermiso, setFiltroPermiso] = useState<string>("");
   const [filtroBarrio, setFiltroBarrio] = useState<string>("");
   const [filtroActivo, setFiltroActivo] = useState<"todos" | "true" | "false">("todos");
   const [filtroArchivado, setFiltroArchivado] = useState<"false" | "true" | "todos">("false");
+  const [filtroBloqueado, setFiltroBloqueado] = useState<"todos" | "true" | "false">("todos");
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState<number>(100);
   const [total, setTotal] = useState(0);
@@ -186,6 +188,7 @@ export default function UsuariosAdminGeneral() {
 
       if (filtroActivo !== "todos") params.activo = filtroActivo;
       if (filtroArchivado !== "todos") params.archivado = filtroArchivado;
+      if (filtroBloqueado !== "todos") params.bloqueado = filtroBloqueado;
 
       params.sortBy = sortBy;
       params.sortDir = sortDir;
@@ -465,7 +468,7 @@ export default function UsuariosAdminGeneral() {
   useEffect(() => {
     cargar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtroQ, filtroRole, filtroPermiso, filtroBarrio, filtroActivo, filtroArchivado, sortBy, sortDir, page, limit]);
+  }, [filtroQ, filtroRole, filtroPermiso, filtroBarrio, filtroActivo, filtroArchivado, filtroBloqueado, sortBy, sortDir, page, limit]);
 
   const rows = useMemo(() => usuarios || [], [usuarios]);
   const safeTotalPages = Math.max(1, totalPages || 1);
@@ -580,7 +583,24 @@ function renderPaginacion(position: "top" | "bottom") {
   );
 }
 
-if (loading) return <p style={{ color: "#E5E7EB" }}>Cargando usuarios…</p>;
+  function aplicarFiltros() {
+    setFiltroQ(filtroQInput.trim());
+    setPage(1);
+  }
+
+  function limpiarFiltros() {
+    setFiltroQInput("");
+    setFiltroQ("");
+    setFiltroRole("");
+    setFiltroPermiso("");
+    setFiltroBarrio("");
+    setFiltroActivo("todos");
+    setFiltroArchivado("false");
+    setFiltroBloqueado("todos");
+    setSortBy("apellido");
+    setSortDir("asc");
+    setPage(1);
+  }
 
   return (
     <div
@@ -649,10 +669,10 @@ if (loading) return <p style={{ color: "#E5E7EB" }}>Cargando usuarios…</p>;
             Búsqueda (apellido, nombre, email, DNI, matrícula):{" "}
             <input
               type="text"
-              value={filtroQ}
-              onChange={(e) => {
-                setFiltroQ(e.target.value);
-                setPage(1);
+              value={filtroQInput}
+              onChange={(e) => setFiltroQInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") aplicarFiltros();
               }}
               style={{
                 width: 260,
@@ -786,9 +806,33 @@ if (loading) return <p style={{ color: "#E5E7EB" }}>Cargando usuarios…</p>;
           </label>
         </div>
 
-        <div style={{ alignSelf: "flex-end" }}>
+        <div>
+          <label style={{ fontSize: 14, fontWeight: 600, color: "#E5E7EB" }}>
+            Bloqueados:{" "}
+            <select
+  value={filtroBloqueado}
+  onChange={(e) => {
+    setFiltroBloqueado(e.target.value as "todos" | "true" | "false");
+    setPage(1);
+  }}
+  style={selectStyle}
+>
+  <option value="todos" style={optionStyle}>
+    Todos
+  </option>
+  <option value="false" style={optionStyle}>
+    No bloqueados
+  </option>
+  <option value="true" style={optionStyle}>
+    Bloqueados
+  </option>
+</select>
+          </label>
+        </div>
+
+        <div style={{ alignSelf: "flex-end", display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button
-            onClick={cargar}
+            onClick={aplicarFiltros}
             style={{
               padding: "10px 14px",
               fontSize: 14,
@@ -800,10 +844,31 @@ if (loading) return <p style={{ color: "#E5E7EB" }}>Cargando usuarios…</p>;
               cursor: "pointer",
             }}
           >
-            Aplicar filtros / Recargar
+            Aplicar filtros
+          </button>
+
+          <button
+            type="button"
+            onClick={limpiarFiltros}
+            style={{
+              padding: "10px 14px",
+              fontSize: 14,
+              fontWeight: 700,
+              color: "#F8FAFC",
+              background: "#111827",
+              border: "1px solid #475569",
+              borderRadius: 8,
+              cursor: "pointer",
+            }}
+          >
+            Limpiar filtros
           </button>
         </div>
       </div>
+      {loading ? (
+        <p style={{ marginTop: 0, color: "#CBD5E1", fontWeight: 700 }}>Cargando usuarios...</p>
+      ) : null}
+
       {renderPaginacion("top")}
 
       <div
