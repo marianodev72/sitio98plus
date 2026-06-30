@@ -4,6 +4,7 @@
 const Vivienda = require("../models/vivienda");
 const PDFDocument = require("pdfkit");
 const ExcelJS = require("exceljs");
+const { normalizarGradoVisual } = require("../utils/normalizarGradoVisual");
 const {
   deriveGrupoViviendaFromGradoEscalafon,
   deriveGrupoViviendaFromGrupoJerarquico,
@@ -623,11 +624,6 @@ function buildViviendasPipeline(query = {}) {
     });
   }
 
-  // 8) Filtro por grado efectivo del permisionario
-  if (grado && up(grado) !== "TODOS") {
-    const rxGrado = new RegExp(`^${escapeRegex(grado)}$`, "i");
-    pipeline.push({ $match: { _gradoFinal: rxGrado } });
-  }
   // 9) Project final
   pipeline.push({
     $project: {
@@ -671,7 +667,7 @@ function buildViviendasPipeline(query = {}) {
   const sort = {};
   if (sortKey === "hacinamiento") sort.hacinamientoRatio = dir;
   else if (sortKey === "personas") sort.cantidadHabitantes = dir;
-  else if (sortKey === "grado") sort["permisionario.grado"] = dir;
+  else if (sortKey === "grado") sort.codigo = 1;
   else sort[sortKey] = dir;
 
   pipeline.push({ $sort: sort });
@@ -1006,10 +1002,41 @@ function filtrarPorHacinamiento(viviendas = [], hacinamiento) {
   return (Array.isArray(viviendas) ? viviendas : []).filter((v) => up(v && (v.semaforo || v.hacinamientoColor)) === filtro);
 }
 
+function normalizarViviendasGradoVisual(viviendas = []) {
+  return (Array.isArray(viviendas) ? viviendas : []).map((vivienda) => {
+    if (vivienda && vivienda.permisionario) {
+      vivienda.permisionario.grado = normalizarGradoVisual(vivienda.permisionario.grado);
+    }
+    return vivienda;
+  });
+}
+
+function filtrarPorGradoVisual(viviendas = [], grado) {
+  const filtro = normalizarGradoVisual(grado);
+  if (!filtro) return viviendas;
+  return (Array.isArray(viviendas) ? viviendas : []).filter(
+    (v) => normalizarGradoVisual(v && v.permisionario && v.permisionario.grado) === filtro
+  );
+}
+
+function ordenarPorGradoVisual(viviendas = [], meta = {}) {
+  if (safeStr(meta.sortBy).toLowerCase() !== "grado") return viviendas;
+  const dir = String(meta.sortDir || "asc").toLowerCase() === "desc" ? -1 : 1;
+  return [...(Array.isArray(viviendas) ? viviendas : [])].sort((a, b) => {
+    const gradoA = normalizarGradoVisual(a && a.permisionario && a.permisionario.grado);
+    const gradoB = normalizarGradoVisual(b && b.permisionario && b.permisionario.grado);
+    const cmpGrado = gradoA.localeCompare(gradoB);
+    if (cmpGrado !== 0) return cmpGrado * dir;
+    return safeStr(a && a.codigo).localeCompare(safeStr(b && b.codigo));
+  });
+}
 async function listarViviendasFiltradas(query = {}, _user = null, options = {}) {
   const { pipeline, meta } = buildViviendasPipeline(query);
   const viviendasBase = await Vivienda.aggregate(pipeline);
-  const enriquecidas = enriquecerViviendasHacinamiento(viviendasBase);
+  const conGradoVisual = normalizarViviendasGradoVisual(viviendasBase);
+  const filtradasPorGrado = filtrarPorGradoVisual(conGradoVisual, query.grado);
+  const ordenadas = ordenarPorGradoVisual(filtradasPorGrado, meta);
+  const enriquecidas = enriquecerViviendasHacinamiento(ordenadas);
   const filtradas = filtrarPorHacinamiento(enriquecidas, query.hacinamiento);
 
   const total = filtradas.length;
@@ -1050,7 +1077,7 @@ function buildFiltrosResumen(query = {}) {
   const estado = clean(query.estado);
   const dormitorios = clean(query.dormitorios);
   const permisionario = clean(query.permisionario);
-  const grado = clean(query.grado);
+  const grado = normalizarGradoVisual(clean(query.grado));
   const personasMin = clean(query.personasMin);
   const personasMax = clean(query.personasMax);
   const hacinamiento = normalizeHacinamientoFiltro(query.hacinamiento);
@@ -1092,7 +1119,7 @@ function getPermisionarioMatricula(vivienda = {}) {
 }
 
 function getPermisionarioGrado(vivienda = {}) {
-  return safeStr(vivienda && vivienda.permisionario && vivienda.permisionario.grado) || "-";
+  return normalizarGradoVisual(vivienda && vivienda.permisionario && vivienda.permisionario.grado) || "-";
 }
 
 function formatTipoDestinoExcel(value) {

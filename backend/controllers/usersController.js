@@ -5,6 +5,7 @@ const { User } = require("../models/user");
 const AsignacionAlojamiento = require("../modules/alojamientos/models/AsignacionAlojamiento");
 const MisDatosDeclaradosUpdate = require("../models/MisDatosDeclaradosUpdate");
 const { FormSubmission } = require("../models/FormSubmission");
+const { normalizarGradoVisual } = require("../utils/normalizarGradoVisual");
 
 // ✅ Vivienda model (minúscula) — IMPORT CORRECTO
 // ✅ Vivienda model (robusto)
@@ -93,7 +94,7 @@ function sanitizeUsuarioListItem(user) {
   user.barrioAsignado = publicLabel(user.barrioAsignado);
   user.viviendaLabel = publicLabel(user.viviendaLabel);
   user.alojamientoLabel = publicLabel(user.alojamientoLabel);
-  user.grado = safeStr(user.gradoFinal || user.grado || user.meta?.grado);
+  user.grado = normalizarGradoVisual(user.gradoFinal || user.grado || user.meta?.grado);
   delete user.gradoFinal;
   delete user.meta;
   if (Array.isArray(user.territoriosAlojamiento)) {
@@ -247,7 +248,7 @@ function buildSort(req) {
 }
 
 function getGradoFiltro(req) {
-  const grado = up(req?.query?.grado);
+  const grado = normalizarGradoVisual(req?.query?.grado);
   return grado && grado !== "TODOS" ? grado : "";
 }
 
@@ -318,7 +319,7 @@ function extractAnexo01Grado(doc = {}) {
 }
 
 function applyDeclaredGradeDoc(doc, usersById, usersByMatricula, resultById, extractor) {
-  const grado = up(extractor(doc));
+  const grado = normalizarGradoVisual(extractor(doc));
   if (!grado) return;
 
   const matchedIds = new Set();
@@ -348,7 +349,7 @@ async function hydrateUsuariosGradoDeclarado(usuarios = []) {
     const uid = String(user?._id || "");
     if (!uid) continue;
     usersById.set(uid, user);
-    resultById.set(uid, up(user.grado || user.meta?.grado));
+    resultById.set(uid, normalizarGradoVisual(user.grado || user.meta?.grado));
 
     const mat = normalizeMatricula(user.matricula);
     if (mat) {
@@ -405,7 +406,7 @@ async function hydrateUsuariosGradoDeclarado(usuarios = []) {
 
   for (const user of usuarios) {
     const uid = String(user?._id || "");
-    user.gradoFinal = safeStr(resultById.get(uid));
+    user.gradoFinal = normalizarGradoVisual(resultById.get(uid));
   }
 
   return usuarios;
@@ -413,8 +414,8 @@ async function hydrateUsuariosGradoDeclarado(usuarios = []) {
 
 function sortUsuariosPorGrado(usuarios = [], dir = 1) {
   return [...usuarios].sort((a, b) => {
-    const gA = up(a?.gradoFinal || a?.grado || a?.meta?.grado);
-    const gB = up(b?.gradoFinal || b?.grado || b?.meta?.grado);
+    const gA = normalizarGradoVisual(a?.gradoFinal || a?.grado || a?.meta?.grado);
+    const gB = normalizarGradoVisual(b?.gradoFinal || b?.grado || b?.meta?.grado);
     const cmpGrado = gA.localeCompare(gB);
     if (cmpGrado !== 0) return cmpGrado * dir;
     const aName = `${safeStr(a?.apellido)} ${safeStr(a?.nombre)}`.trim();
@@ -446,7 +447,7 @@ async function listarUsuariosAdminConGrado(req, options = {}) {
     await hydrateUsuariosGradoDeclarado(usuarios);
 
     if (gradoFiltro) {
-      usuarios = usuarios.filter((u) => up(u.gradoFinal || u.grado) === gradoFiltro);
+      usuarios = usuarios.filter((u) => normalizarGradoVisual(u.gradoFinal || u.grado) === gradoFiltro);
     }
 
     if (sortGrado) {
