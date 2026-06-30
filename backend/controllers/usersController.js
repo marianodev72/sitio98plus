@@ -3,6 +3,8 @@ const mongoose = require("mongoose");
 const PDFDocument = require("pdfkit");
 const { User } = require("../models/user");
 const AsignacionAlojamiento = require("../modules/alojamientos/models/AsignacionAlojamiento");
+const MisDatosDeclaradosUpdate = require("../models/MisDatosDeclaradosUpdate");
+const { FormSubmission } = require("../models/FormSubmission");
 
 // ✅ Vivienda model (minúscula) — IMPORT CORRECTO
 // ✅ Vivienda model (robusto)
@@ -48,6 +50,10 @@ function safeStr(v) {
   return String(v || "").trim();
 }
 
+function normalizeMatricula(value) {
+  return safeStr(value).replace(/[\s.-]+/g, "").toUpperCase();
+}
+
 function isObjectIdLike(value) {
   return mongoose.Types.ObjectId.isValid(String(value || ""));
 }
@@ -87,7 +93,8 @@ function sanitizeUsuarioListItem(user) {
   user.barrioAsignado = publicLabel(user.barrioAsignado);
   user.viviendaLabel = publicLabel(user.viviendaLabel);
   user.alojamientoLabel = publicLabel(user.alojamientoLabel);
-  user.grado = safeStr(user.grado || user.meta?.grado);
+  user.grado = safeStr(user.gradoFinal || user.grado || user.meta?.grado);
+  delete user.gradoFinal;
   delete user.meta;
   if (Array.isArray(user.territoriosAlojamiento)) {
     user.territoriosAlojamiento = user.territoriosAlojamiento
@@ -205,14 +212,6 @@ function buildFiltro(req) {
   if (bloqueadoQ === "true" || bloqueadoQ === "1") filtro.bloqueado = true;
   if (bloqueadoQ === "false" || bloqueadoQ === "0") filtro.bloqueado = false;
 
-  const gradoQ = safeStr(req.query?.grado);
-  if (gradoQ && up(gradoQ) !== "TODOS") {
-    const rxGrado = new RegExp(`^${escapeRegex(gradoQ)}$`, "i");
-    filtro.$and = [
-      ...(Array.isArray(filtro.$and) ? filtro.$and : []),
-      { $or: [{ grado: rxGrado }, { "meta.grado": rxGrado }] },
-    ];
-  }
 
   const q = safeStr(req.query?.q || req.query?.buscar || req.query?.texto);
   if (q) {
@@ -247,6 +246,249 @@ function buildSort(req) {
   return { [map[key] || key]: dir };
 }
 
+function getGradoFiltro(req) {
+  const grado = up(req?.query?.grado);
+  return grado && grado !== "TODOS" ? grado : "";
+}
+
+function isSortByGrado(req) {
+  return safeStr(req?.query?.sortBy).toLowerCase() === "grado";
+}
+
+function firstText(...values) {
+  for (const value of values) {
+    const text = safeStr(value);
+    if (text) return text;
+  }
+  return "";
+}
+
+function collectDocUserIds(doc = {}) {
+  const values = [
+    doc.usuario,
+    doc.userId,
+    doc.usuarioId,
+    doc.solicitanteId,
+    doc.postulanteId,
+    doc.datos?.usuarioId,
+    doc.datos?.userId,
+    doc.datos?.solicitanteId,
+    doc.datos?.postulanteId,
+    doc.datosPersonales?.usuarioId,
+    doc.datosPersonales?.userId,
+    doc.datosFormulario?.usuarioId,
+    doc.datosFormulario?.userId,
+  ];
+
+  return values
+    .map((value) => {
+      if (!value) return "";
+      if (typeof value === "object" && value._id) return String(value._id);
+      return String(value);
+    })
+    .filter(Boolean);
+}
+
+function collectDocMatriculas(doc = {}) {
+  return [
+    doc.matricula,
+    doc.datosActualizados?.matricula,
+    doc.baseDatos?.matricula,
+    doc.datos?.matricula,
+    doc.datos?.mr,
+    doc.datosPersonales?.matricula,
+    doc.datosPersonales?.mr,
+    doc.datosFormulario?.matricula,
+    doc.datosFormulario?.mr,
+  ]
+    .map(normalizeMatricula)
+    .filter(Boolean);
+}
+
+function extractMisDatosGrado(doc = {}) {
+  return firstText(doc.datosActualizados?.gradoEscalafon, doc.baseDatos?.gradoEscalafon);
+}
+
+function extractAnexo01Grado(doc = {}) {
+  return firstText(
+    doc.datos?.gradoEscalafon,
+    doc.datosPersonales?.gradoEscalafon,
+    doc.datosFormulario?.gradoEscalafon
+  );
+}
+
+function applyDeclaredGradeDoc(doc, usersById, usersByMatricula, resultById, extractor) {
+  const grado = up(extractor(doc));
+  if (!grado) return;
+
+  const matchedIds = new Set();
+  for (const uid of collectDocUserIds(doc)) {
+    if (usersById.has(uid)) matchedIds.add(uid);
+  }
+
+  for (const mat of collectDocMatriculas(doc)) {
+    const ids = usersByMatricula.get(mat);
+    if (!ids) continue;
+    ids.forEach((uid) => matchedIds.add(uid));
+  }
+
+  for (const uid of matchedIds) {
+    if (!safeStr(resultById.get(uid))) resultById.set(uid, grado);
+  }
+}
+
+async function hydrateUsuariosGradoDeclarado(usuarios = []) {
+  if (!Array.isArray(usuarios) || usuarios.length === 0) return usuarios;
+
+  const usersById = new Map();
+  const usersByMatricula = new Map();
+  const resultById = new Map();
+
+  for (const user of usuarios) {
+    const uid = String(user?._id || "");
+    if (!uid) continue;
+    usersById.set(uid, user);
+    resultById.set(uid, up(user.grado || user.meta?.grado));
+
+    const mat = normalizeMatricula(user.matricula);
+    if (mat) {
+      if (!usersByMatricula.has(mat)) usersByMatricula.set(mat, new Set());
+      usersByMatricula.get(mat).add(uid);
+    }
+  }
+
+  const needsDeclarado = Array.from(resultById.values()).some((grado) => !safeStr(grado));
+  if (needsDeclarado) {
+    const misDatos = await MisDatosDeclaradosUpdate.find({})
+      .select("usuario userId usuarioId datosActualizados.gradoEscalafon datosActualizados.matricula baseDatos.gradoEscalafon baseDatos.matricula updatedAt createdAt")
+      .sort({ updatedAt: -1, createdAt: -1, _id: -1 })
+      .lean();
+
+    for (const doc of misDatos || []) {
+      applyDeclaredGradeDoc(doc, usersById, usersByMatricula, resultById, extractMisDatosGrado);
+    }
+
+    const anexos01 = await FormSubmission.find({ codigo: "ANEXO_01" })
+      .select("usuario userId usuarioId solicitanteId postulanteId datos.gradoEscalafon datos.matricula datos.mr datos.usuarioId datos.userId datos.postulanteId datosPersonales.gradoEscalafon datosPersonales.matricula datosPersonales.mr updatedAt createdAt")
+      .sort({ updatedAt: -1, createdAt: -1, _id: -1 })
+      .lean();
+
+    for (const doc of anexos01 || []) {
+      applyDeclaredGradeDoc(doc, usersById, usersByMatricula, resultById, extractAnexo01Grado);
+    }
+
+    if (mongoose.connection?.readyState === 1) {
+      const postulaciones = await mongoose.connection.collection("postulacions")
+        .find({}, {
+          projection: {
+            usuario: 1,
+            userId: 1,
+            usuarioId: 1,
+            solicitanteId: 1,
+            postulanteId: 1,
+            datos: 1,
+            datosPersonales: 1,
+            datosFormulario: 1,
+            updatedAt: 1,
+            createdAt: 1,
+            fechaEnvio: 1,
+          },
+        })
+        .sort({ updatedAt: -1, fechaEnvio: -1, createdAt: -1, _id: -1 })
+        .toArray();
+
+      for (const doc of postulaciones || []) {
+        applyDeclaredGradeDoc(doc, usersById, usersByMatricula, resultById, extractAnexo01Grado);
+      }
+    }
+  }
+
+  for (const user of usuarios) {
+    const uid = String(user?._id || "");
+    user.gradoFinal = safeStr(resultById.get(uid));
+  }
+
+  return usuarios;
+}
+
+function sortUsuariosPorGrado(usuarios = [], dir = 1) {
+  return [...usuarios].sort((a, b) => {
+    const gA = up(a?.gradoFinal || a?.grado || a?.meta?.grado);
+    const gB = up(b?.gradoFinal || b?.grado || b?.meta?.grado);
+    const cmpGrado = gA.localeCompare(gB);
+    if (cmpGrado !== 0) return cmpGrado * dir;
+    const aName = `${safeStr(a?.apellido)} ${safeStr(a?.nombre)}`.trim();
+    const bName = `${safeStr(b?.apellido)} ${safeStr(b?.nombre)}`.trim();
+    return aName.localeCompare(bName);
+  });
+}
+
+async function listarUsuariosAdminConGrado(req, options = {}) {
+  let filtro = buildFiltro(req);
+  const sort = buildSort(req);
+  const barrioQ = safeStr(req.query?.barrio);
+  filtro = await applyRobustBarrioFilter({ filtro, barrioQ });
+
+  const gradoFiltro = getGradoFiltro(req);
+  const sortGrado = isSortByGrado(req);
+  const limitQ = Number.parseInt(String(req.query?.limit || "200"), 10);
+  const limit = Number.isFinite(limitQ) ? Math.max(1, Math.min(1000, limitQ)) : 200;
+  const pageQ = Number.parseInt(String(req.query?.page || "1"), 10);
+  const page = Number.isFinite(pageQ) ? Math.max(1, pageQ) : 1;
+  const paginate = options.paginate !== false;
+
+  if (gradoFiltro || sortGrado || !paginate) {
+    let usuarios = await User.find(filtro)
+      .select(ADMIN_READ_SELECT)
+      .sort(sortGrado ? { apellido: 1, nombre: 1 } : sort)
+      .lean();
+
+    await hydrateUsuariosGradoDeclarado(usuarios);
+
+    if (gradoFiltro) {
+      usuarios = usuarios.filter((u) => up(u.gradoFinal || u.grado) === gradoFiltro);
+    }
+
+    if (sortGrado) {
+      const dir = String(req.query?.sortDir || "asc").toLowerCase() === "desc" ? -1 : 1;
+      usuarios = sortUsuariosPorGrado(usuarios, dir);
+    }
+
+    const total = usuarios.length;
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const safePage = Math.min(page, totalPages);
+    const start = (safePage - 1) * limit;
+    const pageUsuarios = paginate ? usuarios.slice(start, start + limit) : usuarios;
+
+    return {
+      usuarios: pageUsuarios,
+      total,
+      page: paginate ? safePage : 1,
+      limit: paginate ? limit : total,
+      totalPages: paginate ? totalPages : 1,
+    };
+  }
+
+  const skip = (page - 1) * limit;
+  const total = await User.countDocuments(filtro);
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const usuarios = await User.find(filtro)
+    .select(ADMIN_READ_SELECT)
+    .sort(sort)
+    .skip(skip)
+    .limit(limit)
+    .lean();
+
+  await hydrateUsuariosGradoDeclarado(usuarios);
+
+  return {
+    usuarios,
+    total,
+    page,
+    limit,
+    totalPages,
+  };
+}
 async function applyRobustBarrioFilter({ filtro, barrioQ }) {
   try {
     const barrio = safeStr(barrioQ);
@@ -396,26 +638,7 @@ async function listar(req, res) {
   try {
     if (!isAdminStaffReadOnly(req)) return deny(res);
 
-    let filtro = buildFiltro(req);
-    const sort = buildSort(req);
-
-    const barrioQ = safeStr(req.query?.barrio);
-    filtro = await applyRobustBarrioFilter({ filtro, barrioQ });
-
-    const limitQ = Number.parseInt(String(req.query?.limit || "200"), 10);
-    const limit = Number.isFinite(limitQ) ? Math.max(1, Math.min(1000, limitQ)) : 200;
-    const pageQ = Number.parseInt(String(req.query?.page || "1"), 10);
-    const page = Number.isFinite(pageQ) ? Math.max(1, pageQ) : 1;
-    const skip = (page - 1) * limit;
-
-    const total = await User.countDocuments(filtro);
-    const totalPages = Math.max(1, Math.ceil(total / limit));
-    const usuarios = await User.find(filtro)
-      .select(ADMIN_READ_SELECT)
-      .sort(sort)
-      .skip(skip)
-      .limit(limit)
-      .lean();
+    const { usuarios, total, page, limit, totalPages } = await listarUsuariosAdminConGrado(req, { paginate: true });
     await attachViviendaOcupadaLabel(usuarios);
     await attachAlojamientoActivoLabel(usuarios);
     usuarios.forEach(sanitizeUsuarioListItem);
@@ -996,13 +1219,7 @@ async function pdf(req, res) {
   try {
     if (!isAdminStaffReadOnly(req)) return deny(res);
 
-    let filtro = buildFiltro(req);
-    const sort = buildSort(req);
-
-    const barrioQ = safeStr(req.query?.barrio);
-    filtro = await applyRobustBarrioFilter({ filtro, barrioQ });
-
-    const usuarios = await User.find(filtro).select(ADMIN_READ_SELECT).sort(sort).lean();
+    const { usuarios } = await listarUsuariosAdminConGrado(req, { paginate: false });
 
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="Sitio98_Usuarios.pdf"`);

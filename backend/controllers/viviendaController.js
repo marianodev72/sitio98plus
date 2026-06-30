@@ -95,6 +95,27 @@ function accentInsensitivePattern(input) {
   return out;
 }
 
+function mongoNormalizeMatriculaExpr(valueExpr) {
+  return {
+    $replaceAll: {
+      input: {
+        $replaceAll: {
+          input: {
+            $replaceAll: {
+              input: { $toUpper: { $toString: { $ifNull: [valueExpr, ""] } } },
+              find: " ",
+              replacement: "",
+            },
+          },
+          find: "-",
+          replacement: "",
+        },
+      },
+      find: ".",
+      replacement: "",
+    },
+  };
+}
 function buildViviendasPipeline(query = {}) {
   const { codigo, barrio, estado, dormitorios, permisionario, grado, personasMin, personasMax, sortBy, sortDir } = query;
 
@@ -147,28 +168,49 @@ function buildViviendasPipeline(query = {}) {
     },
   });
 
-  // 2) Lookup del ÚLTIMO MisDatosDeclaradosUpdate del permisionario
+  pipeline.push({
+    $addFields: {
+      permisionarioDoc: { $arrayElemAt: ["$permisionarioDoc", 0] },
+    },
+  });
+  // 2) Lookup del último MisDatosDeclaradosUpdate del permisionario
   pipeline.push({
     $lookup: {
       from: MIS_DATOS_COLL,
-      let: { uid: "$ocupacionActual.permisionario" },
+      let: {
+        uid: "$ocupacionActual.permisionario",
+        matriculaNorm: mongoNormalizeMatriculaExpr("$permisionarioDoc.matricula"),
+      },
       pipeline: [
         {
           $match: {
             $expr: {
               $or: [
-                // match directo (ObjectId == ObjectId)
                 { $eq: ["$usuario", "$$uid"] },
-
-                // match por string (String(ObjectId) == String(ObjectId/string))
                 { $eq: [{ $toString: "$usuario" }, { $toString: "$$uid" }] },
+                { $eq: [{ $toString: "$userId" }, { $toString: "$$uid" }] },
+                { $eq: [{ $toString: "$usuarioId" }, { $toString: "$$uid" }] },
+                {
+                  $and: [
+                    { $ne: ["$$matriculaNorm", ""] },
+                    {
+                      $in: [
+                        "$$matriculaNorm",
+                        [
+                          mongoNormalizeMatriculaExpr("$datosActualizados.matricula"),
+                          mongoNormalizeMatriculaExpr("$baseDatos.matricula"),
+                        ],
+                      ],
+                    },
+                  ],
+                },
               ],
             },
           },
         },
         { $sort: { updatedAt: -1, createdAt: -1, _id: -1 } },
         { $limit: 10 },
-        { $project: { _id: 1, createdAt: 1, updatedAt: 1, datosActualizados: 1, datos: 1, grupoFamiliar: 1 } },
+        { $project: { _id: 1, createdAt: 1, updatedAt: 1, datosActualizados: 1, baseDatos: 1, datos: 1, grupoFamiliar: 1 } },
       ],
       as: "misDatosCandidatos",
     },
@@ -177,7 +219,10 @@ function buildViviendasPipeline(query = {}) {
   pipeline.push({
     $lookup: {
       from: FORM_SUBMISSIONS_COLL,
-      let: { uid: "$ocupacionActual.permisionario" },
+      let: {
+        uid: "$ocupacionActual.permisionario",
+        matriculaNorm: mongoNormalizeMatriculaExpr("$permisionarioDoc.matricula"),
+      },
       pipeline: [
         {
           $match: {
@@ -186,27 +231,92 @@ function buildViviendasPipeline(query = {}) {
               $or: [
                 { $eq: ["$usuario", "$$uid"] },
                 { $eq: [{ $toString: "$usuario" }, { $toString: "$$uid" }] },
+                { $eq: [{ $toString: "$userId" }, { $toString: "$$uid" }] },
+                { $eq: [{ $toString: "$usuarioId" }, { $toString: "$$uid" }] },
+                {
+                  $and: [
+                    { $ne: ["$$matriculaNorm", ""] },
+                    {
+                      $in: [
+                        "$$matriculaNorm",
+                        [
+                          mongoNormalizeMatriculaExpr("$datos.matricula"),
+                          mongoNormalizeMatriculaExpr("$datos.mr"),
+                          mongoNormalizeMatriculaExpr("$datosPersonales.matricula"),
+                          mongoNormalizeMatriculaExpr("$datosPersonales.mr"),
+                        ],
+                      ],
+                    },
+                  ],
+                },
               ],
             },
           },
         },
-        { $sort: { createdAt: -1 } },
+        { $sort: { updatedAt: -1, createdAt: -1, _id: -1 } },
         { $limit: 1 },
-        { $project: { _id: 1, createdAt: 1, datos: 1 } },
+        { $project: { _id: 1, createdAt: 1, updatedAt: 1, datos: 1, datosPersonales: 1 } },
       ],
       as: "anexo01Ultimos",
+    },
+  });
+
+  pipeline.push({
+    $lookup: {
+      from: "postulacions",
+      let: {
+        uid: "$ocupacionActual.permisionario",
+        matriculaNorm: mongoNormalizeMatriculaExpr("$permisionarioDoc.matricula"),
+      },
+      pipeline: [
+        {
+          $match: {
+            $expr: {
+              $or: [
+                { $eq: ["$usuario", "$$uid"] },
+                { $eq: [{ $toString: "$usuario" }, { $toString: "$$uid" }] },
+                { $eq: [{ $toString: "$userId" }, { $toString: "$$uid" }] },
+                { $eq: [{ $toString: "$usuarioId" }, { $toString: "$$uid" }] },
+                { $eq: [{ $toString: "$solicitanteId" }, { $toString: "$$uid" }] },
+                { $eq: [{ $toString: "$postulanteId" }, { $toString: "$$uid" }] },
+                {
+                  $and: [
+                    { $ne: ["$$matriculaNorm", ""] },
+                    {
+                      $in: [
+                        "$$matriculaNorm",
+                        [
+                          mongoNormalizeMatriculaExpr("$datos.matricula"),
+                          mongoNormalizeMatriculaExpr("$datos.mr"),
+                          mongoNormalizeMatriculaExpr("$datosPersonales.matricula"),
+                          mongoNormalizeMatriculaExpr("$datosPersonales.mr"),
+                          mongoNormalizeMatriculaExpr("$datosFormulario.matricula"),
+                          mongoNormalizeMatriculaExpr("$datosFormulario.mr"),
+                        ],
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        },
+        { $sort: { updatedAt: -1, fechaEnvio: -1, createdAt: -1, _id: -1 } },
+        { $limit: 1 },
+        { $project: { _id: 1, createdAt: 1, updatedAt: 1, fechaEnvio: 1, datos: 1, datosPersonales: 1, datosFormulario: 1 } },
+      ],
+      as: "postulacionUltimas",
     },
   });
 
   // Normalizamos docs
   pipeline.push({
     $addFields: {
-      permisionarioDoc: { $arrayElemAt: ["$permisionarioDoc", 0] },
       misDatosUltimo: { $arrayElemAt: ["$misDatosCandidatos", 0] }, // compatibilidad interna del pipeline
       anexo01Ultimo: { $arrayElemAt: ["$anexo01Ultimos", 0] },
+      postulacionUltima: { $arrayElemAt: ["$postulacionUltimas", 0] },
     },
   });
-
   // 3) Derivaciones adicionales para ANEXO 17 (si no hay cantidades, caemos a convivientes por edad)
   pipeline.push({
     $addFields: {
@@ -215,6 +325,42 @@ function buildViviendasPipeline(query = {}) {
       },
       _mdGrupoLegacy: { $ifNull: ["$misDatosUltimo.grupoFamiliar", {}] },
       _a01Datos: { $ifNull: ["$anexo01Ultimo.datos", {}] },
+      _gradoFinal: {
+        $let: {
+          vars: {
+            candidatos: [
+              "$permisionarioDoc.grado",
+              "$permisionarioDoc.meta.grado",
+              "$misDatosUltimo.datosActualizados.gradoEscalafon",
+              "$misDatosUltimo.baseDatos.gradoEscalafon",
+              "$anexo01Ultimo.datos.gradoEscalafon",
+              "$anexo01Ultimo.datosPersonales.gradoEscalafon",
+              "$postulacionUltima.datos.gradoEscalafon",
+              "$postulacionUltima.datosPersonales.gradoEscalafon",
+              "$postulacionUltima.datosFormulario.gradoEscalafon",
+            ],
+          },
+          in: {
+            $ifNull: [
+              {
+                $first: {
+                  $filter: {
+                    input: "$$candidatos",
+                    as: "g",
+                    cond: {
+                      $ne: [
+                        { $trim: { input: { $toString: { $ifNull: ["$$g", ""] } } } },
+                        "",
+                      ],
+                    },
+                  },
+                },
+              },
+              "",
+            ],
+          },
+        },
+      },
     },
   });
 
@@ -477,16 +623,11 @@ function buildViviendasPipeline(query = {}) {
     });
   }
 
-  // 8) Filtro por grado del permisionario
+  // 8) Filtro por grado efectivo del permisionario
   if (grado && up(grado) !== "TODOS") {
     const rxGrado = new RegExp(`^${escapeRegex(grado)}$`, "i");
-    pipeline.push({
-      $match: {
-        $or: [{ "permisionarioDoc.grado": rxGrado }, { "permisionarioDoc.meta.grado": rxGrado }],
-      },
-    });
+    pipeline.push({ $match: { _gradoFinal: rxGrado } });
   }
-
   // 9) Project final
   pipeline.push({
     $project: {
@@ -521,7 +662,7 @@ function buildViviendasPipeline(query = {}) {
         nombre: "$permisionarioDoc.nombre",
         apellido: "$permisionarioDoc.apellido",
         matricula: "$permisionarioDoc.matricula",
-        grado: { $ifNull: ["$permisionarioDoc.grado", "$permisionarioDoc.meta.grado"] },
+        grado: "$_gradoFinal",
       },
     },
   });
