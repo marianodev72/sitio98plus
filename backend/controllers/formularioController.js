@@ -1117,6 +1117,45 @@ async function getNombreApellidoSafe(userId) {
   }
 }
 
+function findPdfIntervencion(historial = [], opts = {}) {
+  const roles = Array.isArray(opts.roles) ? opts.roles.map(up) : [];
+  const acciones = Array.isArray(opts.acciones) ? opts.acciones.map(up) : [];
+  const accionIncludes = Array.isArray(opts.accionIncludes)
+    ? opts.accionIncludes.map(up)
+    : [];
+
+  return [...(Array.isArray(historial) ? historial : [])].reverse().find((h) => {
+    const rol = up(h?.rol);
+    const accion = up(h?.accion || h?.observacion || h?.detalle);
+    const roleOk = !roles.length || roles.includes(rol);
+    const accionOk =
+      !acciones.length ||
+      acciones.includes(accion) ||
+      accionIncludes.some((needle) => accion.includes(needle));
+
+    return roleOk && accionOk;
+  });
+}
+
+function findHistorialEstadoAdmin(anexo, opts = {}) {
+  const estados = Array.isArray(anexo?.historialEstados)
+    ? anexo.historialEstados
+    : [];
+  const estadosNuevos = Array.isArray(opts.estadosNuevos)
+    ? opts.estadosNuevos.map(up)
+    : [];
+  const observacionIncludes = Array.isArray(opts.observacionIncludes)
+    ? opts.observacionIncludes.map(up)
+    : ["ADMIN_GENERAL", "ADMIN GENERAL", "ADMIN"];
+
+  return [...estados].reverse().find((h) => {
+    const estadoNuevo = up(h?.estadoNuevo);
+    const observacion = up(h?.observacion);
+    const estadoOk = !estadosNuevos.length || estadosNuevos.includes(estadoNuevo);
+    const obsOk = observacionIncludes.some((needle) => observacion.includes(needle));
+    return estadoOk && obsOk;
+  });
+}
 // ─────────────────────────────
 // Historial de intervenciones (pie de página PDF)
 
@@ -2133,27 +2172,28 @@ function renderAnexo02Pdf(
   const postNombre = String(signers?.postulanteNombre || "").trim();
 
   const adminStored = anexo?.datos?.conformidadAdminGeneral || null;
+  const adminIntervencion = findPdfIntervencion(historial, {
+    roles: ["ADMIN_GENERAL", "SISTEMA"],
+    acciones: ["FORM_CONFORMIDAD_ADMIN"],
+    accionIncludes: ["INTERVENCION ADMIN_GENERAL", "CIERRE ADMIN_GENERAL"],
+  });
   const adminFallback = !adminStored && up(anexo?.estado) === "CERRADO"
-    ? [...(Array.isArray(anexo?.historialEstados) ? anexo.historialEstados : [])]
-        .reverse()
-        .find((h) => {
-          const obs = up(h?.observacion);
-          return (
-            up(h?.estadoNuevo) === "CERRADO" &&
-            (obs.includes("ADMIN_GENERAL") || obs.includes("ADMIN GENERAL") || obs.includes("ADMIN"))
-          );
-        })
+    ? findHistorialEstadoAdmin(anexo, { estadosNuevos: ["CERRADO"] })
     : null;
 
-  const adminOK = Boolean(adminStored?.ok || adminFallback);
-  const adminFecha = fmtDateTime(adminStored?.fecha || adminFallback?.fecha);
-  const adminNombre = String(signers?.adminNombre || "").trim();
+  const adminOK = Boolean(adminStored?.ok || adminIntervencion || adminFallback);
+  const adminFecha = fmtDateTime(
+    adminStored?.fecha || adminIntervencion?.fecha || adminFallback?.fecha
+  );
+  const adminNombre = String(
+    signers?.adminNombre || adminIntervencion?.nombre || ""
+  ).trim();
 
   const postLine1 = postOK && postFecha ? postFecha : "Pendiente";
   const postLine2 = postNombre ? postNombre : "";
 
-  const adminLine1 = adminOK && adminFecha ? adminFecha : "Pendiente";
-  const adminLine2 = adminNombre || (adminFallback ? "ADMIN GENERAL" : "");
+  const adminLine1 = adminOK ? adminFecha || "Aprobado / conforme" : "Pendiente";
+  const adminLine2 = adminNombre || (adminFallback || adminIntervencion ? "ADMIN GENERAL" : "");
 
   const colLeftX = LEFT;
   const colRightX = 330;
@@ -3894,7 +3934,7 @@ function renderAnexo11Pdf(
 // - Usa claves reales del ANEXO_01 (las que ya estás guardando)
 // - Agrega firma + aclaración + fecha y hora (createdAt)
 
-function renderAnexo01Pdf(doc, anexo) {
+function renderAnexo01Pdf(doc, anexo, signers = {}) {
   const d = anexo?.datos && typeof anexo.datos === "object" ? anexo.datos : {};
 
   const safe = (v) => {
@@ -4097,8 +4137,20 @@ function renderAnexo01Pdf(doc, anexo) {
   doc.moveDown(0.4);
   doc.text(`Fecha: ${fmtDate(anexo?.createdAt)}`);
 doc.moveDown(0.2);
-doc.text(`Hora: ${anexo?.createdAt ? new Date(anexo.createdAt).toLocaleTimeString("es-AR") : "—"}`);
+doc.text(`Hora: ${anexo?.createdAt ? new Date(anexo.createdAt).toLocaleTimeString("es-AR") : "-"}`);
 doc.moveDown(0.6);
+
+  const adminGeneral = signers?.adminGeneral || {};
+  const adminEstado = safe(adminGeneral.estado) || "Pendiente";
+  const adminNombre = safe(adminGeneral.nombre);
+  const adminFecha = adminGeneral.fecha ? fmtDateTime(adminGeneral.fecha) : "";
+
+  doc.font("Helvetica-Bold").fontSize(11).text("Intervencion ADMIN_GENERAL:");
+  doc.moveDown(0.3);
+  doc.font("Helvetica").fontSize(10).text(`Resultado: ${adminEstado}`);
+  if (adminNombre) doc.text(`Usuario: ${adminNombre}`);
+  if (adminFecha) doc.text(`Fecha y hora: ${adminFecha}`);
+  doc.moveDown(0.6);
 }
 
 // ─────────────────────────────
@@ -4260,6 +4312,7 @@ async function descargarPdf(req, res) {
       // fail-soft: si no existe, el PDF igual se genera pero quedarán campos vacíos
     }
 
+    let signers01 = {};
     let signers02 = {};
     let signers03 = {};
     let signers04 = {};
@@ -4281,6 +4334,38 @@ async function descargarPdf(req, res) {
     }
 
     // ─────────────────────────────
+// Firmantes ANEXO_01
+if (codigoUp === "ANEXO_01") {
+  const adminAudit = findPdfIntervencion(historial, {
+    roles: ["ADMIN_GENERAL"],
+    acciones: ["FORM_APROBAR_POSTULACION_01", "FORM_RECHAZAR_POSTULACION_01"],
+    accionIncludes: ["APROBAR", "RECHAZAR"],
+  });
+  const adminHist = findHistorialEstadoAdmin(anexo, {
+    estadosNuevos: ["APROBADO", "RECHAZADO"],
+  });
+  const resultadoUp =
+    up(anexo?.datos?.resultadoPostulacion) ||
+    up(anexo?.estadoInstitucional).replace("_ADMIN_GENERAL", "") ||
+    up(adminHist?.estadoNuevo) ||
+    (up(adminAudit?.accion).includes("RECHAZ") ? "RECHAZADO" : "") ||
+    (up(adminAudit?.accion).includes("APROB") ? "APROBADO" : "");
+  const adminNombre =
+    adminAudit?.nombre ||
+    (isObjectId(adminHist?.realizadoPor)
+      ? await getNombreApellidoSafe(adminHist.realizadoPor)
+      : "");
+
+  signers01 = {
+    adminGeneral: {
+      estado: ["APROBADO", "RECHAZADO"].includes(resultadoUp)
+        ? resultadoUp
+        : "",
+      nombre: adminNombre || (adminAudit || adminHist ? "ADMIN GENERAL" : ""),
+      fecha: adminAudit?.fecha || adminHist?.fecha || null,
+    },
+  };
+}
 // Firmantes ANEXO_02
 if (codigoUp === "ANEXO_02") {
   const postUid =
@@ -4326,8 +4411,14 @@ if (codigoUp === "ANEXO_02") {
         permUserId = d.postulanteId;
       }
 
-      const permNombre = await getNombreApellidoSafe(permUserId);
-      const permFecha = d?.conformidadPermisionario?.fecha || null;
+      const permIntervencion = findPdfIntervencion(historial, {
+        roles: ["PERMISIONARIO"],
+        acciones: ["FORM_CONFORMIDAD_PERMISIONARIO_03"],
+        accionIncludes: ["CONFORMIDAD PERMISIONARIO"],
+      });
+      const permNombre =
+        (await getNombreApellidoSafe(permUserId)) || permIntervencion?.nombre || "";
+      const permFecha = d?.conformidadPermisionario?.fecha || permIntervencion?.fecha || null;
 
       let inspUserId = null;
       const iv = Array.isArray(anexo.intervinientes) ? anexo.intervinientes : [];
@@ -4350,8 +4441,17 @@ if (codigoUp === "ANEXO_02") {
         adminUserId = d.conformidadAdminGeneral.usuario;
       }
 
-      const adminNombre = await getNombreApellidoSafe(adminUserId);
-      const adminFecha = d?.conformidadAdminGeneral?.fecha || null;
+      const adminIntervencion03 = findPdfIntervencion(historial, {
+        roles: ["ADMIN_GENERAL", "ADMIN", "SISTEMA"],
+        acciones: ["FORM_CIERRE_ADMIN_03"],
+        accionIncludes: ["CIERRE ADMIN_GENERAL (ANEXO_03)", "CIERRE ADMIN_GENERAL"],
+      });
+      const adminNombre =
+        (await getNombreApellidoSafe(adminUserId)) ||
+        adminIntervencion03?.nombre ||
+        "";
+      const adminFecha =
+        d?.conformidadAdminGeneral?.fecha || adminIntervencion03?.fecha || null;
 
       signers03 = {
         permisionario: { nombre: permNombre, fecha: permFecha },
@@ -4565,7 +4665,7 @@ if (codigoUp === "ANEXO_02") {
     doc.pipe(res);
 
    if (codigoUp === "ANEXO_01") {
-  renderAnexo01Pdf(doc, anexo);
+  renderAnexo01Pdf(doc, anexo, signers01);
 } else if (codigoUp === "ANEXO_03") {
   renderAnexo03Pdf(doc, anexo, vivienda, signers03, historial);
 } else if (codigoUp === "ANEXO_02") {
