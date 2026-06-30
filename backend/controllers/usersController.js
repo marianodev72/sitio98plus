@@ -87,6 +87,8 @@ function sanitizeUsuarioListItem(user) {
   user.barrioAsignado = publicLabel(user.barrioAsignado);
   user.viviendaLabel = publicLabel(user.viviendaLabel);
   user.alojamientoLabel = publicLabel(user.alojamientoLabel);
+  user.grado = safeStr(user.grado || user.meta?.grado);
+  delete user.meta;
   if (Array.isArray(user.territoriosAlojamiento)) {
     user.territoriosAlojamiento = user.territoriosAlojamiento
       .map((territorio) => {
@@ -112,7 +114,7 @@ const PERMISOS_VALIDOS = ["INSPECTOR", "JEFE_DE_BARRIO", "INSPECTOR_ALOJAMIENTOS
  * ❌ Excluye campos técnicos (passwordHash, loginEventos, adminEventos, tokenVersion, IPs, etc.) por defecto.
  */
 const ADMIN_READ_SELECT =
-  "_id nombre apellido email dni matricula telefono tipoPersonal precedencia grupoJerarquico excepcionTipoDestino role permisos barrioAsignado territoriosAlojamiento estadoHabitacional activo bloqueado archivado archivadoAt viviendaAsignada alojamientoAsignado createdAt updatedAt";
+  "_id nombre apellido email dni matricula grado meta telefono tipoPersonal precedencia grupoJerarquico excepcionTipoDestino role permisos barrioAsignado territoriosAlojamiento estadoHabitacional activo bloqueado archivado archivadoAt viviendaAsignada alojamientoAsignado createdAt updatedAt";
 
 // Legacy roles INSPECTOR/JEFE_DE_BARRIO (si quedaron como role)
 function normalizeLegacyRoleToPermisos(user) {
@@ -203,6 +205,15 @@ function buildFiltro(req) {
   if (bloqueadoQ === "true" || bloqueadoQ === "1") filtro.bloqueado = true;
   if (bloqueadoQ === "false" || bloqueadoQ === "0") filtro.bloqueado = false;
 
+  const gradoQ = safeStr(req.query?.grado);
+  if (gradoQ && up(gradoQ) !== "TODOS") {
+    const rxGrado = new RegExp(`^${escapeRegex(gradoQ)}$`, "i");
+    filtro.$and = [
+      ...(Array.isArray(filtro.$and) ? filtro.$and : []),
+      { $or: [{ grado: rxGrado }, { "meta.grado": rxGrado }] },
+    ];
+  }
+
   const q = safeStr(req.query?.q || req.query?.buscar || req.query?.texto);
   if (q) {
     const regex = new RegExp(escapeRegex(q), "i");
@@ -222,6 +233,7 @@ function buildSort(req) {
     "email",
     "dni",
     "matricula",
+    "grado",
     "role",
     "barrioasignado",
     "activo",

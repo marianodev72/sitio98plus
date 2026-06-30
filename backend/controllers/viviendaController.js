@@ -96,7 +96,7 @@ function accentInsensitivePattern(input) {
 }
 
 function buildViviendasPipeline(query = {}) {
-  const { codigo, barrio, estado, dormitorios, permisionario, personasMin, personasMax, sortBy, sortDir } = query;
+  const { codigo, barrio, estado, dormitorios, permisionario, grado, personasMin, personasMax, sortBy, sortDir } = query;
 
   const dir = String(sortDir || "asc").toLowerCase() === "desc" ? -1 : 1;
   const sortKey = String(sortBy || "barrio").toLowerCase();
@@ -477,7 +477,17 @@ function buildViviendasPipeline(query = {}) {
     });
   }
 
-  // 8) Project final
+  // 8) Filtro por grado del permisionario
+  if (grado && up(grado) !== "TODOS") {
+    const rxGrado = new RegExp(`^${escapeRegex(grado)}$`, "i");
+    pipeline.push({
+      $match: {
+        $or: [{ "permisionarioDoc.grado": rxGrado }, { "permisionarioDoc.meta.grado": rxGrado }],
+      },
+    });
+  }
+
+  // 9) Project final
   pipeline.push({
     $project: {
       codigo: 1,
@@ -511,14 +521,16 @@ function buildViviendasPipeline(query = {}) {
         nombre: "$permisionarioDoc.nombre",
         apellido: "$permisionarioDoc.apellido",
         matricula: "$permisionarioDoc.matricula",
+        grado: { $ifNull: ["$permisionarioDoc.grado", "$permisionarioDoc.meta.grado"] },
       },
     },
   });
 
-  // 9) Sorting
+  // 10) Sorting
   const sort = {};
   if (sortKey === "hacinamiento") sort.hacinamientoRatio = dir;
   else if (sortKey === "personas") sort.cantidadHabitantes = dir;
+  else if (sortKey === "grado") sort["permisionario.grado"] = dir;
   else sort[sortKey] = dir;
 
   pipeline.push({ $sort: sort });
@@ -897,6 +909,7 @@ function buildFiltrosResumen(query = {}) {
   const estado = clean(query.estado);
   const dormitorios = clean(query.dormitorios);
   const permisionario = clean(query.permisionario);
+  const grado = clean(query.grado);
   const personasMin = clean(query.personasMin);
   const personasMax = clean(query.personasMax);
   const hacinamiento = normalizeHacinamientoFiltro(query.hacinamiento);
@@ -906,6 +919,7 @@ function buildFiltrosResumen(query = {}) {
   if (estado) out["Estado"] = estado;
   if (dormitorios) out["Dormitorios"] = dormitorios;
   if (permisionario) out["Permisionario"] = permisionario;
+  if (grado) out["Grado"] = grado;
   if (personasMin) out["Personas mín."] = personasMin;
   if (personasMax) out["Personas máx."] = personasMax;
   if (hacinamiento) out["Hacinamiento"] = hacinamiento;
@@ -934,6 +948,10 @@ function getPermisionarioLabel(vivienda = {}) {
 
 function getPermisionarioMatricula(vivienda = {}) {
   return safeStr(vivienda && vivienda.permisionario && vivienda.permisionario.matricula) || "-";
+}
+
+function getPermisionarioGrado(vivienda = {}) {
+  return safeStr(vivienda && vivienda.permisionario && vivienda.permisionario.grado) || "-";
 }
 
 function formatTipoDestinoExcel(value) {
@@ -970,7 +988,7 @@ function applyHeaderStyle(row) {
 
 function aplicarFormatoTabla(sheet) {
   sheet.views = [{ state: "frozen", ySplit: 1 }];
-  sheet.autoFilter = { from: "A1", to: "N1" };
+  sheet.autoFilter = { from: "A1", to: "O1" };
   applyHeaderStyle(sheet.getRow(1));
   sheet.eachRow((row, rowNumber) => {
     row.height = rowNumber === 1 ? 24 : 20;
@@ -1029,6 +1047,7 @@ function buildViviendasWorkbook({ viviendas = [], filtros = {}, user = null, fec
     { header: "Dormitorios", key: "dormitorios", width: 14 },
     { header: "Estado vivienda", key: "estado", width: 18 },
     { header: "Destino", key: "destino", width: 18 },
+    { header: "Grado", key: "grado", width: 12 },
     { header: "Permisionario", key: "permisionario", width: 30 },
     { header: "Matricula", key: "matricula", width: 16 },
     { header: "Grupo familiar / personas", key: "personas", width: 24 },
@@ -1047,6 +1066,7 @@ function buildViviendasWorkbook({ viviendas = [], filtros = {}, user = null, fec
       dormitorios: asExcelValue(vivienda.dormitorios),
       estado: asExcelValue(vivienda.estado),
       destino: formatTipoDestinoExcel(vivienda.tipoDestino),
+      grado: getPermisionarioGrado(vivienda),
       permisionario: getPermisionarioLabel(vivienda),
       matricula: getPermisionarioMatricula(vivienda),
       personas: asExcelValue(vivienda.cantidadHabitantes),
@@ -1111,13 +1131,14 @@ function generateViviendasListadoPDF(res, payload) {
     const color = v && (v.semaforo || v.hacinamientoColor) ? (v.semaforo || v.hacinamientoColor) : "-";
 
     const p = (v && v.permisionario) || {};
+    const grado = safeStr(p.grado) || "-";
     const permStr =
       p.apellido || p.nombre || p.matricula
         ? `${p.apellido || ""} ${p.nombre || ""}`.trim() + (p.matricula ? ` (Matr: ${p.matricula})` : "")
         : "—";
 
     doc.text(
-      `${idx + 1}. ${codigo} | Barrio: ${barrio} | Estado: ${estado} | Dorm: ${dormitorios} | Personas: ${personas} | Hacin.: ${pctText} (${color}) | Ocupa: ${permStr}`
+      `${idx + 1}. ${codigo} | Barrio: ${barrio} | Estado: ${estado} | Dorm: ${dormitorios} | Personas: ${personas} | Hacin.: ${pctText} (${color}) | Grado: ${grado} | Ocupa: ${permStr}`
     );
   });
 

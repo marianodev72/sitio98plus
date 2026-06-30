@@ -65,6 +65,7 @@ const userSchema = new Schema(
 
     dni: String,
     matricula: String,
+    grado: { type: String, trim: true, uppercase: true, index: true },
     telefono: String,
     tipoPersonal: {
       type: String,

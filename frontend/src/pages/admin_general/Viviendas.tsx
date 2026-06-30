@@ -41,6 +41,7 @@ type Vivienda = {
     nombre?: string;
     apellido?: string;
     matricula?: string;
+    grado?: string;
   };
 };
 
@@ -69,6 +70,7 @@ type SortBy =
   | "barrio"
   | "dormitorios"
   | "estado"
+  | "grado"
   | "permisionario"
   | "personas"
   | "hacinamiento";
@@ -83,6 +85,8 @@ const ESTADOS: { value: EstadoVivienda; label: string }[] = [
   { value: "REPARACION", label: "Reparación" },
   { value: "BAJA", label: "Baja" },
 ];
+
+const GRADOS_VIVIENDA = ["AL", "VL", "CL", "CN", "CF", "CC", "TF", "TN", "GM", "GU", "SM", "SP", "SI", "CS", "CP", "CI", "CB", "C1", "C2", "MR", "SSCO", "SSOP"] as const;
 
 const HACINAMIENTO_FILTROS: { value: HacinamientoFiltro; label: string }[] = [
   { value: "", label: "Hacinamiento: Todos" },
@@ -193,6 +197,8 @@ function sortLabel(sortBy: SortBy): string {
       return "Dormitorios";
     case "estado":
       return "Estado";
+    case "grado":
+      return "Grado";
     case "permisionario":
       return "Permisionario";
     case "personas":
@@ -234,6 +240,7 @@ export default function Viviendas({ readOnly = false }: Props) {
   const [estado, setEstado] = useState("");
   const [dormitorios, setDormitorios] = useState("");
   const [permisionario, setPermisionario] = useState("");
+  const [grado, setGrado] = useState("todos");
   const [personasMin, setPersonasMin] = useState("");
   const [personasMax, setPersonasMax] = useState("");
   const [hacinamiento, setHacinamiento] = useState<HacinamientoFiltro>("");
@@ -247,6 +254,15 @@ export default function Viviendas({ readOnly = false }: Props) {
   const [sortBy, setSortBy] = useState<SortBy>("barrio");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
 
+  const gradoOpciones = useMemo(() => {
+    const set = new Set<string>(GRADOS_VIVIENDA);
+    viviendas.forEach((v) => {
+      const gradoValue = up(v.permisionario?.grado);
+      if (gradoValue) set.add(gradoValue);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [viviendas]);
+
   function buildParams(options: { pageValue?: number; limitValue?: PageLimit; includePagination?: boolean } = {}): Record<string, string> {
     const params: Record<string, string> = {};
 
@@ -255,6 +271,7 @@ export default function Viviendas({ readOnly = false }: Props) {
     if (estado) params.estado = estado;
     if (dormitorios) params.dormitorios = dormitorios;
     if (permisionario.trim()) params.permisionario = permisionario.trim();
+    if (grado !== "todos") params.grado = grado;
     if (personasMin) params.personasMin = personasMin;
     if (personasMax) params.personasMax = personasMax;
     if (hacinamiento) params.hacinamiento = hacinamiento;
@@ -398,6 +415,7 @@ export default function Viviendas({ readOnly = false }: Props) {
     setEstado("");
     setDormitorios("");
     setPermisionario("");
+    setGrado("todos");
     setPersonasMin("");
     setPersonasMax("");
     setHacinamiento("");
@@ -622,6 +640,23 @@ export default function Viviendas({ readOnly = false }: Props) {
                 </option>
               </select>
 
+
+              <select
+                value={grado}
+                onChange={(e) => setGrado(e.target.value)}
+                title="Filtrar por grado"
+                style={{ ...selectStyle, minWidth: 150 }}
+              >
+                <option value="todos" style={optionStyle}>
+                  Grado: Todos
+                </option>
+                {gradoOpciones.map((g) => (
+                  <option key={g} value={g} style={optionStyle}>
+                    {g}
+                  </option>
+                ))}
+              </select>
+
               <input
                 placeholder="Permisionario (nombre/apellido/matrícula)"
                 value={permisionario}
@@ -782,7 +817,7 @@ export default function Viviendas({ readOnly = false }: Props) {
                 border={0}
                 cellPadding={6}
                 cellSpacing={0}
-                style={{ width: "100%", borderCollapse: "collapse", minWidth: 1080 }}
+                style={{ width: "100%", borderCollapse: "collapse", minWidth: 1160 }}
               >
                 <thead>
                   <tr>
@@ -801,6 +836,9 @@ export default function Viviendas({ readOnly = false }: Props) {
                     <th style={thStyle}>
                       Destino
                     </th>
+                    <th style={thStyle} onClick={() => applySort("grado")}>
+                      Grado{sortIndicator("grado")}
+                    </th>
                     <th style={thStyle} onClick={() => applySort("permisionario")}>
                       Permisionario{sortIndicator("permisionario")}
                     </th>
@@ -815,6 +853,7 @@ export default function Viviendas({ readOnly = false }: Props) {
 
                 <tbody>
                   {viviendas.map((v) => {
+                    const gradoPerm = v.permisionario?.grado || "-";
                     const perm = v.permisionario
                       ? (
                           `${v.permisionario.apellido || ""} ${v.permisionario.nombre || ""}`.trim() ||
@@ -870,6 +909,8 @@ export default function Viviendas({ readOnly = false }: Props) {
                         </td>
 
                         <td style={tdStyle}>{formatTipoDestino(v.tipoDestino)}</td>
+
+                        <td style={tdStyle}>{gradoPerm}</td>
 
                         <td style={tdStyle}>{perm}</td>
 

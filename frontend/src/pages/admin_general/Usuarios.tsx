@@ -10,6 +10,7 @@ type Usuario = {
   email?: string;
   dni?: string;
   matricula?: string;
+  grado?: string;
   tipoPersonal?: string;
   grupoJerarquico?: string;
   role?: string; // rol base
@@ -31,6 +32,7 @@ type TerritorioAlojamiento = {
 const ROLES_BASE = ["POSTULANTE", "PERMISIONARIO", "ALOJADO", "ADMIN", "ADMIN_GENERAL"] as const;
 const PERMISOS_VALIDOS = ["INSPECTOR", "JEFE_DE_BARRIO", "INSPECTOR_ALOJAMIENTOS"] as const;
 const PAGE_SIZE_OPTIONS = [50, 100, 200, 500] as const;
+const GRADOS_USUARIO = ["AL", "VL", "CL", "CN", "CF", "CC", "TF", "TN", "GM", "GU", "SM", "SP", "SI", "CS", "CP", "CI", "CB", "C1", "C2", "MR", "SSCO", "SSOP"] as const;
 
 type SortKey =
   | "apellido"
@@ -38,6 +40,7 @@ type SortKey =
   | "email"
   | "dni"
   | "matricula"
+  | "grado"
   | "tipoPersonal"
   | "role"
   | "barrioAsignado"
@@ -112,6 +115,7 @@ export default function UsuariosAdminGeneral() {
   const [filtroRole, setFiltroRole] = useState<string>("");
   const [filtroPermiso, setFiltroPermiso] = useState<string>("");
   const [filtroBarrio, setFiltroBarrio] = useState<string>("");
+  const [filtroGrado, setFiltroGrado] = useState<string>("todos");
   const [filtroActivo, setFiltroActivo] = useState<"todos" | "true" | "false">("todos");
   const [filtroArchivado, setFiltroArchivado] = useState<"false" | "true" | "todos">("false");
   const [filtroBloqueado, setFiltroBloqueado] = useState<"todos" | "true" | "false">("todos");
@@ -185,6 +189,7 @@ export default function UsuariosAdminGeneral() {
       if (filtroRole) params.role = filtroRole;
       if (filtroPermiso) params.permiso = filtroPermiso;
       if (filtroBarrio) params.barrio = filtroBarrio;
+      if (filtroGrado !== "todos") params.grado = filtroGrado;
 
       if (filtroActivo !== "todos") params.activo = filtroActivo;
       if (filtroArchivado !== "todos") params.archivado = filtroArchivado;
@@ -468,9 +473,17 @@ export default function UsuariosAdminGeneral() {
   useEffect(() => {
     cargar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtroQ, filtroRole, filtroPermiso, filtroBarrio, filtroActivo, filtroArchivado, filtroBloqueado, sortBy, sortDir, page, limit]);
+  }, [filtroQ, filtroRole, filtroPermiso, filtroBarrio, filtroGrado, filtroActivo, filtroArchivado, filtroBloqueado, sortBy, sortDir, page, limit]);
 
   const rows = useMemo(() => usuarios || [], [usuarios]);
+  const gradoOpciones = useMemo(() => {
+    const set = new Set<string>(GRADOS_USUARIO);
+    usuarios.forEach((u) => {
+      const grado = up(u.grado);
+      if (grado) set.add(grado);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [usuarios]);
   const safeTotalPages = Math.max(1, totalPages || 1);
   const safePage = Math.min(Math.max(1, page), safeTotalPages);
 
@@ -594,6 +607,7 @@ function renderPaginacion(position: "top" | "bottom") {
     setFiltroRole("");
     setFiltroPermiso("");
     setFiltroBarrio("");
+    setFiltroGrado("todos");
     setFiltroActivo("todos");
     setFiltroArchivado("false");
     setFiltroBloqueado("todos");
@@ -685,6 +699,30 @@ function renderPaginacion(position: "top" | "bottom") {
                 boxSizing: "border-box",
               }}
             />
+          </label>
+        </div>
+
+
+        <div>
+          <label style={{ fontSize: 14, fontWeight: 600, color: "#E5E7EB" }}>
+            Grado:{" "}
+            <select
+              value={filtroGrado}
+              onChange={(e) => {
+                setFiltroGrado(e.target.value);
+                setPage(1);
+              }}
+              style={selectStyle}
+            >
+              <option value="todos" style={optionStyle}>
+                Todos
+              </option>
+              {gradoOpciones.map((g) => (
+                <option key={g} value={g} style={optionStyle}>
+                  {g}
+                </option>
+              ))}
+            </select>
           </label>
         </div>
 
@@ -905,6 +943,20 @@ function renderPaginacion(position: "top" | "bottom") {
                   color: "#F8FAFC",
                   whiteSpace: "nowrap",
                 }}
+                onClick={() => toggleSort("grado")}
+                title="Ordenar por grado"
+              >
+                Grado {sortBy === "grado" ? (sortDir === "asc" ? "â–²" : "â–¼") : ""}
+              </th>
+              <th
+                style={{
+                  cursor: "pointer",
+                  padding: "12px 14px",
+                  fontSize: 14,
+                  border: "1px solid #334155",
+                  color: "#F8FAFC",
+                  whiteSpace: "nowrap",
+                }}
                 onClick={() => toggleSort("apellido")}
                 title="Ordenar por apellido"
               >
@@ -1102,6 +1154,9 @@ function renderPaginacion(position: "top" | "bottom") {
 
     return (
       <tr key={u._id} style={{ background: "#020817" }}>
+        <td style={{ padding: "12px 14px", border: "1px solid #334155", fontSize: 14, fontWeight: 800 }}>
+          {fallback(u.grado)}
+        </td>
         <td style={{ padding: "12px 14px", border: "1px solid #334155", fontSize: 14 }}>
           <div style={{ fontWeight: 700 }}>{fallback(u.apellido)} {fallback(u.nombre)}</div>
           <button
@@ -1443,7 +1498,7 @@ function renderPaginacion(position: "top" | "bottom") {
   {rows.length === 0 && (
     <tr>
       <td
-        colSpan={15}
+        colSpan={16}
         style={{
           textAlign: "center",
           padding: 16,
