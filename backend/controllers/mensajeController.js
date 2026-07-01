@@ -12,21 +12,57 @@ function up(v) {
   return String(v || "").toUpperCase().trim();
 }
 async function resolverBarrioOperativoPermisionario(user) {
-  const fallback = String(user?.barrioAsignado || "").trim();
   const userId = String(user?._id || user?.id || "").trim();
-  if (!userId || !mongoose.Types.ObjectId.isValid(userId)) return fallback;
+  const userObjectId = mongoose.Types.ObjectId.isValid(userId)
+    ? new mongoose.Types.ObjectId(userId)
+    : null;
+  const dbUser = userObjectId
+    ? await User.collection.findOne(
+        { _id: userObjectId },
+        {
+          projection: {
+            _id: 1,
+            viviendaAsignada: 1,
+            viviendaAsignadaId: 1,
+            barrioAsignado: 1,
+            role: 1,
+            permisos: 1,
+            activo: 1,
+            bloqueado: 1,
+            archivado: 1,
+          },
+        }
+      )
+    : null;
+  const efectivo = { ...(user || {}), ...(dbUser || {}) };
+  const fallback = String(efectivo?.barrioAsignado || user?.barrioAsignado || "").trim();
+  if (!userObjectId) return fallback;
 
-  const viviendaAsignada = String(user?.viviendaAsignada || "").trim();
+  const viviendaRefs = [efectivo?.viviendaAsignada, efectivo?.viviendaAsignadaId]
+    .map((value) => String(value || "").trim())
+    .filter((value, index, list) => value && list.indexOf(value) === index);
+
   let vivienda = null;
-
-  if (mongoose.Types.ObjectId.isValid(viviendaAsignada)) {
-    vivienda = await Vivienda.findById(viviendaAsignada).select("barrio").lean();
+  for (const viviendaId of viviendaRefs) {
+    if (!mongoose.Types.ObjectId.isValid(viviendaId)) continue;
+    vivienda = await Vivienda.findById(viviendaId).select("barrio").lean();
+    if (vivienda?.barrio) break;
   }
 
-  if (!vivienda) {
-    vivienda = await Vivienda.findOne({ "ocupacionActual.permisionario": userId })
-      .select("barrio")
-      .lean();
+  if (!vivienda?.barrio) {
+    vivienda = await Vivienda.collection.findOne(
+      {
+        $or: [
+          { "ocupacionActual.permisionario": userObjectId },
+          { "ocupacionActual.permisionario": userId },
+          { permisionarioId: userObjectId },
+          { permisionarioId: userId },
+          { usuarioId: userObjectId },
+          { usuarioId: userId },
+        ],
+      },
+      { projection: { barrio: 1 } }
+    );
   }
 
   return String(vivienda?.barrio || "").trim() || fallback;
