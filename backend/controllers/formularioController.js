@@ -5660,6 +5660,70 @@ return res.status(201).json(
   }
 }
     
+
+function boolQuery(value) {
+  return ["1", "true", "si", "yes"].includes(String(value || "").toLowerCase().trim());
+}
+
+function tieneConformidadOk(anexo, tipo) {
+  const tipoUp = up(tipo);
+  const conformidades = Array.isArray(anexo?.conformidades) ? anexo.conformidades : [];
+  if (conformidades.some((item) => up(item?.tipo || item?.rol) === tipoUp && item?.ok === true)) return true;
+  if (tipoUp === "ADMIN_GENERAL" && anexo?.datos?.conformidadAdminGeneral?.ok === true) return true;
+  if (tipoUp === "PERMISIONARIO" && anexo?.datos?.conformidadPermisionario?.ok === true) return true;
+  if (tipoUp === "POSTULANTE" && (anexo?.conformidadPostulante?.ok === true || anexo?.datos?.conformidadPostulante?.ok === true)) return true;
+  return false;
+}
+
+function anexo01TieneDecisionAdmin(anexo) {
+  const estado = up(anexo?.estado);
+  const estadoInstitucional = up(anexo?.estadoInstitucional);
+  const resultado = up(anexo?.datos?.resultadoPostulacion);
+  return (
+    estado === "APROBADO" ||
+    estado === "RECHAZADO" ||
+    estadoInstitucional === "APROBADO_ADMIN_GENERAL" ||
+    estadoInstitucional === "RECHAZADO_ADMIN_GENERAL" ||
+    resultado === "APROBADO" ||
+    resultado === "RECHAZADO"
+  );
+}
+
+function requiereIntervencionAdminGeneralFormulario(anexo) {
+  const codigo = up(anexo?.codigo);
+  const estado = up(anexo?.estado);
+  const estadoInstitucional = up(anexo?.estadoInstitucional);
+  if (!codigo || ["CERRADO", "ANULADO", "RECHAZADO", "ASIGNADO"].includes(estado)) return false;
+  if (estadoInstitucional.includes("CERRADO")) return false;
+
+  if (codigo === "ANEXO_01") {
+    const tieneDerivado =
+      !!anexo?.tieneAnexo02Derivado ||
+      !!anexo?.tramiteCerradoPorDerivacion ||
+      up(anexo?.estadoDerivacion) === "ANEXO_02_GENERADO";
+    if (tieneDerivado) return false;
+    if (estadoInstitucional === "RECHAZADO_ADMIN_GENERAL") return false;
+    return estado === "ENVIADO" || estado === "EN_REVISION" || anexo01TieneDecisionAdmin(anexo);
+  }
+
+  if (codigo === "ANEXO_02") {
+    return estado === "EN_REVISION" && tieneConformidadOk(anexo, "POSTULANTE") && !tieneConformidadOk(anexo, "ADMIN_GENERAL");
+  }
+  if (codigo === "ANEXO_03") {
+    return estado === "EN_REVISION" && tieneConformidadOk(anexo, "PERMISIONARIO") && !tieneConformidadOk(anexo, "ADMIN_GENERAL");
+  }
+  if (codigo === "ANEXO_07") {
+    return ["ENVIADO", "EN_REVISION"].includes(estado) && !tieneConformidadOk(anexo, "ADMIN_GENERAL");
+  }
+  if (codigo === "ANEXO_08" || codigo === "ANEXO_09") {
+    return estado === "EN_REVISION" && tieneConformidadOk(anexo, "PERMISIONARIO") && !tieneConformidadOk(anexo, "ADMIN_GENERAL");
+  }
+  if (codigo === "ANEXO_11") {
+    return estadoInstitucional === "EN_REVISION_ADMIN_GENERAL";
+  }
+  return false;
+}
+
 async function listarPorCodigo(req, res) {
   try {
     const user = req.user;
@@ -5697,6 +5761,8 @@ if (isInspector) {
 
     const estado = up(req.query?.estado);
     if (estado) filter.estado = estado;
+
+    const requiereMiIntervencion = boolQuery(req.query?.requiereMiIntervencion);
 
     const barrioFiltro = String(req.query?.barrio || "").trim();
     if (barrioFiltro) {
@@ -5775,34 +5841,40 @@ if (isInspector) {
     const limit = Math.min(Math.max(Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 50, 1), 100);
     const shouldPaginate = listarTodos || req.query?.limit || req.query?.page;
 
-    let query = FormSubmission.find(filter)
+    let anexosBase = await FormSubmission.find(filter)
       .populate("usuario", "nombre apellido email role")
       .sort({ updatedAt: sortDir, createdAt: sortDir, _id: sortDir })
       .lean();
 
-    if (shouldPaginate) {
-      query = query.skip((page - 1) * limit).limit(limit);
+    if (requiereMiIntervencion) {
+      if (role !== "ADMIN_GENERAL") {
+        anexosBase = [];
+      } else {
+        anexosBase = await hydrateAnexo01Derivacion(await hydrateViviendaCodigo(anexosBase));
+        anexosBase = anexosBase.filter(requiereIntervencionAdminGeneralFormulario);
+      }
     }
 
-const anexos = await query;
+    const total = shouldPaginate ? anexosBase.length : null;
+    const anexos = shouldPaginate ? anexosBase.slice((page - 1) * limit, page * limit) : anexosBase;
 
     // ✅ Solo para ANEXO_02: agregamos viviendaCodigo sin romper formato
     if (codigo === "ANEXO_02") {
       const anexosHidratados = await hydrateViviendaCodigo(anexos);
-      return res.json(stripAdjuntoRutas({ anexos: anexosHidratados }));
+      return res.json(stripAdjuntoRutas({ anexos: anexosHidratados, total, page, limit }));
     }
 
     if (listarTodos) {
       const anexosHidratados = await hydrateAnexo01Derivacion(await hydrateViviendaCodigo(anexos));
-      return res.json(stripAdjuntoRutas({ anexos: anexosHidratados.map((a) => stripEstadoInstitucionalIfNeeded(user, a)) }));
+      return res.json(stripAdjuntoRutas({ anexos: anexosHidratados.map((a) => stripEstadoInstitucionalIfNeeded(user, a)), total, page, limit }));
     }
 
     if (codigo === "ANEXO_01") {
       const anexosHidratados = await hydrateAnexo01Derivacion(anexos);
-      return res.json(stripAdjuntoRutas({ anexos: anexosHidratados.map((a) => stripEstadoInstitucionalIfNeeded(user, a)) }));
+      return res.json(stripAdjuntoRutas({ anexos: anexosHidratados.map((a) => stripEstadoInstitucionalIfNeeded(user, a)), total, page, limit }));
     }
 
-    return res.json(stripAdjuntoRutas({ anexos: Array.isArray(anexos) ? anexos.map((a) => stripEstadoInstitucionalIfNeeded(user, a?.toObject ? a.toObject() : a)) : anexos }));
+    return res.json(stripAdjuntoRutas({ anexos: Array.isArray(anexos) ? anexos.map((a) => stripEstadoInstitucionalIfNeeded(user, a?.toObject ? a.toObject() : a)) : anexos, total, page, limit }));
   } catch (e) {
     console.error(e);
     return genericDenied(res);

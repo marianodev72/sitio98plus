@@ -85,6 +85,47 @@ async function applyVisibilityFilter(filter, user) {
   };
 }
 
+
+function boolQuery(value) {
+  return ["1", "true", "si", "yes"].includes(String(value || "").toLowerCase().trim());
+}
+
+function mergeAnd(filter, condition) {
+  if (!condition) return filter;
+  const next = { ...filter };
+  const currentAnd = Array.isArray(next.$and) ? next.$and : [];
+  delete next.$and;
+  return { ...next, $and: [...currentAnd, condition] };
+}
+
+function sinConformidadAdminGeneral() {
+  return {
+    $and: [
+      { conformidades: { $not: { $elemMatch: { tipo: "ADMIN_GENERAL", ok: true } } } },
+      { "datos.conformidadAdminGeneral.ok": { $ne: true } },
+    ],
+  };
+}
+
+function buildRequiereIntervencionAdminGeneralFilter() {
+  const sinAdmin = sinConformidadAdminGeneral();
+  return {
+    $or: [
+      {
+        codigo: "ANEXO_21",
+        estado: { $in: ["ENVIADO", "EN_REVISION"] },
+        estadoInstitucional: { $nin: ["APROBADO_ADMIN_GENERAL", "RECHAZADO_ADMIN_GENERAL", "CERRADO_ADMIN_GENERAL"] },
+      },
+      { codigo: "ANEXO_22", estado: "EN_REVISION", ...sinAdmin },
+      { codigo: "ANEXO_23", estado: "EN_REVISION", ...sinAdmin },
+      { codigo: "ANEXO_24", estado: "EN_REVISION", ...sinAdmin },
+      { codigo: "ANEXO_25", estado: "EN_REVISION", ...sinAdmin },
+      { codigo: "ANEXO_26", estado: "EN_REVISION", ...sinAdmin },
+      { codigo: "ANEXO_28", estado: "EN_REVISION", ...sinAdmin },
+    ],
+  };
+}
+
 function toListItem(doc) {
   return {
     _id: doc._id,
@@ -123,8 +164,16 @@ async function listar(req, res) {
     const baseFilter = buildBaseFilter(req.query || {});
     if (!baseFilter) return deny(res);
 
-    const filter = await applyVisibilityFilter(baseFilter, req.user);
+    let filter = await applyVisibilityFilter(baseFilter, req.user);
     if (!filter) return deny(res);
+
+    if (boolQuery(req.query?.requiereMiIntervencion)) {
+      if (up(req.user?.role) !== "ADMIN_GENERAL") {
+        filter = { _id: null };
+      } else {
+        filter = mergeAnd(filter, buildRequiereIntervencionAdminGeneralFilter());
+      }
+    }
 
     const page = parsePositiveInt(req.query?.page, 1, 10000);
     const limit = parsePositiveInt(req.query?.limit, 50, 200);

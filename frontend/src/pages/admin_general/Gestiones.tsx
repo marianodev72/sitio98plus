@@ -1,6 +1,6 @@
 // frontend/src/pages/admin_general/Gestiones.tsx
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { http } from "../../api/http";
 import { useAuth } from "../../auth/useAuth";
 import { decodeHtmlEntities } from "../../utils/decodeHtmlEntities";
@@ -59,6 +59,7 @@ type FiltrosGestiones = {
   q: string;
   sortDir: "asc" | "desc";
   limit: number;
+  requiereMiIntervencion: boolean;
 };
 
 const TODOS_CODIGOS = "TODOS";
@@ -105,6 +106,27 @@ const ESTADOS_ALOJAMIENTO = [
 
 const FORM_LIMIT_OPTIONS = [50, 100];
 const ALOJADOS_LIMIT_OPTIONS = [50, 100, 200];
+
+
+function boolParam(value: string | null) {
+  return ["1", "true", "si", "yes"].includes(String(value || "").toLowerCase().trim());
+}
+
+function panelFromParam(value: string | null): Panel {
+  return up(value) === "ALOJADOS" ? "ALOJADOS" : "PERMISIONARIOS";
+}
+
+function codigoInicialPorPanel(panel: Panel, value: string | null) {
+  const codigo = up(value);
+  if (panel === "ALOJADOS") return ANEXOS_ALOJADO.includes(codigo) ? codigo : "ANEXO_21";
+  return codigo && (codigo === TODOS_CODIGOS || ANEXOS_PERMISIONARIO.includes(codigo)) ? codigo : TODOS_CODIGOS;
+}
+
+function limitInicialPorPanel(panel: Panel, value: string | null) {
+  const n = Number.parseInt(String(value || "50"), 10);
+  const options = panel === "ALOJADOS" ? ALOJADOS_LIMIT_OPTIONS : FORM_LIMIT_OPTIONS;
+  return options.includes(n) ? n : 50;
+}
 
 function safe(v: unknown) {
   if (v === null || v === undefined || v === "") return "-";
@@ -281,8 +303,16 @@ function estadoOperativo(a: Anexo) {
 export default function Gestiones() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const didMountPanel = useRef(false);
 
-  const [panel, setPanel] = useState<Panel>("PERMISIONARIOS");
+  const initialPanel = panelFromParam(searchParams.get("panel"));
+  const initialCodigo = codigoInicialPorPanel(initialPanel, searchParams.get("codigo"));
+  const initialLimit = limitInicialPorPanel(initialPanel, searchParams.get("limit"));
+  const initialSortDir = searchParams.get("sortDir") === "asc" ? "asc" : "desc";
+  const initialPage = Math.max(1, Number.parseInt(String(searchParams.get("page") || "1"), 10) || 1);
+
+  const [panel, setPanel] = useState<Panel>(initialPanel);
   const anexosDisponibles = useMemo(
     () => (panel === "PERMISIONARIOS" ? ANEXOS_PERMISIONARIO : ANEXOS_ALOJADO),
     [panel]
@@ -292,21 +322,23 @@ export default function Gestiones() {
     [panel]
   );
 
-  const [codigo, setCodigo] = useState<string>(TODOS_CODIGOS);
-  const [estadoFiltro, setEstadoFiltro] = useState("");
-  const [barrioFiltro, setBarrioFiltro] = useState("");
-  const [qFiltro, setQFiltro] = useState("");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-  const [limit, setLimit] = useState(50);
+  const [codigo, setCodigo] = useState<string>(initialCodigo);
+  const [estadoFiltro, setEstadoFiltro] = useState(searchParams.get("estado") || "");
+  const [barrioFiltro, setBarrioFiltro] = useState(searchParams.get("barrio") || "");
+  const [qFiltro, setQFiltro] = useState(searchParams.get("q") || "");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">(initialSortDir);
+  const [limit, setLimit] = useState(initialLimit);
+  const [requiereMiIntervencion, setRequiereMiIntervencion] = useState(boolParam(searchParams.get("requiereMiIntervencion")));
   const [appliedFilters, setAppliedFilters] = useState<FiltrosGestiones>({
-    codigo: TODOS_CODIGOS,
-    estado: "",
-    barrio: "",
-    q: "",
-    sortDir: "desc",
-    limit: 50,
+    codigo: initialCodigo,
+    estado: searchParams.get("estado") || "",
+    barrio: searchParams.get("barrio") || "",
+    q: searchParams.get("q") || "",
+    sortDir: initialSortDir,
+    limit: initialLimit,
+    requiereMiIntervencion: boolParam(searchParams.get("requiereMiIntervencion")),
   });
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(initialPage);
   const [total, setTotal] = useState<number | null>(null);
   const [items, setItems] = useState<Anexo[]>([]);
   const [loading, setLoading] = useState(false);
@@ -317,6 +349,11 @@ export default function Gestiones() {
   const esAdmin = myRole === "ADMIN" || myRole === "ADMIN_GENERAL";
 
   useEffect(() => {
+    if (!didMountPanel.current) {
+      didMountPanel.current = true;
+      return;
+    }
+
     const nextCodigo = panel === "PERMISIONARIOS" ? TODOS_CODIGOS : "ANEXO_21";
     const nextLimit = panel === "PERMISIONARIOS" ? Math.min(limit, 100) : limit;
     const nextFilters: FiltrosGestiones = {
@@ -326,6 +363,7 @@ export default function Gestiones() {
       q: "",
       sortDir: "desc",
       limit: nextLimit,
+      requiereMiIntervencion: false,
     };
 
     setCodigo(nextCodigo);
@@ -334,6 +372,7 @@ export default function Gestiones() {
     setQFiltro("");
     setSortDir("desc");
     setLimit(nextLimit);
+    setRequiereMiIntervencion(false);
     setAppliedFilters(nextFilters);
     setPage(1);
   }, [panel]);
@@ -356,6 +395,7 @@ export default function Gestiones() {
         };
 
         if (appliedFilters.estado) params.estado = appliedFilters.estado;
+        if (appliedFilters.requiereMiIntervencion) params.requiereMiIntervencion = "true";
 
         if (panel === "ALOJADOS") {
           if (appliedFilters.codigo && appliedFilters.codigo !== TODOS_CODIGOS) params.codigo = appliedFilters.codigo;
@@ -422,6 +462,7 @@ export default function Gestiones() {
       q: qFiltro,
       sortDir,
       limit,
+      requiereMiIntervencion,
     });
     setPage(1);
   }
@@ -436,6 +477,7 @@ export default function Gestiones() {
       q: "",
       sortDir: "desc",
       limit: nextLimit,
+      requiereMiIntervencion: false,
     };
 
     setCodigo(nextCodigo);
@@ -444,9 +486,24 @@ export default function Gestiones() {
     setQFiltro("");
     setSortDir("desc");
     setLimit(nextLimit);
+    setRequiereMiIntervencion(false);
     setAppliedFilters(nextFilters);
     setPage(1);
   }
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    params.set("panel", panel);
+    if (appliedFilters.codigo) params.set("codigo", appliedFilters.codigo);
+    if (appliedFilters.estado) params.set("estado", appliedFilters.estado);
+    if (appliedFilters.barrio) params.set("barrio", appliedFilters.barrio);
+    if (appliedFilters.q) params.set("q", appliedFilters.q);
+    if (appliedFilters.sortDir !== "desc") params.set("sortDir", appliedFilters.sortDir);
+    if (appliedFilters.limit !== 50) params.set("limit", String(appliedFilters.limit));
+    if (appliedFilters.requiereMiIntervencion) params.set("requiereMiIntervencion", "true");
+    if (page > 1) params.set("page", String(page));
+    setSearchParams(params, { replace: true });
+  }, [appliedFilters, page, panel, setSearchParams]);
 
   useEffect(() => {
     cargarLista();
@@ -583,6 +640,21 @@ const optionStyle: CSSProperties = {
                     {estado}
                   </option>
                 ))}
+              </select>
+
+              <select
+                value={requiereMiIntervencion ? "true" : "false"}
+                onChange={(e) => setRequiereMiIntervencion(e.target.value === "true")}
+                disabled={loading}
+                style={selectStyle}
+                aria-label="Vista de intervencion"
+              >
+                <option value="false" style={optionStyle}>
+                  Vista: Todas
+                </option>
+                <option value="true" style={optionStyle}>
+                  Vista: Requieren mi intervencion
+                </option>
               </select>
 
               {!isAlojados && (
@@ -753,11 +825,7 @@ const optionStyle: CSSProperties = {
                               <button
                                 disabled={busy}
                                 onClick={() =>
-                                  navigate(
-                                    isAlojados
-                                      ? `/app/admin-general/gestiones/alojamientos/${an._id}`
-                                      : `/app/admin-general/gestiones/${an._id}`
-                                  )
+                                  navigate((isAlojados ? `/app/admin-general/gestiones/alojamientos/${an._id}` : `/app/admin-general/gestiones/${an._id}`) + window.location.search)
                                 }
                                 style={primaryButtonStyle}
                               >
@@ -766,7 +834,7 @@ const optionStyle: CSSProperties = {
                               {!isAlojados && an.anexo02RelacionadoId && up(an.codigo) === "ANEXO_01" && (
                                 <button
                                   disabled={busy}
-                                  onClick={() => navigate(`/app/admin-general/gestiones/${an.anexo02RelacionadoId}`)}
+                                  onClick={() => navigate(`/app/admin-general/gestiones/${an.anexo02RelacionadoId}` + window.location.search)}
                                   style={secondaryButtonStyle}
                                 >
                                   Ver ANEXO_02
