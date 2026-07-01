@@ -31,7 +31,6 @@ export default function MisComunicaciones() {
     );
   }
 
-  const barrio = String(user?.barrioAsignado || "").trim();
 
   return (
     <div style={pageStyle}>
@@ -47,12 +46,11 @@ export default function MisComunicaciones() {
 
         <div style={cardStyle}>
           <div style={{ marginTop: 4 }}>
-            <Mensajeria lockedBarrio={barrio || undefined} hideBarrioSelect />
+            <Mensajeria hideBarrioSelect />
           </div>
 
           <div style={noteStyle}>
-            La selección de barrio permanece restringida para mantener el circuito institucional
-            definido para el usuario.
+            Los destinatarios disponibles se resuelven segun el circuito institucional autorizado.
           </div>
 
           <div style={{ marginTop: 18 }}>
