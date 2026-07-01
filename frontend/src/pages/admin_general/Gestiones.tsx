@@ -106,7 +106,58 @@ const ESTADOS_ALOJAMIENTO = [
 
 const FORM_LIMIT_OPTIONS = [50, 100];
 const ALOJADOS_LIMIT_OPTIONS = [50, 100, 200];
+const GESTIONES_FILTERS_STORAGE_KEY = "sitio98plus.adminGeneral.gestiones.filters";
 
+
+type PersistedGestionesFilters = FiltrosGestiones & {
+  panel: Panel;
+  page: number;
+};
+
+function hasUrlFilters(params: URLSearchParams) {
+  return params.toString().length > 0;
+}
+
+function readStoredFilters(): PersistedGestionesFilters | null {
+  try {
+    if (typeof window === "undefined") return null;
+    const raw = window.localStorage.getItem(GESTIONES_FILTERS_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<PersistedGestionesFilters>;
+    const panel = panelFromParam(String(parsed.panel || ""));
+    return {
+      panel,
+      codigo: codigoInicialPorPanel(panel, String(parsed.codigo || "")),
+      estado: typeof parsed.estado === "string" ? parsed.estado : "",
+      barrio: typeof parsed.barrio === "string" ? parsed.barrio : "",
+      q: typeof parsed.q === "string" ? parsed.q : "",
+      sortDir: parsed.sortDir === "asc" ? "asc" : "desc",
+      limit: limitInicialPorPanel(panel, String(parsed.limit || "50")),
+      requiereMiIntervencion: Boolean(parsed.requiereMiIntervencion),
+      page: Math.max(1, Number.parseInt(String(parsed.page || "1"), 10) || 1),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredFilters(value: PersistedGestionesFilters) {
+  try {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(GESTIONES_FILTERS_STORAGE_KEY, JSON.stringify(value));
+  } catch {
+    // Persistencia auxiliar: si falla, la URL sigue siendo fuente de verdad.
+  }
+}
+
+function clearStoredFilters() {
+  try {
+    if (typeof window === "undefined") return;
+    window.localStorage.removeItem(GESTIONES_FILTERS_STORAGE_KEY);
+  } catch {
+    // Limpieza auxiliar best-effort.
+  }
+}
 
 function boolParam(value: string | null) {
   return ["1", "true", "si", "yes"].includes(String(value || "").toLowerCase().trim());
@@ -305,12 +356,14 @@ export default function Gestiones() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const didMountPanel = useRef(false);
+  const skipPersistOnce = useRef(false);
 
-  const initialPanel = panelFromParam(searchParams.get("panel"));
-  const initialCodigo = codigoInicialPorPanel(initialPanel, searchParams.get("codigo"));
-  const initialLimit = limitInicialPorPanel(initialPanel, searchParams.get("limit"));
-  const initialSortDir = searchParams.get("sortDir") === "asc" ? "asc" : "desc";
-  const initialPage = Math.max(1, Number.parseInt(String(searchParams.get("page") || "1"), 10) || 1);
+  const storedFilters = hasUrlFilters(searchParams) ? null : readStoredFilters();
+  const initialPanel = storedFilters?.panel || panelFromParam(searchParams.get("panel"));
+  const initialCodigo = storedFilters?.codigo || codigoInicialPorPanel(initialPanel, searchParams.get("codigo"));
+  const initialLimit = storedFilters?.limit || limitInicialPorPanel(initialPanel, searchParams.get("limit"));
+  const initialSortDir = storedFilters?.sortDir || (searchParams.get("sortDir") === "asc" ? "asc" : "desc");
+  const initialPage = storedFilters?.page || Math.max(1, Number.parseInt(String(searchParams.get("page") || "1"), 10) || 1);
 
   const [panel, setPanel] = useState<Panel>(initialPanel);
   const anexosDisponibles = useMemo(
@@ -323,20 +376,20 @@ export default function Gestiones() {
   );
 
   const [codigo, setCodigo] = useState<string>(initialCodigo);
-  const [estadoFiltro, setEstadoFiltro] = useState(searchParams.get("estado") || "");
-  const [barrioFiltro, setBarrioFiltro] = useState(searchParams.get("barrio") || "");
-  const [qFiltro, setQFiltro] = useState(searchParams.get("q") || "");
+  const [estadoFiltro, setEstadoFiltro] = useState(storedFilters?.estado || searchParams.get("estado") || "");
+  const [barrioFiltro, setBarrioFiltro] = useState(storedFilters?.barrio || searchParams.get("barrio") || "");
+  const [qFiltro, setQFiltro] = useState(storedFilters?.q || searchParams.get("q") || "");
   const [sortDir, setSortDir] = useState<"asc" | "desc">(initialSortDir);
   const [limit, setLimit] = useState(initialLimit);
-  const [requiereMiIntervencion, setRequiereMiIntervencion] = useState(boolParam(searchParams.get("requiereMiIntervencion")));
+  const [requiereMiIntervencion, setRequiereMiIntervencion] = useState(storedFilters?.requiereMiIntervencion || boolParam(searchParams.get("requiereMiIntervencion")));
   const [appliedFilters, setAppliedFilters] = useState<FiltrosGestiones>({
     codigo: initialCodigo,
-    estado: searchParams.get("estado") || "",
-    barrio: searchParams.get("barrio") || "",
-    q: searchParams.get("q") || "",
+    estado: storedFilters?.estado || searchParams.get("estado") || "",
+    barrio: storedFilters?.barrio || searchParams.get("barrio") || "",
+    q: storedFilters?.q || searchParams.get("q") || "",
     sortDir: initialSortDir,
     limit: initialLimit,
-    requiereMiIntervencion: boolParam(searchParams.get("requiereMiIntervencion")),
+    requiereMiIntervencion: storedFilters?.requiereMiIntervencion || boolParam(searchParams.get("requiereMiIntervencion")),
   });
   const [page, setPage] = useState(initialPage);
   const [total, setTotal] = useState<number | null>(null);
@@ -375,6 +428,7 @@ export default function Gestiones() {
     setRequiereMiIntervencion(false);
     setAppliedFilters(nextFilters);
     setPage(1);
+    clearStoredFilters();
   }, [panel]);
 
   async function cargarLista() {
@@ -468,6 +522,7 @@ export default function Gestiones() {
   }
 
   function limpiarFiltros() {
+    skipPersistOnce.current = true;
     const nextCodigo = panel === "PERMISIONARIOS" ? TODOS_CODIGOS : "ANEXO_21";
     const nextLimit = 50;
     const nextFilters: FiltrosGestiones = {
@@ -489,9 +544,18 @@ export default function Gestiones() {
     setRequiereMiIntervencion(false);
     setAppliedFilters(nextFilters);
     setPage(1);
+    clearStoredFilters();
+    setSearchParams(new URLSearchParams(), { replace: true });
   }
 
   useEffect(() => {
+    if (skipPersistOnce.current) {
+      skipPersistOnce.current = false;
+      clearStoredFilters();
+      setSearchParams(new URLSearchParams(), { replace: true });
+      return;
+    }
+
     const params = new URLSearchParams();
     params.set("panel", panel);
     if (appliedFilters.codigo) params.set("codigo", appliedFilters.codigo);
@@ -502,6 +566,7 @@ export default function Gestiones() {
     if (appliedFilters.limit !== 50) params.set("limit", String(appliedFilters.limit));
     if (appliedFilters.requiereMiIntervencion) params.set("requiereMiIntervencion", "true");
     if (page > 1) params.set("page", String(page));
+    writeStoredFilters({ ...appliedFilters, panel, page });
     setSearchParams(params, { replace: true });
   }, [appliedFilters, page, panel, setSearchParams]);
 

@@ -5701,7 +5701,7 @@ function requiereIntervencionAdminGeneralFormulario(anexo) {
       !!anexo?.tieneAnexo02Derivado ||
       !!anexo?.tramiteCerradoPorDerivacion ||
       up(anexo?.estadoDerivacion) === "ANEXO_02_GENERADO";
-    if (tieneDerivado) return false;
+    if (tieneDerivado || anexo?.usuarioTieneAnexo02) return false;
     if (estadoInstitucional === "RECHAZADO_ADMIN_GENERAL") return false;
     return estado === "ENVIADO" || estado === "EN_REVISION" || anexo01TieneDecisionAdmin(anexo);
   }
