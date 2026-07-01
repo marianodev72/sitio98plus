@@ -5,6 +5,7 @@ const Vivienda = require("../models/vivienda");
 const PDFDocument = require("pdfkit");
 const ExcelJS = require("exceljs");
 const { normalizarGradoVisual } = require("../utils/normalizarGradoVisual");
+const { normalizarNombrePropio, normalizarNombreCompletoVisual } = require("../utils/normalizarNombrePropio");
 const {
   deriveGrupoViviendaFromGradoEscalafon,
   deriveGrupoViviendaFromGrupoJerarquico,
@@ -1002,10 +1003,12 @@ function filtrarPorHacinamiento(viviendas = [], hacinamiento) {
   return (Array.isArray(viviendas) ? viviendas : []).filter((v) => up(v && (v.semaforo || v.hacinamientoColor)) === filtro);
 }
 
-function normalizarViviendasGradoVisual(viviendas = []) {
+function normalizarViviendasVisual(viviendas = []) {
   return (Array.isArray(viviendas) ? viviendas : []).map((vivienda) => {
     if (vivienda && vivienda.permisionario) {
       vivienda.permisionario.grado = normalizarGradoVisual(vivienda.permisionario.grado);
+      vivienda.permisionario.nombre = normalizarNombrePropio(vivienda.permisionario.nombre);
+      vivienda.permisionario.apellido = normalizarNombrePropio(vivienda.permisionario.apellido);
     }
     return vivienda;
   });
@@ -1033,7 +1036,7 @@ function ordenarPorGradoVisual(viviendas = [], meta = {}) {
 async function listarViviendasFiltradas(query = {}, _user = null, options = {}) {
   const { pipeline, meta } = buildViviendasPipeline(query);
   const viviendasBase = await Vivienda.aggregate(pipeline);
-  const conGradoVisual = normalizarViviendasGradoVisual(viviendasBase);
+  const conGradoVisual = normalizarViviendasVisual(viviendasBase);
   const filtradasPorGrado = filtrarPorGradoVisual(conGradoVisual, query.grado);
   const ordenadas = ordenarPorGradoVisual(filtradasPorGrado, meta);
   const enriquecidas = enriquecerViviendasHacinamiento(ordenadas);
@@ -1111,7 +1114,7 @@ function getHacinamientoEstado(vivienda = {}) {
 
 function getPermisionarioLabel(vivienda = {}) {
   const p = vivienda.permisionario || {};
-  return safeStr((p.apellido || "") + " " + (p.nombre || "")) || safeStr(p.matricula) || "-";
+  return normalizarNombreCompletoVisual(p.apellido, p.nombre) || safeStr(p.matricula) || "-";
 }
 
 function getPermisionarioMatricula(vivienda = {}) {
@@ -1300,10 +1303,11 @@ function generateViviendasListadoPDF(res, payload) {
 
     const p = (v && v.permisionario) || {};
     const grado = safeStr(p.grado) || "-";
+    const permNombre = normalizarNombreCompletoVisual(p.apellido, p.nombre);
     const permStr =
-      p.apellido || p.nombre || p.matricula
-        ? `${p.apellido || ""} ${p.nombre || ""}`.trim() + (p.matricula ? ` (Matr: ${p.matricula})` : "")
-        : "—";
+      permNombre || p.matricula
+        ? `${permNombre || "-"}` + (p.matricula ? ` (Matr: ${p.matricula})` : "")
+        : "-";
 
     doc.text(
       `${idx + 1}. ${codigo} | Barrio: ${barrio} | Estado: ${estado} | Dorm: ${dormitorios} | Personas: ${personas} | Hacin.: ${pctText} (${color}) | Grado: ${grado} | Ocupa: ${permStr}`

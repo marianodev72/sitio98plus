@@ -6,6 +6,7 @@ const AsignacionAlojamiento = require("../modules/alojamientos/models/Asignacion
 const MisDatosDeclaradosUpdate = require("../models/MisDatosDeclaradosUpdate");
 const { FormSubmission } = require("../models/FormSubmission");
 const { normalizarGradoVisual } = require("../utils/normalizarGradoVisual");
+const { normalizarNombrePropio } = require("../utils/normalizarNombrePropio");
 
 // ✅ Vivienda model (minúscula) — IMPORT CORRECTO
 // ✅ Vivienda model (robusto)
@@ -94,6 +95,8 @@ function sanitizeUsuarioListItem(user) {
   user.barrioAsignado = publicLabel(user.barrioAsignado);
   user.viviendaLabel = publicLabel(user.viviendaLabel);
   user.alojamientoLabel = publicLabel(user.alojamientoLabel);
+  user.nombre = normalizarNombrePropio(user.nombre);
+  user.apellido = normalizarNombrePropio(user.apellido);
   user.grado = normalizarGradoVisual(user.gradoFinal || user.grado || user.meta?.grado);
   delete user.gradoFinal;
   delete user.meta;
@@ -1244,7 +1247,7 @@ async function pdf(req, res) {
 
     (usuarios || []).forEach((u, i) => {
       doc.fontSize(9).text(
-        `${i + 1}. ${u.apellido || "-"} ${u.nombre || "-"} | ${u.email || "-"} | DNI: ${u.dni || "-"} | Matr: ${
+        `${i + 1}. ${normalizarNombrePropio(u.apellido) || "-"} ${normalizarNombrePropio(u.nombre) || "-"} | ${u.email || "-"} | DNI: ${u.dni || "-"} | Matr: ${
           u.matricula || "-"
         } | Rol: ${u.role || "-"} | Barrio: ${u.barrioAsignado || "-"} | Activo: ${
           u.activo !== false ? "Sí" : "No"

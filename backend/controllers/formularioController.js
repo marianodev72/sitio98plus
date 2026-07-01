@@ -27,6 +27,7 @@ try {
 
 const MisDatosDeclaradosUpdate = require("../models/MisDatosDeclaradosUpdate");
 const { User } = require("../models/user");
+const { normalizarNombrePropio, normalizarNombreCompletoVisual } = require("../utils/normalizarNombrePropio");
 
 let Vivienda = null;
 try {
@@ -1108,10 +1109,7 @@ async function getNombreApellidoSafe(userId) {
     if (!isObjectId(userId)) return "";
     const u = await User.findById(userId).select("nombre apellido").lean();
     if (!u) return "";
-    const full = `${String(u.apellido || "").trim()} ${String(
-      u.nombre || ""
-    ).trim()}`.trim();
-    return full;
+    return normalizarNombreCompletoVisual(u.apellido, u.nombre);
   } catch {
     return "";
   }
@@ -2086,9 +2084,9 @@ function renderAnexo02Pdf(
   // Datos en claro (fuente de verdad: ANEXO_01)
   const grado = t(d.grado || d01.gradoEscalafon || "");
 
-  const ape = t(d01.apellido || "");
-  const nom = t(d01.nombres || "");
-  const apeNom = t(d.apellidoNombres || `${ape} ${nom}`.trim());
+  const ape = normalizarNombrePropio(t(d01.apellido || ""));
+  const nom = normalizarNombrePropio(t(d01.nombres || ""));
+  const apeNom = normalizarNombrePropio(t(d.apellidoNombres || `${ape} ${nom}`.trim()));
 
   // ✅ "M.R." = MATRÍCULA
   const matricula = t(d.mr || d01.mr || "");
@@ -2558,14 +2556,14 @@ function renderAnexo08Pdf(doc, anexo, vivienda, signers = {}, historial = []) {
   }
 
   bloqueTitulo("REPRESENTANTE 1");
-  lineaDato("Apellido y nombres", rep1.apellidoNombres || "—");
+  lineaDato("Apellido y nombres", normalizarNombrePropio(rep1.apellidoNombres) || "-");
   lineaDato("Grado", rep1.grado || "—");
   lineaDato("M.R.", rep1.mr || "—");
   lineaDato("Destino", rep1.destino || "—");
   lineaDato("Teléfono", rep1.telefono || "—");
 
   bloqueTitulo("REPRESENTANTE 2");
-  lineaDato("Apellido y nombres", rep2.apellidoNombres || "—");
+  lineaDato("Apellido y nombres", normalizarNombrePropio(rep2.apellidoNombres) || "-");
   lineaDato("Grado", rep2.grado || "—");
   lineaDato("M.R.", rep2.mr || "—");
   lineaDato("Destino", rep2.destino || "—");
@@ -4017,8 +4015,8 @@ function renderAnexo01Pdf(doc, anexo, signers = {}) {
   row2("MR:", d.mr);
   row2("N° Afiliado OSFA:", d.afiliadoOSFA);
   row2("Grado y escalafón:", d.gradoEscalafon);
-  row2("Apellido:", d.apellido);
-  row2("Nombres:", d.nombres);
+  row2("Apellido:", normalizarNombrePropio(d.apellido));
+  row2("Nombres:", normalizarNombrePropio(d.nombres));
 
   doc.moveDown(0.2);
   row2("Destino actual:", d.destinoActual);
@@ -4043,7 +4041,7 @@ function renderAnexo01Pdf(doc, anexo, signers = {}) {
     doc.font("Helvetica").fontSize(10).text("(Sin datos)");
   } else {
     convivientes.forEach((c, i) => {
-      const nombre = safe(c?.apellidoNombres);
+      const nombre = normalizarNombrePropio(safe(c?.apellidoNombres));
       const relacion = safe(c?.relacion || c?.parentesco);
       const edad = safe(c?.edad);
       const dni = safe(c?.dni);
@@ -4191,7 +4189,7 @@ function renderAnexo04Pdf(doc, anexo, vivienda, signers, historial) {
 
   doc.fontSize(12).text("Representante en caso de emergencia", { underline: true });
   doc.fontSize(11);
-  doc.text(`Apellido y nombres: ${String(repE.apellidoNombres || repE.nombreCompleto || "")}`);
+  doc.text(`Apellido y nombres: ${normalizarNombrePropio(repE.apellidoNombres || repE.nombreCompleto)}`);
   doc.text(`Parentesco: ${String(repE.parentesco || "")}`);
   doc.text(`Domicilio: ${String(repE.domicilio || "")}`);
   doc.text(`Teléfono: ${String(repE.telefono || "")}`);
@@ -4201,7 +4199,7 @@ function renderAnexo04Pdf(doc, anexo, vivienda, signers, historial) {
 
   doc.fontSize(12).text("Representante del organismo", { underline: true });
   doc.fontSize(11);
-  doc.text(`Apellido y nombres: ${String(repO.apellidoNombres || repO.nombreCompleto || "")}`);
+  doc.text(`Apellido y nombres: ${normalizarNombrePropio(repO.apellidoNombres || repO.nombreCompleto)}`);
   doc.text(`Cargo/Función: ${String(repO.cargo || "")}`);
   doc.text(`Destino/Oficina: ${String(repO.destino || repO.oficina || "")}`);
   doc.text(`Teléfono: ${String(repO.telefono || "")}`);
@@ -6541,11 +6539,35 @@ function getDatosDeclaradosUpdate(upd) {
   return objectWithContent(legacy) ? legacy : {};
 }
 
+function normalizarDatosPersonalesVisual(datos = {}) {
+  if (!datos || typeof datos !== "object") return datos;
+  const out = { ...datos };
+  if (Object.prototype.hasOwnProperty.call(out, "apellido")) out.apellido = normalizarNombrePropio(out.apellido);
+  if (Object.prototype.hasOwnProperty.call(out, "nombre")) out.nombre = normalizarNombrePropio(out.nombre);
+  if (Object.prototype.hasOwnProperty.call(out, "nombres")) out.nombres = normalizarNombrePropio(out.nombres);
+  if (Object.prototype.hasOwnProperty.call(out, "apellidoNombres")) {
+    out.apellidoNombres = normalizarNombrePropio(out.apellidoNombres);
+  }
+  if (Array.isArray(out.convivientes)) {
+    out.convivientes = out.convivientes.map((c) => {
+      if (!c || typeof c !== "object") return c;
+      return {
+        ...c,
+        apellido: normalizarNombrePropio(c.apellido),
+        nombre: normalizarNombrePropio(c.nombre),
+        nombres: normalizarNombrePropio(c.nombres),
+        apellidoNombres: normalizarNombrePropio(c.apellidoNombres),
+      };
+    });
+  }
+  return out;
+}
+
 function buildMisDatosDeclaradosUserInfo(upd) {
   const d = getDatosDeclaradosUpdate(upd);
   return {
-    apellido: d.apellido || "",
-    nombres: d.nombres || d.nombre || "",
+    apellido: normalizarNombrePropio(d.apellido),
+    nombres: normalizarNombrePropio(d.nombres || d.nombre),
     matricula: d.matricula || "",
     gradoEscalafon: d.gradoEscalafon || "",
     destinoActual: d.destinoActual || "",
@@ -6554,7 +6576,8 @@ function buildMisDatosDeclaradosUserInfo(upd) {
 }
 
 function renderMisDatosDeclaradosPdf(doc, upd, userInfo) {
-  const d = getDatosDeclaradosUpdate(upd);
+  const d = normalizarDatosPersonalesVisual(getDatosDeclaradosUpdate(upd));
+  userInfo = normalizarDatosPersonalesVisual(userInfo || {});
   const val = (x) => (x === null || x === undefined ? "" : String(x));
 
   const titulo = "MIS DATOS DECLARADOS — ACTUALIZACIÓN REGISTRADA";
@@ -7027,16 +7050,24 @@ async function buildPreviewDatosDeclaradosUsuario(userId) {
       ? anexo01Base.datos
       : {};
   const datosVigentes = ultimo ? buildDatosEfectivosMisDatos(ultimo) : datosHistoricos;
-  const diferencias = buildDiferenciasMisDatos(datosHistoricos, datosVigentes);
+  const usuarioVisual = {
+    ...usuario,
+    apellido: normalizarNombrePropio(usuario.apellido),
+    nombre: normalizarNombrePropio(usuario.nombre),
+    nombres: normalizarNombrePropio(usuario.nombres),
+  };
+  const datosHistoricosVisual = normalizarDatosPersonalesVisual(datosHistoricos);
+  const datosVigentesVisual = normalizarDatosPersonalesVisual(datosVigentes);
+  const diferencias = buildDiferenciasMisDatos(datosHistoricosVisual, datosVigentesVisual);
 
   return {
     ok: true,
-    usuario,
+    usuario: usuarioVisual,
     anexo01Base,
     ultimo,
     historial,
-    datosHistoricos,
-    datosVigentes,
+    datosHistoricos: datosHistoricosVisual,
+    datosVigentes: datosVigentesVisual,
     diferencias,
   };
 }
