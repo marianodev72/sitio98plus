@@ -11,6 +11,26 @@ const { UPLOAD_ROOT: MENSAJES_UPLOAD_ROOT } = require("../middleware/uploadMensa
 function up(v) {
   return String(v || "").toUpperCase().trim();
 }
+async function resolverBarrioOperativoPermisionario(user) {
+  const fallback = String(user?.barrioAsignado || "").trim();
+  const userId = String(user?._id || user?.id || "").trim();
+  if (!userId || !mongoose.Types.ObjectId.isValid(userId)) return fallback;
+
+  const viviendaAsignada = String(user?.viviendaAsignada || "").trim();
+  let vivienda = null;
+
+  if (mongoose.Types.ObjectId.isValid(viviendaAsignada)) {
+    vivienda = await Vivienda.findById(viviendaAsignada).select("barrio").lean();
+  }
+
+  if (!vivienda) {
+    vivienda = await Vivienda.findOne({ "ocupacionActual.permisionario": userId })
+      .select("barrio")
+      .lean();
+  }
+
+  return String(vivienda?.barrio || "").trim() || fallback;
+}
 
 function asArray(v) {
   if (Array.isArray(v)) return v;
@@ -390,6 +410,11 @@ async function getAgenda(req, res) {
       role === "PERMISIONARIO" &&
       (misPermisos.includes("INSPECTOR") || misPermisos.includes("JEFE_DE_BARRIO"));
 
+    const barrioOperativo =
+      role === "PERMISIONARIO" && !esTerritorial
+        ? await resolverBarrioOperativoPermisionario(req.user)
+        : barrioAsignado;
+
     if (esInspectorAlojamientos(req.user)) {
       const admins = await User.find({
         activo: true,
@@ -406,7 +431,7 @@ async function getAgenda(req, res) {
     }
 
     // Seguridad: sin barrio no hay territorialidad (pero igual devuelve admins)
-    if (role === "PERMISIONARIO" && !barrioAsignado) {
+    if (role === "PERMISIONARIO" && !barrioOperativo) {
       const admins = await User.find({
         activo: true,
         bloqueado: false,
@@ -466,7 +491,7 @@ async function getAgenda(req, res) {
           { role: { $in: ["ADMIN_GENERAL", "ADMIN"] } },
           {
             role: "PERMISIONARIO",
-            barrioAsignado,
+            barrioAsignado: barrioOperativo,
             permisos: { $in: ["INSPECTOR", "JEFE_DE_BARRIO"] },
           },
         ],
@@ -693,7 +718,6 @@ async function descargarAdjunto(req, res) {
 async function enviarMensaje(req, res) {
   try {
     const role = up(req.user?.role);
-    const myBarrio = up(req.user?.barrioAsignado);
     const remitenteId = String(req.user?._id || "").trim();
     if (!remitenteId) return res.status(401).json({ message: "No autenticado" });
 
@@ -701,6 +725,11 @@ async function enviarMensaje(req, res) {
     const soyAutoridadTerritorial =
       role === "PERMISIONARIO" &&
       (misPermisos.includes("INSPECTOR") || misPermisos.includes("JEFE_DE_BARRIO"));
+    const myBarrio = up(
+      role === "PERMISIONARIO" && !soyAutoridadTerritorial
+        ? await resolverBarrioOperativoPermisionario(req.user)
+        : req.user?.barrioAsignado
+    );
 
     // Compat: para / para[] / destinatarios / destinatarioId
     const paraRaw =
