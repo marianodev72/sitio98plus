@@ -5724,6 +5724,88 @@ function requiereIntervencionAdminGeneralFormulario(anexo) {
   return false;
 }
 
+const CODIGOS_INTERVENCION_INSPECTOR = ["ANEXO_02", "ANEXO_03", "ANEXO_07", "ANEXO_08", "ANEXO_09", "ANEXO_11"];
+
+function requiereIntervencionInspectorFormulario(anexo) {
+  const codigo = up(anexo?.codigo);
+  const estado = up(anexo?.estado);
+  const estadoInstitucional = up(anexo?.estadoInstitucional);
+  const datos = anexo?.datos && typeof anexo.datos === "object" ? anexo.datos : {};
+
+  if (!CODIGOS_INTERVENCION_INSPECTOR.includes(codigo)) return false;
+  if (["ANULADO", "RECHAZADO"].includes(estado)) return false;
+  if (estado === "CERRADO" && codigo !== "ANEXO_08") return false;
+  if (estadoInstitucional.includes("CERRADO")) return false;
+
+  if (codigo === "ANEXO_02") {
+    return !anexo?.tieneAnexo03Derivado;
+  }
+
+  if (codigo === "ANEXO_03") {
+    return estado === "ENVIADO" && !datos?.conformidadInspector?.ok;
+  }
+
+  if (codigo === "ANEXO_07") {
+    return estado === "ENVIADO" && !datos?.conformidadInspector?.ok;
+  }
+
+  if (codigo === "ANEXO_08") {
+    return estado === "CERRADO" && !anexo?.tieneAnexo09Derivado;
+  }
+
+  if (codigo === "ANEXO_09") {
+    return estado === "ENVIADO" && !datos?.conformidadInspector?.ok;
+  }
+
+  if (codigo === "ANEXO_11") {
+    return [
+      "VISITA_PENDIENTE_AGENDA",
+      "VISITA_CONFIRMADA",
+      "TAREA_PENDIENTE_PROGRAMACION",
+      "DEVUELTO_A_INSPECTOR_POR_ADMIN_GENERAL",
+      "DEVUELTO_A_INSPECTOR",
+      "TAREA_CONFIRMADA",
+    ].includes(estadoInstitucional);
+  }
+
+  return false;
+}
+
+async function hydrateDerivacionesInspector(docs) {
+  const arr = Array.isArray(docs) ? docs : [];
+  if (!arr.length) return arr;
+
+  const anexo02Ids = arr.filter((a) => up(a?.codigo) === "ANEXO_02").map((a) => a?._id).filter(Boolean);
+  const anexo08Ids = arr.filter((a) => up(a?.codigo) === "ANEXO_08").map((a) => a?._id).filter(Boolean);
+  const origenIds = [...anexo02Ids, ...anexo08Ids];
+  if (!origenIds.length) return arr;
+
+  const derivados = await FormSubmission.find({
+    derivadoDe: { $in: origenIds },
+    codigo: { $in: ["ANEXO_03", "ANEXO_09"] },
+  })
+    .select("_id codigo derivadoDe estado")
+    .lean();
+
+  const derivadosByOrigen = new Map();
+  for (const der of derivados || []) {
+    const key = String(der?.derivadoDe || "");
+    if (!key) continue;
+    const list = derivadosByOrigen.get(key) || [];
+    list.push(der);
+    derivadosByOrigen.set(key, list);
+  }
+
+  return arr.map((anexo) => {
+    const derivadosOrigen = derivadosByOrigen.get(String(anexo?._id || "")) || [];
+    return {
+      ...anexo,
+      tieneAnexo03Derivado: derivadosOrigen.some((der) => up(der?.codigo) === "ANEXO_03"),
+      tieneAnexo09Derivado: derivadosOrigen.some((der) => up(der?.codigo) === "ANEXO_09"),
+    };
+  });
+}
+
 async function listarPorCodigo(req, res) {
   try {
     const user = req.user;
@@ -5743,9 +5825,13 @@ const isPermisionario = role === "PERMISIONARIO";
 const permisos = Array.isArray(user?.permisos) ? user.permisos : [];
 const permisosUp = permisos.map((p) => up(p));
 const isInspector = isPermisionario && permisosUp.includes("INSPECTOR");
+const requiereMiIntervencion = boolQuery(req.query?.requiereMiIntervencion);
+const inspectorPuedeListarPorIntervencion =
+  isInspector && requiereMiIntervencion && (listarTodos || CODIGOS_INTERVENCION_INSPECTOR.includes(codigo));
 
-// ❗Limitación institucional: INSPECTOR solo puede listar ANEXO_02
-if (!isAdmin && !(isInspector && codigo === "ANEXO_02")) {
+// Limitacion institucional: INSPECTOR solo lista ANEXO_02 en vista normal,
+// o su universo accionable cuando pide requiereMiIntervencion=true.
+if (!isAdmin && !(isInspector && codigo === "ANEXO_02") && !inspectorPuedeListarPorIntervencion) {
   return genericDenied(res);
 }
 
@@ -5761,8 +5847,6 @@ if (isInspector) {
 
     const estado = up(req.query?.estado);
     if (estado) filter.estado = estado;
-
-    const requiereMiIntervencion = boolQuery(req.query?.requiereMiIntervencion);
 
     const barrioFiltro = String(req.query?.barrio || "").trim();
     if (barrioFiltro) {
@@ -5847,11 +5931,14 @@ if (isInspector) {
       .lean();
 
     if (requiereMiIntervencion) {
-      if (role !== "ADMIN_GENERAL") {
-        anexosBase = [];
-      } else {
+      if (role === "ADMIN_GENERAL") {
         anexosBase = await hydrateAnexo01Derivacion(await hydrateViviendaCodigo(anexosBase));
         anexosBase = anexosBase.filter(requiereIntervencionAdminGeneralFormulario);
+      } else if (isInspector) {
+        anexosBase = await hydrateDerivacionesInspector(await hydrateViviendaCodigo(anexosBase));
+        anexosBase = anexosBase.filter(requiereIntervencionInspectorFormulario);
+      } else {
+        anexosBase = [];
       }
     }
 
