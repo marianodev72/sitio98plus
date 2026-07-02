@@ -68,37 +68,25 @@ function pick(...values: unknown[]) {
   return "";
 }
 
-function getNombreUsuario(user: any, ultimaGestion: Anexo | null) {
-  const datos = ultimaGestion?.datos || {};
-  const apellido = pick(user?.apellido, datos.apellido);
-  const nombre = pick(user?.nombre, datos.nombres, datos.nombre);
-  const apellidoNombres = pick(datos.apellidoNombres, datos.permisionarioNombre, datos.postulanteNombre);
-  const grado = pick(user?.grado, datos.gradoEscalafon, datos.grado, datos.gradoPermisionario);
+function getNombreSesion(user: any) {
+  const apellido = pick(user?.apellido);
+  const nombre = pick(user?.nombre);
+  const grado = pick(user?.grado);
+  const nombreBase = [apellido, nombre].filter(Boolean).join(" ").trim();
 
-  const nombreBase = [apellido, nombre].filter(Boolean).join(" ").trim() || apellidoNombres;
-  return [grado, nombreBase].filter(Boolean).join(" ").trim() || "Permisionario";
+  return [grado, nombreBase].filter(Boolean).join(" ").trim() || "Sesion activa";
 }
 
-function getMatricula(user: any, ultimaGestion: Anexo | null) {
-  const datos = ultimaGestion?.datos || {};
-  return pick(user?.matricula, datos.matricula, datos.mr, datos.MR);
+function getMatriculaSesion(user: any) {
+  return pick(user?.matricula);
 }
 
-function getVivienda(user: any, ultimaGestion: Anexo | null) {
-  const datos = ultimaGestion?.datos || {};
-  return pick(
-    datos.viviendaCodigo,
-    ultimaGestion?.viviendaCodigo,
-    datos.codigoVivienda,
-    datos.vivienda,
-    user?.viviendaCodigo,
-    user?.viviendaAsignada
-  );
+function getViviendaSesion(user: any) {
+  return pick(user?.viviendaCodigo, user?.viviendaAsignada);
 }
 
-function getBarrio(user: any, ultimaGestion: Anexo | null) {
-  const datos = ultimaGestion?.datos || {};
-  return pick(datos.viviendaBarrio, datos.barrio, ultimaGestion?.barrio, user?.barrioAsignado);
+function getBarrioSesion(user: any) {
+  return pick(user?.barrioAsignado);
 }
 
 function alertaColor(prioridad: string) {
@@ -123,13 +111,13 @@ export default function PermisionarioDashboard() {
 
   const identidad = useMemo(
     () => ({
-      nombre: getNombreUsuario(user, ultimaGestion),
-      matricula: getMatricula(user, ultimaGestion),
-      vivienda: getVivienda(user, ultimaGestion),
-      barrio: getBarrio(user, ultimaGestion),
-      estadoVivienda: pick((user as any)?.estadoHabitacional, ultimaGestion?.datos?.estadoVivienda),
+      nombre: getNombreSesion(user),
+      matricula: getMatriculaSesion(user),
+      vivienda: getViviendaSesion(user),
+      barrio: getBarrioSesion(user),
+      estadoVivienda: pick((user as any)?.estadoHabitacional),
     }),
-    [user, ultimaGestion]
+    [user]
   );
 
   async function cargarResumen() {
