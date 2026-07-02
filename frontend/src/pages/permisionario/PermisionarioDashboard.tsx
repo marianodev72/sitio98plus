@@ -60,33 +60,9 @@ function fallback(v: unknown) {
   return text(v) || "No informado";
 }
 
-function pick(...values: unknown[]) {
-  for (const value of values) {
-    const clean = text(value);
-    if (clean) return clean;
-  }
-  return "";
-}
 
-function getNombreSesion(user: any) {
-  const apellido = pick(user?.apellido);
-  const nombre = pick(user?.nombre);
-  const grado = pick(user?.grado);
-  const nombreBase = [apellido, nombre].filter(Boolean).join(" ").trim();
-
-  return [grado, nombreBase].filter(Boolean).join(" ").trim() || "Sesion activa";
-}
-
-function getMatriculaSesion(user: any) {
-  return pick(user?.matricula);
-}
-
-function getViviendaSesion(user: any) {
-  return pick(user?.viviendaCodigo, user?.viviendaAsignada);
-}
-
-function getBarrioSesion(user: any) {
-  return pick(user?.barrioAsignado);
+function getNombreSesion() {
+  return "Sesion activa";
 }
 
 function alertaColor(prioridad: string) {
@@ -111,13 +87,9 @@ export default function PermisionarioDashboard() {
 
   const identidad = useMemo(
     () => ({
-      nombre: getNombreSesion(user),
-      matricula: getMatriculaSesion(user),
-      vivienda: getViviendaSesion(user),
-      barrio: getBarrioSesion(user),
-      estadoVivienda: pick((user as any)?.estadoHabitacional),
+      nombre: getNombreSesion(),
     }),
-    [user]
+    []
   );
 
   async function cargarResumen() {
@@ -177,11 +149,7 @@ export default function PermisionarioDashboard() {
             <h2 style={sectionTitleStyle}>Identidad</h2>
             <div style={identityNameStyle}>{identidad.nombre}</div>
             <div style={identityGridStyle}>
-              {identidad.matricula ? <InfoItem label="Matricula" value={identidad.matricula} /> : null}
               <InfoItem label="Rol" value={esInspector ? "Permisionario / Inspector" : fallback(role)} />
-              {identidad.vivienda ? <InfoItem label="Vivienda" value={identidad.vivienda} /> : null}
-              {identidad.barrio ? <InfoItem label="Barrio" value={identidad.barrio} /> : null}
-              {identidad.estadoVivienda ? <InfoItem label="Estado vivienda" value={identidad.estadoVivienda} /> : null}
             </div>
           </section>
 
