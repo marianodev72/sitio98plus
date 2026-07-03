@@ -1,5 +1,5 @@
 // frontend/src/pages/permisionario/PermisionarioDashboard.tsx
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
 import { getAlertasPostLoginResumen, type AlertaPostLogin } from "../../api/alertas";
 import { http } from "../../api/http";
@@ -32,6 +32,29 @@ type Anexo = {
   datos?: Record<string, any>;
 };
 
+type IdentidadResumen = {
+  gradoEscalafon?: string;
+  apellido?: string;
+  nombres?: string;
+  nombreCompleto?: string;
+  matricula?: string;
+  displayName?: string;
+  rol?: string;
+};
+
+type ViviendaResumen = {
+  codigo?: string;
+  barrio?: string;
+  estado?: string;
+} | null;
+
+type DashboardResumen = {
+  identidad?: IdentidadResumen;
+  vivienda?: ViviendaResumen;
+  fuenteIdentidad?: string;
+  ultimaGestion?: Anexo | null;
+};
+
 const ESCUDO_ARMADA = "/assets/institucional/escudos/armada-argentina.png";
 
 function up(v: unknown) {
@@ -60,11 +83,6 @@ function fallback(v: unknown) {
   return text(v) || "No informado";
 }
 
-
-function getNombreSesion() {
-  return "Sesion activa";
-}
-
 function alertaColor(prioridad: string) {
   const p = up(prioridad);
   if (p === "CRITICA") return "#f87171";
@@ -80,28 +98,38 @@ export default function PermisionarioDashboard() {
   const role = up(user?.role);
   const esInspector = hasPerm(user, "INSPECTOR");
 
-  const [loadingGestiones, setLoadingGestiones] = useState(false);
+  const [loadingResumen, setLoadingResumen] = useState(false);
+  const [identidad, setIdentidad] = useState<IdentidadResumen>({
+    displayName: "Sesion activa",
+    rol: "PERMISIONARIO",
+  });
+  const [vivienda, setVivienda] = useState<ViviendaResumen>(null);
   const [ultimaGestion, setUltimaGestion] = useState<Anexo | null>(null);
   const [alertas, setAlertas] = useState<AlertaPostLogin[]>([]);
   const [loadingAlertas, setLoadingAlertas] = useState(false);
 
-  const identidad = useMemo(
-    () => ({
-      nombre: getNombreSesion(),
-    }),
-    []
-  );
-
   async function cargarResumen() {
-    setLoadingGestiones(true);
+    setLoadingResumen(true);
     try {
-      const res = await http.get("/formularios/mios");
-      const list = Array.isArray(res.data?.anexos) ? res.data.anexos : [];
-      setUltimaGestion(list[0] || null);
+      const res = await http.get<DashboardResumen>("/permisionario/dashboard/resumen");
+      const data = res.data || {};
+      setIdentidad({
+        displayName: text(data.identidad?.displayName) || "Sesion activa",
+        gradoEscalafon: text(data.identidad?.gradoEscalafon),
+        apellido: text(data.identidad?.apellido),
+        nombres: text(data.identidad?.nombres),
+        nombreCompleto: text(data.identidad?.nombreCompleto),
+        matricula: text(data.identidad?.matricula),
+        rol: text(data.identidad?.rol) || "PERMISIONARIO",
+      });
+      setVivienda(data.vivienda || null);
+      setUltimaGestion(data.ultimaGestion || null);
     } catch {
+      setIdentidad({ displayName: "Sesion activa", rol: "PERMISIONARIO" });
+      setVivienda(null);
       setUltimaGestion(null);
     } finally {
-      setLoadingGestiones(false);
+      setLoadingResumen(false);
     }
   }
 
@@ -147,15 +175,23 @@ export default function PermisionarioDashboard() {
         <div style={mainGridStyle}>
           <section style={cardStyle}>
             <h2 style={sectionTitleStyle}>Identidad</h2>
-            <div style={identityNameStyle}>{identidad.nombre}</div>
+            <div style={identityNameStyle}>{fallback(identidad.displayName)}</div>
             <div style={identityGridStyle}>
-              <InfoItem label="Rol" value={esInspector ? "Permisionario / Inspector" : fallback(role)} />
+              <InfoItem label="Matricula" value={fallback(identidad.matricula)} />
+              <InfoItem label="Rol" value={esInspector ? "Permisionario / Inspector" : fallback(identidad.rol || role)} />
+              {vivienda ? (
+                <>
+                  <InfoItem label="Vivienda" value={fallback(vivienda.codigo)} />
+                  <InfoItem label="Barrio" value={fallback(vivienda.barrio)} />
+                  <InfoItem label="Estado vivienda" value={fallback(vivienda.estado)} />
+                </>
+              ) : null}
             </div>
           </section>
 
           <section style={cardStyle}>
             <h2 style={sectionTitleStyle}>Ultima gestion</h2>
-            {loadingGestiones ? (
+            {loadingResumen ? (
               <p style={emptyTextStyle}>Consultando gestion...</p>
             ) : !ultimaGestion ? (
               <p style={emptyTextStyle}>Sin gestiones recientes.</p>
